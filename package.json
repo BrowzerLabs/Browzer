@@ -1,0 +1,16 @@
+{
+  "name": "agentic-browser",
+  "version": "1.0.0",
+  "description": "Browser with agent-based capabilities",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "setup": "cd agents && chmod +x setup.sh && ./setup.sh",
+    "setup-win": "cd agents && .\\setup.bat",
+    "postinstall": "echo \"Run 'npm run setup' to set up Python agents\""
+  },
+  "dependencies": {
+    "electron": "^28.0.0"
+  },
+  "license": "MIT"
+}

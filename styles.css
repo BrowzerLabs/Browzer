@@ -1,0 +1,770 @@
+body {
+    margin: 0;
+    padding: 0;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+    height: 100vh;
+    width: 100vw;
+    box-sizing: border-box;
+    overflow: hidden;
+}
+
+html, body {
+    height: 100%;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    overflow: hidden;
+}
+
+.browser-container {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    width: 100vw;
+    min-height: 0;
+    min-width: 0;
+}
+
+.toolbar {
+    display: flex;
+    padding: 10px;
+    background-color: #f5f5f5;
+    border-bottom: 1px solid #ddd;
+    flex-shrink: 0;
+}
+
+.nav-btn {
+    padding: 8px 12px;
+    margin-right: 5px;
+    border: none;
+    background-color: #fff;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.nav-btn:hover {
+    background-color: #e0e0e0;
+}
+
+.url-bar {
+    flex: 1;
+    padding: 8px;
+    margin: 0 10px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+}
+
+/* Content Container */
+.content-container {
+    display: flex;
+    flex: 1;
+    width: 100%;
+    overflow: hidden;
+    position: relative;
+}
+
+#dragbar {
+    width: 5px;
+    background-color: #f1f1f1;
+    cursor: ew-resize;
+    flex: 0 0 5px;
+}
+
+.webviews-container {
+    position: relative;
+    flex: 1 1 auto;
+    height: 100%;
+    overflow: hidden;
+    display: flex;
+}
+
+/* Make sure each webview takes up the full container space */
+.webview {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    border: none;
+    outline: none;
+    display: none; /* Initially hidden, shown when tab is active */
+}
+
+/* The active webview should be displayed */
+.webview.active {
+    display: flex !important;
+}
+
+.agent-container {
+    width: 350px;
+    flex: 0 0 350px;
+    height: 100%;
+    overflow-y: auto;
+    background-color: #fff;
+    border-left: 1px solid #ddd;
+    display: flex;
+    flex-direction: column;
+}
+
+.agent-header {
+    padding: 15px;
+    border-bottom: 1px solid #ddd;
+    background-color: #fff;
+}
+
+.agent-header h3 {
+    margin: 0 0 10px 0;
+}
+
+.agent-controls {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+#agentSelector {
+    flex: 1;
+    padding: 8px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+}
+
+.agent-btn {
+    padding: 8px 16px;
+    background-color: #4285f4;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.agent-btn:hover {
+    background-color: #3367d6;
+}
+
+.agent-results {
+    flex: 1;
+    padding: 15px;
+    overflow-y: auto;
+}
+
+/* Extensions Panel Styles */
+.extensions-panel {
+    position: absolute;
+    top: 50px;
+    right: 20px;
+    width: 300px;
+    background: white;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    z-index: 1000;
+}
+
+.extensions-panel.hidden {
+    display: none;
+}
+
+.extensions-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px;
+    border-bottom: 1px solid #ddd;
+}
+
+.extensions-header h3 {
+    margin: 0;
+}
+
+.close-btn {
+    background: none;
+    border: none;
+    font-size: 20px;
+    cursor: pointer;
+    padding: 0 5px;
+}
+
+.extensions-content {
+    padding: 10px;
+}
+
+/* Developer Mode Toggle */
+.developer-mode {
+    display: flex;
+    align-items: center;
+    margin-bottom: 15px;
+    padding-bottom: 15px;
+    border-bottom: 1px solid #eee;
+}
+
+.switch {
+    position: relative;
+    display: inline-block;
+    width: 50px;
+    height: 24px;
+    margin-right: 10px;
+}
+
+.switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: #ccc;
+    transition: .4s;
+    border-radius: 24px;
+}
+
+.slider:before {
+    position: absolute;
+    content: "";
+    height: 16px;
+    width: 16px;
+    left: 4px;
+    bottom: 4px;
+    background-color: white;
+    transition: .4s;
+    border-radius: 50%;
+}
+
+input:checked + .slider {
+    background-color: #2196F3;
+}
+
+input:checked + .slider:before {
+    transform: translateX(26px);
+}
+
+.extension-install {
+    margin-bottom: 15px;
+    padding-bottom: 15px;
+    border-bottom: 1px solid #eee;
+}
+
+.install-btn {
+    width: 100%;
+    padding: 8px;
+    background-color: #4CAF50;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    margin-bottom: 10px;
+}
+
+.install-btn:hover {
+    background-color: #45a049;
+}
+
+.store-btn {
+    width: 100%;
+    padding: 8px;
+    background-color: #4285f4;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    margin-bottom: 10px;
+}
+
+.store-btn:hover {
+    background-color: #3367d6;
+}
+
+.store-install {
+    margin-bottom: 15px;
+    padding-bottom: 15px;
+    border-bottom: 1px solid #eee;
+}
+
+#extensionIdInput {
+    width: 100%;
+    padding: 8px;
+    margin-bottom: 10px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    box-sizing: border-box;
+}
+
+.extensions-list {
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.extension-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px;
+    border-bottom: 1px solid #eee;
+}
+
+.extension-item:last-child {
+    border-bottom: none;
+}
+
+.remove-extension {
+    background: none;
+    border: none;
+    color: #ff4444;
+    cursor: pointer;
+    padding: 4px 8px;
+}
+
+.hidden {
+    display: none;
+}
+
+/* Agent Results Styles */
+.query-header {
+    margin-bottom: 15px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #e0e0e0;
+}
+
+.query-header h3 {
+    margin: 0;
+    color: #333;
+    font-size: 16px;
+}
+
+.summary-container {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.summary-item {
+    padding: 15px;
+    background-color: #fff;
+    border: 1px solid #eaeaea;
+    border-radius: 8px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    margin-bottom: 5px;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.summary-item:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+}
+
+.summary-item h4 {
+    margin: 0 0 8px 0;
+    font-size: 16px;
+    color: #1a73e8;
+}
+
+.summary-item h4 a {
+    text-decoration: none;
+    color: #1a73e8;
+}
+
+.summary-item h4 a:hover {
+    text-decoration: underline;
+}
+
+.summary-url {
+    font-size: 12px;
+    color: #5f6368;
+    margin-bottom: 10px;
+    word-break: break-all;
+}
+
+.summary-url a {
+    color: #5f6368;
+    text-decoration: none;
+}
+
+.summary-content {
+    color: #202124;
+    line-height: 1.5;
+    font-size: 14px;
+}
+
+/* Crypto table styles */
+.crypto-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 15px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.crypto-table th {
+    background-color: #f8f9fa;
+    color: #5f6368;
+    text-align: left;
+    padding: 12px 15px;
+    font-weight: 500;
+    border-bottom: 1px solid #eaeaea;
+}
+
+.crypto-table td {
+    padding: 12px 15px;
+    border-bottom: 1px solid #eaeaea;
+}
+
+.crypto-table tr:last-child td {
+    border-bottom: none;
+}
+
+.positive {
+    color: #0f9d58;
+}
+
+.negative {
+    color: #d93025;
+}
+
+/* Error and info messages */
+.error-message, .info-message {
+    padding: 15px;
+    border-radius: 8px;
+    margin-bottom: 15px;
+}
+
+.error-message {
+    background-color: #fce8e6;
+    color: #d93025;
+    border: 1px solid #fad2cf;
+}
+
+.info-message {
+    background-color: #e8f0fe;
+    color: #1a73e8;
+    border: 1px solid #d2e3fc;
+}
+
+/* Loading indicator */
+.loading {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 20px;
+    color: #5f6368;
+    font-style: italic;
+}
+
+.loading:before {
+    content: "";
+    display: inline-block;
+    width: 20px;
+    height: 20px;
+    margin-right: 10px;
+    border: 2px solid #e0e0e0;
+    border-radius: 50%;
+    border-top-color: #1a73e8;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* Auto-summarize toggle styles */
+.auto-summarize-container {
+    display: flex;
+    align-items: center;
+    margin-right: 10px;
+}
+
+.auto-summarize-label {
+    font-size: 12px;
+    margin-left: 5px;
+    color: #5f6368;
+    white-space: nowrap;
+}
+
+/* Modify existing switch styles to be smaller for the auto toggle */
+.auto-summarize-container .switch {
+    position: relative;
+    display: inline-block;
+    width: 40px;
+    height: 20px;
+    margin-right: 0;
+}
+
+.auto-summarize-container .switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.auto-summarize-container .slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: #ccc;
+    transition: .3s;
+    border-radius: 20px;
+}
+
+.auto-summarize-container .slider:before {
+    position: absolute;
+    content: "";
+    height: 14px;
+    width: 14px;
+    left: 3px;
+    bottom: 3px;
+    background-color: white;
+    transition: .3s;
+    border-radius: 50%;
+}
+
+.auto-summarize-container input:checked + .slider {
+    background-color: #4285f4;
+}
+
+.auto-summarize-container input:checked + .slider:before {
+    transform: translateX(20px);
+}
+
+/* Tab bar and tabs */
+.tab-bar {
+    display: flex;
+    background-color: #f2f2f2;
+    height: 36px;
+    width: 100%;
+    overflow-x: auto;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+    user-select: none;
+}
+
+.tabs-container {
+    display: flex;
+    flex: 1;
+    height: 100%;
+    overflow-x: auto;
+    white-space: nowrap;
+}
+
+.tab {
+    display: flex;
+    align-items: center;
+    min-width: 140px;
+    max-width: 220px;
+    height: 36px;
+    background-color: #e8e8e8;
+    border-right: 1px solid #ddd;
+    padding: 0 10px;
+    position: relative;
+    cursor: pointer;
+    user-select: none;
+    transition: background-color 0.2s ease;
+}
+
+.tab:hover {
+    background-color: #f0f0f0;
+}
+
+.tab.active {
+    background-color: #fff;
+    height: 37px;
+    border-top: 2px solid #4285f4;
+    z-index: 2;
+}
+
+.tab-title {
+    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: #5f6368;
+    font-size: 13px;
+    margin-right: 8px;
+}
+
+.tab.active .tab-title {
+    color: #202124;
+}
+
+.tab-close {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: none;
+    border: none;
+    color: #5f6368;
+    font-size: 14px;
+    line-height: 1;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+}
+
+.tab-close:hover {
+    background-color: rgba(0, 0, 0, 0.08);
+    color: #000;
+}
+
+.new-tab-btn {
+    width: 36px;
+    height: 36px;
+    background: none;
+    border: none;
+    font-size: 20px;
+    color: #5f6368;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.new-tab-btn:hover {
+    background-color: rgba(0, 0, 0, 0.08);
+}
+
+/* Tab favicon styling */
+.tab-favicon {
+    width: 16px;
+    height: 16px;
+    margin-right: 8px;
+    background-position: center;
+    background-repeat: no-repeat;
+    background-size: contain;
+    flex-shrink: 0;
+}
+
+.tab-favicon:not(.has-favicon) {
+    background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="16" height="16"><path fill="%235f6368" d="M8 1.5a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13zM8 14a5.5 5.5 0 1 1 0-11 5.5 5.5 0 0 1 0 11z"/></svg>');
+}
+
+/* Update existing browser-container to include tab bar */
+.browser-container {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    height: 100vh;
+}
+
+.content-container {
+    display: flex;
+    flex: 1;
+    width: 100%;
+    overflow: hidden;
+}
+
+/* Homepage settings */
+.homepage-section {
+    margin-top: 20px;
+    padding-top: 20px;
+    border-top: 1px solid #e0e0e0;
+}
+
+.homepage-section h4 {
+    margin: 0 0 10px 0;
+    font-size: 14px;
+    font-weight: 500;
+    color: #5f6368;
+}
+
+.homepage-input {
+    display: flex;
+    margin-top: 8px;
+}
+
+.homepage-input input {
+    flex: 1;
+    padding: 8px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 13px;
+    margin-right: 8px;
+}
+
+.homepage-input button {
+    background-color: #4285f4;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    padding: 8px 12px;
+    font-size: 13px;
+    cursor: pointer;
+}
+
+.homepage-input button:hover {
+    background-color: #3367d6;
+}
+
+/* Flight agent styles */
+.flights-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 15px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.flights-table th, 
+.flights-table td {
+    padding: 10px;
+    text-align: left;
+    border-bottom: 1px solid #e0e0e0;
+}
+
+.flights-table th {
+    background-color: #f5f5f5;
+    font-weight: 600;
+    color: #444;
+}
+
+.flights-table tr:hover {
+    background-color: #f9f9f9;
+}
+
+.flights-table .price {
+    font-weight: 600;
+    color: #007bff;
+}
+
+.flights-link {
+    margin: 10px 0;
+}
+
+.flights-link a {
+    display: inline-block;
+    padding: 8px 15px;
+    background-color: #007bff;
+    color: white;
+    text-decoration: none;
+    border-radius: 4px;
+    font-weight: 500;
+    transition: background-color 0.2s;
+}
+
+.flights-link a:hover {
+    background-color: #0056b3;
+}
+
+.search-details {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 10px;
+    font-size: 14px;
+}
+
+.search-details span {
+    background-color: #f0f0f0;
+    padding: 5px 10px;
+    border-radius: 15px;
+    color: #555;
+} 
