@@ -352,7 +352,7 @@ ipcMain.handle('execute-agent', async (event, { agentPath, agentParams }) => {
         fs.appendFileSync(path.join(__dirname, 'agent-execution.log'), 
           `[${new Date().toISOString()}] ${error}\n`);
       }
-    }, 45000); // 45 second timeout (increased from 30)
+    }, 45000); // 45 second timeout (increased from 30 seconds to allow for API calls)
 
     return new Promise((resolve, reject) => {
       pythonProcess.on('close', (code) => {
