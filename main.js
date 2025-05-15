@@ -300,17 +300,22 @@ ipcMain.handle('execute-agent', async (event, { agentPath, agentParams }) => {
       pythonArgs.push(JSON.stringify({
         query: cleanedQuery,
         pageContent: agentParams.pageContent,
-        isDirectPage: true
+        isDirectPage: true,
+        modelInfo: agentParams.modelInfo
       }));
     } else if (agentParams.urls && agentParams.urls.length > 0) {
       // For search results with URLs
       pythonArgs.push(JSON.stringify({
         query: cleanedQuery,
-        urls: agentParams.urls
+        urls: agentParams.urls,
+        modelInfo: agentParams.modelInfo
       }));
     } else {
-      // Otherwise just pass the query
-      pythonArgs.push(cleanedQuery);
+      // Otherwise just pass the query as JSON with modelInfo
+      pythonArgs.push(JSON.stringify({
+        query: cleanedQuery,
+        modelInfo: agentParams.modelInfo
+      }));
     }
     
     console.log(`Starting Python process: ${pythonPath} ${pythonArgs.join(' ')}`);
@@ -347,7 +352,7 @@ ipcMain.handle('execute-agent', async (event, { agentPath, agentParams }) => {
         fs.appendFileSync(path.join(__dirname, 'agent-execution.log'), 
           `[${new Date().toISOString()}] ${error}\n`);
       }
-    }, 30000); // 30 second timeout
+    }, 45000); // 45 second timeout (increased from 30)
 
     return new Promise((resolve, reject) => {
       pythonProcess.on('close', (code) => {
@@ -412,23 +417,8 @@ app.whenReady().then(() => {
         if (error.message.includes('Render frame was disposed') || 
             error.message.includes('WebFrameMain')) {
             console.error('Caught frame disposal error:', error.message);
-            
-            // Create the logs directory if it doesn't exist
-            const logsDir = path.join(__dirname, 'logs');
-            if (!fs.existsSync(logsDir)) {
-                fs.mkdirSync(logsDir);
-            }
-            
-            // Log more detailed information for debugging
-            const timestamp = new Date().toISOString();
-            const logEntry = `[${timestamp}] WebFrame Error:
-Error Message: ${error.message}
-Stack Trace: ${error.stack}
----------------------------
-`;
-            
-            fs.appendFileSync(path.join(logsDir, 'webframe-errors.log'), logEntry);
-            
+            fs.appendFileSync(path.join(__dirname, 'webframe-errors.log'), 
+                `[${new Date().toISOString()}] ${error.message}\n${error.stack}\n\n`);
             // Don't re-throw, just log and continue
             return;
         }
