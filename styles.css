@@ -767,4 +767,103 @@ input:checked + .slider:before {
     padding: 5px 10px;
     border-radius: 15px;
     color: #555;
+}
+
+/* API Keys Section */
+.api-keys-section {
+    margin-bottom: 20px;
+    padding-bottom: 20px;
+    border-bottom: 1px solid #eee;
+}
+
+.api-keys-section h4 {
+    margin: 0 0 15px 0;
+    color: #333;
+}
+
+.api-key-inputs {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.api-key-input {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.api-key-input label {
+    font-size: 14px;
+    color: #666;
+}
+
+.api-key-input input {
+    padding: 8px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-family: monospace;
+}
+
+.api-key-input button {
+    padding: 6px 12px;
+    background-color: #4285f4;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    align-self: flex-start;
+}
+
+.api-key-input button:hover {
+    background-color: #3367d6;
+}
+
+/* Model Selector */
+#modelSelector {
+    padding: 8px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    background-color: white;
+    min-width: 150px;
+}
+
+/* Consolidated Summary */
+.consolidated-summary {
+    margin-bottom: 20px;
+    padding: 15px;
+    background-color: #f8f9fa;
+    border-radius: 8px;
+    border: 1px solid #e9ecef;
+}
+
+.consolidated-summary h4 {
+    margin: 0 0 10px 0;
+    color: #333;
+}
+
+.consolidated-summary .summary-content {
+    color: #444;
+    line-height: 1.5;
+}
+
+/* Timing Information */
+.timing-info {
+    font-size: 14px;
+    color: #666;
+    margin-bottom: 10px;
+    background-color: #f5f5f5;
+    padding: 8px 12px;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 4px;
+    line-height: 1.5;
+}
+
+.time-value {
+    font-weight: bold;
+    color: #4285f4;
+    font-size: 16px;
 } 

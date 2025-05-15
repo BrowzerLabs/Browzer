@@ -111,6 +111,10 @@ document.addEventListener('DOMContentLoaded', () => {
   } else {
     console.error('Run Agent button not found on DOMContentLoaded');
   }
+
+  // Call setup functions when DOM is loaded
+  setupExtensionsPanel();
+  setupAgentControls();
 });
 
 // Set up UI for auto-summarize control
@@ -951,6 +955,16 @@ async function executeAgent(specificWebview = null) {
       return;
     }
     
+    // Get selected model and its API key
+    const modelSelector = document.getElementById('modelSelector');
+    const provider = modelSelector.value;
+    const apiKey = localStorage.getItem(`${provider}_api_key`);
+    
+    if (!apiKey) {
+      alert(`Please configure your ${provider} API key in the Extensions panel first.`);
+      return;
+    }
+    
     // Get URL and title
     const url = webview.getURL();
     let title = webview.getTitle();
@@ -998,17 +1012,36 @@ async function executeAgent(specificWebview = null) {
     
     // If we want to use the topic agent and have extracted urls, pass them
     // For other agents like crypto, just use the query
-    let agentParams = { query };
+    let agentParams = { 
+      query,
+      modelInfo: {
+        provider,
+        apiKey
+      }
+    };
+    
     if (agentType === 'topic' && urls.length > 0) {
       agentParams = {
         query,
-        urls: urls.slice(0, 5) // Pass up to 5 URLs to the agent
+        urls: urls.slice(0, 5), // Pass up to 5 URLs to the agent
+        modelInfo: {
+          provider,
+          apiKey
+        }
       };
     }
     
     // Set path to agent based on selection
     const agentPath = `${__dirname}/agents/${agentType}_agent.py`;
-    console.log(`Executing agent at: ${agentPath} with params:`, agentParams);
+    console.log(`Executing agent at: ${agentPath} with params:`, {
+      query: agentParams.query,
+      urls: agentParams.urls ? agentParams.urls.length : 0,
+      pageContent: agentParams.pageContent ? "Present" : "None",
+      modelInfo: agentParams.modelInfo ? {
+        provider: agentParams.modelInfo.provider,
+        hasApiKey: !!agentParams.modelInfo.apiKey
+      } : "None"
+    });
     logRendererEvent(`Executing agent: ${agentType} with query: ${query}`);
     
     // Update UI to show loading
@@ -1171,13 +1204,36 @@ function displayAgentResults(data) {
   }
 
   if (data.summaries) {
-    // Add a header with the search query
-    const queryHeader = document.createElement('div');
-    queryHeader.className = 'query-header';
-    queryHeader.innerHTML = `<h3>Results for: "${data.query}"</h3>`;
-    agentResults.appendChild(queryHeader);
+    // Create container for generation time and consolidated summary
+    const timingHeader = document.createElement('div');
+    timingHeader.className = 'timing-header';
     
-    // Create container for summaries
+    // Format the processing time
+    const generationTime = data.generation_time || 0;
+    const formattedTime = generationTime.toFixed(2);
+    
+    // Add the consolidated summary if available
+    if (data.consolidated_summary) {
+      const consolidatedDiv = document.createElement('div');
+      consolidatedDiv.className = 'consolidated-summary';
+      consolidatedDiv.innerHTML = `
+        <div class="timing-info">
+          <span>Summary generated in</span>
+          <span class="time-value">${formattedTime}s</span>
+          <span>using ${getModelName()}</span>
+        </div>
+        <div class="summary-content">${data.consolidated_summary}</div>
+      `;
+      agentResults.appendChild(consolidatedDiv);
+    } else {
+      // If no consolidated summary, still add the query
+      const queryHeader = document.createElement('div');
+      queryHeader.className = 'query-header';
+      queryHeader.innerHTML = `<h3>Results for: "${data.query}"</h3>`;
+      agentResults.appendChild(queryHeader);
+    }
+    
+    // Create container for individual summaries
     const resultsDiv = document.createElement('div');
     resultsDiv.className = 'summary-container';
     
@@ -1354,6 +1410,23 @@ async function autoSummarizePage(url, specificWebview = null) {
     agentSelector.value = 'topic';
   }
   
+  // Get selected model and its API key (similar to executeAgent)
+  const modelSelector = document.getElementById('modelSelector');
+  const provider = modelSelector ? modelSelector.value : 'anthropic'; // Default to anthropic if selector not found
+  const apiKey = localStorage.getItem(`${provider}_api_key`);
+  
+  if (!apiKey) {
+    const agentResults = document.getElementById('agentResults');
+    if (agentResults) {
+      agentResults.innerHTML = `
+        <div class="error-message">
+          <p>Please configure your ${provider} API key in the Extensions panel first.</p>
+        </div>
+      `;
+    }
+    return;
+  }
+  
   // Show loading indicator in agent results
   const agentResults = document.getElementById('agentResults');
   if (agentResults) {
@@ -1375,7 +1448,15 @@ async function autoSummarizePage(url, specificWebview = null) {
       }
       
       // Allow a bit more time for Google results to render
-      setTimeout(() => executeAgent(webview), 1000);
+      setTimeout(() => {
+        console.log(`Auto-summarizing Google search with model: ${provider}`);
+        // We need to manually set the modelSelector value before calling executeAgent
+        if (modelSelector) {
+          modelSelector.value = provider;
+        }
+        // Now call executeAgent with the webview
+        executeAgent(webview);
+      }, 1000);
     } else {
       // For regular pages, summarize the current page content
       try {
@@ -1396,7 +1477,11 @@ async function autoSummarizePage(url, specificWebview = null) {
         const agentParams = {
           query: url,
           pageContent: pageContent,
-          isDirectPage: true
+          isDirectPage: true,
+          modelInfo: {
+            provider,
+            apiKey
+          }
         };
         
         console.log('Executing agent for direct page content');
@@ -1638,4 +1723,94 @@ function cycleTab(direction) {
 function getActiveTab() {
   if (!activeTabId) return null;
   return tabs.find(tab => tab.id === activeTabId);
+}
+
+// Add API key configuration section to extensions panel
+function setupExtensionsPanel() {
+  const extensionsContent = document.querySelector('.extensions-content');
+  if (extensionsContent) {
+    // Add API Keys section
+    const apiKeysSection = document.createElement('div');
+    apiKeysSection.className = 'api-keys-section';
+    apiKeysSection.innerHTML = `
+      <h4>API Keys</h4>
+      <div class="api-key-inputs">
+        <div class="api-key-input">
+          <label>OpenAI API Key</label>
+          <input type="password" id="openaiApiKey" placeholder="sk-...">
+          <button class="save-api-key" data-provider="openai">Save</button>
+        </div>
+        <div class="api-key-input">
+          <label>Anthropic API Key</label>
+          <input type="password" id="anthropicApiKey" placeholder="sk-ant-...">
+          <button class="save-api-key" data-provider="anthropic">Save</button>
+        </div>
+        <div class="api-key-input">
+          <label>Perplexity API Key</label>
+          <input type="password" id="perplexityApiKey" placeholder="pplx-...">
+          <button class="save-api-key" data-provider="perplexity">Save</button>
+        </div>
+        <div class="api-key-input">
+          <label>Chutes API Key</label>
+          <input type="password" id="chutesApiKey" placeholder="ch-...">
+          <button class="save-api-key" data-provider="chutes">Save</button>
+        </div>
+      </div>
+    `;
+    extensionsContent.appendChild(apiKeysSection);
+
+    // Load saved API keys
+    const providers = ['openai', 'anthropic', 'perplexity', 'chutes'];
+    providers.forEach(provider => {
+      const savedKey = localStorage.getItem(`${provider}_api_key`);
+      if (savedKey) {
+        document.getElementById(`${provider}ApiKey`).value = savedKey;
+      }
+    });
+
+    // Add save event listeners
+    document.querySelectorAll('.save-api-key').forEach(button => {
+      button.addEventListener('click', () => {
+        const provider = button.dataset.provider;
+        const input = document.getElementById(`${provider}ApiKey`);
+        const apiKey = input.value.trim();
+        if (apiKey) {
+          localStorage.setItem(`${provider}_api_key`, apiKey);
+          alert(`${provider} API key saved!`);
+        }
+      });
+    });
+  }
+}
+
+// Update agent controls to include model selection
+function setupAgentControls() {
+  const agentControls = document.querySelector('.agent-controls');
+  if (agentControls) {
+    // Add model selector
+    const modelSelector = document.createElement('select');
+    modelSelector.id = 'modelSelector';
+    modelSelector.innerHTML = `
+      <option value="anthropic">Claude (Anthropic)</option>
+      <option value="openai">GPT-4 (OpenAI)</option>
+      <option value="perplexity">Perplexity</option>
+      <option value="chutes">Chutes</option>
+    `;
+    
+    // Insert model selector before the Run Agent button
+    const runAgentBtn = document.getElementById('runAgentBtn');
+    if (runAgentBtn) {
+      agentControls.insertBefore(modelSelector, runAgentBtn);
+    }
+  }
+}
+
+// Helper function to get the current model name
+function getModelName() {
+  const modelSelector = document.getElementById('modelSelector');
+  if (!modelSelector) return "AI model";
+  
+  // Get text content of the selected option
+  const selectedOption = modelSelector.options[modelSelector.selectedIndex];
+  return selectedOption ? selectedOption.textContent : "AI model";
 } 

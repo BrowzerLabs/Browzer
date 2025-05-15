@@ -14,6 +14,11 @@ import re
 import urllib.parse
 import random
 import time
+from anthropic import Anthropic
+import openai
+from typing import Dict, List, Optional, Tuple
+import asyncio
+import aiohttp
 
 LOG_FILE = os.path.join(os.path.dirname(__file__), 'topic_agent.log')
 def log_event(message):
@@ -259,7 +264,158 @@ class TopicAgent:
         
         return summaries
 
-    def process_query(self, query, provided_urls=None, page_content=None):
+    def create_consolidated_summary(self, summaries: List[Dict[str, str]], model_info: Dict[str, str]) -> Tuple[bool, Optional[str], float]:
+        log_event(f"[DEBUG] Received model_info: {model_info}")
+        
+        # Start timing
+        start_time = time.time()
+        
+        # Check if model_info is None or empty
+        if not model_info:
+            log_event(f"[ERROR] model_info is None or empty. Cannot generate summary.")
+            return False, None, 0
+            
+        # Get provider with proper error handling
+        provider = model_info.get('provider', '').lower()
+        
+        # Try different ways to access the API key (api_key, apiKey, API_KEY, etc.)
+        api_key = None
+        for key_name in ['api_key', 'apiKey', 'API_KEY', 'api-key']:
+            if key_name in model_info and model_info[key_name]:
+                api_key = model_info[key_name]
+                log_event(f"[DEBUG] Found API key with key name: {key_name}")
+                break
+                
+        log_event(f"[DEBUG] Provider: {provider}, API Key present: {bool(api_key)}")
+        
+        if not api_key:
+            log_event("[ERROR] No API key found in model_info with any known key names")
+            return False, None, 0
+        
+        try:
+            # Prepare the input text
+            input_text = "Please create a concise, easy-to-understand summary from these sources:\n\n"
+            
+            # Limit each summary to 500 characters to avoid context window issues
+            for idx, source in enumerate(summaries, 1):
+                summary_text = source.get('summary', 'N/A')
+                if len(summary_text) > 500:
+                    summary_text = summary_text[:497] + "..."
+                    log_event(f"[DEBUG] Truncated summary {idx} from {len(source.get('summary', 'N/A'))} to 500 chars")
+                
+                input_text += f"Source {idx}:\n"
+                input_text += f"Title: {source.get('title', 'N/A')}\n"
+                input_text += f"URL: {source.get('url', 'N/A')}\n"
+                input_text += f"Content: {summary_text}\n\n"
+            
+            input_text += "\nPlease provide a clear, well-structured summary that captures the key points and main ideas from all sources. Focus on accuracy and readability. Keep the consolidate summary less than 100 words. Give me just the consolidate summary, nothing additional that's irrelevant to the topic."
+            
+            log_event(f"[DEBUG] Input text length: {len(input_text)} characters")
+            if len(input_text) > 8000:
+                log_event("[WARNING] Input text is very large, which may cause timeout issues")
+                
+            # Track the LLM call timing more precisely
+            llm_call_start = time.time()
+            
+            if provider == 'anthropic':
+                client = Anthropic(api_key=api_key)
+                log_event("[DEBUG] Making Anthropic API call")
+                response = client.messages.create(
+                    model="claude-3-7-sonnet-latest",  # Use a faster, smaller model
+                    max_tokens=64000,
+                    temperature=0.3,
+                    system="You are a helpful assistant that creates clear, concise summaries from multiple sources.",
+                    messages=[{"role": "user", "content": input_text}],
+                    timeout=20  # Add timeout
+                )
+                summary = response.content[0].text
+            elif provider == 'openai':
+                client = openai.OpenAI(api_key=api_key)
+                log_event("[DEBUG] Making OpenAI API call")
+                response = client.chat.completions.create(
+                    model="gpt-3.5-turbo",  # Use a faster model
+                    messages=[
+                        {"role": "system", "content": "You are a helpful assistant that creates clear, concise summaries from multiple sources."},
+                        {"role": "user", "content": input_text}
+                    ],
+                    temperature=0.3,
+                    max_tokens=100000,
+                    timeout=20  # Add timeout
+                )
+                summary = response.choices[0].message.content
+            elif provider == 'perplexity':
+                headers = {
+                    'Authorization': f'Bearer {api_key}',
+                    'Content-Type': 'application/json'
+                }
+                log_event("[DEBUG] Making Perplexity API call")
+                response = requests.post(
+                    'https://api.perplexity.ai/chat/completions',
+                    headers=headers,
+                    json={
+                        'model': 'pplx-7b-online',
+                        'messages': [
+                            {'role': 'system', 'content': 'You are a helpful assistant that creates clear, concise summaries from multiple sources.'},
+                            {'role': 'user', 'content': input_text}
+                        ],
+                        'temperature': 0.3,
+                        'max_tokens': 100000
+                    }
+                )
+                response.raise_for_status()
+                summary = response.json()['choices'][0]['message']['content']
+            elif provider == 'chutes':
+                # Use a non-streaming approach with requests instead of async
+                log_event(f"[DEBUG] Using Chutes with non-streaming approach")
+                headers = {
+                    "Authorization": f"Bearer {api_key}",
+                    "Content-Type": "application/json"
+                }
+                
+                body = {
+                    "model": "deepseek-ai/DeepSeek-R1",
+                    "messages": [
+                        {"role": "user", "content": input_text}
+                    ],
+                    "stream": False,  # Non-streaming mode
+                    "max_tokens": 100000,
+                    "temperature": 0.7
+                }
+                
+                try:
+                    log_event("[DEBUG] Making Chutes API call")
+                    response = requests.post(
+                        "https://llm.chutes.ai/v1/chat/completions",
+                        headers=headers,
+                        json=body,
+                        timeout=20  # Lower timeout to prevent hanging
+                    )
+                    response.raise_for_status()
+                    response_json = response.json()
+                    log_event(f"[DEBUG] Chutes response received: {response_json}")
+                    summary = response_json['choices'][0]['message']['content']
+                except Exception as e:
+                    log_event(f"[ERROR] Error in Chutes request: {str(e)}")
+                    return False, None, 0
+            else:
+                log_event(f"Unsupported provider: {provider}")
+                return False, None, 0
+                
+            # Calculate timing
+            llm_call_end = time.time()
+            total_time = time.time() - start_time
+            llm_time = llm_call_end - llm_call_start
+            
+            log_event(f"[DEBUG] LLM call took {llm_time:.2f} seconds. Total summary generation took {total_time:.2f} seconds")
+            log_event("Successfully generated consolidated summary")
+            
+            return True, summary, total_time
+        except Exception as e:
+            log_event(f"Error creating consolidated summary: {str(e)}")
+            total_time = time.time() - start_time
+            return False, None, total_time
+
+    def process_query(self, query, provided_urls=None, page_content=None, model_info=None):
         log_event(f'Processing query: {query}')
         
         # Clean and prepare the query
@@ -314,16 +470,32 @@ class TopicAgent:
                                 'url': 'https://example.com',
                                 'summary': f'Unable to generate summaries for the query: "{clean_query}". Please try a different search term or visit a specific website.'
                             }
-                        ]
+                        ],
+                        'consolidated_summary': None,
+                        'generation_time': 0
                     }
                 }
             
+            # Create consolidated summary if model info is provided
+            consolidated_summary = None
+            generation_time = 0
+            log_event(f"[DEBUG] PROCESS_QUERY BEFORE IF: Received model_info: {model_info} and summaries: {summaries}")
+            if model_info and summaries:
+                log_event(f"[DEBUG] PROCESS_QUERY: Creating consolidated summary with model_info: {model_info}")
+                success, summary, generation_time = self.create_consolidated_summary(summaries, model_info)
+                if success:
+                    consolidated_summary = summary
+                    log_event(f'Successfully created consolidated summary in {generation_time:.2f} seconds')
+                else:
+                    log_event('Failed to create consolidated summary')
             
             return {
                 'success': True,
                 'data': {
                     'query': clean_query,
-                    'summaries': summaries
+                    'summaries': summaries,
+                    'consolidated_summary': consolidated_summary,
+                    'generation_time': generation_time
                 }
             }
             
@@ -343,21 +515,33 @@ if __name__ == "__main__":
         # Try to parse as JSON (containing URLs and query)
         try:
             params = json.loads(input_arg)
+            log_event(f"[DEBUG] Parsed JSON parameters: {json.dumps(params)}")
+            
             query = params.get('query', '')
             urls = params.get('urls', [])
             page_content = params.get('pageContent', None)
+            model_info = params.get('modelInfo', None)
+            
+            log_event(f"[DEBUG] modelInfo in params: {model_info}")
+            if model_info:
+                log_event(f"[DEBUG] modelInfo keys: {list(model_info.keys())}")
+                log_event(f"[DEBUG] modelInfo provider: {model_info.get('provider')}")
+                if 'apiKey' in model_info:
+                    log_event(f"[DEBUG] modelInfo has apiKey: {bool(model_info['apiKey'])}")
+                if 'api_key' in model_info:
+                    log_event(f"[DEBUG] modelInfo has api_key: {bool(model_info['api_key'])}")
             
             agent = TopicAgent()
             
             if page_content:
                 log_event(f'Parsed input as JSON with direct page content: {page_content.get("title", "Untitled")}')
-                result = agent.process_query(query, None, page_content)
+                result = agent.process_query(query, None, page_content, model_info)
             elif urls:
                 log_event(f'Parsed input as JSON with {len(urls)} URLs and query: {query}')
-                result = agent.process_query(query, urls)
+                result = agent.process_query(query, urls, None, model_info)
             else:
-                log_event(f'Parsed input as JSON but found no URLs or page content')
-                result = agent.process_query(query)
+                log_event(f'Parsed input as JSON with query: {query} and modelInfo: {model_info is not None}')
+                result = agent.process_query(query, None, None, model_info)
                 
             print(json.dumps(result))
             log_event(f'Completed processing. Success: {result.get("success", False)}')
