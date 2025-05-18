@@ -20,6 +20,7 @@ window.addEventListener('error', function(event) {
 });
 
 const { ipcRenderer, shell } = require('electron');
+const path = require('path');
 // Don't use the global webview reference
 // const webview = document.getElementById('webview');
 const urlBar = document.getElementById('urlBar');
@@ -1081,33 +1082,22 @@ async function executeAgent(specificWebview = null) {
       query = title;
     }
     
-    // Get selected agent type with error handling
-    const agentSelector = document.getElementById('agentSelector');
-    let agentType = 'topic'; // Default to topic if selector not found
+    // Detect if this is a question vs. a summary request
+    // Skip question detection for URLs
+    const isUrl = query.startsWith('http://') || query.startsWith('https://');
     
-    if (agentSelector) {
-      agentType = agentSelector.value;
-    } else {
-      console.error('Agent selector not found, using default agent: topic');
-    }
+    // Question detection - if the query contains question marks or question words
+    const questionWords = ['what', 'where', 'when', 'who', 'why', 'how', 'can', 'does', 'do', 'is', 'are', 'will', 'should'];
+    const isQuestion = !isUrl && (query.includes('?') || 
+                       questionWords.some(word => query.toLowerCase().split(/\s+/).includes(word.toLowerCase())));
     
-    // Auto-detect flight queries
-    const flightKeywords = [
-      'flights', 'cheap flights', 'airline', 'book a flight', 'travel from', 
-      'travel to', 'fly to', 'fly from', 'flight from', 'flight to', 'airfare'
-    ];
+    console.log(`Query "${query}" ${isQuestion ? 'appears to be a question' : 'appears to be a summary request'}`);
     
-    // Check if query contains flight-related keywords
-    const isFlightQuery = flightKeywords.some(keyword => 
-      query.toLowerCase().includes(keyword.toLowerCase()));
-    
-    // Switch to flight agent if query is flight-related
-    if (isFlightQuery && agentType !== 'flight') {
-      console.log(`Flight-related query detected: "${query}". Switching to flight agent.`);
-      agentType = 'flight';
-      if (agentSelector) {
-        agentSelector.value = 'flight';
-      }
+    // If this is a question, enhance the query with explicit instructions
+    if (isQuestion) {
+      // Format the query to clearly indicate it's a question requiring an answer
+      query = `DIRECT QUESTION: ${query}\n\nPlease provide a direct answer to this specific question using the available context.`;
+      console.log('Enhanced question query:', query);
     }
     
     // Extract URLs from the page for Topic agent
@@ -1119,25 +1109,50 @@ async function executeAgent(specificWebview = null) {
       // Continue with empty URLs array
     }
     
+    // Extract page content for context (especially important for questions)
+    let pageContent = null;
+    if (agentType === 'topic' && isQuestion) {
+      try {
+        pageContent = await extractPageContent(webview);
+        console.log('Extracted page content for question context');
+      } catch (e) {
+        console.error('Error extracting page content:', e);
+      }
+    }
+    
     // If we want to use the topic agent and have extracted urls, pass them
     // For other agents like crypto, just use the query
     let agentParams = { 
       query,
+      originalQuery: query.replace(/^DIRECT QUESTION: /, '').split('\n')[0], // Store the original query
       modelInfo: {
         provider,
         apiKey
       }
     };
     
-    if (agentType === 'topic' && urls.length > 0) {
-      agentParams = {
-        query,
-        urls: urls.slice(0, 5), // Pass up to 5 URLs to the agent
-        modelInfo: {
-          provider,
-          apiKey
+    if (isQuestion) {
+      agentParams.isQuestion = true;
+    }
+    
+    if (agentType === 'topic') {
+      if (isQuestion && pageContent) {
+        // For questions, prioritize page content as context
+        agentParams.pageContent = pageContent;
+        agentParams.isDirectPage = true;
+        
+        // Also include URLs if available
+        if (urls.length > 0) {
+          agentParams.urls = urls.slice(0, 5); // Pass up to 5 URLs
         }
-      };
+      } else if (urls.length > 0) {
+        // For summaries, prioritize URLs
+        agentParams.urls = urls.slice(0, 5); // Pass up to 5 URLs to the agent
+      } else if (pageContent) {
+        // Fallback to page content if no URLs
+        agentParams.pageContent = pageContent;
+        agentParams.isDirectPage = true;
+      }
     }
     
     // Verify the agent type is valid (we know topic_agent.py, flight_agent.py, and crypto_agent.py exist)
@@ -1152,6 +1167,7 @@ async function executeAgent(specificWebview = null) {
     
     console.log(`Executing agent at: ${validAgentPath} with params:`, {
       query: agentParams.query,
+      isQuestion: agentParams.isQuestion || false,
       urls: agentParams.urls ? agentParams.urls.length : 0,
       pageContent: agentParams.pageContent ? "Present" : "None",
       modelInfo: agentParams.modelInfo ? {
@@ -1196,6 +1212,50 @@ async function executeAgent(specificWebview = null) {
       console.error("agentResults element not found!");
       logRendererEvent("agentResults element not found!");
       return;
+    }
+    
+    // Get conversation history if this is a direct question
+    if (isQuestion) {
+      const chatContainer = document.getElementById('chatContainer');
+      let conversationHistory = [];
+      
+      if (chatContainer) {
+        const messages = chatContainer.querySelectorAll('.chat-message');
+        
+        messages.forEach(message => {
+          // Skip loading messages
+          if (message.querySelector('.loading')) return;
+          
+          // Determine role (user or assistant)
+          let role = 'assistant';
+          if (message.classList.contains('user-message')) {
+            role = 'user';
+          }
+          
+          // Get text content, stripping HTML
+          const contentEl = message.querySelector('.message-content');
+          let content = '';
+          if (contentEl) {
+            // Create a temporary div to extract text without HTML
+            const tempDiv = document.createElement('div');
+            tempDiv.innerHTML = contentEl.innerHTML;
+            content = tempDiv.textContent || tempDiv.innerText || '';
+          }
+          
+          if (content) {
+            conversationHistory.push({
+              role: role,
+              content: content
+            });
+          }
+        });
+        
+        // Add the conversation history to agent params if we have any
+        if (conversationHistory.length > 0) {
+          console.log('Including conversation history for context:', conversationHistory);
+          agentParams.conversationHistory = conversationHistory;
+        }
+      }
     }
     
     // Call the main process to execute the agent
@@ -1377,164 +1437,50 @@ function clearLoadingAndUpdateChat(role, content, timing = null) {
   addMessageToChat(role, content, timing);
 }
 
-// Update displayAgentResults to use the new function
+// Display agent execution results
 function displayAgentResults(data) {
   if (!data) {
     clearLoadingAndUpdateChat('assistant', 'No data received from agent');
     return;
   }
 
-  if (data.summaries) {
-    // Format the processing time
-    const generationTime = data.generation_time || 0;
+  console.log("Agent result data:", data);
+  
+  // Check if this is a question answer or a regular summary
+  const isQuestion = data.isQuestion === true;
+  
+  // Handle direct question answers with special formatting
+  if (isQuestion) {
+    let answer = data.consolidated_summary || "No direct answer found for your question.";
     
-    // If we have a consolidated summary, show it
-    if (data.consolidated_summary) {
-      // Check if there's a query to include
-      let responseContent = '';
-      if (data.query) {
-        responseContent = `<div class="summary-header">
-          <h4>Summary: ${data.query}</h4>
-        </div>
-        <div class="summary-content">${data.consolidated_summary}</div>`;
-      } else {
-        responseContent = `<div class="summary-content">${data.consolidated_summary}</div>`;
-      }
-      
-      clearLoadingAndUpdateChat('assistant', responseContent, generationTime);
-    } else {
-      // Otherwise, compile a response from individual summaries
-      let response = '';
-      if (data.summaries.length > 0) {
-        if (data.query) {
-          response += `<div class="summary-header"><h4>Results for: "${data.query}"</h4></div>`;
-        }
-        
-        response += '<div class="summary-container">';
-        data.summaries.forEach(summary => {
-          response += `
-            <div class="summary-item">
-              <h4>${summary.title || 'Summary'}</h4>
-              ${summary.url ? `<div class="summary-url">${summary.url}</div>` : ''}
-              <div class="summary-content">${summary.summary}</div>
-            </div>
-          `;
-        });
-        response += '</div>';
-      } else {
-        response = `<div class="info-message">No results found for: "${data.query}"</div>`;
-      }
-      clearLoadingAndUpdateChat('assistant', response, generationTime);
-    }
-  } else if (data.cryptocurrencies) {
-    // Crypto agent results
-    const response = document.createElement('div');
+    // Format as an answer rather than a summary
+    let formattedAnswer = `<div class="answer-content">${answer}</div>`;
     
-    // Add a header with the query or a default title
-    const header = document.createElement('div');
-    header.className = 'summary-header';
-    header.innerHTML = `<h4>${data.query || 'Cryptocurrency Market Overview'}</h4>`;
-    response.appendChild(header);
-    
-    // Add generation time if available
-    if (data.generation_time) {
-      const timeInfo = document.createElement('div');
-      timeInfo.className = 'time-info';
-      timeInfo.innerHTML = `Data as of ${new Date().toLocaleString()}`;
-      response.appendChild(timeInfo);
+    // Include sources if available
+    if (data.summaries && data.summaries.length > 0) {
+      formattedAnswer += `<div class="answer-sources">
+        <h4>Sources:</h4>
+        <ul>
+          ${data.summaries.map(source => 
+            `<li><a href="${source.url}" target="_blank">${source.title}</a></li>`
+          ).join('')}
+        </ul>
+      </div>`;
     }
     
-    // Create the table
-    const table = document.createElement('table');
-    table.className = 'crypto-table';
-    table.innerHTML = `
-      <thead>
-        <tr>
-          <th>Name</th>
-          <th>Price</th>
-          <th>24h Change</th>
-          <th>Market Cap</th>
-        </tr>
-      </thead>
-      <tbody>
-        ${data.cryptocurrencies.map(crypto => `
-          <tr>
-            <td><strong>${crypto.name}</strong> <span class="crypto-symbol">${crypto.symbol}</span></td>
-            <td>${crypto.price}</td>
-            <td class="${parseFloat(crypto.change_24h) >= 0 ? 'positive' : 'negative'}">
-              ${parseFloat(crypto.change_24h) >= 0 ? '▲' : '▼'} ${crypto.change_24h}
-            </td>
-            <td>${crypto.market_cap}</td>
-          </tr>
-        `).join('')}
-      </tbody>
-    `;
-    response.appendChild(table);
-    
-    clearLoadingAndUpdateChat('assistant', response.outerHTML, data.generation_time);
-  } else if (data.flights) {
-    // Flight agent results
-    const response = document.createElement('div');
-    
-    // Add header
-    const queryHeader = document.createElement('div');
-    queryHeader.className = 'summary-header';
-    queryHeader.innerHTML = `<h4>Flight Results: "${data.query}"</h4>`;
-    response.appendChild(queryHeader);
-    
-    // Add search details if available
-    if (data.search_details) {
-      const details = data.search_details;
-      const detailsElement = document.createElement('div');
-      detailsElement.className = 'search-details';
-      detailsElement.innerHTML = `
-        ${details.origin ? `<span><strong>From:</strong> ${details.origin}</span>` : ''}
-        ${details.destination ? `<span><strong>To:</strong> ${details.destination}</span>` : ''}
-        ${details.departure_date ? `<span><strong>Departure:</strong> ${details.departure_date}</span>` : ''}
-        ${details.return_date ? `<span><strong>Return:</strong> ${details.return_date}</span>` : ''}
-      `;
-      response.appendChild(detailsElement);
-    }
-    
-    // Add link to Google Flights if available
-    if (data.flights_url) {
-      const flightsLink = document.createElement('div');
-      flightsLink.className = 'flights-link';
-      flightsLink.innerHTML = `<p><a href="${data.flights_url}" target="_blank">View all options on Google Flights →</a></p>`;
-      response.appendChild(flightsLink);
-    }
-    
-    // Flight results table
-    const table = document.createElement('table');
-    table.className = 'flights-table';
-    table.innerHTML = `
-      <thead>
-        <tr>
-          <th>Airline</th>
-          <th>Departure</th>
-          <th>Arrival</th>
-          <th>Duration</th>
-          <th>Price</th>
-        </tr>
-      </thead>
-      <tbody>
-        ${data.flights.map(flight => `
-          <tr>
-            <td><strong>${flight.airline}</strong></td>
-            <td>${flight.departure}</td>
-            <td>${flight.arrival}</td>
-            <td>${flight.duration}</td>
-            <td class="price">${flight.price}</td>
-          </tr>
-        `).join('')}
-      </tbody>
-    `;
-    response.appendChild(table);
-    
-    clearLoadingAndUpdateChat('assistant', response.outerHTML, data.generation_time);
+    clearLoadingAndUpdateChat('assistant', formattedAnswer, data.generation_time);
+    return;
+  }
+  
+  // Handle regular summaries (non-questions)
+  if (data.consolidated_summary) {
+    clearLoadingAndUpdateChat('assistant', data.consolidated_summary, data.generation_time);
+  } else if (data.summaries && data.summaries.length > 0) {
+    // If no consolidated summary, show the individual summaries
+    const summariesText = data.summaries.map(s => `<b>${s.title}</b>\n${s.summary}`).join('\n\n');
+    clearLoadingAndUpdateChat('assistant', summariesText);
   } else {
-    clearLoadingAndUpdateChat('assistant', '<div class="info-message"><p>Received data in unexpected format</p></div>');
-    console.log('Unexpected data format:', data);
+    clearLoadingAndUpdateChat('assistant', 'No relevant information found.');
   }
 }
 
@@ -1651,6 +1597,40 @@ async function autoSummarizePage(url, specificWebview = null) {
   // Check if it's a Google search which needs special handling for link extraction
   const isGoogleSearch = url.includes('google.com/search');
   
+  // Get page title to use as context
+  let title = '';
+  try {
+    title = webview.getTitle ? webview.getTitle() : '';
+  } catch (e) {
+    console.error('Error getting webview title:', e);
+  }
+  
+  // Extract query from URL or title
+  let query = url;
+  if (isGoogleSearch) {
+    try {
+      // Extract search query from Google URL
+      const urlObj = new URL(url);
+      const searchParams = urlObj.searchParams;
+      if (searchParams.has('q')) {
+        query = searchParams.get('q');
+      }
+    } catch (e) {
+      console.error('Error extracting search query:', e);
+    }
+  } else {
+    // Use page title for non-search URLs
+    query = title || url;
+  }
+  
+  // Detect if this is a question vs. a summary request
+  const isUrl = query.startsWith('http://') || query.startsWith('https://');
+  const questionWords = ['what', 'where', 'when', 'who', 'why', 'how', 'can', 'does', 'do', 'is', 'are', 'will', 'should'];
+  const isQuestion = !isUrl && (query.includes('?') || 
+                     questionWords.some(word => query.toLowerCase().split(/\s+/).includes(word.toLowerCase())));
+  
+  console.log(`Auto-summarize query "${query}" ${isQuestion ? 'appears to be a question' : 'appears to be a summary request'}`);
+  
   try {
     // Check if page is still loading - but be careful with recursive calls
     if (webview.isLoading && typeof webview.isLoading === 'function' && webview.isLoading()) {
@@ -1690,23 +1670,11 @@ async function autoSummarizePage(url, specificWebview = null) {
         const urls = await extractLinksFromWebview(webview);
         console.log(`Extracted ${urls.length} links from Google search results`);
         
-        // Extract query from URL
-        let query = '';
-        try {
-          const urlObj = new URL(url);
-          const searchParams = urlObj.searchParams;
-          if (searchParams.has('q')) {
-            query = searchParams.get('q');
-          }
-        } catch (e) {
-          console.error('Error extracting search query:', e);
-          query = url;
-        }
-        
         // Setup agent parameters
         const agentParams = {
           query,
           urls: urls.slice(0, 5),
+          isQuestion,
           modelInfo: {
             provider,
             apiKey
@@ -1757,19 +1725,12 @@ async function autoSummarizePage(url, specificWebview = null) {
         // Extract content from the page
         const pageContent = await extractPageContent(webview);
         
-        // Get page title safely
-        let title = '';
-        try {
-          title = webview.getTitle ? webview.getTitle() : '';
-        } catch (e) {
-          console.error('Error getting page title:', e);
-        }
-        
         // Build agent parameters
         const agentParams = {
           query: title || url, // Use page title as query if available
           pageContent: pageContent,
           isDirectPage: true,
+          isQuestion,
           modelInfo: {
             provider,
             apiKey
@@ -2279,13 +2240,19 @@ function addMessageToChat(role, content, timing = null) {
     // Special handling for context messages
     messageDiv.className = 'chat-message context-message';
     messageDiv.innerHTML = `<div class="message-content">${content}</div>`;
+    messageDiv.dataset.role = 'context';
   } else if (role === 'user') {
     // User message is simple
     messageDiv.className = 'chat-message user-message';
     messageDiv.innerHTML = `<div class="message-content">${content}</div>`;
+    messageDiv.dataset.role = 'user';
+    messageDiv.dataset.timestamp = new Date().toISOString();
   } else if (role === 'assistant') {
     // Assistant message can include timing info
     messageDiv.className = 'chat-message assistant-message';
+    messageDiv.dataset.role = 'assistant';
+    messageDiv.dataset.timestamp = new Date().toISOString();
+    
     if (timing) {
       messageDiv.innerHTML = `
         <div class="timing-info">
@@ -2295,6 +2262,7 @@ function addMessageToChat(role, content, timing = null) {
         </div>
         <div class="message-content">${content}</div>
       `;
+      messageDiv.dataset.genTime = timing.toFixed(2);
     } else {
       messageDiv.innerHTML = `<div class="message-content">${content}</div>`;
     }
@@ -2327,68 +2295,84 @@ async function processFollowupQuestion(question) {
       return;
     }
     
-    // Get the active webview to potentially extract content
-    const webview = getActiveWebview();
-    if (!webview) {
-      addMessageToChat('assistant', 'Cannot access current page content.');
+    // Get the active webview to potentially extract page content
+    const activeWebview = document.querySelector('webview.active');
+    if (!activeWebview) {
+      addMessageToChat('assistant', 'No active webview found.');
       return;
     }
     
-    // Extract content from current page for context
-    const pageContent = await extractPageContent(webview);
+    // Note: We don't need to add the user's question to the chat again here
+    // as it's already been added by the chat input handler
     
-    // Prepare agent parameters
-    const agentPath = `${__dirname}/agents/topic_agent.py`;
-
-    // Verify the agent path exists (always use topic agent for follow-up questions)
-    const validAgentPath = `${__dirname}/agents/topic_agent.py`;
-
-    // Process with topic agent
-    const agentParams = {
-      query: question,
-      pageContent: pageContent,
-      isDirectPage: true,
-      modelInfo: {
-        provider,
-        apiKey
+    try {
+      // Attempt to get the page content from the active webview
+      const pageContent = await extractPageContent(activeWebview);
+      console.log("Extracted page content:", pageContent);
+      
+      // Look for any existing messages to provide as context
+      const chatContainer = document.getElementById('chatContainer');
+      let conversationHistory = [];
+      
+      if (chatContainer) {
+        const messages = chatContainer.querySelectorAll('.chat-message');
+        messages.forEach(message => {
+          const role = message.classList.contains('user-message') ? 'user' : 'assistant';
+          const content = message.querySelector('.message-content').textContent.trim();
+          if (content && !content.includes('Processing your question...')) {
+            conversationHistory.push({ role, content });
+          }
+        });
       }
-    };
-
-    console.log('Processing follow-up question:', question);
-
-    // Call the agent
-    const result = await ipcRenderer.invoke('execute-agent', {
-      agentPath: validAgentPath,
-      agentParams
-    });
-    
-    // Remove the loading message
-    const chatContainer = document.getElementById('chatContainer');
-    const loadingMessage = chatContainer.querySelector('.assistant-message:last-child');
-    if (loadingMessage) {
-      chatContainer.removeChild(loadingMessage);
-    }
-    
-    // Display the result
-    if (result.success === false) {
-      addMessageToChat('assistant', `Error: ${result.error || 'Unknown error'}`);
-    } else {
-      // If we have a consolidated summary, show it
-      if (result.data.consolidated_summary) {
-        addMessageToChat('assistant', result.data.consolidated_summary, result.data.generation_time);
-      } else {
-        // Otherwise show individual summaries
-        let response = '';
-        if (result.data.summaries && result.data.summaries.length > 0) {
-          response = result.data.summaries.map(s => s.summary).join('\n\n');
-        } else {
-          response = 'No information found for your query.';
+      
+      // For questions, enhance the prompt to clearly indicate it's a question
+      // Always set isQuestion: true for follow-up questions
+      const enhancedQuery = `DIRECT QUESTION: ${question}\n\nPlease provide a direct answer to this specific question using the available context.`;
+      console.log('Enhanced query for follow-up question:', enhancedQuery);
+      
+      // Update agentParams with our enhanced query
+      const agentParams = {
+        query: enhancedQuery,
+        originalQuery: question, // Keep the original question for reference
+        pageContent: pageContent,
+        isDirectPage: true,
+        isQuestion: true, // Always set to true for questions
+        isFollowUp: true,
+        conversationHistory: conversationHistory,
+        modelInfo: {
+          provider,
+          apiKey,
+          isQuestion: true // Also include in modelInfo for backward compatibility
         }
-        addMessageToChat('assistant', response);
+      };
+      
+      // Set up the topic agent execution
+      const agentPath = path.join(__dirname, 'agents', 'topic_agent.py');
+      
+      console.log(`Executing topic agent with question: ${question}`);
+      console.log(`Agent params:`, JSON.stringify(agentParams, (key, value) => 
+        key === 'apiKey' ? '[REDACTED]' : value));
+      
+      // Execute the agent
+      const result = await ipcRenderer.invoke('execute-agent', {
+        agentPath,
+        agentParams
+      });
+      
+      if (result.success === false) {
+        addMessageToChat('assistant', `Error: ${result.error || 'Unknown error'}`);
+        return;
       }
+      
+      // Display the results
+      displayAgentResults(result.data);
+      
+    } catch (error) {
+      console.error('Error extracting page content:', error);
+      addMessageToChat('assistant', `Error processing your question: ${error.message}`);
     }
   } catch (error) {
-    console.error('Error processing follow-up question:', error);
+    console.error('Error in processFollowupQuestion:', error);
     addMessageToChat('assistant', `Error: ${error.message}`);
   }
 }
