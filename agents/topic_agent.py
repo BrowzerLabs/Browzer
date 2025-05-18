@@ -17,9 +17,9 @@ import time
 from anthropic import Anthropic
 import openai
 from typing import Dict, List, Optional, Tuple
-import asyncio
-import aiohttp
+import traceback
 
+# Set up logging
 LOG_FILE = os.path.join(os.path.dirname(__file__), 'topic_agent.log')
 def log_event(message):
     with open(LOG_FILE, 'a') as f:
@@ -27,6 +27,7 @@ def log_event(message):
 
 class TopicAgent:
     def __init__(self):
+        log_event("Initializing TopicAgent")
         # Download required NLTK data
         try:
             nltk.data.find('tokenizers/punkt')
@@ -44,12 +45,14 @@ class TopicAgent:
             'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/92.0.4515.107 Safari/537.36',
             'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.212 Safari/537.36 Edg/90.0.818.66',
         ]
-        log_event('Initialized TopicAgent')
+        log_event('TopicAgent initialization complete')
 
     def get_random_user_agent(self):
+        """Return a random user agent string"""
         return random.choice(self.user_agents)
 
     def get_webpage_content(self, url):
+        """Fetch the HTML content of a webpage"""
         try:
             headers = {
                 'User-Agent': self.get_random_user_agent(),
@@ -63,13 +66,14 @@ class TopicAgent:
             log_event(f'Sending request to URL: {url}')
             response = requests.get(url, headers=headers, timeout=10)
             response.raise_for_status()
-            log_event(f'Fetched content for URL: {url} (status: {response.status_code})')
+            log_event(f'Successfully fetched content for URL: {url} (status: {response.status_code})')
             return response.text
         except Exception as e:
             log_event(f'Error fetching URL {url}: {e}')
             return None
 
     def extract_text(self, html_content):
+        """Extract and clean text from HTML content"""
         if not html_content:
             log_event('No HTML content to extract text from')
             return ""
@@ -87,13 +91,14 @@ class TopicAgent:
         text = re.sub(r'\s+', ' ', text).strip()  # Replace multiple spaces with single space
         text = re.sub(r'\n+', ' ', text)  # Replace newlines with spaces
         
-        # Log a sample of the extracted text for debugging
+        # Log a sample of the extracted text
         sample = text[:150] + "..." if len(text) > 150 else text
         log_event(f'Extracted text sample: {sample}')
         
         return text
 
     def summarize_text(self, text, num_sentences=5):
+        """Create an extractive summary of text by selecting important sentences"""
         if not text or len(text) < 100:
             log_event(f'Text too short to summarize: {len(text) if text else 0} characters')
             return text
@@ -140,7 +145,7 @@ class TopicAgent:
             return text[:500] + "..." if len(text) > 500 else text  # Fallback to simple truncation
 
     def clean_query(self, query):
-        # Clean and normalize the query
+        """Clean and normalize the query"""
         try:
             # If it's a URL with a query parameter, extract it
             if '?' in query and ('http://' in query or 'https://' in query):
@@ -217,16 +222,16 @@ class TopicAgent:
         results = list(dict.fromkeys(results))
         log_event(f'Found {len(results)} unique search result URLs')
         
-        # Take only top 5 results (we'll process until we get 3 valid ones)
+        # Take only top 5 results
         return results[:5]
 
     def process_urls(self, urls, query):
-        """Process a list of URLs provided directly by the browser"""
-        log_event(f'Processing {len(urls)} URLs provided by browser for query: {query}')
+        """Process a list of URLs to extract summaries"""
+        log_event(f'Processing {len(urls)} URLs for query: {query}')
         
         summaries = []
         for url in urls:
-            if len(summaries) >= 3:
+            if len(summaries) >= 3:  # Limit to 3 summaries
                 break
                 
             log_event(f'Processing URL: {url}')
@@ -264,85 +269,77 @@ class TopicAgent:
         
         return summaries
 
-    def create_consolidated_summary(self, summaries: List[Dict[str, str]], model_info: Dict[str, str]) -> Tuple[bool, Optional[str], float]:
-        log_event(f"[DEBUG] Received model_info: {model_info}")
+    def is_question(self, query: str) -> bool:
+        """Determine if the query is a question"""
+        # Skip question detection for URLs
+        if query.startswith('http://') or query.startswith('https://'):
+            log_event(f"Query is a URL, not a question: {query}")
+            return False
+            
+        # Check for explicit question format
+        if 'DIRECT QUESTION:' in query or query.strip().endswith('?'):
+            log_event(f"Query is explicitly a question: {query}")
+            return True
+        
+        # Check for question words
+        question_words = ['who', 'what', 'when', 'where', 'why', 'how', 'did', 'do', 'does', 'is', 'are', 'was', 'were']
+        words = query.lower().split()
+        if any(word in question_words for word in words):
+            log_event(f"Query contains question words: {query}")
+            return True
+            
+        # Additional checks from params if available
+        return False
+    
+    def generate_llm_response(self, prompt_type: str, input_text: str, model_info: Dict) -> Tuple[bool, Optional[str], float]:
+        """Generate a response using an LLM provider"""
+        log_event(f"Generating {prompt_type} using LLM")
         
         # Start timing
         start_time = time.time()
         
-        # Check if model_info is None or empty
-        if not model_info:
-            log_event(f"[ERROR] model_info is None or empty. Cannot generate summary.")
-            return False, None, 0
-            
-        # Get provider with proper error handling
+        # Get provider and API key
         provider = model_info.get('provider', '').lower()
-        
-        # Try different ways to access the API key (api_key, apiKey, API_KEY, etc.)
         api_key = None
         for key_name in ['api_key', 'apiKey', 'API_KEY', 'api-key']:
             if key_name in model_info and model_info[key_name]:
                 api_key = model_info[key_name]
-                log_event(f"[DEBUG] Found API key with key name: {key_name}")
                 break
                 
-        log_event(f"[DEBUG] Provider: {provider}, API Key present: {bool(api_key)}")
-        
         if not api_key:
-            log_event("[ERROR] No API key found in model_info with any known key names")
+            log_event("[ERROR] No API key found in model_info")
             return False, None, 0
         
         try:
-            # Prepare the input text
-            input_text = "Please create a concise, easy-to-understand summary from these sources:\n\n"
-            
-            # Limit each summary to 500 characters to avoid context window issues
-            for idx, source in enumerate(summaries, 1):
-                summary_text = source.get('summary', 'N/A')
-                if len(summary_text) > 500:
-                    summary_text = summary_text[:497] + "..."
-                    log_event(f"[DEBUG] Truncated summary {idx} from {len(source.get('summary', 'N/A'))} to 500 chars")
-                
-                input_text += f"Source {idx}:\n"
-                input_text += f"Title: {source.get('title', 'N/A')}\n"
-                input_text += f"URL: {source.get('url', 'N/A')}\n"
-                input_text += f"Content: {summary_text}\n\n"
-            
-            input_text += "\nPlease provide a clear, well-structured summary that captures the key points and main ideas from all sources. Focus on accuracy and readability. Keep the consolidate summary less than 100 words. Give me just the consolidate summary, nothing additional that's irrelevant to the topic."
-            
-            log_event(f"[DEBUG] Input text length: {len(input_text)} characters")
-            if len(input_text) > 8000:
-                log_event("[WARNING] Input text is very large, which may cause timeout issues")
-                
-            # Track the LLM call timing more precisely
+            # Track the LLM call timing
             llm_call_start = time.time()
             
             if provider == 'anthropic':
                 client = Anthropic(api_key=api_key)
                 log_event("[DEBUG] Making Anthropic API call")
                 response = client.messages.create(
-                    model="claude-3-7-sonnet-latest",  # Use a faster, smaller model
+                    model="claude-3-7-sonnet-latest",
                     max_tokens=64000,
                     temperature=0.3,
-                    system="You are a helpful assistant that creates clear, concise summaries from multiple sources.",
-                    messages=[{"role": "user", "content": input_text}],
-                    timeout=20  # Add timeout
+                    system=input_text["system"],
+                    messages=[{"role": "user", "content": input_text["user"]}],
+                    timeout=25
                 )
-                summary = response.content[0].text
+                result = response.content[0].text
             elif provider == 'openai':
                 client = openai.OpenAI(api_key=api_key)
                 log_event("[DEBUG] Making OpenAI API call")
                 response = client.chat.completions.create(
-                    model="gpt-3.5-turbo",  # Use a faster model
+                    model="gpt-3.5-turbo",
                     messages=[
-                        {"role": "system", "content": "You are a helpful assistant that creates clear, concise summaries from multiple sources."},
-                        {"role": "user", "content": input_text}
+                        {"role": "system", "content": input_text["system"]},
+                        {"role": "user", "content": input_text["user"]}
                     ],
                     temperature=0.3,
                     max_tokens=100000,
-                    timeout=20  # Add timeout
+                    timeout=25
                 )
-                summary = response.choices[0].message.content
+                result = response.choices[0].message.content
             elif provider == 'perplexity':
                 headers = {
                     'Authorization': f'Bearer {api_key}',
@@ -355,18 +352,17 @@ class TopicAgent:
                     json={
                         'model': 'pplx-7b-online',
                         'messages': [
-                            {'role': 'system', 'content': 'You are a helpful assistant that creates clear, concise summaries from multiple sources.'},
-                            {'role': 'user', 'content': input_text}
+                            {'role': 'system', 'content': input_text["system"]},
+                            {'role': 'user', 'content': input_text["user"]}
                         ],
                         'temperature': 0.3,
                         'max_tokens': 100000
                     }
                 )
                 response.raise_for_status()
-                summary = response.json()['choices'][0]['message']['content']
+                result = response.json()['choices'][0]['message']['content']
             elif provider == 'chutes':
-                # Use a non-streaming approach with requests instead of async
-                log_event(f"[DEBUG] Using Chutes with non-streaming approach")
+                log_event(f"[DEBUG] Using Chutes API")
                 headers = {
                     "Authorization": f"Bearer {api_key}",
                     "Content-Type": "application/json"
@@ -375,28 +371,22 @@ class TopicAgent:
                 body = {
                     "model": "deepseek-ai/DeepSeek-R1",
                     "messages": [
-                        {"role": "user", "content": input_text}
+                        {"role": "system", "content": input_text["system"]},
+                        {"role": "user", "content": input_text["user"]}
                     ],
-                    "stream": False,  # Non-streaming mode
+                    "stream": False,
                     "max_tokens": 100000,
                     "temperature": 0.7
                 }
                 
-                try:
-                    log_event("[DEBUG] Making Chutes API call")
-                    response = requests.post(
-                        "https://llm.chutes.ai/v1/chat/completions",
-                        headers=headers,
-                        json=body,
-                        timeout=20  # Lower timeout to prevent hanging
-                    )
-                    response.raise_for_status()
-                    response_json = response.json()
-                    log_event(f"[DEBUG] Chutes response received: {response_json}")
-                    summary = response_json['choices'][0]['message']['content']
-                except Exception as e:
-                    log_event(f"[ERROR] Error in Chutes request: {str(e)}")
-                    return False, None, 0
+                response = requests.post(
+                    "https://llm.chutes.ai/v1/chat/completions",
+                    headers=headers,
+                    json=body,
+                    timeout=25
+                )
+                response.raise_for_status()
+                result = response.json()['choices'][0]['message']['content']
             else:
                 log_event(f"Unsupported provider: {provider}")
                 return False, None, 0
@@ -406,23 +396,180 @@ class TopicAgent:
             total_time = time.time() - start_time
             llm_time = llm_call_end - llm_call_start
             
-            log_event(f"[DEBUG] LLM call took {llm_time:.2f} seconds. Total summary generation took {total_time:.2f} seconds")
-            log_event("Successfully generated consolidated summary")
+            log_event(f"[DEBUG] LLM call took {llm_time:.2f} seconds. Total generation took {total_time:.2f} seconds")
             
-            return True, summary, total_time
+            return True, result, total_time
         except Exception as e:
-            log_event(f"Error creating consolidated summary: {str(e)}")
+            log_event(f"Error in LLM call: {str(e)}")
+            log_event(traceback.format_exc())
             total_time = time.time() - start_time
             return False, None, total_time
 
-    def process_query(self, query, provided_urls=None, page_content=None, model_info=None):
+    def create_question_answer(self, query: str, summaries: List[Dict[str, str]], model_info: Dict) -> Tuple[bool, Dict]:
+        """Generate an answer to a question using available sources and model knowledge"""
+        log_event(f"Creating answer for question: {query}")
+        
+        # Clean any DIRECT QUESTION: prefix for better prompt formatting
+        clean_query = query.replace("DIRECT QUESTION:", "").strip()
+        
+        # Create the prompt for question answering
+        system_prompt = (
+            "You are a helpful assistant that answers questions accurately and thoroughly. "
+            "Always provide a direct answer to questions. "
+            "IMPORTANT INSTRUCTIONS:\n"
+            "1. If the answer IS in the provided sources, use that information and cite sources.\n"
+            "2. If the answer is NOT in the provided sources, use your general knowledge to provide the best possible answer.\n"
+            "3. NEVER refuse to answer - always provide your best response.\n"
+            "4. When using general knowledge not from sources, clearly indicate this.\n"
+            "5. Keep your answers concise and relevant to the question."
+        )
+        
+        user_prompt = f"QUESTION: {clean_query}\n\n"
+        user_prompt += "Here are the available sources:\n\n"
+        
+        # Include the sources in the prompt
+        if summaries:
+            for idx, source in enumerate(summaries, 1):
+                # Truncate long summaries
+                summary_text = source.get('summary', '')
+                if len(summary_text) > 500:
+                    summary_text = summary_text[:497] + "..."
+                
+                user_prompt += f"Source {idx}:\n"
+                user_prompt += f"Title: {source.get('title', 'Untitled')}\n"
+                user_prompt += f"URL: {source.get('url', 'No URL')}\n"
+                user_prompt += f"Content: {summary_text}\n\n"
+        else:
+            user_prompt += "No sources are available. Please answer based on your general knowledge.\n\n"
+            
+        user_prompt += (
+            "Now answer the question directly and specifically. "
+            "If the answer is in the sources, cite the source. "
+            "If the information is not in the sources, provide the answer from your general knowledge "
+            "and clearly state that it comes from your knowledge rather than the provided sources."
+        )
+        
+        # Generate the answer using LLM
+        success, answer, generation_time = self.generate_llm_response(
+            "question_answer", 
+            {"system": system_prompt, "user": user_prompt}, 
+            model_info
+        )
+        
+        if not success:
+            log_event("Failed to generate question answer")
+            return False, {
+                "query": clean_query,
+                "summaries": summaries,
+                "consolidated_summary": "Failed to generate an answer to your question.",
+                "generation_time": generation_time,
+                "isQuestion": True
+            }
+        
+        log_event(f"Generated question answer in {generation_time:.2f} seconds")
+        
+        return True, {
+            "query": clean_query,
+            "summaries": summaries,
+            "consolidated_summary": answer,
+            "generation_time": generation_time,
+            "isQuestion": True
+        }
+
+    def create_summary(self, query: str, summaries: List[Dict[str, str]], model_info: Dict) -> Tuple[bool, Dict]:
+        """Generate a summary from the provided content"""
+        log_event(f"Creating summary for: {query}")
+        
+        # Create the prompt for summarization
+        system_prompt = (
+            "You are a helpful assistant that creates concise, accurate summaries. "
+            "Summarize the provided sources into a coherent overview that captures the key points. "
+            "Focus on accuracy and clarity."
+        )
+        
+        user_prompt = f"Please create a summary for: {query}\n\n"
+        user_prompt += "Here are the sources to summarize:\n\n"
+        
+        # Include the sources in the prompt
+        if summaries:
+            for idx, source in enumerate(summaries, 1):
+                # Truncate long summaries
+                summary_text = source.get('summary', '')
+                if len(summary_text) > 500:
+                    summary_text = summary_text[:497] + "..."
+                
+                user_prompt += f"Source {idx}:\n"
+                user_prompt += f"Title: {source.get('title', 'Untitled')}\n"
+                user_prompt += f"URL: {source.get('url', 'No URL')}\n"
+                user_prompt += f"Content: {summary_text}\n\n"
+        else:
+            user_prompt += "No sources are available for summarization.\n\n"
+            
+        user_prompt += (
+            "Create a well-structured summary that captures the key information from all sources. "
+            "Focus on accuracy and readability. "
+            "Keep the consolidated summary concise (less than 150 words)."
+        )
+        
+        # Generate the summary using LLM
+        success, summary, generation_time = self.generate_llm_response(
+            "summary", 
+            {"system": system_prompt, "user": user_prompt}, 
+            model_info
+        )
+        
+        if not success:
+            log_event("Failed to generate summary")
+            return False, {
+                "query": query,
+                "summaries": summaries,
+                "consolidated_summary": "Failed to generate summary.",
+                "generation_time": generation_time,
+                "isQuestion": False
+            }
+        
+        log_event(f"Generated summary in {generation_time:.2f} seconds")
+        
+        return True, {
+            "query": query,
+            "summaries": summaries,
+            "consolidated_summary": summary,
+            "generation_time": generation_time,
+            "isQuestion": False
+        }
+
+    def process_query(self, query, provided_urls=None, page_content=None, model_info=None, is_question=None):
+        """Main entry point for processing a query - either summarizing content or answering a question"""
         log_event(f'Processing query: {query}')
         
-        # Clean and prepare the query
-        clean_query = self.clean_query(query)
-        log_event(f'Cleaned query: {clean_query}')
-        
         try:
+            # Clean and prepare the query
+            clean_query = self.clean_query(query)
+            log_event(f'Cleaned query: {clean_query}')
+            
+            # Check if the query is a URL - URLs should never be considered questions
+            is_url = query.startswith('http://') or query.startswith('https://')
+            if is_url:
+                log_event(f'Query is a URL, forcing is_question=False: {query}')
+                query_is_question = False
+            else:
+                # Determine if this is a question
+                query_is_question = is_question if is_question is not None else self.is_question(query)
+                
+                # Also check model_info for isQuestion flag if available
+                if model_info and isinstance(model_info, dict) and 'isQuestion' in model_info:
+                    query_is_question = query_is_question or model_info.get('isQuestion')
+                    
+                # Check originalQuery if available
+                original_query = ""
+                if model_info and isinstance(model_info, dict):
+                    original_query = model_info.get('originalQuery', '')
+                    if original_query and not is_url and self.is_question(original_query):
+                        query_is_question = True
+            
+            log_event(f'Query is{"" if query_is_question else " not"} a question')
+                
+            # Generate summaries from sources
             summaries = []
             
             # If direct page content is provided, just summarize that
@@ -458,91 +605,108 @@ class TopicAgent:
             
             log_event(f'Generated {len(summaries)} summaries')
             
+            # Default response for no summaries
             if not summaries:
-                log_event('Failed to generate any summaries')
+                log_event('No summaries generated')
+                default_message = "No relevant information found."
+                
+                # If it's a question, we'll try to answer it anyway
+                if query_is_question and model_info:
+                    log_event('Attempting to answer question without sources')
+                    success, result = self.create_question_answer(clean_query, [], model_info)
+                    if success:
+                        return {'success': True, 'data': result}
+                
+                # Return a default response
                 return {
                     'success': True,
                     'data': {
                         'query': clean_query,
-                        'summaries': [
-                            {
-                                'title': 'No Results',
-                                'url': 'https://example.com',
-                                'summary': f'Unable to generate summaries for the query: "{clean_query}". Please try a different search term or visit a specific website.'
-                            }
-                        ],
-                        'consolidated_summary': None,
-                        'generation_time': 0
+                        'summaries': [],
+                        'consolidated_summary': default_message,
+                        'generation_time': 0,
+                        'isQuestion': query_is_question
                     }
                 }
             
-            # Create consolidated summary if model info is provided
-            consolidated_summary = None
-            generation_time = 0
-            log_event(f"[DEBUG] PROCESS_QUERY BEFORE IF: Received model_info: {model_info} and summaries: {summaries}")
-            if model_info and summaries:
-                log_event(f"[DEBUG] PROCESS_QUERY: Creating consolidated summary with model_info: {model_info}")
-                success, summary, generation_time = self.create_consolidated_summary(summaries, model_info)
-                if success:
-                    consolidated_summary = summary
-                    log_event(f'Successfully created consolidated summary in {generation_time:.2f} seconds')
-                else:
-                    log_event('Failed to create consolidated summary')
-            
-            return {
-                'success': True,
-                'data': {
-                    'query': clean_query,
-                    'summaries': summaries,
-                    'consolidated_summary': consolidated_summary,
-                    'generation_time': generation_time
+            # If there's no model_info, we can only return the extracted summaries
+            if not model_info:
+                log_event('No model info provided, returning only summaries')
+                return {
+                    'success': True,
+                    'data': {
+                        'query': clean_query,
+                        'summaries': summaries,
+                        'consolidated_summary': None,
+                        'generation_time': 0,
+                        'isQuestion': query_is_question
+                    }
                 }
-            }
+            
+            # Generate response based on whether it's a question or summary request
+            if query_is_question:
+                success, result = self.create_question_answer(clean_query, summaries, model_info)
+            else:
+                success, result = self.create_summary(clean_query, summaries, model_info)
+                
+            if not success:
+                log_event('Failed to generate response')
+                return {
+                    'success': True,  # Still return success to avoid client errors
+                    'data': {
+                        'query': clean_query,
+                        'summaries': summaries,
+                        'consolidated_summary': "Failed to generate a response.",
+                        'generation_time': 0,
+                        'isQuestion': query_is_question
+                    }
+                }
+                
+            log_event('Successfully processed query')
+            return {'success': True, 'data': result}
             
         except Exception as e:
             log_event(f'Error in process_query: {e}')
+            log_event(traceback.format_exc())
             return {
                 'success': False,
                 'error': str(e)
             }
 
 if __name__ == "__main__":
-    # Check if we have direct URLs from the browser
+    log_event("=== Starting new topic_agent.py execution ===")
+    
+    # Check if we have direct input from the browser
     if len(sys.argv) > 1:
         input_arg = sys.argv[1]
         log_event(f'Received input: {input_arg[:100]}...' if len(input_arg) > 100 else input_arg)
         
-        # Try to parse as JSON (containing URLs and query)
+        # Try to parse as JSON
         try:
             params = json.loads(input_arg)
-            log_event(f"[DEBUG] Parsed JSON parameters: {json.dumps(params)}")
+            log_event(f"Parsed JSON parameters: {json.dumps(params)}")
             
+            # Extract parameters
             query = params.get('query', '')
             urls = params.get('urls', [])
             page_content = params.get('pageContent', None)
             model_info = params.get('modelInfo', None)
+            is_question = params.get('isQuestion', None)
             
-            log_event(f"[DEBUG] modelInfo in params: {model_info}")
-            if model_info:
-                log_event(f"[DEBUG] modelInfo keys: {list(model_info.keys())}")
-                log_event(f"[DEBUG] modelInfo provider: {model_info.get('provider')}")
-                if 'apiKey' in model_info:
-                    log_event(f"[DEBUG] modelInfo has apiKey: {bool(model_info['apiKey'])}")
-                if 'api_key' in model_info:
-                    log_event(f"[DEBUG] modelInfo has api_key: {bool(model_info['api_key'])}")
-            
-            agent = TopicAgent()
-            
-            if page_content:
-                log_event(f'Parsed input as JSON with direct page content: {page_content.get("title", "Untitled")}')
-                result = agent.process_query(query, None, page_content, model_info)
-            elif urls:
-                log_event(f'Parsed input as JSON with {len(urls)} URLs and query: {query}')
-                result = agent.process_query(query, urls, None, model_info)
-            else:
-                log_event(f'Parsed input as JSON with query: {query} and modelInfo: {model_info is not None}')
-                result = agent.process_query(query, None, None, model_info)
+            # Force is_question to False if query is a URL
+            if query.startswith('http://') or query.startswith('https://'):
+                log_event(f"Query is a URL, forcing is_question=False: {query}")
+                is_question = False
                 
+                # Also update in modelInfo if present
+                if model_info and isinstance(model_info, dict):
+                    model_info['isQuestion'] = False
+            
+            # Execute agent
+            agent = TopicAgent()
+            result = agent.process_query(query, urls, page_content, model_info, is_question)
+            
+            # Return result
             print(json.dumps(result))
             log_event(f'Completed processing. Success: {result.get("success", False)}')
             sys.exit(0)
@@ -554,7 +718,7 @@ if __name__ == "__main__":
         # Default query if none provided
         query = "artificial intelligence"
     
-    # Standard processing with search
+    # Standard processing with search for non-JSON input
     log_event(f'Starting agent with query: {query}')
     agent = TopicAgent()
     result = agent.process_query(query)
