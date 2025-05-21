@@ -81,6 +81,439 @@ function isProblematicSite(url) {
   }
 }
 
+// Add this after the existing constants but before the tab management
+// Memory management
+const MEMORY_KEY = 'agent_memory';
+const MAX_MEMORY_ITEMS = 100; // Maximum number of conversation items to store
+
+// Store and manage the agent's memory
+function storeInMemory(url, question, answer, title = '') {
+  try {
+    // Skip storing memory for empty content
+    if (!url || (!question && !answer)) {
+      console.log('Skipping memory storage due to empty content');
+      return;
+    }
+    
+    // Get existing memory
+    let memory = [];
+    try {
+      memory = JSON.parse(localStorage.getItem(MEMORY_KEY) || '[]');
+      if (!Array.isArray(memory)) {
+        console.error('Memory is not an array, resetting');
+        memory = [];
+      }
+    } catch (parseError) {
+      console.error('Error parsing memory from localStorage:', parseError);
+      memory = [];
+    }
+    
+    // Get page title from active webview if not provided
+    let pageTitle = title;
+    if (!pageTitle) {
+      const activeWebview = getActiveWebview();
+      if (activeWebview) {
+        try {
+          pageTitle = activeWebview.getTitle ? activeWebview.getTitle() : '';
+        } catch (e) {
+          console.error('Error getting title:', e);
+        }
+      }
+    }
+    
+    // Try to detect the main topic automatically
+    let pageTopic = '';
+    try {
+      pageTopic = extractTopic({
+        title: pageTitle,
+        question: question,
+        answer: answer
+      });
+    } catch (topicError) {
+      console.error('Error extracting topic:', topicError);
+    }
+    
+    // Create memory item with enhanced metadata
+    const memoryItem = {
+      timestamp: Date.now(),
+      url: url || '',
+      title: pageTitle || '',
+      question: question || '',
+      answer: answer || '',
+      domain: url ? (new URL(url)).hostname : '',
+      topic: pageTopic || '',
+      // Track the model used for answers when available
+      modelInfo: {
+        provider: getModelProvider(),
+        name: getModelName()
+      }
+    };
+    
+    // Add to beginning of array
+    memory.unshift(memoryItem);
+    
+    // Limit size
+    if (memory.length > MAX_MEMORY_ITEMS) {
+      memory = memory.slice(0, MAX_MEMORY_ITEMS);
+    }
+    
+    // Save to localStorage immediately
+    try {
+      localStorage.setItem(MEMORY_KEY, JSON.stringify(memory));
+      console.log('Memory stored:', memoryItem);
+    } catch (saveError) {
+      console.error('Error saving memory to localStorage:', saveError);
+    }
+    
+    // Try to get content snippet in background with improved extraction
+    const activeWebview = getActiveWebview();
+    if (activeWebview) {
+      try {
+        activeWebview.executeJavaScript(`
+          (function() {
+            try {
+              // Try multiple strategies to get the most relevant content
+              
+              // First, look for the main article content
+              const mainContent = document.querySelector('article') || 
+                                document.querySelector('main') || 
+                                document.querySelector('.content') ||
+                                document.querySelector('#content');
+              
+              if (mainContent) {
+                // If we have a main content section, try to get the most relevant paragraph
+                const paragraphs = mainContent.querySelectorAll('p');
+                if (paragraphs && paragraphs.length > 0) {
+                  // Get the longest paragraph (likely the most informative)
+                  let bestParagraph = '';
+                  let bestLength = 0;
+                  
+                  for (const p of paragraphs) {
+                    const text = p.innerText.trim();
+                    if (text.length > bestLength && text.length > 100) {
+                      bestParagraph = text;
+                      bestLength = text.length;
+                    }
+                  }
+                  
+                  if (bestParagraph) {
+                    return bestParagraph.substring(0, 500) + (bestParagraph.length > 500 ? '...' : '');
+                  }
+                  
+                  // If no good paragraph, return a collection of shorter paragraphs
+                  const combinedParagraphs = Array.from(paragraphs)
+                    .map(p => p.innerText.trim())
+                    .filter(t => t.length > 30)
+                    .slice(0, 3)
+                    .join(' ');
+                    
+                  if (combinedParagraphs) {
+                    return combinedParagraphs.substring(0, 500) + (combinedParagraphs.length > 500 ? '...' : '');
+                  }
+                }
+                
+                // Fallback to main content text
+                return mainContent.innerText.substring(0, 500) + '...';
+              }
+              
+              // If no main content found, try looking for key headings and their following content
+              const headings = document.querySelectorAll('h1, h2, h3');
+              if (headings && headings.length > 0) {
+                for (const heading of headings) {
+                  // Find the next paragraph after this heading
+                  let nextElement = heading.nextElementSibling;
+                  while (nextElement && 
+                         (nextElement.tagName !== 'P' || 
+                          nextElement.innerText.trim().length < 50)) {
+                    nextElement = nextElement.nextElementSibling;
+                  }
+                  
+                  if (nextElement && nextElement.tagName === 'P') {
+                    const headingText = heading.innerText.trim();
+                    const paragraphText = nextElement.innerText.trim();
+                    if (paragraphText.length > 50) {
+                      return headingText + ': ' + paragraphText.substring(0, 450) + '...';
+                    }
+                  }
+                }
+              }
+              
+              // Last resort: get the first 500 characters of useful body text
+              const bodyText = document.body.innerText
+                .replace(/\\s+/g, ' ')
+                .trim()
+                .substring(0, 500);
+              return bodyText + (bodyText.length === 500 ? '...' : '');
+            } catch(e) {
+              console.error('Error getting content snippet:', e);
+              return '';
+            }
+          })()
+        `).then(snippet => {
+          if (snippet) {
+            try {
+              // Get memory again in case it changed
+              let updatedMemory = [];
+              try {
+                updatedMemory = JSON.parse(localStorage.getItem(MEMORY_KEY) || '[]');
+              } catch (parseError) {
+                console.error('Error parsing memory for snippet update:', parseError);
+                return;
+              }
+              
+              // Update the memory item we just added with the snippet
+              if (updatedMemory.length > 0 && updatedMemory[0].timestamp === memoryItem.timestamp) {
+                updatedMemory[0].contentSnippet = snippet;
+                
+                // Also try to extract keywords from the content for better retrieval later
+                try {
+                  const keywords = extractKeywords(snippet, 5);
+                  if (keywords && keywords.length > 0) {
+                    updatedMemory[0].keywords = keywords;
+                  }
+                } catch (keywordError) {
+                  console.error('Error extracting keywords:', keywordError);
+                }
+                
+                localStorage.setItem(MEMORY_KEY, JSON.stringify(updatedMemory));
+                console.log('Updated memory with content snippet and keywords');
+              }
+            } catch (memoryUpdateError) {
+              console.error('Error updating memory with snippet:', memoryUpdateError);
+            }
+          }
+        }).catch(e => {
+          console.error('Error getting content snippet:', e);
+        });
+      } catch (e) {
+        console.error('Error executing JS for content snippet:', e);
+      }
+    }
+  } catch (error) {
+    console.error('Error storing memory:', error);
+  }
+}
+
+// Helper function to extract keywords from text
+function extractKeywords(text, maxKeywords = 5) {
+  if (!text || typeof text !== 'string') return [];
+  
+  try {
+    // Simple keyword extraction
+    const words = text.toLowerCase()
+      .replace(/[^\w\s]/g, ' ')
+      .split(/\s+/)
+      .filter(word => word && word.length > 4);
+    
+    // Count word frequencies
+    const wordFreq = {};
+    words.forEach(word => {
+      if (!wordFreq[word]) wordFreq[word] = 0;
+      wordFreq[word]++;
+    });
+    
+    // Sort by frequency
+    const sortedWords = Object.keys(wordFreq)
+      .sort((a, b) => wordFreq[b] - wordFreq[a])
+      .slice(0, maxKeywords);
+    
+    return sortedWords;
+  } catch (error) {
+    console.error('Error extracting keywords:', error);
+    return [];
+  }
+}
+
+// Helper to get current model provider
+function getModelProvider() {
+  const modelSelector = document.getElementById('modelSelector');
+  if (!modelSelector) return 'unknown';
+  return modelSelector.value || 'unknown';
+}
+
+// Get relevant memories for a given context
+function getRelevantMemories(url, query, limit = 5) {
+  try {
+    // Safe initialization
+    const memory = JSON.parse(localStorage.getItem(MEMORY_KEY) || '[]');
+    if (!memory || !Array.isArray(memory) || memory.length === 0) {
+      console.log('No memories found in storage');
+      return [];
+    }
+    
+    // Continue with regular processing...
+    let relevantMemories = [];
+    try {
+      const currentDomain = url ? new URL(url).hostname : '';
+      
+      // Extract meaningful keywords from the query
+      const stopWords = ['the', 'and', 'for', 'with', 'from', 'how', 'what', 'when', 'where', 'who', 'why', 'does', 'do', 'is', 'are', 'will', 'should', 'can', 'could', 'would', 'this', 'that', 'these', 'those', 'there', 'their', 'about'];
+      
+      // Clean the query for better keyword extraction
+      const cleanQuery = query.toLowerCase()
+        .replace(/[^\w\s]/g, ' ')  // Replace punctuation with spaces
+        .replace(/\s+/g, ' ')      // Replace multiple spaces with single space
+        .trim();
+      
+      // Extract keywords
+      const queryWords = cleanQuery.split(/\s+/);
+      const queryKeywords = queryWords.filter(word => word.length > 2 && !stopWords.includes(word));
+      
+      console.log('Searching memory with keywords:', queryKeywords);
+      
+      // Score each memory item for relevance
+      const scoredMemories = memory.map(item => {
+        if (!item) return { memory: null, score: 0 };
+        
+        let score = 0;
+        
+        // Prepare memory content for matching - safely
+        const itemContent = {
+          title: (item.title || '').toLowerCase(),
+          question: (item.question || '').toLowerCase(),
+          answer: (item.answer || '').toLowerCase(),
+          contentSnippet: (item.contentSnippet || '').toLowerCase(),
+          domain: (item.domain || '').toLowerCase()
+        };
+        
+        // Domain match
+        if (currentDomain && itemContent.domain) {
+          if (currentDomain === itemContent.domain) {
+            score += 5;
+          } else if (currentDomain.includes(itemContent.domain) || itemContent.domain.includes(currentDomain)) {
+            score += 2;
+          }
+        }
+        
+        // Temporal relevance
+        const ageInHours = (Date.now() - (item.timestamp || 0)) / (1000 * 60 * 60);
+        if (ageInHours < 1) {
+          score += 4; // Very recent (less than 1 hour)
+        } else if (ageInHours < 24) {
+          score += 3; // Today
+        } else if (ageInHours < 72) {
+          score += 2; // Last few days
+        } else if (ageInHours < 168) {
+          score += 1; // Last week
+        }
+        
+        // Keyword matching with field weighting
+        const weights = {
+          question: 3,
+          title: 2.5,
+          answer: 2,
+          contentSnippet: 1
+        };
+        
+        // Exact keyword matches
+        for (const keyword of queryKeywords) {
+          if (!keyword) continue;
+          
+          // Direct field matches with weighted scoring
+          Object.entries(weights).forEach(([field, weight]) => {
+            if (itemContent[field] && itemContent[field].includes(keyword)) {
+              score += weight;
+            }
+          });
+        }
+        
+        return { 
+          memory: item, 
+          score
+        };
+      }).filter(item => item.memory !== null);
+      
+      // Sort by score (highest first)
+      scoredMemories.sort((a, b) => b.score - a.score);
+      
+      // Only include items with a minimum score
+      const minimumScore = query.length > 30 ? 3 : 2;
+      
+      // Get the top memories
+      relevantMemories = scoredMemories
+        .filter(item => item.score >= minimumScore)
+        .map(item => item.memory)
+        .slice(0, limit);
+      
+      console.log(`Found ${relevantMemories.length} relevant memories`);
+      
+      return relevantMemories;
+    } catch (innerError) {
+      console.error('Error scoring memories:', innerError);
+      return [];
+    }
+  } catch (error) {
+    console.error('Error in getRelevantMemories:', error);
+    return []; // Return empty array on error to prevent crashes
+  }
+}
+
+// Helper function to extract potential topic from memory content
+function extractTopic(itemContent) {
+  try {
+    if (!itemContent) return '';
+    
+    // Simple topic extraction - look for knowledge domains, subjects, or key entities
+    const fullText = `${itemContent.title || ''} ${itemContent.question || ''}`.toLowerCase();
+    
+    // Common subjects and entities people might compare
+    const knownDomains = [
+      'python', 'javascript', 'react', 'machine learning', 'ai', 'artificial intelligence',
+      'computer science', 'programming', 'crypto', 'cryptocurrency', 'bitcoin', 'ethereum',
+      'history', 'science', 'physics', 'chemistry', 'biology', 'medicine', 'health',
+      'politics', 'economics', 'finance', 'investing', 'stocks', 'business',
+      'climate', 'environment', 'technology', 'privacy', 'security',
+      'education', 'travel', 'food', 'nutrition', 'diet', 'fitness'
+    ];
+    
+    for (const domain of knownDomains) {
+      if (fullText.includes(domain)) {
+        return domain;
+      }
+    }
+    
+    // If no known domain, try to use first 2-3 significant words from title/question
+    const words = fullText.split(/\s+/).filter(w => w && w.length > 3);
+    if (words.length >= 2) {
+      return words.slice(0, 2).join(' ');
+    }
+    
+    return '';
+  } catch (error) {
+    console.error('Error extracting topic:', error);
+    return '';
+  }
+}
+
+// Helper to deduplicate overlapping memories
+function deduplicateMemories(memories) {
+  try {
+    if (!memories || !Array.isArray(memories) || memories.length <= 1) return memories || [];
+    
+    const result = [];
+    const seenContent = new Set();
+    
+    for (const memory of memories) {
+      if (!memory) continue;
+      
+      // Create a fingerprint of the memory content
+      const contentFingerprint = ((memory.question || '') + (memory.answer || '')).substring(0, 100);
+      
+      // Skip if we've seen very similar content
+      if (seenContent.has(contentFingerprint)) continue;
+      
+      // Otherwise add to results
+      result.push(memory);
+      seenContent.add(contentFingerprint);
+    }
+    
+    return result;
+  } catch (error) {
+    console.error('Error deduplicating memories:', error);
+    return memories || []; // Return original memories on error
+  }
+}
+
 // Load saved preferences on startup
 document.addEventListener('DOMContentLoaded', () => {
   console.log('DOM fully loaded');
@@ -89,6 +522,28 @@ document.addEventListener('DOMContentLoaded', () => {
   tabsContainer = document.getElementById('tabsContainer');
   newTabBtn = document.getElementById('newTabBtn');
   webviewsContainer = document.querySelector('.webviews-container');
+
+  // Add CSS fix for empty memory context blocks
+  const styleEl = document.createElement('style');
+  styleEl.textContent = `
+    /* Fix for empty memory contexts */
+    .memory-context:empty,
+    .memory-context .memory-list:empty,
+    .context-message:empty,
+    .context-message:has(.memory-list:empty) {
+      display: none !important;
+    }
+    
+    /* Fix for yellow block that appears sometimes */
+    .chat-message.context-message {
+      display: none;
+    }
+    
+    .chat-message.context-message:has(.memory-item) {
+      display: block;
+    }
+  `;
+  document.head.appendChild(styleEl);
 
   // Output diagnostic info
   console.log('Tab elements found:', { 
@@ -1096,7 +1551,7 @@ async function executeAgent(specificWebview = null) {
     // If this is a question, enhance the query with explicit instructions
     if (isQuestion) {
       // Format the query to clearly indicate it's a question requiring an answer
-      query = `DIRECT QUESTION: ${query}\n\nPlease provide a direct answer to this specific question using the available context.`;
+      query = `DIRECT QUESTION: ${query}\n\nPlease provide a direct answer to this specific question using the available context. Do not include source information or citations in your answer text - these will be displayed separately in a dedicated sources section.`;
       console.log('Enhanced question query:', query);
     }
     
@@ -1198,7 +1653,7 @@ async function executeAgent(specificWebview = null) {
         chatInputArea.className = 'chat-input-area';
         chatInputArea.innerHTML = `
           <input type="text" id="chatInput" placeholder="Ask a follow-up question..." />
-          <button id="sendMessageBtn" class="chat-send-btn">Send</button>
+          <button id="sendMessageBtn" class="chat-send-btn"></button>
         `;
         agentResults.appendChild(chatInputArea);
         
@@ -1279,6 +1734,21 @@ async function executeAgent(specificWebview = null) {
       displayAgentError(result.error);
     } else {
       displayAgentResults(result.data);
+      
+      // Store auto-summarized page in memory regardless of whether it's a question
+      if (result.data && result.data.consolidated_summary) {
+        // For auto-summarize, use the page title/URL as the "question"
+        const pageTitle = result.data.summaries && result.data.summaries[0] ? 
+          result.data.summaries[0].title : title || url;
+        
+        // Store visited page in memory
+        storeInMemory(
+          url, 
+          `Auto-summary of ${pageTitle}`, 
+          result.data.consolidated_summary,
+          pageTitle
+        );
+      }
     }
   } catch (error) {
     console.error("Agent execution error:", error);
@@ -1425,11 +1895,13 @@ async function extractLinksFromWebview(specificWebview = null) {
 // Add this function to safely clear loading indicators and update chat
 function clearLoadingAndUpdateChat(role, content, timing = null) {
   // First remove any loading indicators
-  const agentResults = document.getElementById('agentResults');
-  if (agentResults) {
-    const loadingIndicators = agentResults.querySelectorAll('.loading');
-    loadingIndicators.forEach(indicator => {
-      indicator.remove();
+  const chatContainer = document.getElementById('chatContainer');
+  if (chatContainer) {
+    const loadingMessages = chatContainer.querySelectorAll('.chat-message');
+    loadingMessages.forEach(message => {
+      if (message.querySelector('.loading')) {
+        message.remove();
+      }
     });
   }
   
@@ -1446,6 +1918,18 @@ function displayAgentResults(data) {
 
   console.log("Agent result data:", data);
   
+  // Remove any empty context messages before displaying new results
+  const chatContainer = document.getElementById('chatContainer');
+  if (chatContainer) {
+    const emptyContextMessages = chatContainer.querySelectorAll('.context-message:not(:has(.memory-item))');
+    emptyContextMessages.forEach(msg => msg.remove());
+  }
+  
+  // Get current URL to store with memory
+  const webview = getActiveWebview();
+  const currentUrl = webview ? webview.src : '';
+  let pageTitle = webview && webview.getTitle ? webview.getTitle() : '';
+  
   // Check if this is a question answer or a regular summary
   const isQuestion = data.isQuestion === true;
   
@@ -1453,32 +1937,57 @@ function displayAgentResults(data) {
   if (isQuestion) {
     let answer = data.consolidated_summary || "No direct answer found for your question.";
     
-    // Format as an answer rather than a summary
+    // Format as an answer rather than a summary - remove any "Source:" text that's in the answer
+    answer = answer.replace(/Source:.*?(\.|$)/g, '').trim();
     let formattedAnswer = `<div class="answer-content">${answer}</div>`;
     
-    // Include sources if available
+    // Include sources if available, but in a separate div with proper styling
     if (data.summaries && data.summaries.length > 0) {
-      formattedAnswer += `<div class="answer-sources">
-        <h4>Sources:</h4>
-        <ul>
-          ${data.summaries.map(source => 
+      formattedAnswer += `<div class="answer-sources"><h4>Sources:</h4><ul>${data.summaries.map(source => 
             `<li><a href="${source.url}" target="_blank">${source.title}</a></li>`
-          ).join('')}
-        </ul>
-      </div>`;
+          ).join('')}</ul></div>`;
     }
     
     clearLoadingAndUpdateChat('assistant', formattedAnswer, data.generation_time);
+    
+    // Store this Q&A in memory (extract question from data)
+    const question = data.originalQuery || data.query || '';
+    if (question && question.replace('DIRECT QUESTION:', '').trim()) {
+      storeInMemory(currentUrl, question.replace('DIRECT QUESTION:', '').trim(), answer, pageTitle);
+    }
+    
     return;
   }
   
   // Handle regular summaries (non-questions)
   if (data.consolidated_summary) {
     clearLoadingAndUpdateChat('assistant', data.consolidated_summary, data.generation_time);
+    
+    // Always store the summary in memory for future reference
+    // This makes all web content and summaries available for future questions
+    const summaryTitle = data.summaries && data.summaries.length > 0 ? data.summaries[0].title : pageTitle || 'Page summary';
+    storeInMemory(
+      currentUrl, 
+      `Page content: ${summaryTitle}`, 
+      data.consolidated_summary,
+      pageTitle
+    );
   } else if (data.summaries && data.summaries.length > 0) {
     // If no consolidated summary, show the individual summaries
     const summariesText = data.summaries.map(s => `<b>${s.title}</b>\n${s.summary}`).join('\n\n');
     clearLoadingAndUpdateChat('assistant', summariesText);
+    
+    // Store individual summaries
+    data.summaries.forEach(summary => {
+      if (summary.url && summary.summary) {
+        storeInMemory(
+          summary.url,
+          `Content from: ${summary.title || 'Page'}`,
+          summary.summary,
+          summary.title
+        );
+      }
+    });
   } else {
     clearLoadingAndUpdateChat('assistant', 'No relevant information found.');
   }
@@ -1704,6 +2213,21 @@ async function autoSummarizePage(url, specificWebview = null) {
           displayAgentError(result.error);
         } else {
           displayAgentResults(result.data);
+          
+          // Store auto-summarized page in memory regardless of whether it's a question
+          if (result.data && result.data.consolidated_summary) {
+            // For auto-summarize, use the page title/URL as the "question"
+            const pageTitle = result.data.summaries && result.data.summaries[0] ? 
+              result.data.summaries[0].title : title || url;
+            
+            // Store visited page in memory
+            storeInMemory(
+              url, 
+              `Auto-summary of ${pageTitle}`, 
+              result.data.consolidated_summary,
+              pageTitle
+            );
+          }
         }
       } catch (error) {
         console.error('Error in auto-summarize Google search:', error);
@@ -1759,6 +2283,21 @@ async function autoSummarizePage(url, specificWebview = null) {
           displayAgentError(result.error);
         } else {
           displayAgentResults(result.data);
+          
+          // Store auto-summarized page in memory regardless of whether it's a question
+          if (result.data && result.data.consolidated_summary) {
+            // For auto-summarize, use the page title/URL as the "question"
+            const pageTitle = result.data.summaries && result.data.summaries[0] ? 
+              result.data.summaries[0].title : title || url;
+            
+            // Store visited page in memory
+            storeInMemory(
+              url, 
+              `Auto-summary of ${pageTitle}`, 
+              result.data.consolidated_summary,
+              pageTitle
+            );
+          }
         }
       } catch (error) {
         console.error('Error auto-summarizing page:', error);
@@ -1792,12 +2331,39 @@ async function autoSummarizePage(url, specificWebview = null) {
 }
 
 // Improve extractPageContent function with better error handling
-async function extractPageContent(specificWebview = null) {
+async function extractPageContent(specificWebview = null, options = {}) {
   try {
     const webview = specificWebview || getActiveWebview();
     if (!webview) {
       console.error('No webview available for extracting page content');
       return { title: '', description: '', content: '', url: '' };
+    }
+    
+    // Default options
+    const defaultOptions = {
+      includeHtml: false,       // By default, extract just text
+      preserveLinks: false,     // By default, don't preserve links
+      detectContentType: true   // Auto-detect what format to use based on the query
+    };
+    
+    const opts = {...defaultOptions, ...options};
+    
+    // Auto-detect content type based on query if enabled
+    if (opts.detectContentType) {
+      const chatInput = document.getElementById('chatInput');
+      if (chatInput && chatInput.value) {
+        const query = chatInput.value.toLowerCase();
+        // Keywords that suggest we need HTML and link preservation
+        if (query.includes('link') || query.includes('url') || 
+            query.includes('click') || query.includes('button') ||
+            query.includes('navigation') || query.includes('href') ||
+            query.includes('download') || query.includes('menu') ||
+            query.includes('sidebar') || query.includes('layout')) {
+          console.log('Detected query about links or UI elements, preserving HTML structure');
+          opts.preserveLinks = true;
+          opts.includeHtml = true;
+        }
+      }
     }
     
     // Get current URL safely
@@ -1839,7 +2405,7 @@ async function extractPageContent(specificWebview = null) {
             console.log('Page finished loading, extracting content after short delay');
             setTimeout(() => {
               try {
-                extractPageContent(webview).then(resolve).catch(e => {
+                extractPageContent(webview, opts).then(resolve).catch(e => {
                   console.error('Error in delayed content extraction:', e);
                   // Even on error, resolve with empty content to avoid hanging
                   resolve({ 
@@ -1877,6 +2443,7 @@ async function extractPageContent(specificWebview = null) {
           return;
         }
         
+        // Enhanced extraction script with HTML support
         const extractScript = `
           (function() {
             try {
@@ -1892,72 +2459,114 @@ async function extractPageContent(specificWebview = null) {
                 console.error('Error getting meta description:', e);
               }
               
-              // Get main content by trying various selectors
-              let content = "";
+              // Find main content element
+              const mainContent = document.querySelector('article') || 
+                                document.querySelector('main') || 
+                                document.querySelector('.content') ||
+                                document.querySelector('#content') ||
+                                document.body;
               
-              try {
-                // Try article or main content first
-                const mainContent = document.querySelector('article') || 
-                                  document.querySelector('main') || 
-                                  document.querySelector('.content') ||
-                                  document.querySelector('#content');
-                
+              // Handle HTML extraction if requested
+              ${opts.includeHtml ? `
                 if (mainContent) {
-                  content = mainContent.innerText || '';
-                } else {
-                  // Fallback to body text, skipping headers, footers, navs
-                  const body = document.body;
-                  if (body) {
-                    const elementsToSkip = ['header', 'footer', 'nav', 'aside', 'script', 'style'];
+                  // Create a clone to modify without affecting the original page
+                  const clone = mainContent.cloneNode(true);
+                  
+                  // Remove scripts, styles, and other unwanted elements
+                  clone.querySelectorAll('script, style, iframe, noscript, svg, canvas').forEach(el => el.remove());
+                  
+                  // Process links to make them more visible to the LLM
+                  ${opts.preserveLinks ? `
+                    clone.querySelectorAll('a').forEach(link => {
+                      if (link.href) {
+                        // Mark the original text
+                        const originalText = link.textContent.trim();
+                        // Add explicit link annotation with URL
+                        link.textContent = originalText + " [LINK: " + link.href + "]";
+                        // Add a special attribute to make links stand out
+                        link.setAttribute('data-extracted-link', 'true');
+                      }
+                    });
                     
-                    // Function to extract text from the DOM while skipping unwanted elements
-                    function extractText(element, depth = 0) {
-                      if (!element || depth > 100) return "";
-                      
-                      // Skip unwanted elements
-                      if (element.tagName && elementsToSkip.includes(element.tagName.toLowerCase())) {
-                        return "";
-                      }
-                      
-                      // If it's a text node, return its text
-                      if (element.nodeType === Node.TEXT_NODE) {
-                        return element.textContent ? (element.textContent.trim() + " ") : "";
-                      }
-                      
-                      // If it has the 'hidden' class or inline style display:none, skip it
-                      if ((element.classList && element.classList.contains('hidden')) ||
-                          (element.style && element.style.display === 'none')) {
-                        return "";
-                      }
-                      
-                      // Process children recursively
-                      let result = "";
-                      if (element.childNodes) {
-                        for (const child of element.childNodes) {
-                          result += extractText(child, depth + 1);
-                        }
-                      }
-                      
-                      return result;
+                    // Also process buttons and interactive elements
+                    clone.querySelectorAll('button, [role="button"], input[type="submit"], input[type="button"]').forEach(btn => {
+                      const btnText = btn.textContent.trim() || btn.value || "Button";
+                      btn.setAttribute('data-extracted-button', btnText);
+                    });
+                  ` : ''}
+                  
+                  // Get both HTML and text content
+                  return {
+                    title: title,
+                    description: description,
+                    content: clone.innerText,
+                    htmlContent: clone.innerHTML,
+                    url: window.location.href
+                  };
+                }
+              ` : ''}
+              
+              // Standard text extraction (when HTML not requested or as fallback)
+              if (mainContent) {
+                // If we have a main content section, try to get the most relevant paragraph
+                const paragraphs = mainContent.querySelectorAll('p');
+                if (paragraphs && paragraphs.length > 0) {
+                  // Get the longest paragraph (likely the most informative)
+                  let bestParagraph = '';
+                  let bestLength = 0;
+                  
+                  for (const p of paragraphs) {
+                    const text = p.innerText.trim();
+                    if (text.length > bestLength && text.length > 100) {
+                      bestParagraph = text;
+                      bestLength = text.length;
                     }
+                  }
+                  
+                  if (bestParagraph) {
+                    return {
+                      title: title,
+                      description: description,
+                      content: mainContent.innerText, 
+                      url: window.location.href
+                    };
+                  }
+                  
+                  // If no good paragraph, return a collection of shorter paragraphs
+                  const combinedParagraphs = Array.from(paragraphs)
+                    .map(p => p.innerText.trim())
+                    .filter(t => t.length > 30)
+                    .slice(0, 3)
+                    .join(' ');
                     
-                    content = extractText(body);
+                  if (combinedParagraphs) {
+                    return {
+                      title: title,
+                      description: description,
+                      content: mainContent.innerText,
+                      url: window.location.href
+                    };
                   }
                 }
-              } catch(e) {
-                console.error('Error extracting content:', e);
-                // Attempt a very simple fallback
-                try {
-                  content = document.body ? document.body.innerText || '' : '';
-                } catch(e2) {
-                  console.error('Fallback content extraction failed:', e2);
-                }
+                
+                // Fallback to main content text
+                return {
+                  title: title,
+                  description: description,
+                  content: mainContent.innerText,
+                  url: window.location.href
+                };
               }
               
+              // Last resort: get useful body text
+              const bodyText = document.body.innerText
+                .replace(/\\s+/g, ' ')
+                .trim();
+                
               return {
                 title: title,
                 description: description,
-                content: content,
+                content: bodyText,
                 url: window.location.href
               };
             } catch(finalError) {
@@ -1983,6 +2592,9 @@ async function extractPageContent(specificWebview = null) {
         ])
         .then(pageInfo => {
           console.log('Extracted page content, length:', pageInfo?.content?.length || 0);
+          if (pageInfo?.htmlContent) {
+            console.log('HTML content extracted, length:', pageInfo.htmlContent.length);
+          }
           resolve(pageInfo || { title: '', description: '', content: '', url: '' });
         })
         .catch(err => {
@@ -2124,6 +2736,106 @@ function setupExtensionsPanel() {
         }
       });
     });
+    
+    // Add Memory Management section
+    const memorySection = document.createElement('div');
+    memorySection.className = 'memory-section';
+    memorySection.innerHTML = `
+      <h4>AI Memory Management</h4>
+      <div class="memory-controls">
+        <div class="memory-stats">
+          <span id="memoryCount">0</span> memories stored
+        </div>
+        <div class="memory-actions">
+          <button id="clearMemoryBtn" class="btn-warning">Clear Memory</button>
+          <button id="exportMemoryBtn">Export</button>
+          <button id="importMemoryBtn">Import</button>
+        </div>
+      </div>
+    `;
+    extensionsContent.appendChild(memorySection);
+    
+    // Set up memory buttons
+    const clearMemoryBtn = document.getElementById('clearMemoryBtn');
+    const exportMemoryBtn = document.getElementById('exportMemoryBtn');
+    const importMemoryBtn = document.getElementById('importMemoryBtn');
+    const memoryCountSpan = document.getElementById('memoryCount');
+    
+    // Update memory count
+    function updateMemoryCount() {
+      try {
+        const memory = JSON.parse(localStorage.getItem(MEMORY_KEY) || '[]');
+        memoryCountSpan.textContent = memory.length.toString();
+      } catch (e) {
+        console.error('Error updating memory count:', e);
+        memoryCountSpan.textContent = '0';
+      }
+    }
+    
+    // Initial count update
+    updateMemoryCount();
+    
+    // Clear memory
+    clearMemoryBtn.addEventListener('click', () => {
+      if (confirm('Are you sure you want to clear all AI memory? This cannot be undone.')) {
+        localStorage.removeItem(MEMORY_KEY);
+        updateMemoryCount();
+        alert('Memory cleared successfully.');
+      }
+    });
+    
+    // Export memory
+    exportMemoryBtn.addEventListener('click', () => {
+      try {
+        const memory = localStorage.getItem(MEMORY_KEY) || '[]';
+        const blob = new Blob([memory], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'ai_memory_export.json';
+        a.click();
+        
+        URL.revokeObjectURL(url);
+      } catch (e) {
+        console.error('Error exporting memory:', e);
+        alert('Error exporting memory: ' + e.message);
+      }
+    });
+    
+    // Import memory
+    importMemoryBtn.addEventListener('click', () => {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = '.json';
+      
+      input.onchange = (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          try {
+            const contents = event.target.result;
+            const parsed = JSON.parse(contents);
+            
+            if (Array.isArray(parsed)) {
+              localStorage.setItem(MEMORY_KEY, contents);
+              updateMemoryCount();
+              alert('Memory imported successfully.');
+            } else {
+              alert('Invalid memory file format.');
+            }
+          } catch (e) {
+            alert('Error parsing memory file: ' + e.message);
+          }
+        };
+        
+        reader.readAsText(file);
+      };
+      
+      input.click();
+    });
   }
 }
 
@@ -2134,32 +2846,26 @@ function setupAgentControls() {
     // Clear existing controls
     agentControls.innerHTML = '';
     
-    // Create a flex container for the controls row
+    // Create a clean, modern row for the controls
     const controlsRow = document.createElement('div');
     controlsRow.className = 'controls-row';
     
-    // Add model selector with icon and label
-    const modelSelectorWrapper = document.createElement('div');
-    modelSelectorWrapper.className = 'model-selector-wrapper';
-    modelSelectorWrapper.innerHTML = `
-      <label for="modelSelector" class="selector-label">Model</label>
-    `;
-    
+    // Create model selector without label, with an elegant dropdown
     const modelSelector = document.createElement('select');
     modelSelector.id = 'modelSelector';
+    // Removed modern-selector class to avoid style conflicts
     modelSelector.innerHTML = `
       <option value="anthropic">Claude (Anthropic)</option>
       <option value="openai">GPT-4 (OpenAI)</option>
       <option value="perplexity">Perplexity</option>
       <option value="chutes">Chutes</option>
     `;
-    modelSelectorWrapper.appendChild(modelSelector);
-    controlsRow.appendChild(modelSelectorWrapper);
+    controlsRow.appendChild(modelSelector);
     
-    // Add Analyze button with icon
+    // Add Analyze button with a more modern design
     const analyzeButton = document.createElement('button');
     analyzeButton.id = 'runAgentBtn';
-    analyzeButton.className = 'agent-btn compact';
+    analyzeButton.className = 'primary-btn';
     analyzeButton.innerHTML = `<span class="btn-icon">↻</span>Analyze Page`;
     analyzeButton.addEventListener('click', executeAgent);
     controlsRow.appendChild(analyzeButton);
@@ -2167,38 +2873,36 @@ function setupAgentControls() {
     // Add the controls row to the agent controls
     agentControls.appendChild(controlsRow);
     
-    // Add auto-summarize toggle if not already present
-    let autoSummarizeContainer = document.querySelector('.auto-summarize-container');
-    if (!autoSummarizeContainer) {
-      autoSummarizeContainer = document.createElement('div');
-      autoSummarizeContainer.className = 'auto-summarize-container';
-      autoSummarizeContainer.innerHTML = `
-        <label class="switch">
-          <input type="checkbox" id="autoSummarizeToggle" ${localStorage.getItem('autoSummarize') === 'true' ? 'checked' : ''}>
-          <span class="slider"></span>
-        </label>
-        <span class="auto-summarize-label">Auto-summarize pages</span>
-      `;
-      agentControls.appendChild(autoSummarizeContainer);
-      
-      // Set up event listener for the toggle
-      const autoSummarizeToggle = document.getElementById('autoSummarizeToggle');
-      if (autoSummarizeToggle) {
-        autoSummarizeToggle.addEventListener('change', (e) => {
-          localStorage.setItem('autoSummarize', e.target.checked);
-          console.log('Auto-summarize set to:', e.target.checked);
-        });
-      }
+    // Add auto-summarize toggle below the controls
+    const autoSummarizeContainer = document.createElement('div');
+    autoSummarizeContainer.className = 'auto-summarize-container';
+    autoSummarizeContainer.innerHTML = `
+      <label class="switch">
+        <input type="checkbox" id="autoSummarizeToggle" ${localStorage.getItem('autoSummarize') === 'true' ? 'checked' : ''}>
+        <span class="slider"></span>
+      </label>
+      <span class="auto-summarize-label">Auto-summarize pages</span>
+    `;
+    agentControls.appendChild(autoSummarizeContainer);
+    
+    // Set up event listener for the toggle
+    const autoSummarizeToggle = document.getElementById('autoSummarizeToggle');
+    if (autoSummarizeToggle) {
+      autoSummarizeToggle.addEventListener('change', (e) => {
+        localStorage.setItem('autoSummarize', e.target.checked);
+        autoSummarizeEnabled = e.target.checked;
+        console.log('Auto-summarize set to:', e.target.checked);
+      });
     }
   }
   
-  // Create a chat container for messages
+  // Create a chat container for messages with improved styling
   const agentResults = document.getElementById('agentResults');
   if (agentResults) {
     // Clear existing content
     agentResults.innerHTML = '';
     
-    // Add welcome message or instructions
+    // Add a more engaging welcome message
     const welcomeContainer = document.createElement('div');
     welcomeContainer.className = 'welcome-container';
     welcomeContainer.innerHTML = `
@@ -2209,18 +2913,18 @@ function setupAgentControls() {
     `;
     agentResults.appendChild(welcomeContainer);
     
-    // Add chat container
+    // Add chat container with improved styling
     const chatContainer = document.createElement('div');
     chatContainer.id = 'chatContainer';
     chatContainer.className = 'chat-container';
     agentResults.appendChild(chatContainer);
     
-    // Add input area for follow-up questions
+          // Add a more modern input area for questions
     const chatInputArea = document.createElement('div');
     chatInputArea.className = 'chat-input-area';
     chatInputArea.innerHTML = `
       <input type="text" id="chatInput" placeholder="Ask a follow-up question..." />
-      <button id="sendMessageBtn" class="chat-send-btn"></button>
+      <button id="sendMessageBtn" class="chat-send-btn">Send</button>
     `;
     agentResults.appendChild(chatInputArea);
     
@@ -2233,6 +2937,15 @@ function setupAgentControls() {
 function addMessageToChat(role, content, timing = null) {
   const chatContainer = document.getElementById('chatContainer');
   if (!chatContainer) return;
+  
+  // Skip empty content
+  if (!content || content.trim() === '') return;
+  
+  // Skip empty context messages (those with no memory items)
+  if (role === 'context' && (!content.includes('memory-item') || content.includes('memory-list"></ul>'))) {
+    console.log('Skipping empty context message');
+    return;
+  }
   
   const messageDiv = document.createElement('div');
   
@@ -2253,7 +2966,10 @@ function addMessageToChat(role, content, timing = null) {
     messageDiv.dataset.role = 'assistant';
     messageDiv.dataset.timestamp = new Date().toISOString();
     
-    if (timing) {
+    // Check if content contains only a loading indicator
+    const isLoading = content.includes('class="loading"') && !content.replace(/<div class="loading">.*?<\/div>/g, '').trim();
+    
+    if (timing && !isLoading) {
       messageDiv.innerHTML = `
         <div class="timing-info">
           <span>Summary generated in</span>
@@ -2306,28 +3022,131 @@ async function processFollowupQuestion(question) {
     // as it's already been added by the chat input handler
     
     try {
+      // Get current URL for memory context
+      const currentUrl = activeWebview.src || '';
+      
+      // Detect if the question is about links, navigation, or UI elements
+      const isAboutLinks = question.toLowerCase().match(/link|url|href|click|button|navigation|menu|download|sidebar|layout/);
+      
+      // Initialize conversation history array
+      let conversationHistory = [];
+      
       // Attempt to get the page content from the active webview
-      const pageContent = await extractPageContent(activeWebview);
+      // Pass extraction options based on the question type
+      const extractionOptions = {
+        includeHtml: isAboutLinks ? true : false,
+        preserveLinks: isAboutLinks ? true : false,
+        detectContentType: true // Let the function also try to auto-detect
+      };
+      
+      console.log('Extraction options:', extractionOptions);
+      const pageContent = await extractPageContent(activeWebview, extractionOptions);
       console.log("Extracted page content:", pageContent);
       
       // Look for any existing messages to provide as context
       const chatContainer = document.getElementById('chatContainer');
-      let conversationHistory = [];
       
       if (chatContainer) {
         const messages = chatContainer.querySelectorAll('.chat-message');
         messages.forEach(message => {
+          // Skip context messages and loading indicators
+          if (message.classList.contains('context-message') || message.querySelector('.loading')) {
+            return;
+          }
+          
           const role = message.classList.contains('user-message') ? 'user' : 'assistant';
-          const content = message.querySelector('.message-content').textContent.trim();
-          if (content && !content.includes('Processing your question...')) {
+          const contentEl = message.querySelector('.message-content');
+          let content = '';
+          
+          if (contentEl) {
+            // Use textContent to avoid HTML tags
+            content = contentEl.textContent || '';
+          }
+          
+          if (content && content.trim() && !content.includes('Processing your question...')) {
             conversationHistory.push({ role, content });
           }
         });
       }
       
-      // For questions, enhance the prompt to clearly indicate it's a question
-      // Always set isQuestion: true for follow-up questions
-      const enhancedQuery = `DIRECT QUESTION: ${question}\n\nPlease provide a direct answer to this specific question using the available context.`;
+      // Retrieve relevant memories for this context - safely
+      try {
+        const relevantMemories = getRelevantMemories(currentUrl, question, 3);
+        console.log('Retrieved relevant memories:', relevantMemories);
+        
+        // If we found relevant memories, add them to the conversation history
+        if (relevantMemories && relevantMemories.length > 0) {
+          // Add a separator for memories
+          conversationHistory.push({
+            role: 'assistant',
+            content: 'Here are some relevant items from previous conversations that may help:',
+            isMemory: true
+          });
+          
+          // Add each memory with enhanced source information
+          relevantMemories.forEach(memory => {
+            // Skip invalid memories
+            if (!memory) return;
+            
+            try {
+              // Detect likely topic of this memory based on content
+              const detectedTopic = extractTopic({
+                title: memory.title || '',
+                question: memory.question || '',
+                answer: memory.answer || '',
+                contentSnippet: memory.contentSnippet || '',
+                domain: memory.domain || ''
+              });
+              
+              if (memory.question) {
+                conversationHistory.push({
+                  role: 'user',
+                  content: memory.question,
+                  isMemory: true,
+                  source: {
+                    domain: memory.domain || '',
+                    url: memory.url || '',
+                    title: memory.title || '',
+                    timestamp: memory.timestamp || Date.now(),
+                    topic: detectedTopic
+                  }
+                });
+              }
+              
+              if (memory.answer) {
+                conversationHistory.push({
+                  role: 'assistant',
+                  content: memory.answer,
+                  isMemory: true,
+                  source: {
+                    domain: memory.domain || '',
+                    url: memory.url || '',
+                    title: memory.title || '',
+                    timestamp: memory.timestamp || Date.now(),
+                    topic: detectedTopic
+                  }
+                });
+              }
+            } catch (memoryError) {
+              console.error('Error processing memory:', memoryError);
+              // Continue with other memories
+            }
+          });
+          
+          // Add a separator after memories
+          conversationHistory.push({
+            role: 'assistant',
+            content: 'Now addressing your current question:',
+            isMemory: true
+          });
+        }
+      } catch (memoryError) {
+        console.error('Error retrieving or processing memories:', memoryError);
+        // Continue without memories
+      }
+      
+      // For questions, enhance the prompt to clearly indicate it's a question and instruct not to include source citations in the answer
+      const enhancedQuery = `DIRECT QUESTION: ${question}\n\nPlease provide a direct answer to this specific question using the available context. Do not include source information or citations in your answer text - these will be displayed separately in a dedicated sources section.`;
       console.log('Enhanced query for follow-up question:', enhancedQuery);
       
       // Update agentParams with our enhanced query
@@ -2338,6 +3157,7 @@ async function processFollowupQuestion(question) {
         isDirectPage: true,
         isQuestion: true, // Always set to true for questions
         isFollowUp: true,
+        isAboutLinks: isAboutLinks, // Tell the agent if this is about links
         conversationHistory: conversationHistory,
         modelInfo: {
           provider,
@@ -2368,7 +3188,7 @@ async function processFollowupQuestion(question) {
       displayAgentResults(result.data);
       
     } catch (error) {
-      console.error('Error extracting page content:', error);
+      console.error('Error processing question:', error);
       addMessageToChat('assistant', `Error processing your question: ${error.message}`);
     }
   } catch (error) {
@@ -2640,7 +3460,7 @@ function injectSelectionHandler(webview) {
           const style = document.createElement('style');
           style.textContent = \`
             #add-to-chat-button {
-              position: absolute;
+              position: fixed;
               background-color: #4285f4;
               color: white;
               border: none;
@@ -2666,23 +3486,58 @@ function injectSelectionHandler(webview) {
           let button = document.createElement('button');
           button.id = 'add-to-chat-button';
           button.textContent = 'Add to chat';
+          button.style.zIndex = '2147483647';
+          
           button.onclick = function(e) {
             e.preventDefault();
             e.stopPropagation();
             
             const selection = window.getSelection();
             if (selection && selection.toString().trim()) {
-              // Use Electron IPC to communicate with the main process
-              if (window.electron && window.electron.ipcRenderer) {
-                window.electron.ipcRenderer.sendToHost('add-to-chat', selection.toString().trim());
-              } else {
-                // Fallback to postMessage for compatibility
-                window.parent.postMessage({
-                  type: 'add-to-chat',
-                  text: selection.toString().trim()
-                }, '*');
+              // Try multiple communication methods for redundancy
+              try {
+                // Method 1: Use Electron IPC directly
+                if (window.electron && window.electron.ipcRenderer) {
+                  window.electron.ipcRenderer.sendToHost('add-to-chat', selection.toString().trim());
+                  console.log('Sent selection via IPC');
+                } 
+                // Method 2: Use postMessage as fallback
+                else {
+                  window.parent.postMessage({
+                    type: 'add-to-chat',
+                    text: selection.toString().trim()
+                  }, '*');
+                  console.log('Sent selection via postMessage');
+                }
+                
+                // Method 3: Store selection in localStorage for polling
+                try {
+                  localStorage.setItem('selectedTextForChat', selection.toString().trim());
+                  localStorage.setItem('selectedTextTimestamp', Date.now().toString());
+                  console.log('Stored selection in localStorage');
+                } catch (storageError) {
+                  console.error('Failed to store selection in localStorage:', storageError);
+                }
+                
+                // Visual feedback
+                button.style.backgroundColor = '#43a047';
+                button.textContent = 'Added to chat';
+                setTimeout(() => {
+                  button.style.backgroundColor = '#4285f4';
+                  button.textContent = 'Add to chat';
+                  button.style.display = 'none';
+                }, 1500);
+              } catch (e) {
+                console.error('Error sending selection to chat:', e);
+                
+                // Show error state
+                button.style.backgroundColor = '#f44336';
+                button.textContent = 'Error - try again';
+                setTimeout(() => {
+                  button.style.backgroundColor = '#4285f4';
+                  button.textContent = 'Add to chat';
+                }, 1500);
               }
-              this.style.display = 'none';
             }
             return false;
           };
@@ -2697,18 +3552,18 @@ function injectSelectionHandler(webview) {
               if (!range) return false;
               
               const rect = range.getBoundingClientRect();
-              const buttonWidth = 150; // Approximate width of our button
+              if (!rect || rect.width === 0) return false;
               
-              // Position directly under the selection
-              // Add window.scrollX/Y to account for page scroll position
-              const top = rect.bottom + window.scrollY + 10;
+              // Position directly under the selection, floating reliably
+              const top = Math.min(rect.bottom + 10, window.innerHeight - 50);
               
               // Center horizontally on the selection
-              const left = rect.left + (rect.width / 2) + window.scrollX;
+              const left = rect.left + (rect.width / 2);
               
               console.log('Positioning button at:', { top, left, rect });
               
               // Set the button position
+              button.style.position = 'fixed';
               button.style.top = top + 'px';
               button.style.left = left + 'px';
               button.style.display = 'block';
@@ -2730,9 +3585,10 @@ function injectSelectionHandler(webview) {
               if (selectedText) {
                 if (!positionButton(selection)) {
                   console.log('Could not position button, falling back to event coordinates');
-                  // Fallback positioning if getBoundingClientRect fails
-                  button.style.top = (e.clientY + window.scrollY + 20) + 'px';
-                  button.style.left = (e.clientX + window.scrollX) + 'px';
+                  // Fallback positioning directly near the cursor
+                  button.style.position = 'fixed';
+                  button.style.top = (e.clientY + 20) + 'px';
+                  button.style.left = (e.clientX) + 'px';
                   button.style.display = 'block';
                 }
               } else {
@@ -2755,7 +3611,8 @@ function injectSelectionHandler(webview) {
               const selectedText = selection.toString().trim();
               
               if (selectedText) {
-                // Use Electron IPC for keyboard shortcut too
+                // Try all communication methods
+                // Use Electron IPC if available
                 if (window.electron && window.electron.ipcRenderer) {
                   window.electron.ipcRenderer.sendToHost('add-to-chat', selectedText);
                 } else {
@@ -2765,15 +3622,34 @@ function injectSelectionHandler(webview) {
                     text: selectedText
                   }, '*');
                 }
-                button.style.display = 'none';
+                
+                // Store in localStorage as backup
+                try {
+                  localStorage.setItem('selectedTextForChat', selectedText);
+                  localStorage.setItem('selectedTextTimestamp', Date.now().toString());
+                } catch (storageError) {
+                  console.error('Failed to store selection in localStorage:', storageError);
+                }
+                
+                // Visual feedback for keyboard shortcut
+                const feedbackDiv = document.createElement('div');
+                feedbackDiv.style.position = 'fixed';
+                feedbackDiv.style.top = '20px';
+                feedbackDiv.style.left = '50%';
+                feedbackDiv.style.transform = 'translateX(-50%)';
+                feedbackDiv.style.background = '#4285f4';
+                feedbackDiv.style.color = 'white';
+                feedbackDiv.style.padding = '10px 20px';
+                feedbackDiv.style.borderRadius = '4px';
+                feedbackDiv.style.zIndex = '2147483647';
+                feedbackDiv.style.boxShadow = '0 2px 10px rgba(0,0,0,0.2)';
+                feedbackDiv.textContent = 'Text added to chat';
+                document.body.appendChild(feedbackDiv);
+                
+                setTimeout(() => {
+                  feedbackDiv.remove();
+                }, 1500);
               }
-            }
-          });
-          
-          // Hide button when clicking elsewhere
-          document.addEventListener('mousedown', function(e) {
-            if (e.target !== button) {
-              button.style.display = 'none';
             }
           });
           
@@ -2803,6 +3679,44 @@ function injectSelectionHandler(webview) {
     };
     
     webview.addEventListener('did-finish-load', loadHandler);
+    
+    // Also poll for localStorage selection as backup method
+    setInterval(() => {
+      try {
+        webview.executeJavaScript(`
+          (function() {
+            const selectedText = localStorage.getItem('selectedTextForChat');
+            const timestamp = localStorage.getItem('selectedTextTimestamp');
+            
+            if (selectedText && timestamp) {
+              // Only process if selection is recent (within last 5 seconds)
+              const now = Date.now();
+              const selectionTime = parseInt(timestamp, 10);
+              
+              if (now - selectionTime < 5000) {
+                // Clear the selection so we don't process it again
+                localStorage.removeItem('selectedTextForChat');
+                localStorage.removeItem('selectedTextTimestamp');
+                
+                return selectedText;
+              }
+            }
+            return null;
+          })()
+        `)
+        .then(result => {
+          if (result) {
+            console.log('Retrieved selection from localStorage');
+            addSelectedTextToChat(result);
+          }
+        })
+        .catch(err => {
+          // Silently ignore errors in polling
+        });
+      } catch (e) {
+        // Ignore errors in polling
+      }
+    }, 1000);
   } catch (err) {
     console.error('Error setting up selection handler:', err);
   }
@@ -2840,4 +3754,4 @@ function updateTabFavicon(webview, faviconUrl) {
     console.error('Error updating favicon:', error);
   }
 }
-  
+ 
