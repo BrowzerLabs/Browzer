@@ -283,10 +283,18 @@ ipcMain.handle('execute-agent', async (event, { agentPath, agentParams }) => {
     // Sanitize page content if present to remove potentially problematic content
     if (agentParams.pageContent) {
       // Limit content length to prevent massive payloads
+      // Use a much higher limit for questions to ensure we capture all relevant content
+      const maxContentLength = agentParams.isQuestion ? 500000 : 100000;
+      
       if (agentParams.pageContent.content && 
-          agentParams.pageContent.content.length > 100000) {
-        agentParams.pageContent.content = agentParams.pageContent.content.substring(0, 100000) + 
+          agentParams.pageContent.content.length > maxContentLength) {
+        agentParams.pageContent.content = agentParams.pageContent.content.substring(0, maxContentLength) + 
           "... [content truncated due to length]";
+        
+        // Log truncation for debugging
+        console.log(`Page content truncated from ${agentParams.pageContent.content.length} to ${maxContentLength} characters`);
+        fs.appendFileSync(path.join(__dirname, 'agent-execution.log'), 
+          `[${new Date().toISOString()}] Content truncated from ${agentParams.pageContent.content.length} to ${maxContentLength} characters\n`);
       }
     }
     
@@ -301,20 +309,23 @@ ipcMain.handle('execute-agent', async (event, { agentPath, agentParams }) => {
         query: cleanedQuery,
         pageContent: agentParams.pageContent,
         isDirectPage: true,
-        modelInfo: agentParams.modelInfo
+        modelInfo: agentParams.modelInfo,
+        conversationHistory: agentParams.conversationHistory || null
       }));
     } else if (agentParams.urls && agentParams.urls.length > 0) {
       // For search results with URLs
       pythonArgs.push(JSON.stringify({
         query: cleanedQuery,
         urls: agentParams.urls,
-        modelInfo: agentParams.modelInfo
+        modelInfo: agentParams.modelInfo,
+        conversationHistory: agentParams.conversationHistory || null
       }));
     } else {
       // Otherwise just pass the query as JSON with modelInfo
       pythonArgs.push(JSON.stringify({
         query: cleanedQuery,
-        modelInfo: agentParams.modelInfo
+        modelInfo: agentParams.modelInfo,
+        conversationHistory: agentParams.conversationHistory || null
       }));
     }
     

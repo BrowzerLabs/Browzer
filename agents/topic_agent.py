@@ -405,49 +405,226 @@ class TopicAgent:
             total_time = time.time() - start_time
             return False, None, total_time
 
-    def create_question_answer(self, query: str, summaries: List[Dict[str, str]], model_info: Dict) -> Tuple[bool, Dict]:
+    def create_question_answer(self, query: str, summaries: List[Dict[str, str]], model_info: Dict, conversation_history=None) -> Tuple[bool, Dict]:
         """Generate an answer to a question using available sources and model knowledge"""
         log_event(f"Creating answer for question: {query}")
         
         # Clean any DIRECT QUESTION: prefix for better prompt formatting
         clean_query = query.replace("DIRECT QUESTION:", "").strip()
         
+        # Analyze if the query is comparing sources or asking for comparisons
+        is_comparison_question = self._is_comparison_query(clean_query)
+        log_event(f"Query identified as comparison question: {is_comparison_question}")
+        
         # Create the prompt for question answering
         system_prompt = (
             "You are a helpful assistant that answers questions accurately and thoroughly. "
             "Always provide a direct answer to questions. "
             "IMPORTANT INSTRUCTIONS:\n"
-            "1. If the answer IS in the provided sources, use that information and cite sources.\n"
-            "2. If the answer is NOT in the provided sources, use your general knowledge to provide the best possible answer.\n"
+            "1. If the answer IS in the provided sources or memory, use that information and cite sources.\n"
+            "2. If the answer is NOT in the sources or memory, use your general knowledge to provide the best possible answer.\n"
             "3. NEVER refuse to answer - always provide your best response.\n"
             "4. When using general knowledge not from sources, clearly indicate this.\n"
-            "5. Keep your answers concise and relevant to the question."
+            "5. Keep your answers concise and relevant to the question.\n"
+            "6. If there are multiple sources or memories with conflicting information, acknowledge this and explain the differences.\n"
+            "7. When comparing information from different sources, organize your answer in a structured way that highlights similarities and differences.\n"
+            "8. When memory items contain information from pages visited at different times, clearly identify temporal relationships like 'according to more recent information' or 'previously known information'."
         )
         
         user_prompt = f"QUESTION: {clean_query}\n\n"
-        user_prompt += "Here are the available sources:\n\n"
+        
+        # Include conversation history if available
+        memory_items = []
+        current_conversation = []
+        
+        # Track domain frequencies for source comparison
+        domain_frequencies = {}
+        memory_domains = set()
+        memory_topics = set()
+        memory_timestamps = []
+        
+        # First pass through conversation history to collect metadata
+        if conversation_history and len(conversation_history) > 0:
+            for item in conversation_history:
+                role = item.get('role', '')
+                content = item.get('content', '')
+                is_memory = item.get('isMemory', False)
+                
+                # Skip items with no content
+                if not content.strip():
+                    continue
+                
+                # Collect domain and topic information from memory items
+                if is_memory and 'source' in item:
+                    source_info = item.get('source', {})
+                    domain = source_info.get('domain', '')
+                    if domain:
+                        memory_domains.add(domain)
+                        if domain in domain_frequencies:
+                            domain_frequencies[domain] += 1
+                        else:
+                            domain_frequencies[domain] = 1
+                    
+                    # Extract topic if available
+                    topic = source_info.get('topic', '')
+                    if topic:
+                        memory_topics.add(topic)
+                    
+                    # Track timestamps
+                    timestamp = source_info.get('timestamp', 0)
+                    if timestamp:
+                        memory_timestamps.append(timestamp)
+                
+                # Collect memory items separately for better organization
+                if is_memory:
+                    memory_items.append({'role': role, 'content': content})
+                else:
+                    current_conversation.append({'role': role, 'content': content})
+        
+        # Analyze memory metadata for potential conflicts or source comparison opportunities
+        has_multiple_sources = len(memory_domains) > 1
+        has_temporal_differences = len(memory_timestamps) > 1 and max(memory_timestamps) - min(memory_timestamps) > 24 * 60 * 60 * 1000  # 24 hours in ms
+        
+        user_prompt += "Here is the relevant conversation and memory context:\n\n"
+        
+        # Add note about comparison context if appropriate
+        if is_comparison_question and has_multiple_sources:
+            user_prompt += "COMPARISON CONTEXT: This question appears to be comparing information across multiple sources "
+            user_prompt += f"from domains: {', '.join(memory_domains)}. "
+            if has_temporal_differences:
+                user_prompt += "These sources were accessed at different times, so temporal context may be relevant. "
+            user_prompt += "When answering, explicitly compare and contrast information from different sources.\n\n"
+        
+        # First add memory items if available
+        if memory_items:
+            user_prompt += "MEMORY CONTEXT (Information from previous conversations):\n"
+            
+            # Group memory items by domain for easier source comparison
+            domain_groups = {}
+            ungrouped_memories = []
+            
+            for item in memory_items:
+                role = item.get('role', '')
+                content = item.get('content', '')
+                source_info = item.get('source', {})
+                domain = source_info.get('domain', '')
+                
+                if domain and role == 'assistant':  # Group only answer memories by domain
+                    if domain not in domain_groups:
+                        domain_groups[domain] = []
+                    domain_groups[domain].append(item)
+                else:
+                    ungrouped_memories.append(item)
+            
+            # Output memory items by domain groups for easier comparison
+            if domain_groups and len(domain_groups) > 1 and is_comparison_question:
+                user_prompt += "--- MEMORY GROUPED BY SOURCE ---\n"
+                for domain, items in domain_groups.items():
+                    user_prompt += f"\nFrom {domain}:\n"
+                    for item in items:
+                        role = item.get('role', '')
+                        content = item.get('content', '')
+                        timestamp = item.get('source', {}).get('timestamp', 0)
+                        
+                        # Add timestamp context for temporal comparison
+                        date_str = ""
+                        if timestamp:
+                            try:
+                                date_obj = datetime.fromtimestamp(timestamp / 1000)  # Convert from ms to seconds
+                                date_str = f" (from {date_obj.strftime('%Y-%m-%d')})"
+                            except:
+                                pass
+                        
+                        if role == 'user':
+                            user_prompt += f"Question{date_str}: {content}\n\n"
+                        elif role == 'assistant':
+                            user_prompt += f"Answer{date_str}: {content}\n\n"
+                user_prompt += "--- END OF GROUPED MEMORY ---\n\n"
+            
+            # Output remaining ungrouped memories
+            for item in ungrouped_memories:
+                role = item.get('role', '')
+                content = item.get('content', '')
+                
+                # Format differently based on role
+                if role == 'user':
+                    user_prompt += f"Previous Question: {content}\n\n"
+                elif role == 'assistant':
+                    user_prompt += f"Previous Answer: {content}\n\n"
+            
+            user_prompt += "---\n\n"
+            
+            # Add explicit comparison instruction if needed
+            if is_comparison_question and has_multiple_sources:
+                user_prompt += "IMPORTANT: The question is asking to compare information across different sources or time periods. "
+                user_prompt += "Please clearly identify differences and similarities between sources "
+                user_prompt += "and explain any discrepancies you find.\n\n"
+        
+        # Then add recent conversation
+        if current_conversation:
+            user_prompt += "RECENT CONVERSATION:\n"
+            for item in current_conversation:
+                role = item.get('role', '')
+                content = item.get('content', '')
+                
+                if role == 'user':
+                    user_prompt += f"User: {content}\n\n"
+                elif role == 'assistant':
+                    user_prompt += f"Assistant: {content}\n\n"
+            user_prompt += "---\n\n"
+        
+        user_prompt += "CURRENT QUESTION AND SOURCES:\n"
+        
+        # Check if we have any full content sources
+        has_full_content = any(source.get('is_full_content', False) for source in summaries)
         
         # Include the sources in the prompt
         if summaries:
-            for idx, source in enumerate(summaries, 1):
-                # Truncate long summaries
-                summary_text = source.get('summary', '')
-                if len(summary_text) > 500:
-                    summary_text = summary_text[:497] + "..."
-                
-                user_prompt += f"Source {idx}:\n"
-                user_prompt += f"Title: {source.get('title', 'Untitled')}\n"
-                user_prompt += f"URL: {source.get('url', 'No URL')}\n"
-                user_prompt += f"Content: {summary_text}\n\n"
+            # If we have full content sources, prioritize them and make it clear
+            if has_full_content:
+                user_prompt += "FULL WEBPAGE CONTENT (complete, not summarized):\n\n"
+                for idx, source in enumerate(summaries, 1):
+                    if source.get('is_full_content', False):
+                        user_prompt += f"Title: {source.get('title', 'Untitled')}\n"
+                        user_prompt += f"URL: {source.get('url', 'No URL')}\n"
+                        user_prompt += f"Content: {source.get('summary', '')}\n\n"
+                        
+                        # Add explicit instruction to use this full content
+                        user_prompt += "IMPORTANT: This is the complete content of the webpage, not a summary. "
+                        user_prompt += "The answer to the question is likely contained within this content. "
+                        user_prompt += "Please read through the full content carefully to find relevant information.\n\n"
+            else:
+                # Regular processing for summarized content
+                for idx, source in enumerate(summaries, 1):
+                    # Truncate long summaries
+                    summary_text = source.get('summary', '')
+                    if len(summary_text) > 500 and not source.get('is_full_content', False):
+                        summary_text = summary_text[:497] + "..."
+                    
+                    user_prompt += f"Source {idx}:\n"
+                    user_prompt += f"Title: {source.get('title', 'Untitled')}\n"
+                    user_prompt += f"URL: {source.get('url', 'No URL')}\n"
+                    user_prompt += f"Content: {summary_text}\n\n"
         else:
-            user_prompt += "No sources are available. Please answer based on your general knowledge.\n\n"
+            user_prompt += "No recent sources are available. Please answer based on memory context and your general knowledge.\n\n"
             
         user_prompt += (
             "Now answer the question directly and specifically. "
-            "If the answer is in the sources, cite the source. "
-            "If the information is not in the sources, provide the answer from your general knowledge "
+            "If the answer is in the sources or memory context, cite the source. "
+            "If the information is not in the sources but in memory, indicate which memory item contains the information. "
+            "If neither sources nor memory contain the answer, provide the answer from your general knowledge "
             "and clearly state that it comes from your knowledge rather than the provided sources."
         )
+        
+        # For comparison questions, add extra guidance
+        if is_comparison_question:
+            user_prompt += (
+                "\n\nSince this question involves comparing information, please structure your answer to clearly "
+                "highlight similarities and differences between sources. You may use a structured format like:\n"
+                "* Point of comparison 1: [Source A says X, Source B says Y]\n"
+                "* Point of comparison 2: [Source A says P, Source B says Q]\n"
+                "Conclude with insights about why these differences might exist."
+            )
         
         # Generate the answer using LLM
         success, answer, generation_time = self.generate_llm_response(
@@ -475,6 +652,39 @@ class TopicAgent:
             "generation_time": generation_time,
             "isQuestion": True
         }
+
+    def _is_comparison_query(self, query: str) -> bool:
+        """Detect if a query is asking for comparison between sources or information"""
+        # Convert to lowercase for easier matching
+        query_lower = query.lower()
+        
+        # Patterns indicating comparison questions
+        comparison_words = ['compare', 'difference', 'different', 'similarities', 'similar', 'versus', 'vs', 'vs.', 'better', 'worse', 'stronger', 'weaker']
+        comparison_phrases = ['what is the difference', 'how do they compare', 'which one is', 'pros and cons', 'advantages and disadvantages']
+        
+        # Check for comparison words
+        if any(word in query_lower.split() for word in comparison_words):
+            return True
+            
+        # Check for comparison phrases
+        if any(phrase in query_lower for phrase in comparison_phrases):
+            return True
+            
+        # Check for "A or B" pattern
+        if re.search(r'\b\w+\s+or\s+\w+\b', query_lower):
+            return True
+            
+        # Check for multiple mentions of the same type of entity
+        entity_patterns = [
+            r'(?:between|among)\s+(.+?)\s+and\s+(.+?)\b',  # "between X and Y"
+            r'(\w+)\s*(?:,|\band\b)\s*(\w+)\s+(?:are|is)'  # "X and Y are" or "X, Y are"
+        ]
+        
+        for pattern in entity_patterns:
+            if re.search(pattern, query_lower):
+                return True
+                
+        return False
 
     def create_summary(self, query: str, summaries: List[Dict[str, str]], model_info: Dict) -> Tuple[bool, Dict]:
         """Generate a summary from the provided content"""
@@ -538,7 +748,7 @@ class TopicAgent:
             "isQuestion": False
         }
 
-    def process_query(self, query, provided_urls=None, page_content=None, model_info=None, is_question=None):
+    def process_query(self, query, provided_urls=None, page_content=None, model_info=None, is_question=None, conversation_history=None):
         """Main entry point for processing a query - either summarizing content or answering a question"""
         log_event(f'Processing query: {query}')
         
@@ -567,11 +777,123 @@ class TopicAgent:
                     if original_query and not is_url and self.is_question(original_query):
                         query_is_question = True
             
-            log_event(f'Query is{"" if query_is_question else " not"} a question')
+            # Check if this is a query about links, UI elements, or navigation
+            is_about_links = False
+            if model_info and isinstance(model_info, dict) and 'isAboutLinks' in model_info:
+                is_about_links = model_info.get('isAboutLinks', False)
                 
+            # If we have HTML content, check if it should be used directly
+            has_html_content = page_content and isinstance(page_content, dict) and 'htmlContent' in page_content
+            if has_html_content:
+                log_event(f'Page content contains HTML: {len(page_content.get("htmlContent", ""))} characters')
+            
+            # Log if conversation history is available
+            if conversation_history:
+                log_event(f'Received conversation history with {len(conversation_history)} items')
+                # Log the first few items for debugging
+                for i, item in enumerate(conversation_history[:3]):  # Log up to 3 items to avoid excessive logs
+                    role = item.get('role', 'unknown')
+                    content_preview = item.get('content', '')[:50] + '...' if len(item.get('content', '')) > 50 else item.get('content', '')
+                    is_memory = item.get('isMemory', False)
+                    log_event(f'  History item {i}: role={role}, isMemory={is_memory}, content={content_preview}')
+            else:
+                log_event('No conversation history received')
+                
+            log_event(f'Query is{"" if query_is_question else " not"} a question')
+            
+            # Special handling for queries about links with HTML content
+            if query_is_question and is_about_links and has_html_content and model_info:
+                log_event(f'Processing question about links/UI using HTML content')
+                
+                # Set up special system prompt for HTML analysis
+                system_prompt = (
+                    "You are a helpful assistant with expertise in understanding webpage structure and content. "
+                    "When analyzing HTML content, pay special attention to links, buttons, navigation elements, and UI components. "
+                    "If asked about specific UI elements or links, identify them clearly in your answer. "
+                    "Format links as '[Link text](URL)' in your response for clarity. "
+                    "Always provide direct answers based on the actual page content, "
+                    "and do not make assumptions about content that isn't visible."
+                )
+                
+                # Create a user prompt specifically for HTML analysis
+                user_prompt = f"WEBPAGE ANALYSIS QUESTION: {clean_query}\n\n"
+                user_prompt += "Below is the HTML content of a webpage with specially marked links in the format 'text [LINK: url]'.\n\n"
+                user_prompt += f"Page title: {page_content.get('title', 'Untitled')}\n"
+                user_prompt += f"URL: {page_content.get('url', '')}\n\n"
+                
+                # Add HTML content
+                html_content = page_content.get('htmlContent', '')
+                # Use a reasonable length limit for the HTML
+                if len(html_content) > 50000:
+                    html_content = html_content[:50000] + "... [HTML truncated]"
+                    
+                user_prompt += "HTML CONTENT:\n"
+                user_prompt += html_content
+                user_prompt += "\n\n"
+                
+                user_prompt += (
+                    "Please analyze this HTML to answer the question. "
+                    "If the question is about finding links, buttons, or navigation elements, "
+                    "list all relevant elements with their text and URLs. "
+                    "If asked about a specific link or UI element, provide details if found. "
+                    "If the information isn't available in the HTML, clearly state that you cannot find it."
+                )
+                
+                # Generate response using LLM
+                success, answer, generation_time = self.generate_llm_response(
+                    "html_analysis", 
+                    {"system": system_prompt, "user": user_prompt}, 
+                    model_info
+                )
+                
+                if success:
+                    log_event('Successfully processed HTML query')
+                    return {
+                        'success': True,
+                        'data': {
+                            "query": clean_query,
+                            "summaries": [],  # No need for summaries in this mode
+                            "consolidated_summary": answer,
+                            "generation_time": generation_time,
+                            "isQuestion": True
+                        }
+                    }
+                
+                # If HTML analysis fails, fall back to standard processing
+                log_event('HTML analysis failed, falling back to standard processing')
+            
+            # Special handling for direct page content with questions
+            if query_is_question and page_content and isinstance(page_content, dict) and model_info:
+                log_event(f'Direct question with page content detected - using full content')
+                
+                # Extract content details
+                content = page_content.get('content', '')
+                title = page_content.get('title', 'Untitled Page')
+                url = page_content.get('url', query)
+                
+                if content and len(content) > 200:
+                    # Create a special "full content" summary that preserves all the original content
+                    # This ensures we don't lose information in the summarization process
+                    summaries = [{
+                        'title': title,
+                        'url': url,
+                        'summary': content,  # Use the full content instead of summarizing
+                        'is_full_content': True  # Flag to indicate this is full content
+                    }]
+                    log_event(f'Using full page content for question: {title}')
+                    
+                    # Generate answer directly from full content
+                    success, result = self.create_question_answer(clean_query, summaries, model_info, conversation_history)
+                    if success:
+                        return {'success': True, 'data': result}
+                    else:
+                        log_event('Failed to answer question with full content')
+                        # Continue with normal processing as fallback
+            
             # Generate summaries from sources
             summaries = []
             
+            # Normal processing path for non-questions or if direct handling failed
             # If direct page content is provided, just summarize that
             if page_content and isinstance(page_content, dict):
                 log_event(f'Processing direct page content: {page_content.get("title", "Untitled")}')
@@ -613,7 +935,7 @@ class TopicAgent:
                 # If it's a question, we'll try to answer it anyway
                 if query_is_question and model_info:
                     log_event('Attempting to answer question without sources')
-                    success, result = self.create_question_answer(clean_query, [], model_info)
+                    success, result = self.create_question_answer(clean_query, [], model_info, conversation_history)
                     if success:
                         return {'success': True, 'data': result}
                 
@@ -645,7 +967,7 @@ class TopicAgent:
             
             # Generate response based on whether it's a question or summary request
             if query_is_question:
-                success, result = self.create_question_answer(clean_query, summaries, model_info)
+                success, result = self.create_question_answer(clean_query, summaries, model_info, conversation_history)
             else:
                 success, result = self.create_summary(clean_query, summaries, model_info)
                 
@@ -692,6 +1014,18 @@ if __name__ == "__main__":
             page_content = params.get('pageContent', None)
             model_info = params.get('modelInfo', None)
             is_question = params.get('isQuestion', None)
+            conversation_history = params.get('conversationHistory', None)
+            is_about_links = params.get('isAboutLinks', False)
+            
+            # Check if HTML content was provided and needs to be preserved in page_content
+            if page_content and isinstance(page_content, dict) and 'htmlContent' in page_content:
+                log_event(f"HTML content found ({len(page_content['htmlContent'])} chars)")
+                # We already have the HTML content in page_content, no action needed
+            
+            # Add isAboutLinks to model_info for processing by the agent
+            if is_about_links and model_info and isinstance(model_info, dict):
+                model_info['isAboutLinks'] = is_about_links
+                log_event(f"Added isAboutLinks=True to model_info")
             
             # Force is_question to False if query is a URL
             if query.startswith('http://') or query.startswith('https://'):
@@ -704,7 +1038,7 @@ if __name__ == "__main__":
             
             # Execute agent
             agent = TopicAgent()
-            result = agent.process_query(query, urls, page_content, model_info, is_question)
+            result = agent.process_query(query, urls, page_content, model_info, is_question, conversation_history)
             
             # Return result
             print(json.dumps(result))
