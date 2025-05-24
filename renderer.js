@@ -53,6 +53,9 @@ let autoSummarizeEnabled = true;
 const AUTO_SUMMARIZE_KEY = 'auto_summarize_enabled';
 const SAVED_TABS_KEY = 'saved_tabs';
 
+// History management
+const HISTORY_STORAGE_KEY = 'browser_history';
+
 // New tab defaults
 const NEW_TAB_URL = 'about:blank'; // Default URL for new tabs
 const HOMEPAGE_KEY = 'homepage_url';
@@ -545,6 +548,72 @@ document.addEventListener('DOMContentLoaded', () => {
   `;
   document.head.appendChild(styleEl);
 
+  // Set up IPC listeners for menu commands
+  const { ipcRenderer } = require('electron');
+  
+  // Handle menu commands
+  ipcRenderer.on('menu-new-tab', () => {
+    console.log('Menu: New Tab');
+    createNewTab();
+  });
+  
+  ipcRenderer.on('menu-close-tab', () => {
+    console.log('Menu: Close Tab');
+    if (activeTabId) {
+      closeTab(activeTabId);
+    }
+  });
+  
+  ipcRenderer.on('menu-show-history', () => {
+    console.log('Menu: Show History');
+    showHistoryPage();
+  });
+  
+  ipcRenderer.on('menu-reload', () => {
+    console.log('Menu: Reload');
+    const webview = getActiveWebview();
+    if (webview) {
+      webview.reload();
+    }
+  });
+  
+  ipcRenderer.on('menu-force-reload', () => {
+    console.log('Menu: Force Reload');
+    const webview = getActiveWebview();
+    if (webview) {
+      webview.reloadIgnoringCache();
+    }
+  });
+  
+  ipcRenderer.on('menu-go-back', () => {
+    console.log('Menu: Go Back');
+    const webview = getActiveWebview();
+    if (webview && webview.canGoBack()) {
+      webview.goBack();
+    }
+  });
+  
+  ipcRenderer.on('menu-go-forward', () => {
+    console.log('Menu: Go Forward');
+    const webview = getActiveWebview();
+    if (webview && webview.canGoForward()) {
+      webview.goForward();
+    }
+  });
+  
+  ipcRenderer.on('menu-clear-history', () => {
+    console.log('Menu: Clear History');
+    if (confirm('Are you sure you want to clear all browsing history? This action cannot be undone.')) {
+      try {
+        localStorage.removeItem(HISTORY_STORAGE_KEY);
+        alert('History cleared successfully.');
+      } catch (error) {
+        console.error('Error clearing history:', error);
+        alert('Error clearing history: ' + error.message);
+      }
+    }
+  });
+
   // Output diagnostic info
   console.log('Tab elements found:', { 
     tabsContainer: !!tabsContainer,
@@ -938,7 +1007,7 @@ function selectTab(tabId) {
         webview.classList.add('active');
         
         // Update URL bar with the selected tab's URL
-        if (webview.src) {
+        if (urlBar) {
           urlBar.value = webview.src;
         }
       } else {
@@ -1049,7 +1118,9 @@ function setupWebviewEvents(webview) {
     }
     
     // Update URL bar
+    if (urlBar) {
     urlBar.value = webview.src;
+    }
     
     // Update tab title
     updateTabTitle(webview, webview.getTitle());
@@ -1057,8 +1128,14 @@ function setupWebviewEvents(webview) {
     // Update navigation buttons
     updateNavigationButtons();
     
-    // Auto-summarize if enabled (for any page, not just Google)
+    // Track page visit in history
     const url = webview.src;
+    const title = webview.getTitle();
+    if (url && url !== 'about:blank' && !url.startsWith('file://')) {
+      trackPageVisit(url, title);
+    }
+    
+    // Auto-summarize if enabled (for any page, not just Google)
     if (autoSummarizeEnabled && url) {
       // Skip auto-summarizing about:blank and other non-http pages
       if (url.startsWith('http')) {
@@ -1119,9 +1196,43 @@ function setupWebviewEvents(webview) {
 window.addEventListener('message', function(event) {
   // Make sure the message is from our webview
   console.log('Received window message event:', event.data);
+  
   if (event.data && event.data.type === 'add-to-chat') {
     console.log('Received add-to-chat message via postMessage:', event.data.text);
     addSelectedTextToChat(event.data.text);
+  }
+  
+  // Handle navigation messages from history page
+  if (event.data && event.data.type === 'navigate-to' && event.data.url) {
+    console.log('Received navigate-to message from history page:', event.data.url);
+    const webview = getActiveWebview();
+    if (webview) {
+      webview.loadURL(event.data.url);
+    }
+  }
+  
+  // Handle clear history message
+  if (event.data && event.data.type === 'clear-history') {
+    console.log('Received clear-history message from history page');
+    try {
+      localStorage.removeItem(HISTORY_STORAGE_KEY);
+      console.log('History cleared successfully');
+    } catch (error) {
+      console.error('Error clearing history:', error);
+    }
+  }
+  
+  // Handle delete history item message
+  if (event.data && event.data.type === 'delete-history-item' && event.data.itemId) {
+    console.log('Received delete-history-item message for ID:', event.data.itemId);
+    try {
+      let history = JSON.parse(localStorage.getItem(HISTORY_STORAGE_KEY) || '[]');
+      history = history.filter(item => item.id !== event.data.itemId);
+      localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(history));
+      console.log('History item deleted successfully');
+    } catch (error) {
+      console.error('Error deleting history item:', error);
+    }
   }
 });
 
@@ -1251,6 +1362,7 @@ function getActiveWebview() {
 }
 
 // Navigation functions
+if (backBtn) {
 backBtn.addEventListener('click', () => {
   const webview = getActiveWebview();
   const tab = getActiveTab();
@@ -1259,7 +1371,11 @@ backBtn.addEventListener('click', () => {
     webview.goBack();
   }
 });
+} else {
+  console.warn('backBtn element not found');
+}
 
+if (forwardBtn) {
 forwardBtn.addEventListener('click', () => {
   const webview = getActiveWebview();
   const tab = getActiveTab();
@@ -1268,16 +1384,28 @@ forwardBtn.addEventListener('click', () => {
     webview.goForward();
   }
 });
+} else {
+  console.warn('forwardBtn element not found');
+}
 
+if (reloadBtn) {
 reloadBtn.addEventListener('click', () => {
     const webview = getActiveWebview();
     if (webview) {
         webview.reload();
     }
 });
+} else {
+  console.warn('reloadBtn element not found');
+}
 
 // URL handling
 function navigateToUrl() {
+    if (!urlBar) {
+      console.warn('urlBar element not found');
+      return;
+    }
+    
     let url = urlBar.value;
     
     // If it looks like a search query rather than a URL, use Google search
@@ -1295,35 +1423,71 @@ function navigateToUrl() {
     }
 }
 
+if (goBtn) {
 goBtn.addEventListener('click', navigateToUrl);
+} else {
+  console.warn('goBtn element not found');
+}
+
+if (urlBar) {
 urlBar.addEventListener('keypress', (e) => {
     if (e.key === 'Enter') {
         navigateToUrl();
     }
 });
+} else {
+  console.warn('urlBar element not found');
+}
+
+// History button
+const historyBtn = document.getElementById('historyBtn');
+if (historyBtn) {
+    historyBtn.addEventListener('click', showHistoryPage);
+}
 
 // Update navigation buttons
 function updateNavigationButtons() {
     const webview = getActiveWebview();
     if (webview) {
+        if (backBtn) {
         backBtn.disabled = !webview.canGoBack();
+        }
+        if (forwardBtn) {
         forwardBtn.disabled = !webview.canGoForward();
+        }
     } else {
+        if (backBtn) {
         backBtn.disabled = true;
+        }
+        if (forwardBtn) {
         forwardBtn.disabled = true; 
+        }
     }
 }
 
 // Extensions Panel Management
+if (extensionsBtn) {
 extensionsBtn.addEventListener('click', () => {
+      if (extensionsPanel) {
     extensionsPanel.classList.toggle('hidden');
+      }
 });
+} else {
+  console.warn('extensionsBtn element not found');
+}
 
+if (closeExtensionsBtn) {
 closeExtensionsBtn.addEventListener('click', () => {
+      if (extensionsPanel) {
     extensionsPanel.classList.add('hidden');
+      }
 });
+} else {
+  console.warn('closeExtensionsBtn element not found');
+}
 
 // Developer Mode
+if (developerModeToggle) {
 developerModeToggle.addEventListener('change', async (event) => {
     try {
         const result = await ipcRenderer.invoke('enable-developer-mode');
@@ -1336,20 +1500,36 @@ developerModeToggle.addEventListener('change', async (event) => {
         developerModeToggle.checked = false;
     }
 });
+} else {
+  console.warn('developerModeToggle element not found');
+}
 
 // Extension Installation
+if (installExtensionBtn) {
 installExtensionBtn.addEventListener('click', () => {
+      if (extensionFile) {
     extensionFile.setAttribute('webkitdirectory', '');
     extensionFile.removeAttribute('accept');
     extensionFile.click();
+      }
 });
+} else {
+  console.warn('installExtensionBtn element not found');
+}
 
+if (loadExtensionBtn) {
 loadExtensionBtn.addEventListener('click', () => {
+      if (extensionFile) {
     extensionFile.removeAttribute('webkitdirectory');
     extensionFile.setAttribute('accept', '.crx');
     extensionFile.click();
+      }
 });
+} else {
+  console.warn('loadExtensionBtn element not found');
+}
 
+if (extensionFile) {
 extensionFile.addEventListener('change', async (event) => {
     const files = event.target.files;
     if (files.length > 0) {
@@ -1365,14 +1545,22 @@ extensionFile.addEventListener('change', async (event) => {
         }
     }
 });
+} else {
+  console.warn('extensionFile element not found');
+}
 
 // Chrome Web Store Integration
+if (openChromeStoreBtn) {
 openChromeStoreBtn.addEventListener('click', () => {
     shell.openExternal('https://chrome.google.com/webstore');
 });
+} else {
+  console.warn('openChromeStoreBtn element not found');
+}
 
+if (installFromStoreBtn) {
 installFromStoreBtn.addEventListener('click', async () => {
-    const extensionId = extensionIdInput.value.trim();
+      const extensionId = extensionIdInput ? extensionIdInput.value.trim() : '';
     if (!extensionId) {
         alert('Please enter an extension ID');
         return;
@@ -1382,7 +1570,9 @@ installFromStoreBtn.addEventListener('click', async () => {
         const result = await ipcRenderer.invoke('install-from-store', extensionId);
         if (result.success) {
             updateExtensionsList();
+              if (extensionIdInput) {
             extensionIdInput.value = '';
+              }
         } else {
             alert('Failed to install extension: ' + result.error);
         }
@@ -1390,6 +1580,9 @@ installFromStoreBtn.addEventListener('click', async () => {
         alert('Error installing extension: ' + err.message);
     }
 });
+} else {
+  console.warn('installFromStoreBtn element not found');
+}
 
 // Update Extensions List
 async function updateExtensionsList() {
@@ -1430,7 +1623,6 @@ updateExtensionsList();
 // Create a debugging function that both logs to console and shows an alert
 function debugLog(message) {
   console.log(message);
-  alert("DEBUG: " + message);
 }
 
 // Check elements immediately after declaration
@@ -1997,10 +2189,14 @@ function displayAgentError(error) {
   addMessageToChat('assistant', `Error: ${error}`);
 }
 
+if (dragbar) {
 dragbar.addEventListener('mousedown', function(e) {
     isDragging = true;
     document.body.style.cursor = 'ew-resize';
 });
+} else {
+  console.warn('dragbar element not found');
+}
 
 document.addEventListener('mousemove', function(e) {
     if (!isDragging) return;
@@ -2623,13 +2819,13 @@ async function extractPageContent(specificWebview = null, options = {}) {
   }
 }
 
-// Also hook into form submissions to catch Google searches
-webview.addEventListener('did-start-navigation', (event) => {
-  if (event.url.includes('google.com/search')) {
-    // This is likely a Google search - we'll auto-summarize after it loads
-    console.log('Google search detected');
-  }
-});
+// // FIXER Also hook into form submissions to catch Google searches
+// webview.addEventListener('did-start-navigation', (event) => {
+//   if (event.url.includes('google.com/search')) {
+//     // This is likely a Google search - we'll auto-summarize after it loads
+//     console.log('Google search detected');
+//   }
+// });
 
 // Set up keyboard shortcuts
 document.addEventListener('keydown', function(e) {
@@ -2645,6 +2841,12 @@ document.addEventListener('keydown', function(e) {
     if (activeTabId) {
       closeTab(activeTabId);
     }
+  }
+  
+  // Ctrl+H: Show history
+  if (e.ctrlKey && e.key === 'h') {
+    e.preventDefault();
+    showHistoryPage();
   }
   
   // Ctrl+Tab: Next tab
@@ -2919,7 +3121,7 @@ function setupAgentControls() {
     chatContainer.className = 'chat-container';
     agentResults.appendChild(chatContainer);
     
-          // Add a more modern input area for questions
+    // Add a more modern input area for questions
     const chatInputArea = document.createElement('div');
     chatInputArea.className = 'chat-input-area';
     chatInputArea.innerHTML = `
@@ -3361,7 +3563,6 @@ function debugActiveWebview() {
   
   if (!activeWebview) {
     console.log('No active webview found');
-    alert('No active webview found');
     return;
   }
   
@@ -3383,7 +3584,6 @@ function debugActiveWebview() {
   };
   
   console.log('Active webview info:', info);
-  alert(`Active webview: ${info.id}\nSrc: ${info.src}\nEvents attached: ${JSON.stringify(info.hasEventListeners)}`);
 }
 
 // Helper function to check if an element has an event listener
@@ -3441,284 +3641,61 @@ setupWebviewEvents = function(webview) {
 // Add this function to inject scripts into webviews
 function injectSelectionHandler(webview) {
   try {
-    console.log('Injecting selection handler into webview:', webview.id);
+    console.log('Setting up simple selection handler for webview:', webview.id);
     
-    // Wait for webview to finish loading before injecting
+    // Wait for webview to finish loading before setting up
     const loadHandler = () => {
       webview.removeEventListener('did-finish-load', loadHandler);
       
-      // Inject a script that captures text selection and adds a custom menu
+      // Add a reasonable delay to ensure webview is ready
+      setTimeout(() => {
+        try {
+          // Check if webview is still valid
+          if (!webview || (webview.isDestroyed && webview.isDestroyed())) {
+            console.log('Webview was destroyed, skipping injection');
+            return;
+          }
+          
+          // Simple, safer script injection
       webview.executeJavaScript(`
-        (function() {
-          // Avoid double-initialization
-          if (window.__hasAddToChatHandler) return;
-          window.__hasAddToChatHandler = true;
-          
-          console.log('Selection handler script injected');
-          
-          // Add custom styles for the button
-          const style = document.createElement('style');
-          style.textContent = \`
-            #add-to-chat-button {
-              position: fixed;
-              background-color: #4285f4;
-              color: white;
-              border: none;
-              border-radius: 4px;
-              padding: 8px 16px;
-              font-size: 14px;
-              cursor: pointer;
-              box-shadow: 0 4px 8px rgba(0,0,0,0.3);
-              z-index: 2147483647;
-              display: none;
-              font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-              transform: translateX(-50%);
-              pointer-events: auto;
-            }
-            
-            #add-to-chat-button:hover {
-              background-color: #3367d6;
-            }
-          \`;
-          document.head.appendChild(style);
-          
-          // Create the button
-          let button = document.createElement('button');
-          button.id = 'add-to-chat-button';
-          button.textContent = 'Add to chat';
-          button.style.zIndex = '2147483647';
-          
-          button.onclick = function(e) {
-            e.preventDefault();
-            e.stopPropagation();
-            
-            const selection = window.getSelection();
-            if (selection && selection.toString().trim()) {
-              // Try multiple communication methods for redundancy
-              try {
-                // Method 1: Use Electron IPC directly
-                if (window.electron && window.electron.ipcRenderer) {
-                  window.electron.ipcRenderer.sendToHost('add-to-chat', selection.toString().trim());
-                  console.log('Sent selection via IPC');
-                } 
-                // Method 2: Use postMessage as fallback
-                else {
-                  window.parent.postMessage({
-                    type: 'add-to-chat',
-                    text: selection.toString().trim()
-                  }, '*');
-                  console.log('Sent selection via postMessage');
-                }
-                
-                // Method 3: Store selection in localStorage for polling
-                try {
-                  localStorage.setItem('selectedTextForChat', selection.toString().trim());
-                  localStorage.setItem('selectedTextTimestamp', Date.now().toString());
-                  console.log('Stored selection in localStorage');
-                } catch (storageError) {
-                  console.error('Failed to store selection in localStorage:', storageError);
-                }
-                
-                // Visual feedback
-                button.style.backgroundColor = '#43a047';
-                button.textContent = 'Added to chat';
+            if (!window.__selectionHandlerSetup) {
+              window.__selectionHandlerSetup = true;
+              
+              // Simple postMessage setup
+              document.addEventListener('mouseup', function() {
                 setTimeout(() => {
-                  button.style.backgroundColor = '#4285f4';
-                  button.textContent = 'Add to chat';
-                  button.style.display = 'none';
-                }, 1500);
-              } catch (e) {
-                console.error('Error sending selection to chat:', e);
-                
-                // Show error state
-                button.style.backgroundColor = '#f44336';
-                button.textContent = 'Error - try again';
-                setTimeout(() => {
-                  button.style.backgroundColor = '#4285f4';
-                  button.textContent = 'Add to chat';
-                }, 1500);
-              }
+                  try {
+                    const selection = window.getSelection();
+                    const text = selection.toString().trim();
+                    if (text && text.length > 5) {
+                      console.log('Text selected:', text.substring(0, 50) + '...');
+                    }
+                  } catch (e) {
+                    // Silently ignore selection errors
+                  }
+                }, 50);
+              });
+              
+              console.log('Simple selection handler setup complete');
             }
-            return false;
-          };
-          document.body.appendChild(button);
-          
-          // Function to position the button near selection
-          function positionButton(selection) {
-            if (!selection || selection.rangeCount === 0) return false;
-            
-            try {
-              const range = selection.getRangeAt(0);
-              if (!range) return false;
-              
-              const rect = range.getBoundingClientRect();
-              if (!rect || rect.width === 0) return false;
-              
-              // Position directly under the selection, floating reliably
-              const top = Math.min(rect.bottom + 10, window.innerHeight - 50);
-              
-              // Center horizontally on the selection
-              const left = rect.left + (rect.width / 2);
-              
-              console.log('Positioning button at:', { top, left, rect });
-              
-              // Set the button position
-              button.style.position = 'fixed';
-              button.style.top = top + 'px';
-              button.style.left = left + 'px';
-              button.style.display = 'block';
-              
-              return true;
-            } catch (e) {
-              console.error('Error positioning Add to Chat button:', e);
-              return false;
-            }
-          }
-          
-          // Show button when text is selected via mouse
-          document.addEventListener('mouseup', function(e) {
-            // Short delay to ensure the selection is complete
-            setTimeout(() => {
-              const selection = window.getSelection();
-              const selectedText = selection.toString().trim();
-              
-              if (selectedText) {
-                if (!positionButton(selection)) {
-                  console.log('Could not position button, falling back to event coordinates');
-                  // Fallback positioning directly near the cursor
-                  button.style.position = 'fixed';
-                  button.style.top = (e.clientY + 20) + 'px';
-                  button.style.left = (e.clientX) + 'px';
-                  button.style.display = 'block';
-                }
-              } else {
-                // Only hide if we didn't click on the button itself
-                if (e.target !== button) {
-                  button.style.display = 'none';
-                }
-              }
-            }, 10);
+          `, false)
+          .catch(err => {
+            // Don't log errors, just silently fail to avoid spam
+            console.log('Script injection failed (this is normal for some sites)');
           });
-          
-          // Also support keyboard shortcut (Cmd+Shift+C or Ctrl+Shift+C)
-          document.addEventListener('keydown', function(e) {
-            const isMac = navigator.platform.includes('Mac');
-            const isCtrlShiftC = (isMac && e.metaKey && e.shiftKey && e.code === 'KeyC') || 
-                                (!isMac && e.ctrlKey && e.shiftKey && e.code === 'KeyC');
-            
-            if (isCtrlShiftC) {
-              const selection = window.getSelection();
-              const selectedText = selection.toString().trim();
-              
-              if (selectedText) {
-                // Try all communication methods
-                // Use Electron IPC if available
-                if (window.electron && window.electron.ipcRenderer) {
-                  window.electron.ipcRenderer.sendToHost('add-to-chat', selectedText);
-                } else {
-                  // Fallback to postMessage
-                  window.parent.postMessage({
-                    type: 'add-to-chat',
-                    text: selectedText
-                  }, '*');
-                }
-                
-                // Store in localStorage as backup
-                try {
-                  localStorage.setItem('selectedTextForChat', selectedText);
-                  localStorage.setItem('selectedTextTimestamp', Date.now().toString());
-                } catch (storageError) {
-                  console.error('Failed to store selection in localStorage:', storageError);
-                }
-                
-                // Visual feedback for keyboard shortcut
-                const feedbackDiv = document.createElement('div');
-                feedbackDiv.style.position = 'fixed';
-                feedbackDiv.style.top = '20px';
-                feedbackDiv.style.left = '50%';
-                feedbackDiv.style.transform = 'translateX(-50%)';
-                feedbackDiv.style.background = '#4285f4';
-                feedbackDiv.style.color = 'white';
-                feedbackDiv.style.padding = '10px 20px';
-                feedbackDiv.style.borderRadius = '4px';
-                feedbackDiv.style.zIndex = '2147483647';
-                feedbackDiv.style.boxShadow = '0 2px 10px rgba(0,0,0,0.2)';
-                feedbackDiv.textContent = 'Text added to chat';
-                document.body.appendChild(feedbackDiv);
-                
-                setTimeout(() => {
-                  feedbackDiv.remove();
-                }, 1500);
-              }
-            }
-          });
-          
-          // Handle scroll events to reposition the button if needed
-          document.addEventListener('scroll', function() {
-            if (button.style.display === 'block') {
-              const selection = window.getSelection();
-              if (selection && selection.toString().trim()) {
-                positionButton(selection);
-              } else {
-                button.style.display = 'none';
-              }
-            }
-          });
-          
-          // Pre-assign the electron object if available in this context
-          if (!window.electron && window.require) {
-            try {
-              window.electron = { ipcRenderer: window.require('electron').ipcRenderer };
-            } catch (e) {
-              console.log('Electron IPC not available in this context');
-            }
-          }
-        })();
-      `)
-      .catch(err => console.error('Error injecting selection handler:', err));
+        } catch (err) {
+          console.log('Error during script setup (this is normal for some sites)');
+        }
+      }, 1500);
     };
     
-    webview.addEventListener('did-finish-load', loadHandler);
+    // Only add the event listener if webview is valid
+    if (webview && typeof webview.addEventListener === 'function') {
+      webview.addEventListener('did-finish-load', loadHandler);
+    }
     
-    // Also poll for localStorage selection as backup method
-    setInterval(() => {
-      try {
-        webview.executeJavaScript(`
-          (function() {
-            const selectedText = localStorage.getItem('selectedTextForChat');
-            const timestamp = localStorage.getItem('selectedTextTimestamp');
-            
-            if (selectedText && timestamp) {
-              // Only process if selection is recent (within last 5 seconds)
-              const now = Date.now();
-              const selectionTime = parseInt(timestamp, 10);
-              
-              if (now - selectionTime < 5000) {
-                // Clear the selection so we don't process it again
-                localStorage.removeItem('selectedTextForChat');
-                localStorage.removeItem('selectedTextTimestamp');
-                
-                return selectedText;
-              }
-            }
-            return null;
-          })()
-        `)
-        .then(result => {
-          if (result) {
-            console.log('Retrieved selection from localStorage');
-            addSelectedTextToChat(result);
-          }
-        })
-        .catch(err => {
-          // Silently ignore errors in polling
-        });
-      } catch (e) {
-        // Ignore errors in polling
-      }
-    }, 1000);
   } catch (err) {
-    console.error('Error setting up selection handler:', err);
+    console.log('Error setting up selection handler (this is normal for some sites)');
   }
 }
 
@@ -3752,6 +3729,166 @@ function updateTabFavicon(webview, faviconUrl) {
     }
   } catch (error) {
     console.error('Error updating favicon:', error);
+  }
+}
+
+
+function trackPageVisit(url, title) {
+  if (!url || url === 'about:blank') return;
+  
+  try {
+    let history = JSON.parse(localStorage.getItem(HISTORY_STORAGE_KEY) || '[]');
+    
+    const visit = {
+      id: Date.now(),
+      url: url,
+      title: title || url,
+      visitDate: new Date(),
+      timestamp: Date.now()
+    };
+    
+    // Remove any existing entry for this URL to avoid duplicates
+    history = history.filter(item => item.url !== url);
+    
+    // Add new visit to the beginning
+    history.unshift(visit);
+    
+    // Keep only the most recent 1000 visits
+    if (history.length > 1000) {
+      history = history.slice(0, 1000);
+    }
+    
+    localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(history));
+  } catch (error) {
+    console.error('Error tracking page visit:', error);
+  }
+}
+
+// Set up message listener for history page navigation
+window.addEventListener('message', function(event) {
+  console.log('Received message from history page:', event.data);
+  
+  if (event.data && event.data.type === 'navigate-to' && event.data.url) {
+    const webview = getActiveWebview();
+    if (webview) {
+      webview.loadURL(event.data.url);
+    }
+  }
+  
+  // Handle add-to-chat messages (existing functionality)
+  if (event.data && event.data.type === 'add-to-chat') {
+    console.log('Received add-to-chat message via postMessage:', event.data.text);
+    addSelectedTextToChat(event.data.text);
+  }
+  
+  // Handle clear history message
+  if (event.data && event.data.type === 'clear-history') {
+    console.log('Received clear-history message from history page');
+    try {
+      localStorage.removeItem(HISTORY_STORAGE_KEY);
+      console.log('History cleared successfully');
+    } catch (error) {
+      console.error('Error clearing history:', error);
+    }
+  }
+  
+  // Handle delete history item message
+  if (event.data && event.data.type === 'delete-history-item' && event.data.itemId) {
+    console.log('Received delete-history-item message for ID:', event.data.itemId);
+    try {
+      let history = JSON.parse(localStorage.getItem(HISTORY_STORAGE_KEY) || '[]');
+      history = history.filter(item => item.id !== event.data.itemId);
+      localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(history));
+      console.log('History item deleted successfully');
+    } catch (error) {
+      console.error('Error deleting history item:', error);
+              }
+            }
+          });
+          
+function showHistoryPage() {
+  console.log('=== SHOW HISTORY PAGE CALLED ===');
+  
+  try {
+    const webview = getActiveWebview();
+    console.log('Active webview found:', !!webview);
+    
+    if (webview) {
+      // Use simple file:// URL directly - no custom protocol
+      const historyURL = `file://${require('path').join(process.cwd(), 'history.html')}`;
+      console.log('Loading history URL:', historyURL);
+      
+      // Set up event listener to inject history data when page loads
+      const historyLoadHandler = () => {
+        console.log('History page loaded, injecting data...');
+        
+        // Get history data from localStorage
+        try {
+          const historyData = localStorage.getItem(HISTORY_STORAGE_KEY) || '[]';
+          const parsedHistory = JSON.parse(historyData);
+          console.log('Injecting history data:', parsedHistory.length, 'items');
+          
+          // Inject the history data into the page
+        webview.executeJavaScript(`
+            if (window.receiveHistoryData) {
+              window.receiveHistoryData(${historyData});
+            } else {
+              // If function not ready yet, store for later
+              window.__pendingHistoryData = ${historyData};
+              
+              // Try again in a moment
+              setTimeout(() => {
+                if (window.receiveHistoryData && window.__pendingHistoryData) {
+                  window.receiveHistoryData(window.__pendingHistoryData);
+                  delete window.__pendingHistoryData;
+                }
+              }, 500);
+            }
+          `).then(() => {
+            console.log('History data injected successfully');
+          }).catch(err => {
+            console.error('Error injecting history data:', err);
+          });
+          
+        } catch (error) {
+          console.error('Error preparing history data:', error);
+        }
+        
+        // Remove the event listener
+        webview.removeEventListener('did-finish-load', historyLoadHandler);
+      };
+      
+      // Add the event listener
+      webview.addEventListener('did-finish-load', historyLoadHandler);
+      
+      // Load the URL
+      webview.loadURL(historyURL);
+      console.log('History URL loaded successfully');
+      
+    } else {
+      console.log('No active webview, creating new tab...');
+      const historyURL = `file://${require('path').join(process.cwd(), 'history.html')}`;
+      const newTabId = createNewTab(historyURL);
+      console.log('New history tab created:', newTabId);
+    }
+  } catch (error) {
+    console.error('Error in showHistoryPage:', error);
+    alert('Error opening history page: ' + error.message);
+  }
+}
+
+function deleteHistoryItemLocal(itemId, modal) {
+  try {
+    let history = JSON.parse(localStorage.getItem(HISTORY_STORAGE_KEY) || '[]');
+    history = history.filter(item => item.id !== itemId);
+    localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(history));
+    
+    // Refresh the modal
+    modal.remove();
+    showHistoryPage();
+  } catch (error) {
+    console.error('Error deleting history item:', error);
+    alert('Error deleting history item');
   }
 }
  

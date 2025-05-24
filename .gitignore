@@ -11,3 +11,4 @@ package-lock.json
 venv/
 agents/venv/
 .env
+*.code-workspace
