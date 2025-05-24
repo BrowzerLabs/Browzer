@@ -1,4 +1,23 @@
-const { app, BrowserWindow, session, ipcMain, shell } = require('electron');
+// Set the application name first, before any other imports or operations
+const { app } = require('electron');
+
+// Set multiple name properties aggressively
+app.setName('Browzer');
+process.title = 'Browzer';
+
+// Set additional name properties for comprehensive coverage
+if (process.platform === 'darwin') {
+  app.dock?.setIcon(null); // This can help refresh the dock name
+  
+  // Try to set the bundle identifier
+  try {
+    app.setAppUserModelId('com.browzer.app');
+  } catch (e) {
+    console.log('Could not set app user model ID');
+  }
+}
+
+const { BrowserWindow, session, ipcMain, shell, Menu } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const https = require('https');
@@ -52,6 +71,7 @@ function createWindow() {
     const mainWindow = new BrowserWindow({
         width: 1200,
         height: 800,
+        title: 'Browzer',
         webPreferences: {
             nodeIntegration: true,
             contextIsolation: false,
@@ -420,29 +440,210 @@ ipcMain.handle('execute-agent', async (event, { agentPath, agentParams }) => {
   }
 });
 
+// Start the app when ready
 app.whenReady().then(() => {
-    createWindow();
-
-    // Add specific error handler for webframe disposal errors
-    process.on('uncaughtException', (error) => {
-        if (error.message.includes('Render frame was disposed') || 
-            error.message.includes('WebFrameMain')) {
-            console.error('Caught frame disposal error:', error.message);
-            fs.appendFileSync(path.join(__dirname, 'webframe-errors.log'), 
-                `[${new Date().toISOString()}] ${error.message}\n${error.stack}\n\n`);
-            // Don't re-throw, just log and continue
-            return;
+  // Ensure the app name is set again when ready
+  app.setName('Browzer');
+  
+  // Set about panel options (this can help with app name recognition)
+  if (process.platform === 'darwin') {
+    app.setAboutPanelOptions({
+      applicationName: 'Browzer',
+      applicationVersion: '0.0.1 (alpha)',
+      copyright: 'Copyright © 2025 Browzer'
+    });
+  }
+  
+  // Create the application menu
+  const template = [
+    // macOS app menu
+    ...(process.platform === 'darwin' ? [{
+      label: 'Browzer',
+      submenu: [
+        { role: 'about' },
+        { type: 'separator' },
+        { role: 'services' },
+        { type: 'separator' },
+        { role: 'hide' },
+        { role: 'hideothers' },
+        { role: 'unhide' },
+        { type: 'separator' },
+        { role: 'quit' }
+      ]
+    }] : []),
+    // File menu
+    {
+      label: 'File',
+      submenu: [
+        {
+          label: 'New Tab',
+          accelerator: 'CmdOrCtrl+T',
+          click: () => {
+            // Send message to renderer to create new tab
+            const focusedWindow = BrowserWindow.getFocusedWindow();
+            if (focusedWindow) {
+              focusedWindow.webContents.send('menu-new-tab');
+            }
+          }
+        },
+        {
+          label: 'New Window',
+          accelerator: 'CmdOrCtrl+N',
+          click: () => {
+            createWindow();
+          }
+        },
+        { type: 'separator' },
+        {
+          label: 'Close Tab',
+          accelerator: 'CmdOrCtrl+W',
+          click: () => {
+            const focusedWindow = BrowserWindow.getFocusedWindow();
+            if (focusedWindow) {
+              focusedWindow.webContents.send('menu-close-tab');
+            }
+          }
+        },
+        ...(process.platform !== 'darwin' ? [
+          { type: 'separator' },
+          { role: 'quit' }
+        ] : [])
+      ]
+    },
+    // Edit menu
+    {
+      label: 'Edit',
+      submenu: [
+        { role: 'undo' },
+        { role: 'redo' },
+        { type: 'separator' },
+        { role: 'cut' },
+        { role: 'copy' },
+        { role: 'paste' },
+        { role: 'selectall' }
+      ]
+    },
+    // View menu
+    {
+      label: 'View',
+      submenu: [
+        {
+          label: 'Reload',
+          accelerator: 'CmdOrCtrl+R',
+          click: () => {
+            const focusedWindow = BrowserWindow.getFocusedWindow();
+            if (focusedWindow) {
+              focusedWindow.webContents.send('menu-reload');
+            }
+          }
+        },
+        {
+          label: 'Force Reload',
+          accelerator: 'CmdOrCtrl+Shift+R',
+          click: () => {
+            const focusedWindow = BrowserWindow.getFocusedWindow();
+            if (focusedWindow) {
+              focusedWindow.webContents.send('menu-force-reload');
+            }
+          }
+        },
+        { role: 'toggledevtools' },
+        { type: 'separator' },
+        { role: 'resetzoom' },
+        { role: 'zoomin' },
+        { role: 'zoomout' },
+        { type: 'separator' },
+        { role: 'togglefullscreen' }
+      ]
+    },
+    // History menu
+    {
+      label: 'History',
+      submenu: [
+        {
+          label: 'Show History',
+          accelerator: 'CmdOrCtrl+H',
+          click: () => {
+            const focusedWindow = BrowserWindow.getFocusedWindow();
+            if (focusedWindow) {
+              focusedWindow.webContents.send('menu-show-history');
+            }
+          }
+        },
+        { type: 'separator' },
+        {
+          label: 'Back',
+          accelerator: 'CmdOrCtrl+Left',
+          click: () => {
+            const focusedWindow = BrowserWindow.getFocusedWindow();
+            if (focusedWindow) {
+              focusedWindow.webContents.send('menu-go-back');
+            }
+          }
+        },
+        {
+          label: 'Forward',
+          accelerator: 'CmdOrCtrl+Right',
+          click: () => {
+            const focusedWindow = BrowserWindow.getFocusedWindow();
+            if (focusedWindow) {
+              focusedWindow.webContents.send('menu-go-forward');
+            }
+          }
+        },
+        { type: 'separator' },
+        {
+          label: 'Clear History',
+          click: () => {
+            const focusedWindow = BrowserWindow.getFocusedWindow();
+            if (focusedWindow) {
+              focusedWindow.webContents.send('menu-clear-history');
+            }
+          }
         }
-        
-        // For other errors, log them but allow them to propagate
-        console.error('Uncaught exception:', error);
-        fs.appendFileSync(path.join(__dirname, 'crash-log.txt'), 
-            `[${new Date().toISOString()}] Uncaught exception: ${error.message}\n${error.stack}\n`);
-    });
+      ]
+    },
+    // Window menu
+    {
+      label: 'Window',
+      submenu: [
+        { role: 'minimize' },
+        { role: 'close' },
+        ...(process.platform === 'darwin' ? [
+          { type: 'separator' },
+          { role: 'front' },
+          { type: 'separator' },
+          { role: 'window' }
+        ] : [])
+      ]
+    }
+  ];
 
-    app.on('activate', function () {
-        if (BrowserWindow.getAllWindows().length === 0) createWindow();
-    });
+  const menu = Menu.buildFromTemplate(template);
+  Menu.setApplicationMenu(menu);
+
+  createWindow();
+
+  // Add specific error handler for webframe disposal errors
+  process.on('uncaughtException', (error) => {
+    if (error.message.includes('Render frame was disposed') || 
+        error.message.includes('WebFrameMain')) {
+      console.error('Caught frame disposal error:', error.message);
+      fs.appendFileSync(path.join(__dirname, 'webframe-errors.log'), 
+          `[${new Date().toISOString()}] ${error.message}\n${error.stack}\n\n`);
+      // Don't re-throw, just log and continue
+      return;
+    }
+    
+    // For other errors, log them but allow them to propagate
+    console.error('Uncaught exception:', error);
+    fs.appendFileSync(path.join(__dirname, 'crash-log.txt'), 
+        `[${new Date().toISOString()}] Uncaught exception: ${error.message}\n${error.stack}\n`);
+  });
+
+  app.on('activate', function () {
+    if (BrowserWindow.getAllWindows().length === 0) createWindow();
+  });
 });
 
 app.on('window-all-closed', function () {
