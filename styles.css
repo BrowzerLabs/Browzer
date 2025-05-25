@@ -996,44 +996,50 @@ input:checked + .slider:before {
 .api-keys-section h4 {
     margin: 0 0 15px 0;
     color: #333;
+    font-size: 16px;
+    font-weight: 600;
 }
 
 .api-key-inputs {
     display: flex;
     flex-direction: column;
-    gap: 15px;
+    gap: 12px;
 }
 
 .api-key-input {
     display: flex;
-    flex-direction: column;
-    gap: 5px;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
 }
 
 .api-key-input label {
-    font-size: 14px;
+    min-width: 120px;
+    font-weight: 500;
     color: #666;
 }
 
-.api-key-input input {
-    padding: 8px;
-    border: 1px solid #ddd;
+.api-key-input input[type="password"] {
+    flex: 1;
+    min-width: 200px;
+    padding: 6px 10px;
+    border: 1px solid #ccc;
     border-radius: 4px;
-    font-family: monospace;
 }
 
-.api-key-input button {
+.save-api-key {
     padding: 6px 12px;
-    background-color: #4285f4;
+    background: #28a745;
     color: white;
     border: none;
     border-radius: 4px;
     cursor: pointer;
-    align-self: flex-start;
+    font-size: 12px;
+    font-weight: 500;
 }
 
-.api-key-input button:hover {
-    background-color: #3367d6;
+.save-api-key:hover {
+    background: #218838;
 }
 
 /* Model Selector */
@@ -1947,4 +1953,217 @@ input:checked + .slider:before {
     text-align: center;
     padding: 60px 30px;
     color: #666;
+}
+
+/* Cache Management Styles */
+.cache-section {
+  margin-top: 20px;
+  padding: 15px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  background: #f9f9f9;
+}
+
+.cache-section h4 {
+  margin: 0 0 15px 0;
+  color: #333;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.cache-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 15px;
+}
+
+.cache-stat-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  background: white;
+  border-radius: 4px;
+  border: 1px solid #eee;
+}
+
+.cache-stat-label {
+  font-weight: 500;
+  color: #666;
+}
+
+.cache-stat-item span:last-child {
+  font-weight: 600;
+  color: #333;
+}
+
+.cache-controls {
+  margin-bottom: 15px;
+}
+
+.cache-type-controls {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+.cache-settings {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  flex-wrap: wrap;
+}
+
+.cache-settings label {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 14px;
+}
+
+.cache-settings input[type="number"] {
+  width: 80px;
+  padding: 4px 8px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+}
+
+.cache-settings input[type="checkbox"] {
+  margin: 0;
+}
+
+.cache-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.btn-primary, .btn-secondary, .btn-warning {
+  padding: 8px 12px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+  transition: background-color 0.2s;
+}
+
+.btn-primary {
+  background: #007bff;
+  color: white;
+}
+
+.btn-primary:hover {
+  background: #0056b3;
+}
+
+.btn-secondary {
+  background: #6c757d;
+  color: white;
+}
+
+.btn-secondary:hover {
+  background: #545b62;
+}
+
+.btn-warning {
+  background: #ffc107;
+  color: #212529;
+}
+
+.btn-warning:hover {
+  background: #e0a800;
+}
+
+/* Memory section styles */
+.memory-section {
+  margin-top: 20px;
+  padding: 15px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  background: #f9f9f9;
+}
+
+.memory-section h4 {
+  margin: 0 0 15px 0;
+  color: #333;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.memory-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.memory-stats {
+  font-weight: 500;
+  color: #666;
+}
+
+.memory-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* API Keys section styles */
+.api-keys-section {
+  margin-top: 20px;
+  padding: 15px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  background: #f9f9f9;
+}
+
+.api-keys-section h4 {
+  margin: 0 0 15px 0;
+  color: #333;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.api-key-inputs {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.api-key-input {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.api-key-input label {
+  min-width: 120px;
+  font-weight: 500;
+  color: #666;
+}
+
+.api-key-input input[type="password"] {
+  flex: 1;
+  min-width: 200px;
+  padding: 6px 10px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+}
+
+.save-api-key {
+  padding: 6px 12px;
+  background: #28a745;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.save-api-key:hover {
+  background: #218838;
 } 

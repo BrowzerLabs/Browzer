@@ -56,6 +56,614 @@ const SAVED_TABS_KEY = 'saved_tabs';
 // History management
 const HISTORY_STORAGE_KEY = 'browser_history';
 
+// Caching system constants
+const CACHE_PREFIX = 'browser_cache_';
+const CACHE_METADATA_KEY = 'cache_metadata';
+const CACHE_SETTINGS_KEY = 'cache_settings';
+
+// Cache types
+const CACHE_TYPES = {
+  PAGE_CONTENT: 'page_content',
+  API_RESPONSE: 'api_response', 
+  METADATA: 'metadata',
+  RESOURCES: 'resources',
+  AI_ANALYSIS: 'ai_analysis'
+};
+
+// Default cache settings
+const DEFAULT_CACHE_SETTINGS = {
+  maxSize: 50 * 1024 * 1024, // 50MB total cache size
+  maxItems: 1000, // Maximum number of cached items
+  defaultTTL: 24 * 60 * 60 * 1000, // 24 hours in milliseconds
+  enableCompression: true,
+  enableAutoCleanup: true,
+  cleanupInterval: 60 * 60 * 1000, // 1 hour
+  typeTTLs: {
+    [CACHE_TYPES.PAGE_CONTENT]: 6 * 60 * 60 * 1000, // 6 hours
+    [CACHE_TYPES.API_RESPONSE]: 2 * 60 * 60 * 1000, // 2 hours
+    [CACHE_TYPES.METADATA]: 24 * 60 * 60 * 1000, // 24 hours
+    [CACHE_TYPES.RESOURCES]: 7 * 24 * 60 * 60 * 1000, // 7 days
+    [CACHE_TYPES.AI_ANALYSIS]: 12 * 60 * 60 * 1000 // 12 hours
+  }
+};
+
+// Cache system class
+class BrowserCache {
+  constructor() {
+    this.settings = this.loadSettings();
+    this.metadata = this.loadMetadata();
+    this.stats = {
+      hits: 0,
+      misses: 0,
+      writes: 0,
+      evictions: 0
+    };
+    
+    // Auto-cleanup timer
+    if (this.settings.enableAutoCleanup) {
+      this.startAutoCleanup();
+    }
+  }
+
+  // Load cache settings
+  loadSettings() {
+    try {
+      const saved = localStorage.getItem(CACHE_SETTINGS_KEY);
+      return saved ? { ...DEFAULT_CACHE_SETTINGS, ...JSON.parse(saved) } : DEFAULT_CACHE_SETTINGS;
+    } catch (error) {
+      console.error('Error loading cache settings:', error);
+      return DEFAULT_CACHE_SETTINGS;
+    }
+  }
+
+  // Save cache settings
+  saveSettings() {
+    try {
+      localStorage.setItem(CACHE_SETTINGS_KEY, JSON.stringify(this.settings));
+    } catch (error) {
+      console.error('Error saving cache settings:', error);
+    }
+  }
+
+  // Load cache metadata
+  loadMetadata() {
+    try {
+      const saved = localStorage.getItem(CACHE_METADATA_KEY);
+      return saved ? JSON.parse(saved) : {};
+    } catch (error) {
+      console.error('Error loading cache metadata:', error);
+      return {};
+    }
+  }
+
+  // Save cache metadata
+  saveMetadata() {
+    try {
+      localStorage.setItem(CACHE_METADATA_KEY, JSON.stringify(this.metadata));
+    } catch (error) {
+      console.error('Error saving cache metadata:', error);
+    }
+  }
+
+  // Generate cache key
+  generateKey(type, identifier, params = {}) {
+    const paramString = Object.keys(params).length > 0 ? JSON.stringify(params) : '';
+    const combined = `${type}:${identifier}:${paramString}`;
+    
+    // Use a simple hash for long keys
+    if (combined.length > 100) {
+      return `${CACHE_PREFIX}${this.simpleHash(combined)}`;
+    }
+    
+    return `${CACHE_PREFIX}${combined}`;
+  }
+
+  // Simple hash function
+  simpleHash(str) {
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+      const char = str.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash; // Convert to 32-bit integer
+    }
+    return Math.abs(hash).toString(36);
+  }
+
+  // Compress data if enabled
+  compress(data) {
+    if (!this.settings.enableCompression) return data;
+    
+    try {
+      // Simple compression using JSON stringification with reduced whitespace
+      if (typeof data === 'object') {
+        return JSON.stringify(data);
+      }
+      return data;
+    } catch (error) {
+      console.error('Error compressing data:', error);
+      return data;
+    }
+  }
+
+  // Decompress data if needed
+  decompress(data, originalType) {
+    if (!this.settings.enableCompression) return data;
+    
+    try {
+      if (originalType === 'object' && typeof data === 'string') {
+        return JSON.parse(data);
+      }
+      return data;
+    } catch (error) {
+      console.error('Error decompressing data:', error);
+      return data;
+    }
+  }
+
+  // Set cache item
+  set(type, identifier, data, customTTL = null, params = {}) {
+    try {
+      const key = this.generateKey(type, identifier, params);
+      const ttl = customTTL || this.settings.typeTTLs[type] || this.settings.defaultTTL;
+      const expiresAt = Date.now() + ttl;
+      
+      const originalType = typeof data;
+      const compressedData = this.compress(data);
+      
+      const cacheItem = {
+        data: compressedData,
+        originalType: originalType,
+        type: type,
+        identifier: identifier,
+        params: params,
+        createdAt: Date.now(),
+        expiresAt: expiresAt,
+        accessCount: 0,
+        lastAccessed: Date.now(),
+        size: JSON.stringify(compressedData).length
+      };
+
+      // Check if we need to make space
+      this.ensureSpace(cacheItem.size);
+
+      // Store the item
+      localStorage.setItem(key, JSON.stringify(cacheItem));
+      
+      // Update metadata
+      this.metadata[key] = {
+        type: type,
+        createdAt: cacheItem.createdAt,
+        expiresAt: expiresAt,
+        size: cacheItem.size,
+        lastAccessed: cacheItem.lastAccessed
+      };
+      
+      this.saveMetadata();
+      this.stats.writes++;
+      
+      console.log(`Cache SET: ${type}:${identifier} (${this.formatSize(cacheItem.size)})`);
+      return true;
+      
+    } catch (error) {
+      console.error('Error setting cache item:', error);
+      return false;
+    }
+  }
+
+  // Get cache item
+  get(type, identifier, params = {}) {
+    try {
+      const key = this.generateKey(type, identifier, params);
+      const itemStr = localStorage.getItem(key);
+      
+      if (!itemStr) {
+        this.stats.misses++;
+        return null;
+      }
+
+      const item = JSON.parse(itemStr);
+      
+      // Check expiration
+      if (Date.now() > item.expiresAt) {
+        this.delete(type, identifier, params);
+        this.stats.misses++;
+        return null;
+      }
+
+      // Update access stats
+      item.accessCount++;
+      item.lastAccessed = Date.now();
+      
+      // Update metadata
+      if (this.metadata[key]) {
+        this.metadata[key].lastAccessed = item.lastAccessed;
+      }
+      
+      // Re-save with updated stats
+      localStorage.setItem(key, JSON.stringify(item));
+      this.saveMetadata();
+      
+      this.stats.hits++;
+      
+      console.log(`Cache HIT: ${type}:${identifier}`);
+      return this.decompress(item.data, item.originalType);
+      
+    } catch (error) {
+      console.error('Error getting cache item:', error);
+      this.stats.misses++;
+      return null;
+    }
+  }
+
+  // Delete cache item
+  delete(type, identifier, params = {}) {
+    try {
+      const key = this.generateKey(type, identifier, params);
+      localStorage.removeItem(key);
+      delete this.metadata[key];
+      this.saveMetadata();
+      
+      console.log(`Cache DELETE: ${type}:${identifier}`);
+      return true;
+    } catch (error) {
+      console.error('Error deleting cache item:', error);
+      return false;
+    }
+  }
+
+  // Check if item exists and is valid
+  has(type, identifier, params = {}) {
+    try {
+      const key = this.generateKey(type, identifier, params);
+      const metadata = this.metadata[key];
+      
+      if (!metadata) return false;
+      if (Date.now() > metadata.expiresAt) {
+        this.delete(type, identifier, params);
+        return false;
+      }
+      
+      return localStorage.getItem(key) !== null;
+    } catch (error) {
+      console.error('Error checking cache item:', error);
+      return false;
+    }
+  }
+
+  // Clear cache by type
+  clearByType(type) {
+    try {
+      let cleared = 0;
+      const keysToDelete = [];
+      
+      for (const [key, metadata] of Object.entries(this.metadata)) {
+        if (metadata.type === type) {
+          keysToDelete.push(key);
+        }
+      }
+      
+      keysToDelete.forEach(key => {
+        localStorage.removeItem(key);
+        delete this.metadata[key];
+        cleared++;
+      });
+      
+      this.saveMetadata();
+      console.log(`Cache cleared ${cleared} items of type: ${type}`);
+      return cleared;
+    } catch (error) {
+      console.error('Error clearing cache by type:', error);
+      return 0;
+    }
+  }
+
+  // Clear all cache
+  clearAll() {
+    try {
+      let cleared = 0;
+      const keysToDelete = Object.keys(this.metadata);
+      
+      keysToDelete.forEach(key => {
+        localStorage.removeItem(key);
+        cleared++;
+      });
+      
+      this.metadata = {};
+      this.saveMetadata();
+      
+      // Reset stats
+      this.stats = { hits: 0, misses: 0, writes: 0, evictions: 0 };
+      
+      console.log(`Cache cleared all ${cleared} items`);
+      return cleared;
+    } catch (error) {
+      console.error('Error clearing all cache:', error);
+      return 0;
+    }
+  }
+
+  // Ensure we have enough space for new item
+  ensureSpace(newItemSize) {
+    const currentSize = this.getCurrentSize();
+    const totalItems = Object.keys(this.metadata).length;
+    
+    // Check size limit
+    if (currentSize + newItemSize > this.settings.maxSize) {
+      this.evictLRU(currentSize + newItemSize - this.settings.maxSize);
+    }
+    
+    // Check item count limit
+    if (totalItems >= this.settings.maxItems) {
+      this.evictLRU(0, totalItems - this.settings.maxItems + 1);
+    }
+  }
+
+  // Evict least recently used items
+  evictLRU(sizeToFree = 0, itemsToFree = 0) {
+    try {
+      // Sort by last accessed (oldest first)
+      const sortedItems = Object.entries(this.metadata)
+        .sort(([, a], [, b]) => a.lastAccessed - b.lastAccessed);
+      
+      let freedSize = 0;
+      let freedItems = 0;
+      
+      for (const [key, metadata] of sortedItems) {
+        if ((sizeToFree > 0 && freedSize >= sizeToFree) || 
+            (itemsToFree > 0 && freedItems >= itemsToFree)) {
+          break;
+        }
+        
+        localStorage.removeItem(key);
+        freedSize += metadata.size;
+        freedItems++;
+        delete this.metadata[key];
+        this.stats.evictions++;
+        
+        console.log(`Cache EVICT: ${key} (${this.formatSize(metadata.size)})`);
+      }
+      
+      this.saveMetadata();
+      console.log(`Cache evicted ${freedItems} items, freed ${this.formatSize(freedSize)}`);
+      
+    } catch (error) {
+      console.error('Error during cache eviction:', error);
+    }
+  }
+
+  // Clean up expired items
+  cleanup() {
+    try {
+      const now = Date.now();
+      let cleaned = 0;
+      let freedSize = 0;
+      
+      const expiredKeys = Object.entries(this.metadata)
+        .filter(([, metadata]) => now > metadata.expiresAt)
+        .map(([key]) => key);
+      
+      expiredKeys.forEach(key => {
+        const metadata = this.metadata[key];
+        localStorage.removeItem(key);
+        freedSize += metadata.size;
+        delete this.metadata[key];
+        cleaned++;
+      });
+      
+      if (cleaned > 0) {
+        this.saveMetadata();
+        console.log(`Cache cleanup: removed ${cleaned} expired items, freed ${this.formatSize(freedSize)}`);
+      }
+      
+      return { cleaned, freedSize };
+    } catch (error) {
+      console.error('Error during cache cleanup:', error);
+      return { cleaned: 0, freedSize: 0 };
+    }
+  }
+
+  // Start auto-cleanup timer
+  startAutoCleanup() {
+    setInterval(() => {
+      this.cleanup();
+    }, this.settings.cleanupInterval);
+  }
+
+  // Get current cache size
+  getCurrentSize() {
+    return Object.values(this.metadata).reduce((sum, item) => sum + item.size, 0);
+  }
+
+  // Get cache statistics
+  getStats() {
+    const currentSize = this.getCurrentSize();
+    const itemCount = Object.keys(this.metadata).length;
+    const hitRate = this.stats.hits + this.stats.misses > 0 ? 
+      (this.stats.hits / (this.stats.hits + this.stats.misses) * 100).toFixed(2) : 0;
+    
+    return {
+      ...this.stats,
+      hitRate: `${hitRate}%`,
+      currentSize: this.formatSize(currentSize),
+      currentSizeBytes: currentSize,
+      maxSize: this.formatSize(this.settings.maxSize),
+      itemCount: itemCount,
+      maxItems: this.settings.maxItems,
+      utilization: `${((currentSize / this.settings.maxSize) * 100).toFixed(1)}%`
+    };
+  }
+
+  // Format size for display
+  formatSize(bytes) {
+    if (bytes === 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  }
+
+  // Update settings
+  updateSettings(newSettings) {
+    this.settings = { ...this.settings, ...newSettings };
+    this.saveSettings();
+  }
+}
+
+// Initialize global cache instance
+const browserCache = new BrowserCache();
+
+// Cache helper functions for common operations
+const CacheHelpers = {
+  // Cache page content for faster AI analysis
+  cachePageContent: async (url, webview) => {
+    try {
+      if (!url || url === 'about:blank') return false;
+      
+      // Check if already cached and recent
+      const cached = browserCache.get(CACHE_TYPES.PAGE_CONTENT, url);
+      if (cached && Date.now() - cached.timestamp < 30 * 60 * 1000) { // 30 minutes
+        return cached;
+      }
+      
+      // Extract fresh content
+      const content = await extractPageContent(webview, { 
+        includeHtml: false, 
+        preserveLinks: true,
+        detectContentType: true 
+      });
+      
+      if (content && content.content) {
+        // Cache with metadata
+        const cacheData = {
+          ...content,
+          timestamp: Date.now(),
+          domain: new URL(url).hostname
+        };
+        
+        browserCache.set(CACHE_TYPES.PAGE_CONTENT, url, cacheData);
+        console.log(`Cached page content for: ${url}`);
+        return cacheData;
+      }
+      
+      return false;
+    } catch (error) {
+      console.error('Error caching page content:', error);
+      return false;
+    }
+  },
+
+  // Cache AI analysis results
+  cacheAIAnalysis: (url, query, result, model = 'unknown') => {
+    try {
+      const cacheKey = `${url}_${query.substring(0, 50)}`;
+      const cacheData = {
+        result: result,
+        query: query,
+        model: model,
+        timestamp: Date.now(),
+        domain: url ? new URL(url).hostname : 'unknown'
+      };
+      
+      browserCache.set(CACHE_TYPES.AI_ANALYSIS, cacheKey, cacheData);
+      console.log(`Cached AI analysis for: ${url}`);
+      return true;
+    } catch (error) {
+      console.error('Error caching AI analysis:', error);
+      return false;
+    }
+  },
+
+  // Get cached AI analysis
+  getCachedAIAnalysis: (url, query) => {
+    try {
+      const cacheKey = `${url}_${query.substring(0, 50)}`;
+      return browserCache.get(CACHE_TYPES.AI_ANALYSIS, cacheKey);
+    } catch (error) {
+      console.error('Error getting cached AI analysis:', error);
+      return null;
+    }
+  },
+
+  // Cache API responses
+  cacheAPIResponse: (endpoint, params, response, customTTL = null) => {
+    try {
+      const cacheKey = `${endpoint}_${JSON.stringify(params).substring(0, 100)}`;
+      browserCache.set(CACHE_TYPES.API_RESPONSE, cacheKey, response, customTTL);
+      console.log(`Cached API response for: ${endpoint}`);
+      return true;
+    } catch (error) {
+      console.error('Error caching API response:', error);
+      return false;
+    }
+  },
+
+  // Get cached API response
+  getCachedAPIResponse: (endpoint, params) => {
+    try {
+      const cacheKey = `${endpoint}_${JSON.stringify(params).substring(0, 100)}`;
+      return browserCache.get(CACHE_TYPES.API_RESPONSE, cacheKey);
+    } catch (error) {
+      console.error('Error getting cached API response:', error);
+      return null;
+    }
+  },
+
+  // Cache page metadata (title, description, etc.)
+  cachePageMetadata: (url, metadata) => {
+    try {
+      browserCache.set(CACHE_TYPES.METADATA, url, metadata);
+      console.log(`Cached metadata for: ${url}`);
+      return true;
+    } catch (error) {
+      console.error('Error caching metadata:', error);
+      return false;
+    }
+  },
+
+  // Get cached metadata
+  getCachedMetadata: (url) => {
+    try {
+      return browserCache.get(CACHE_TYPES.METADATA, url);
+    } catch (error) {
+      console.error('Error getting cached metadata:', error);
+      return null;
+    }
+  },
+
+  // Smart cache key generation for URLs
+  generateURLCacheKey: (url) => {
+    try {
+      const urlObj = new URL(url);
+      // Remove query parameters that don't affect content
+      const paramsToIgnore = ['utm_source', 'utm_medium', 'utm_campaign', 'fbclid', 'gclid', '_ga'];
+      
+      paramsToIgnore.forEach(param => {
+        urlObj.searchParams.delete(param);
+      });
+      
+      return urlObj.toString();
+    } catch (error) {
+      return url; // Fallback to original URL
+    }
+  },
+
+  // Preload cache for common operations
+  preloadCache: async (urls) => {
+    try {
+      const promises = urls.map(async (url) => {
+        if (!browserCache.has(CACHE_TYPES.PAGE_CONTENT, url)) {
+          // This would need to be implemented with background loading
+          console.log(`Would preload: ${url}`);
+        }
+      });
+      
+      await Promise.all(promises);
+    } catch (error) {
+      console.error('Error preloading cache:', error);
+    }
+  }
+};
+
 // New tab defaults
 const NEW_TAB_URL = 'about:blank'; // Default URL for new tabs
 const HOMEPAGE_KEY = 'homepage_url';
@@ -88,7 +696,6 @@ function isProblematicSite(url) {
 // Memory management
 const MEMORY_KEY = 'agent_memory';
 const MAX_MEMORY_ITEMS = 100; // Maximum number of conversation items to store
-
 // Store and manage the agent's memory
 function storeInMemory(url, question, answer, title = '') {
   try {
@@ -1135,6 +1742,27 @@ function setupWebviewEvents(webview) {
       trackPageVisit(url, title);
     }
     
+    // Cache page content and metadata for faster AI analysis
+    if (url && url.startsWith('http')) {
+      // Cache page metadata
+      const metadata = {
+        title: title || '',
+        url: url,
+        timestamp: Date.now(),
+        domain: new URL(url).hostname
+      };
+      CacheHelpers.cachePageMetadata(url, metadata);
+      
+      // Cache page content in background (non-blocking)
+      setTimeout(async () => {
+        try {
+          await CacheHelpers.cachePageContent(url, webview);
+        } catch (error) {
+          console.error('Error caching page content:', error);
+        }
+      }, 2000); // Wait 2 seconds after page load to ensure content is ready
+    }
+    
     // Auto-summarize if enabled (for any page, not just Google)
     if (autoSummarizeEnabled && url) {
       // Skip auto-summarizing about:blank and other non-http pages
@@ -1655,7 +2283,6 @@ setTimeout(() => {
     document.body.appendChild(fallbackBtn);
   }
 }, 1000);
-
 // Handle agent execution
 async function executeAgent(specificWebview = null) {
   try {
@@ -1739,6 +2366,55 @@ async function executeAgent(specificWebview = null) {
                        questionWords.some(word => query.toLowerCase().split(/\s+/).includes(word.toLowerCase())));
     
     console.log(`Query "${query}" ${isQuestion ? 'appears to be a question' : 'appears to be a summary request'}`);
+    
+    // Check cache first for AI analysis results
+    const normalizedQuery = query.toLowerCase().trim();
+    const cachedResult = CacheHelpers.getCachedAIAnalysis(url, normalizedQuery);
+    
+    if (cachedResult && Date.now() - cachedResult.timestamp < 30 * 60 * 1000) { // 30 minutes cache
+      console.log('Using cached AI analysis result for:', normalizedQuery);
+      
+      // Set up chat container if it doesn't exist
+      const agentResults = document.getElementById('agentResults');
+      if (agentResults) {
+        let chatContainer = document.getElementById('chatContainer');
+        if (!chatContainer) {
+          console.log('Chat container not found, creating one');
+          agentResults.innerHTML = '';
+          
+          chatContainer = document.createElement('div');
+          chatContainer.id = 'chatContainer';
+          chatContainer.className = 'chat-container';
+          agentResults.appendChild(chatContainer);
+          
+          const chatInputArea = document.createElement('div');
+          chatInputArea.className = 'chat-input-area';
+          chatInputArea.innerHTML = `
+            <input type="text" id="chatInput" placeholder="Ask a follow-up question..." />
+            <button id="sendMessageBtn" class="chat-send-btn">Send</button>
+          `;
+          agentResults.appendChild(chatInputArea);
+          
+          setupChatInputHandlers();
+        }
+      }
+      
+      // Display cached results with cache indicator
+      const cachedData = {
+        ...cachedResult.result,
+        cached: true,
+        cacheTime: cachedResult.timestamp
+      };
+      
+      addMessageToChat('assistant', 
+        `<div class="info-message" style="margin-bottom: 12px; font-size: 12px; color: #666;">
+          📋 Retrieved from cache (saved ${Math.round((Date.now() - cachedResult.timestamp) / 60000)} minutes ago)
+        </div>`
+      );
+      
+      displayAgentResults(cachedData);
+      return;
+    }
     
     // If this is a question, enhance the query with explicit instructions
     if (isQuestion) {
@@ -1926,6 +2602,13 @@ async function executeAgent(specificWebview = null) {
       displayAgentError(result.error);
     } else {
       displayAgentResults(result.data);
+      
+      // Cache the AI analysis result for future use
+      if (result.data) {
+        const originalQuery = agentParams.originalQuery || query;
+        CacheHelpers.cacheAIAnalysis(url, originalQuery.toLowerCase().trim(), result.data, provider);
+        console.log('Cached AI analysis result for future use');
+      }
       
       // Store auto-summarized page in memory regardless of whether it's a question
       if (result.data && result.data.consolidated_summary) {
@@ -2125,6 +2808,20 @@ function displayAgentResults(data) {
   // Check if this is a question answer or a regular summary
   const isQuestion = data.isQuestion === true;
   
+  // Check if this is cached data
+  const isCached = data.cached === true;
+  let displayTiming = data.generation_time;
+  
+  // If cached, show 0.01s and prepare cache info
+  if (isCached && data.cacheTime) {
+    displayTiming = 0.01;
+    const ageMinutes = Math.round((Date.now() - data.cacheTime) / 60000);
+    // Store cache info to be picked up by addMessageToChat
+    if (chatContainer) {
+      chatContainer.dataset.cacheInfo = `saved ${ageMinutes} minutes ago`;
+    }
+  }
+  
   // Handle direct question answers with special formatting
   if (isQuestion) {
     let answer = data.consolidated_summary || "No direct answer found for your question.";
@@ -2140,7 +2837,7 @@ function displayAgentResults(data) {
           ).join('')}</ul></div>`;
     }
     
-    clearLoadingAndUpdateChat('assistant', formattedAnswer, data.generation_time);
+    clearLoadingAndUpdateChat('assistant', formattedAnswer, displayTiming);
     
     // Store this Q&A in memory (extract question from data)
     const question = data.originalQuery || data.query || '';
@@ -2153,7 +2850,7 @@ function displayAgentResults(data) {
   
   // Handle regular summaries (non-questions)
   if (data.consolidated_summary) {
-    clearLoadingAndUpdateChat('assistant', data.consolidated_summary, data.generation_time);
+    clearLoadingAndUpdateChat('assistant', data.consolidated_summary, displayTiming);
     
     // Always store the summary in memory for future reference
     // This makes all web content and summaries available for future questions
@@ -2167,7 +2864,7 @@ function displayAgentResults(data) {
   } else if (data.summaries && data.summaries.length > 0) {
     // If no consolidated summary, show the individual summaries
     const summariesText = data.summaries.map(s => `<b>${s.title}</b>\n${s.summary}`).join('\n\n');
-    clearLoadingAndUpdateChat('assistant', summariesText);
+    clearLoadingAndUpdateChat('assistant', summariesText, displayTiming);
     
     // Store individual summaries
     data.summaries.forEach(summary => {
@@ -2181,7 +2878,7 @@ function displayAgentResults(data) {
       }
     });
   } else {
-    clearLoadingAndUpdateChat('assistant', 'No relevant information found.');
+    clearLoadingAndUpdateChat('assistant', 'No relevant information found.', displayTiming);
   }
 }
 
@@ -2336,6 +3033,39 @@ async function autoSummarizePage(url, specificWebview = null) {
   
   console.log(`Auto-summarize query "${query}" ${isQuestion ? 'appears to be a question' : 'appears to be a summary request'}`);
   
+  // Check cache first for auto-summarize results
+  const normalizedQuery = query.toLowerCase().trim();
+  const cachedResult = CacheHelpers.getCachedAIAnalysis(url, normalizedQuery);
+  
+  if (cachedResult && Date.now() - cachedResult.timestamp < 60 * 60 * 1000) { // 1 hour cache for auto-summarize
+    console.log('Using cached auto-summarize result for:', normalizedQuery);
+    
+    // Clear any loading indicators first
+    const loadingMessages = document.querySelectorAll('.loading');
+    loadingMessages.forEach(message => {
+      const parentMessage = message.closest('.chat-message');
+      if (parentMessage) {
+        parentMessage.remove();
+      }
+    });
+    
+    // Display cached results with cache indicator
+    const cachedData = {
+      ...cachedResult.result,
+      cached: true,
+      cacheTime: cachedResult.timestamp
+    };
+    
+    addMessageToChat('assistant', 
+      `<div class="info-message" style="margin-bottom: 12px; font-size: 12px; color: #666;">
+        📋 Auto-summary from cache (saved ${Math.round((Date.now() - cachedResult.timestamp) / 60000)} minutes ago)
+      </div>`
+    );
+    
+    displayAgentResults(cachedData);
+    return;
+  }
+  
   try {
     // Check if page is still loading - but be careful with recursive calls
     if (webview.isLoading && typeof webview.isLoading === 'function' && webview.isLoading()) {
@@ -2424,6 +3154,12 @@ async function autoSummarizePage(url, specificWebview = null) {
               pageTitle
             );
           }
+          
+          // Cache the auto-summarize result for future use
+          if (result.data) {
+            CacheHelpers.cacheAIAnalysis(url, normalizedQuery, result.data, provider);
+            console.log('Cached auto-summarize result for future use');
+          }
         }
       } catch (error) {
         console.error('Error in auto-summarize Google search:', error);
@@ -2494,6 +3230,12 @@ async function autoSummarizePage(url, specificWebview = null) {
               pageTitle
             );
           }
+          
+          // Cache the auto-summarize result for future use
+          if (result.data) {
+            CacheHelpers.cacheAIAnalysis(url, normalizedQuery, result.data, provider);
+            console.log('Cached auto-summarize result for future use');
+          }
         }
       } catch (error) {
         console.error('Error auto-summarizing page:', error);
@@ -2526,13 +3268,31 @@ async function autoSummarizePage(url, specificWebview = null) {
   }
 }
 
-// Improve extractPageContent function with better error handling
+// Improve extractPageContent function with better error handling and caching
 async function extractPageContent(specificWebview = null, options = {}) {
   try {
     const webview = specificWebview || getActiveWebview();
     if (!webview) {
       console.error('No webview available for extracting page content');
       return { title: '', description: '', content: '', url: '' };
+    }
+    
+    // Get current URL safely
+    let currentUrl = '';
+    try {
+      currentUrl = webview.src || '';
+    } catch (e) {
+      console.error('Error getting webview URL:', e);
+      return { title: '', description: '', content: '', url: '' };
+    }
+    
+    // Check cache first for performance
+    if (currentUrl && currentUrl.startsWith('http')) {
+      const cachedContent = browserCache.get(CACHE_TYPES.PAGE_CONTENT, currentUrl);
+      if (cachedContent && Date.now() - cachedContent.timestamp < 10 * 60 * 1000) { // 10 minutes
+        console.log('Using cached page content for:', currentUrl);
+        return cachedContent;
+      }
     }
     
     // Default options
@@ -2560,15 +3320,6 @@ async function extractPageContent(specificWebview = null, options = {}) {
           opts.includeHtml = true;
         }
       }
-    }
-    
-    // Get current URL safely
-    let currentUrl = '';
-    try {
-      currentUrl = webview.src || '';
-    } catch (e) {
-      console.error('Error getting webview URL:', e);
-      return { title: '', description: '', content: '', url: '' };
     }
     
     // Get title safely
@@ -3038,6 +3789,150 @@ function setupExtensionsPanel() {
       
       input.click();
     });
+    
+    // Add Cache Management section
+    const cacheSection = document.createElement('div');
+    cacheSection.className = 'cache-section';
+    cacheSection.innerHTML = `
+      <h4>Cache Management</h4>
+      <div class="cache-stats">
+        <div class="cache-stat-item">
+          <span class="cache-stat-label">Cache Size:</span>
+          <span id="cacheSize">Loading...</span>
+        </div>
+        <div class="cache-stat-item">
+          <span class="cache-stat-label">Items Cached:</span>
+          <span id="cacheItems">Loading...</span>
+        </div>
+        <div class="cache-stat-item">
+          <span class="cache-stat-label">Hit Rate:</span>
+          <span id="cacheHitRate">Loading...</span>
+        </div>
+        <div class="cache-stat-item">
+          <span class="cache-stat-label">Cache Utilization:</span>
+          <span id="cacheUtilization">Loading...</span>
+        </div>
+      </div>
+      <div class="cache-controls">
+        <div class="cache-type-controls">
+          <button id="clearPageCacheBtn" class="btn-secondary">Clear Page Cache</button>
+          <button id="clearApiCacheBtn" class="btn-secondary">Clear API Cache</button>
+          <button id="clearAllCacheBtn" class="btn-warning">Clear All Cache</button>
+        </div>
+        <div class="cache-settings">
+          <label>
+            <span>Max Cache Size (MB):</span>
+            <input type="number" id="maxCacheSize" min="10" max="500" step="10" value="50">
+          </label>
+          <label>
+            <span>Auto Cleanup:</span>
+            <input type="checkbox" id="autoCleanupEnabled" checked>
+          </label>
+          <button id="saveCacheSettingsBtn" class="btn-primary">Save Settings</button>
+        </div>
+      </div>
+      <div class="cache-actions">
+        <button id="cleanupExpiredBtn" class="btn-secondary">Cleanup Expired</button>
+        <button id="exportCacheStatsBtn" class="btn-secondary">Export Stats</button>
+      </div>
+    `;
+    extensionsContent.appendChild(cacheSection);
+    
+    // Set up cache management functions
+    function updateCacheStats() {
+      try {
+        const stats = browserCache.getStats();
+        document.getElementById('cacheSize').textContent = stats.currentSize;
+        document.getElementById('cacheItems').textContent = `${stats.itemCount} / ${stats.maxItems}`;
+        document.getElementById('cacheHitRate').textContent = stats.hitRate;
+        document.getElementById('cacheUtilization').textContent = stats.utilization;
+      } catch (e) {
+        console.error('Error updating cache stats:', e);
+      }
+    }
+    
+    // Update cache stats initially and every 5 seconds
+    updateCacheStats();
+    setInterval(updateCacheStats, 5000);
+    
+    // Load current cache settings
+    const currentSettings = browserCache.settings;
+    document.getElementById('maxCacheSize').value = Math.round(currentSettings.maxSize / (1024 * 1024));
+    document.getElementById('autoCleanupEnabled').checked = currentSettings.enableAutoCleanup;
+    
+    // Clear page cache
+    document.getElementById('clearPageCacheBtn').addEventListener('click', () => {
+      const cleared = browserCache.clearByType(CACHE_TYPES.PAGE_CONTENT);
+      alert(`Cleared ${cleared} page cache items.`);
+      updateCacheStats();
+    });
+    
+    // Clear API cache
+    document.getElementById('clearApiCacheBtn').addEventListener('click', () => {
+      const apiCleared = browserCache.clearByType(CACHE_TYPES.API_RESPONSE);
+      const aiCleared = browserCache.clearByType(CACHE_TYPES.AI_ANALYSIS);
+      alert(`Cleared ${apiCleared + aiCleared} API and AI cache items.`);
+      updateCacheStats();
+    });
+    
+    // Clear all cache
+    document.getElementById('clearAllCacheBtn').addEventListener('click', () => {
+      if (confirm('Are you sure you want to clear all cache? This will slow down page loading and AI analysis until cache is rebuilt.')) {
+        const cleared = browserCache.clearAll();
+        alert(`Cleared all ${cleared} cache items.`);
+        updateCacheStats();
+      }
+    });
+    
+    // Save cache settings
+    document.getElementById('saveCacheSettingsBtn').addEventListener('click', () => {
+      const maxSizeMB = parseInt(document.getElementById('maxCacheSize').value);
+      const autoCleanup = document.getElementById('autoCleanupEnabled').checked;
+      
+      if (maxSizeMB >= 10 && maxSizeMB <= 500) {
+        browserCache.updateSettings({
+          maxSize: maxSizeMB * 1024 * 1024,
+          enableAutoCleanup: autoCleanup
+        });
+        alert('Cache settings saved successfully.');
+        updateCacheStats();
+      } else {
+        alert('Please enter a valid cache size between 10 and 500 MB.');
+      }
+    });
+    
+    // Cleanup expired items
+    document.getElementById('cleanupExpiredBtn').addEventListener('click', () => {
+      const result = browserCache.cleanup();
+      alert(`Cleaned up ${result.cleaned} expired items, freed ${browserCache.formatSize(result.freedSize)}.`);
+      updateCacheStats();
+    });
+    
+    // Export cache statistics
+    document.getElementById('exportCacheStatsBtn').addEventListener('click', () => {
+      try {
+        const stats = browserCache.getStats();
+        const detailedStats = {
+          ...stats,
+          timestamp: new Date().toISOString(),
+          cacheTypes: Object.values(CACHE_TYPES),
+          settings: browserCache.settings
+        };
+        
+        const blob = new Blob([JSON.stringify(detailedStats, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'cache_stats_export.json';
+        a.click();
+        
+        URL.revokeObjectURL(url);
+      } catch (e) {
+        console.error('Error exporting cache stats:', e);
+        alert('Error exporting cache stats: ' + e.message);
+      }
+    });
   }
 }
 
@@ -3172,15 +4067,30 @@ function addMessageToChat(role, content, timing = null) {
     const isLoading = content.includes('class="loading"') && !content.replace(/<div class="loading">.*?<\/div>/g, '').trim();
     
     if (timing && !isLoading) {
+      // Check if this is cached data by looking for cache info in the chat container
+      let displayTime = timing;
+      let cacheText = '';
+      let isCached = false;
+      
+      // Check if cache info was stored in the chat container dataset
+      if (chatContainer.dataset.cacheInfo) {
+        isCached = true;
+        cacheText = ` (retrieved from cache - ${chatContainer.dataset.cacheInfo})`;
+        displayTime = timing; // displayTiming is already 0.01 if cached
+        // Clear the cache info after using it
+        delete chatContainer.dataset.cacheInfo;
+      }
+      
       messageDiv.innerHTML = `
         <div class="timing-info">
           <span>Summary generated in</span>
-          <span class="time-value">${timing.toFixed(2)}s</span>
+          <span class="time-value">${displayTime.toFixed(2)}s</span>
           <span>using ${getModelName()}</span>
+          ${cacheText}
         </div>
         <div class="message-content">${content}</div>
       `;
-      messageDiv.dataset.genTime = timing.toFixed(2);
+      messageDiv.dataset.genTime = displayTime.toFixed(2);
     } else {
       messageDiv.innerHTML = `<div class="message-content">${content}</div>`;
     }
@@ -3220,13 +4130,40 @@ async function processFollowupQuestion(question) {
       return;
     }
     
+    // Get current URL for context
+    const currentUrl = activeWebview.src || '';
+    
+    // Check cache first for this specific question
+    const normalizedQuestion = question.toLowerCase().trim();
+    const cachedResult = CacheHelpers.getCachedAIAnalysis(currentUrl, normalizedQuestion);
+    
+    if (cachedResult && Date.now() - cachedResult.timestamp < 30 * 60 * 1000) { // 30 minutes cache
+      console.log('Using cached answer for question:', normalizedQuestion);
+      
+      // Clear loading indicators
+      const loadingMessages = document.querySelectorAll('.loading');
+      loadingMessages.forEach(message => {
+        const parentMessage = message.closest('.chat-message');
+        if (parentMessage) {
+          parentMessage.remove();
+        }
+      });
+      
+      // Display cached results with cache indicator
+      const cachedData = {
+        ...cachedResult.result,
+        cached: true,
+        cacheTime: cachedResult.timestamp
+      };
+
+      displayAgentResults(cachedData);
+      return;
+    }
+    
     // Note: We don't need to add the user's question to the chat again here
     // as it's already been added by the chat input handler
     
     try {
-      // Get current URL for memory context
-      const currentUrl = activeWebview.src || '';
-      
       // Detect if the question is about links, navigation, or UI elements
       const isAboutLinks = question.toLowerCase().match(/link|url|href|click|button|navigation|menu|download|sidebar|layout/);
       
@@ -3388,6 +4325,12 @@ async function processFollowupQuestion(question) {
       
       // Display the results
       displayAgentResults(result.data);
+      
+      // Cache the follow-up question result for future use
+      if (result.data) {
+        CacheHelpers.cacheAIAnalysis(currentUrl, normalizedQuestion, result.data, provider);
+        console.log('Cached follow-up question result for future use');
+      }
       
     } catch (error) {
       console.error('Error processing question:', error);
@@ -3892,3 +4835,4 @@ function deleteHistoryItemLocal(itemId, modal) {
   }
 }
  
+
