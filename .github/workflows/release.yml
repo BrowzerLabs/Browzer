@@ -9,6 +9,7 @@ on:
 jobs:
   release:
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 60  # Increase timeout to 60 minutes
     
     strategy:
       matrix:
@@ -42,27 +43,25 @@ jobs:
         run: npm ci
         
       - name: Prepare Python bundle
-        run: npm run prebuild
-        
+        run: |
+          chmod +x scripts/prepare-python-bundle.sh
+          ./scripts/prepare-python-bundle.sh
+          
       - name: Build Electron app (macOS)
         if: matrix.os == 'macos-latest'
         run: npm run build:mac
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CSC_IDENTITY_AUTO_DISCOVERY: false  # Disable code signing
           
       - name: Build Electron app (Linux)
         if: matrix.os == 'ubuntu-latest'
         run: npm run build:linux
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          
+        
       - name: Build Electron app (Windows)
         if: matrix.os == 'windows-latest'
         run: npm run build:win
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          
-      - name: Upload artifacts (macOS)
+        
+      - name: Upload macOS artifacts
         if: matrix.os == 'macos-latest'
         uses: actions/upload-artifact@v4
         with:
@@ -70,8 +69,9 @@ jobs:
           path: |
             dist/*.dmg
             dist/*.zip
-            
-      - name: Upload artifacts (Linux)
+          retention-days: 30
+          
+      - name: Upload Linux artifacts
         if: matrix.os == 'ubuntu-latest'
         uses: actions/upload-artifact@v4
         with:
@@ -81,8 +81,9 @@ jobs:
             dist/*.deb
             dist/*.rpm
             dist/*.tar.gz
-            
-      - name: Upload artifacts (Windows)
+          retention-days: 30
+          
+      - name: Upload Windows artifacts
         if: matrix.os == 'windows-latest'
         uses: actions/upload-artifact@v4
         with:
@@ -90,8 +91,9 @@ jobs:
           path: |
             dist/*.exe
             dist/*.msi
+          retention-days: 30
 
-  publish:
+  create-release:
     needs: release
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/')
@@ -112,8 +114,8 @@ jobs:
             artifacts/macos-builds/*
             artifacts/linux-builds/*
             artifacts/windows-builds/*
-          generate_release_notes: true
           draft: false
           prerelease: false
+          generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} 

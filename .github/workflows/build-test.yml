@@ -9,6 +9,7 @@ on:
 jobs:
   test-build:
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 45  # Increase timeout
     
     strategy:
       matrix:
@@ -42,16 +43,35 @@ jobs:
         run: npm ci
         
       - name: Prepare Python bundle
-        run: npm run prebuild
-        
+        run: |
+          chmod +x scripts/prepare-python-bundle.sh
+          ./scripts/prepare-python-bundle.sh
+          
       - name: Test build (macOS)
         if: matrix.os == 'macos-latest'
         run: npm run build:mac
-        
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: false  # Disable code signing for PR builds
+          CSC_FOR_PULL_REQUEST: false  # Explicitly disable code signing
+          
       - name: Test build (Linux)
         if: matrix.os == 'ubuntu-latest'
         run: npm run build:linux
         
       - name: Test build (Windows)
         if: matrix.os == 'windows-latest'
-        run: npm run build:win 
+        run: npm run build:win
+        
+      - name: Check build artifacts
+        run: |
+          ls -la dist/ || echo "No dist directory found"
+          
+      - name: Upload build artifacts (for debugging)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: failed-build-${{ matrix.os }}
+          path: |
+            dist/
+            *.log
+          retention-days: 7 
