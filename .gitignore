@@ -1,14 +1,75 @@
+# Dependencies
 node_modules
-package-lock.json
+
+# Logs
 *.log
-*.log.*
-*.log.*.*
-*.log.*.*.*
-*.log.*.*.*.*
-*.log.*.*.*.*.*
-*.log.*.*.*.*.*.*
-.DS_Store
+agent-execution.log
+agent_debug.log
+renderer_agent.log
+webframe-errors.log
+crash-log.txt
+
+# Environment files
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Python virtual environments
 venv/
 agents/venv/
-.env
+.venv
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# Build artifacts and distribution files (generated during build)
+dist/
+build/
+out/
+
+# Python bundle (generated during build)
+python-bundle/
+
+# Electron distribution files (generated during build)
+*.dmg
+*.zip
+*.AppImage
+*.deb
+*.rpm
+*.tar.gz
+*.exe
+*.msi
+
+# Build configuration cache (generated during build)
+builder-effective-config.yaml
+builder-debug.yml
+latest-mac.yml
+*.blockmap
+
+# OS generated files
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
 *.code-workspace
+
+# Temporary files
+*.tmp
+*.temp
+temp/
+tmp/
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
