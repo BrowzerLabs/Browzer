@@ -1805,16 +1805,20 @@ function setupWebviewEvents(webview) {
     if (event.channel === 'add-to-chat') {
       console.log('Processing add-to-chat via IPC with text:', event.args[0]);
       addSelectedTextToChat(event.args[0]);
+      showToast('✓ Text added to chat input');
     }
   });
   
-  // Additional debug ipc listeners to help track messages
+  // Also listen for console messages to help debug add-to-chat
   webview.addEventListener('console-message', (event) => {
-    console.log(`Webview ${webview.id} console:`, event.message);
+    if (event.message.includes('Text sent to chat') || event.message.includes('selection handler')) {
+      console.log(`Webview ${webview.id} console:`, event.message);
+    }
   });
   
   // Inject our selection handler script
   injectSelectionHandler(webview);
+  
   
   console.log('All webview event listeners set up for:', webview.id);
 }
@@ -1828,6 +1832,10 @@ window.addEventListener('message', function(event) {
   if (event.data && event.data.type === 'add-to-chat') {
     console.log('Received add-to-chat message via postMessage:', event.data.text);
     addSelectedTextToChat(event.data.text);
+    
+    // Show feedback
+    showToast('✓ Text added to chat input');
+    return;
   }
   
   // Handle navigation messages from history page
@@ -1868,7 +1876,7 @@ window.addEventListener('message', function(event) {
 function addSelectedTextToChat(selectedText) {
   if (!selectedText || selectedText.trim().length === 0) {
     console.error('No text to add to chat');
-    showToast('Error: No text selected');
+    showToast('❌ Error: No text selected');
     return;
   }
   
@@ -1883,59 +1891,86 @@ function addSelectedTextToChat(selectedText) {
   }
   
   try {
-    // Find the chat input field
-    const chatInput = document.getElementById('chatInput');
+    // Ensure agent results area exists first
+    const agentResults = document.getElementById('agentResults');
+    if (!agentResults) {
+      console.error('Agent results container not found');
+      showToast('❌ Error: Chat area not found');
+      return;
+    }
     
-    // Make sure we have a chat area
+    // Initialize chat UI if it doesn't exist
+    let chatContainer = document.getElementById('chatContainer');
+    let chatInput = document.getElementById('chatInput');
+    
     if (!chatInput) {
       console.log('Chat input not found, initializing chat UI');
       
-      // Try to initialize the chat container
-      const agentResults = document.getElementById('agentResults');
-      if (agentResults) {
-        // Clear existing content
+      // Clear existing content if needed
+      if (!chatContainer) {
         agentResults.innerHTML = '';
         
         // Create chat container
-        const newChatContainer = document.createElement('div');
-        newChatContainer.id = 'chatContainer';
-        newChatContainer.className = 'chat-container';
-        agentResults.appendChild(newChatContainer);
+        chatContainer = document.createElement('div');
+        chatContainer.id = 'chatContainer';
+        chatContainer.className = 'chat-container';
+        agentResults.appendChild(chatContainer);
         
-        // Add chat input
-        const chatInputArea = document.createElement('div');
-        chatInputArea.className = 'chat-input-area';
-        chatInputArea.innerHTML = `
-          <input type="text" id="chatInput" placeholder="Ask a follow-up question..." />
-          <button id="sendMessageBtn" class="chat-send-btn">Send</button>
-        `;
-        agentResults.appendChild(chatInputArea);
-        
-        // Set up event handlers for the new input
-        setupChatInputHandlers();
-        
-        // Try again with the newly created input
-        const newChatInput = document.getElementById('chatInput');
-        if (newChatInput) {
-          newChatInput.value = selectedText + (truncated ? ' (text truncated due to length)' : '');
-          newChatInput.focus();
-          showToast('Text added to input');
-        } else {
-          showToast('Error: Could not create chat input');
+        // Add welcome message if container is empty
+        if (chatContainer.children.length === 0) {
+          const welcomeMessage = document.createElement('div');
+          welcomeMessage.className = 'welcome-container';
+          welcomeMessage.innerHTML = `
+            <div class="welcome-icon">💬</div>
+            <h3>Chat with AI</h3>
+            <p>Text from webpage added to chat input. Ask questions about the selected content.</p>
+          `;
+          chatContainer.appendChild(welcomeMessage);
         }
-      } else {
-        showToast('Error: Chat area not found');
-        console.error('Agent results container not found');
       }
-    } else {
-      // Add the selected text to the input field
-      chatInput.value = selectedText + (truncated ? ' (text truncated due to length)' : '');
+      
+      // Add chat input area
+      const chatInputArea = document.createElement('div');
+      chatInputArea.className = 'chat-input-area';
+      chatInputArea.innerHTML = `
+        <input type="text" id="chatInput" placeholder="Ask a question about the selected text..." />
+        <button id="sendMessageBtn" class="chat-send-btn">Send</button>
+      `;
+      agentResults.appendChild(chatInputArea);
+      
+      // Set up event handlers for the new input
+      setupChatInputHandlers();
+      
+      // Get the newly created input
+      chatInput = document.getElementById('chatInput');
+    }
+    
+    if (chatInput) {
+      // Add selected text directly without quotes or hyphen formatting
+      const textToAdd = selectedText + (truncated ? ' (truncated)' : '');
+      
+      // If there's already text in the input, append to it with a space
+      const existingText = chatInput.value.trim();
+      if (existingText) {
+        chatInput.value = existingText + ' ' + textToAdd;
+      } else {
+        chatInput.value = textToAdd;
+      }
+      
+      // Focus and position cursor at the end
       chatInput.focus();
-      showToast('Text added to input');
+      chatInput.setSelectionRange(chatInput.value.length, chatInput.value.length);
+      
+      // Scroll to make sure input is visible
+      chatInput.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      
+      console.log('✓ Text successfully added to chat input');
+    } else {
+      throw new Error('Could not create or find chat input');
     }
   } catch (error) {
     console.error('Error adding text to chat input:', error);
-    showToast('Error adding text to chat input');
+    showToast('❌ Error adding text to chat input');
   }
 }
 
@@ -4352,81 +4387,6 @@ function getModelName() {
   return selectedOption ? selectedOption.textContent : "AI model";
 }
 
-// Add these new functions
-function addSelectedTextToChat(selectedText) {
-  if (!selectedText || selectedText.trim().length === 0) {
-    console.error('No text to add to chat');
-    showToast('Error: No text selected');
-    return;
-  }
-  
-  console.log('Adding text to chat input:', selectedText);
-  
-  // Limit the text length for very long selections
-  const maxLength = 1000;
-  let truncated = false;
-  if (selectedText.length > maxLength) {
-    selectedText = selectedText.substring(0, maxLength);
-    truncated = true;
-  }
-  
-  try {
-    // Find the chat input field
-    const chatInput = document.getElementById('chatInput');
-    
-    // Make sure we have a chat area
-    if (!chatInput) {
-      console.log('Chat input not found, initializing chat UI');
-      
-      // Try to initialize the chat container
-      const agentResults = document.getElementById('agentResults');
-      if (agentResults) {
-        // Clear existing content
-        agentResults.innerHTML = '';
-        
-        // Create chat container
-        const newChatContainer = document.createElement('div');
-        newChatContainer.id = 'chatContainer';
-        newChatContainer.className = 'chat-container';
-        agentResults.appendChild(newChatContainer);
-        
-        // Add chat input
-        const chatInputArea = document.createElement('div');
-        chatInputArea.className = 'chat-input-area';
-        chatInputArea.innerHTML = `
-          <input type="text" id="chatInput" placeholder="Ask a follow-up question..." />
-          <button id="sendMessageBtn" class="chat-send-btn">Send</button>
-        `;
-        agentResults.appendChild(chatInputArea);
-        
-        // Set up event handlers for the new input
-        setupChatInputHandlers();
-        
-        // Try again with the newly created input
-        const newChatInput = document.getElementById('chatInput');
-        if (newChatInput) {
-          newChatInput.value = selectedText + (truncated ? ' (text truncated due to length)' : '');
-          newChatInput.focus();
-          showToast('Text added to input');
-        } else {
-          showToast('Error: Could not create chat input');
-        }
-      } else {
-        showToast('Error: Chat area not found');
-        console.error('Agent results container not found');
-      }
-    } else {
-      // Add the selected text to the input field
-      chatInput.value = selectedText + (truncated ? ' (text truncated due to length)' : '');
-      chatInput.focus();
-      showToast('Text added to input');
-    }
-  } catch (error) {
-    console.error('Error adding text to chat input:', error);
-    showToast('Error adding text to chat input');
-  }
-}
-
 function showToast(message) {
   // Create toast element if it doesn't exist
   let toast = document.getElementById('toast');
@@ -4584,61 +4544,384 @@ setupWebviewEvents = function(webview) {
 // Add this function to inject scripts into webviews
 function injectSelectionHandler(webview) {
   try {
-    console.log('Setting up simple selection handler for webview:', webview.id);
+    console.log('Setting up enhanced selection handler for webview:', webview.id);
     
-    // Wait for webview to finish loading before setting up
-    const loadHandler = () => {
-      webview.removeEventListener('did-finish-load', loadHandler);
-      
-      // Add a reasonable delay to ensure webview is ready
-      setTimeout(() => {
-        try {
-          // Check if webview is still valid
-          if (!webview || (webview.isDestroyed && webview.isDestroyed())) {
-            console.log('Webview was destroyed, skipping injection');
-            return;
-          }
-          
-          // Simple, safer script injection
-      webview.executeJavaScript(`
-            if (!window.__selectionHandlerSetup) {
-              window.__selectionHandlerSetup = true;
-              
-              // Simple postMessage setup
-              document.addEventListener('mouseup', function() {
-                setTimeout(() => {
-                  try {
-                    const selection = window.getSelection();
-                    const text = selection.toString().trim();
-                    if (text && text.length > 5) {
-                      console.log('Text selected:', text.substring(0, 50) + '...');
-                    }
-                  } catch (e) {
-                    // Silently ignore selection errors
-                  }
-                }, 50);
-              });
-              
-              console.log('Simple selection handler setup complete');
-            }
-          `, false)
-          .catch(err => {
-            // Don't log errors, just silently fail to avoid spam
-            console.log('Script injection failed (this is normal for some sites)');
-          });
-        } catch (err) {
-          console.log('Error during script setup (this is normal for some sites)');
+    // Multiple injection strategies for better compatibility
+    const attemptInjection = (attempt = 1) => {
+      try {
+        // Check if webview is still valid
+        if (!webview || (webview.isDestroyed && webview.isDestroyed())) {
+          console.log('Webview was destroyed, skipping injection');
+          return;
         }
-      }, 1500);
+        
+        console.log(`Injection attempt ${attempt} for webview:`, webview.id);
+        
+        // Enhanced script with better compatibility
+        const injectionScript = `
+          (function() {
+            // Prevent multiple injections
+            if (window.__browzerSelectionHandler) {
+              console.log('Selection handler already installed');
+              return;
+            }
+            
+            console.log('Installing Browzer selection handler...');
+            window.__browzerSelectionHandler = true;
+            
+            // Create and style the add to chat button
+            let addToChatBtn = null;
+            let selectionTimeout = null;
+            
+            function createAddToChatButton(selectedText, rect) {
+              try {
+                // Remove any existing button
+                hideAddToChatButton();
+                
+                // Create new button with enhanced styling
+                addToChatBtn = document.createElement('button');
+                addToChatBtn.textContent = 'Add to Chat';
+                addToChatBtn.setAttribute('data-browzer-button', 'true');
+                
+                // Apply styles directly to avoid CSP issues
+                const styles = {
+                  position: 'fixed',
+                  zIndex: '2147483647', // Maximum z-index
+                  padding: '8px 14px',
+                  background: '#1a73e8',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '6px',
+                  fontSize: '13px',
+                  fontWeight: '500',
+                  cursor: 'pointer',
+                  boxShadow: '0 4px 8px rgba(0,0,0,0.2)',
+                  transition: 'all 0.2s ease',
+                  fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+                  userSelect: 'none',
+                  pointerEvents: 'auto',
+                  outline: 'none',
+                  textDecoration: 'none'
+                };
+                
+                Object.assign(addToChatBtn.style, styles);
+                
+                // Position button near selection with better boundary checking
+                const viewportWidth = window.innerWidth;
+                const viewportHeight = window.innerHeight;
+                const scrollY = window.pageYOffset || document.documentElement.scrollTop;
+                const scrollX = window.pageXOffset || document.documentElement.scrollLeft;
+                
+                let buttonTop = Math.max(10, rect.top + scrollY - 45);
+                let buttonLeft = Math.min(viewportWidth - 130, Math.max(10, rect.left + scrollX));
+                
+                // Keep button in viewport
+                if (buttonTop + 40 > viewportHeight + scrollY) {
+                  buttonTop = rect.bottom + scrollY + 5;
+                }
+                
+                addToChatBtn.style.top = buttonTop + 'px';
+                addToChatBtn.style.left = buttonLeft + 'px';
+                
+                // Enhanced interaction handlers
+                addToChatBtn.addEventListener('mouseenter', function() {
+                  this.style.background = '#1765cc';
+                  this.style.transform = 'translateY(-2px)';
+                  this.style.boxShadow = '0 6px 12px rgba(0,0,0,0.25)';
+                });
+                
+                addToChatBtn.addEventListener('mouseleave', function() {
+                  this.style.background = '#1a73e8';
+                  this.style.transform = 'translateY(0)';
+                  this.style.boxShadow = '0 4px 8px rgba(0,0,0,0.2)';
+                });
+                
+                // Click handler with multiple message strategies
+                addToChatBtn.addEventListener('click', function(e) {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  
+                  console.log('Add to Chat clicked, sending text:', selectedText.substring(0, 50));
+                  
+                  // Try multiple communication methods
+                  let messageSent = false;
+                  
+                  // Method 1: IPC (for Electron webviews)
+                  try {
+                    if (typeof require !== 'undefined') {
+                      const { ipcRenderer } = require('electron');
+                      if (ipcRenderer && ipcRenderer.sendToHost) {
+                        ipcRenderer.sendToHost('add-to-chat', selectedText);
+                        messageSent = true;
+                        console.log('Message sent via IPC');
+                      }
+                    }
+                  } catch (err) {
+                    console.log('IPC method failed:', err.message);
+                  }
+                  
+                  // Method 2: PostMessage to parent
+                  if (!messageSent) {
+                    try {
+                      window.parent.postMessage({
+                        type: 'add-to-chat',
+                        text: selectedText,
+                        source: 'browzer-selection'
+                      }, '*');
+                      messageSent = true;
+                      console.log('Message sent via postMessage to parent');
+                    } catch (err) {
+                      console.log('PostMessage to parent failed:', err.message);
+                    }
+                  }
+                  
+                  // Method 3: PostMessage to top window
+                  if (!messageSent) {
+                    try {
+                      window.top.postMessage({
+                        type: 'add-to-chat',
+                        text: selectedText,
+                        source: 'browzer-selection'
+                      }, '*');
+                      messageSent = true;
+                      console.log('Message sent via postMessage to top');
+                    } catch (err) {
+                      console.log('PostMessage to top failed:', err.message);
+                    }
+                  }
+                  
+                  // Method 4: Custom event
+                  if (!messageSent) {
+                    try {
+                      const customEvent = new CustomEvent('browzer-add-to-chat', {
+                        detail: { text: selectedText },
+                        bubbles: true
+                      });
+                      document.dispatchEvent(customEvent);
+                      console.log('Message sent via custom event');
+                    } catch (err) {
+                      console.log('Custom event failed:', err.message);
+                    }
+                  }
+                  
+                  // Remove button and clear selection
+                  hideAddToChatButton();
+                  try {
+                    window.getSelection().removeAllRanges();
+                  } catch (e) {}
+                });
+                
+                // Add to page with error handling
+                try {
+                  document.body.appendChild(addToChatBtn);
+                  console.log('Add to Chat button created and positioned');
+                } catch (err) {
+                  console.error('Failed to add button to page:', err);
+                  return;
+                }
+                
+                // Auto-hide after 7 seconds
+                setTimeout(hideAddToChatButton, 7000);
+                
+              } catch (err) {
+                console.error('Error creating Add to Chat button:', err);
+              }
+            }
+            
+            function hideAddToChatButton() {
+              if (addToChatBtn && addToChatBtn.parentNode) {
+                try {
+                  addToChatBtn.parentNode.removeChild(addToChatBtn);
+                } catch (e) {}
+              }
+              addToChatBtn = null;
+            }
+            
+            // Enhanced selection detection
+            function checkSelection() {
+              try {
+                const selection = window.getSelection();
+                const text = selection.toString().trim();
+                
+                if (text && text.length >= 3) { // Lower threshold for better UX
+                  console.log('Text selected for add to chat:', text.substring(0, 30) + '...');
+                  
+                  const range = selection.rangeCount > 0 ? selection.getRangeAt(0) : null;
+                  if (range) {
+                    const rect = range.getBoundingClientRect();
+                    if (rect.width > 0 && rect.height > 0) {
+                      createAddToChatButton(text, rect);
+                      return;
+                    }
+                  }
+                }
+                
+                hideAddToChatButton();
+              } catch (e) {
+                console.error('Error in selection check:', e);
+              }
+            }
+            
+            // Multiple event listeners for better compatibility
+            
+            // Primary selection detection
+            document.addEventListener('mouseup', function(e) {
+              // Small delay to ensure selection is complete
+              clearTimeout(selectionTimeout);
+              selectionTimeout = setTimeout(checkSelection, 100);
+            }, true);
+            
+            // Additional selection events
+            document.addEventListener('selectionchange', function() {
+              clearTimeout(selectionTimeout);
+              selectionTimeout = setTimeout(checkSelection, 150);
+            });
+            
+            // Touch support for mobile
+            document.addEventListener('touchend', function(e) {
+              clearTimeout(selectionTimeout);
+              selectionTimeout = setTimeout(checkSelection, 200);
+            });
+            
+            // Hide button on click elsewhere
+            document.addEventListener('mousedown', function(e) {
+              if (addToChatBtn && !addToChatBtn.contains(e.target)) {
+                hideAddToChatButton();
+              }
+            }, true);
+            
+            // Enhanced keyboard shortcuts
+            document.addEventListener('keydown', function(e) {
+              // Ctrl+Shift+A or Cmd+Shift+A
+              if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'A') {
+                e.preventDefault();
+                const selection = window.getSelection();
+                const text = selection.toString().trim();
+                
+                if (text) {
+                  // Direct send without button
+                  try {
+                    window.parent.postMessage({
+                      type: 'add-to-chat',
+                      text: text,
+                      source: 'browzer-keyboard'
+                    }, '*');
+                    console.log('Text sent via keyboard shortcut');
+                    
+                    // Visual feedback
+                    const flash = document.createElement('div');
+                    flash.textContent = '✓ Added to chat';
+                    flash.style.cssText = \`
+                      position: fixed; top: 20px; right: 20px; z-index: 2147483647;
+                      background: #4caf50; color: white; padding: 8px 16px;
+                      border-radius: 4px; font-size: 14px; opacity: 0;
+                      transition: opacity 0.3s;
+                    \`;
+                    document.body.appendChild(flash);
+                    
+                    setTimeout(() => flash.style.opacity = '1', 10);
+                    setTimeout(() => {
+                      flash.style.opacity = '0';
+                      setTimeout(() => flash.remove(), 300);
+                    }, 2000);
+                    
+                  } catch (err) {
+                    console.log('Keyboard shortcut failed:', err);
+                  }
+                }
+              }
+              
+              // Escape to hide button
+              if (e.key === 'Escape') {
+                hideAddToChatButton();
+              }
+            });
+            
+            console.log('✓ Browzer selection handler installed successfully');
+            console.log('- Select text to see Add to Chat button');
+            console.log('- Use Ctrl+Shift+A (or Cmd+Shift+A) for quick add');
+            
+            // Test injection success
+            window.__browzerHandlerActive = true;
+            
+          })();
+        `;
+        
+        // Execute the enhanced script
+        webview.executeJavaScript(injectionScript, false)
+          .then(() => {
+            console.log(`✓ Selection handler injection successful (attempt ${attempt})`);
+            
+            // Verify injection worked
+            setTimeout(() => {
+              webview.executeJavaScript('window.__browzerHandlerActive === true', false)
+                .then(result => {
+                  if (result) {
+                    console.log('✓ Selection handler verified as active');
+                  } else {
+                    console.log('Selection handler verification failed, trying again...');
+                    if (attempt < 3) {
+                      setTimeout(() => attemptInjection(attempt + 1), 2000);
+                    }
+                  }
+                })
+                .catch(() => {
+                  if (attempt < 3) {
+                    setTimeout(() => attemptInjection(attempt + 1), 2000);
+                  }
+                });
+            }, 1000);
+          })
+          .catch(err => {
+            console.log(`Injection attempt ${attempt} failed:`, err.message);
+            
+            // Retry with different timing
+            if (attempt < 4) {
+              const delay = attempt * 1000; // Increasing delay
+              setTimeout(() => attemptInjection(attempt + 1), delay);
+            }
+          });
+          
+      } catch (err) {
+        console.log(`Error in injection attempt ${attempt}:`, err.message);
+        if (attempt < 3) {
+          setTimeout(() => attemptInjection(attempt + 1), 1500);
+        }
+      }
     };
     
-    // Only add the event listener if webview is valid
-    if (webview && typeof webview.addEventListener === 'function') {
-      webview.addEventListener('did-finish-load', loadHandler);
+    // Start injection process
+    const startInjection = () => {
+      // Immediate attempt
+      attemptInjection(1);
+      
+      // Also try after page events
+      const tryAfterEvent = (eventName, delay = 500) => {
+        webview.addEventListener(eventName, () => {
+          setTimeout(() => attemptInjection(1), delay);
+        }, { once: true });
+      };
+      
+      tryAfterEvent('did-finish-load', 800);
+      tryAfterEvent('dom-ready', 600);
+    };
+    
+    // Check if webview is already loaded
+    try {
+      if (webview.isLoading && typeof webview.isLoading === 'function' && !webview.isLoading()) {
+        // Already loaded, inject immediately
+        startInjection();
+      } else {
+        // Wait for load
+        webview.addEventListener('did-finish-load', startInjection, { once: true });
+      }
+    } catch (e) {
+      // Fallback: just try injection
+      startInjection();
     }
     
   } catch (err) {
-    console.log('Error setting up selection handler (this is normal for some sites)');
+    console.log('Error setting up selection handler:', err.message);
   }
 }
 
@@ -4817,6 +5100,78 @@ function showHistoryPage() {
   } catch (error) {
     console.error('Error in showHistoryPage:', error);
     alert('Error opening history page: ' + error.message);
+  }
+}
+
+function deleteHistoryItemLocal(itemId, modal) {
+  try {
+    let history = JSON.parse(localStorage.getItem(HISTORY_STORAGE_KEY) || '[]');
+    history = history.filter(item => item.id !== itemId);
+    localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(history));
+    
+    // Refresh the modal
+    modal.remove();
+    showHistoryPage();
+  } catch (error) {
+    console.error('Error deleting history item:', error);
+    alert('Error deleting history item');
+  }
+}
+
+// Add the missing Add to Chat button functions
+let addToChatButton = null;
+
+function showAddToChatButton(webview, selectedText, rect) {
+  try {
+    console.log('Showing add to chat button for selected text:', selectedText.substring(0, 50) + '...');
+    
+    // Remove any existing button first
+    hideAddToChatButton();
+    
+    // Create the button
+    addToChatButton = document.createElement('button');
+    addToChatButton.className = 'add-to-chat-button';
+    addToChatButton.textContent = 'Add to Chat';
+    addToChatButton.style.position = 'fixed';
+    addToChatButton.style.zIndex = '10000';
+    
+    // Position the button near the selection (with some offset)
+    const webviewRect = webview.getBoundingClientRect();
+    const buttonTop = Math.max(10, webviewRect.top + rect.top - 40);
+    const buttonLeft = Math.min(window.innerWidth - 120, webviewRect.left + rect.left);
+    
+    addToChatButton.style.top = buttonTop + 'px';
+    addToChatButton.style.left = buttonLeft + 'px';
+    
+    // Add click handler
+    addToChatButton.onclick = function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      addSelectedTextToChat(selectedText);
+      hideAddToChatButton();
+    };
+    
+    // Add the button to the DOM
+    document.body.appendChild(addToChatButton);
+    
+    // Auto-hide after 5 seconds
+    setTimeout(() => {
+      hideAddToChatButton();
+    }, 5000);
+    
+  } catch (error) {
+    console.error('Error showing add to chat button:', error);
+  }
+}
+
+function hideAddToChatButton() {
+  try {
+    if (addToChatButton && addToChatButton.parentNode) {
+      addToChatButton.parentNode.removeChild(addToChatButton);
+    }
+    addToChatButton = null;
+  } catch (error) {
+    console.error('Error hiding add to chat button:', error);
   }
 }
 
