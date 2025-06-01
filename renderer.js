@@ -1474,26 +1474,52 @@ function createNewTab(url = NEW_TAB_URL) {
     const webview = document.createElement('webview');
     webview.id = webviewId;
     webview.className = 'webview';
-    
+
     // Determine if we need special settings for this URL
     const needsSpecialSettings = url && isProblematicSite(url);
+
+    // Configure webview to mimic a real browser and avoid detection
+    const userAgent = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'; // Common Chrome User Agent
+
+    // Modern browser-like webview preferences
+    // contextIsolation=true is crucial for security and mimicking modern browsers.
+    // nodeIntegration=false is also important for security and standard browser behavior.
+    const webPreferencesArray = [
+      'contextIsolation=true',
+      'nodeIntegration=false',
+      'webSecurity=true',
+      'allowRunningInsecureContent=false',
+      'experimentalFeatures=true', // Enables features that might be on by default in Chrome
+      'sandbox=false', // Disabling sandbox can sometimes help with compatibility but consider security implications
+      'webgl=true',
+      'plugins=true', // Though NPAPI plugins are deprecated, some sites might check for this
+      'javascript=true',
+      'images=true',
+      'textAreasAreResizable=true',
+      'backgroundThrottling=false' // Prevents throttling of background tabs
+    ];
+
+    // Apply browser-like settings
+    webview.setAttribute('useragent', userAgent);
+    webview.setAttribute('webpreferences', webPreferencesArray.join(', '));
+    webview.setAttribute('allowpopups', 'true'); // Allow popups as most browsers do
+    webview.setAttribute('partition', 'persist:main-session'); // Use a persistent session
+
+    // Enable modern web features (enableremotemodule should be false for security)
+    webview.setAttribute('enableremotemodule', 'false');
+    webview.setAttribute('nodeintegrationinsubframes', 'false');
     
-    // Set the preload script path
+    // Set the preload script path for injecting scripts safely with contextIsolation
     const preloadScriptPath = `file://${__dirname}/preload.js`;
-    
-    // Add standard attributes
-    webview.setAttribute('allowpopups', 'true');
-    webview.setAttribute('webpreferences', 'contextIsolation=false, nodeIntegration=true');
-    webview.setAttribute('nodeintegration', 'true');
     webview.setAttribute('preload', preloadScriptPath);
-    
-    // Add special attributes for problematic sites
+
+    // Special handling for problematic sites - might use a separate session or slightly different prefs
     if (needsSpecialSettings) {
-      console.log('Adding special webview settings for problematic site:', url);
-      webview.setAttribute('webpreferences', 'contextIsolation=false, javascript=true, webSecurity=true, allowRunningInsecureContent=false, nodeIntegration=true');
-      webview.setAttribute('partition', 'persist:safemode');
-      webview.setAttribute('disablewebsecurity', 'false');
-      webview.setAttribute('preload', preloadScriptPath);
+      console.log('Using enhanced compatibility mode for:', url);
+      // Use a different partition for problematic sites to isolate their data
+      webview.setAttribute('partition', 'persist:compat-session');
+      // Potentially override some webPreferences for compatibility if needed, but start with the same secure defaults.
+      // For example, if a site specifically breaks with the sandbox, you might adjust it here ONLY for that site.
     }
     
     // Add webview to container (initially hidden)
@@ -1520,6 +1546,53 @@ function createNewTab(url = NEW_TAB_URL) {
     
     // Setup event listeners for this webview
     setupWebviewEvents(webview);
+    
+    // Inject selection handler and compatibility scripts via preload, triggered by an IPC message from the webview once it's ready
+    webview.addEventListener('ipc-message', (event) => {
+      if (event.channel === 'webview-ready-for-scripts') {
+        console.log(`Webview ${webview.id} is ready for scripts. Injecting selection handler and compatibility enhancements.`);
+        // Inject selection handler
+        injectSelectionHandler(webview); 
+        // Inject compatibility enhancements
+        webview.executeJavaScript(`
+          // Override navigator properties to better mimic Chrome
+          try {
+            Object.defineProperty(navigator, 'webdriver', {
+              get: () => false, // Explicitly set to false, as it is in real Chrome
+            });
+            Object.defineProperty(navigator, 'languages', {
+              get: () => ['en-US', 'en'], // Common browser languages
+            });
+            Object.defineProperty(navigator, 'platform', {
+              get: () => 'MacIntel', // Common platform for macOS Chrome
+            });
+            Object.defineProperty(navigator, 'plugins', {
+              get: () => ({ length: 0 }), // Mimic no plugins, or a few common ones if needed
+            });
+            
+            // Ensure window.chrome object looks more legitimate
+            window.chrome = window.chrome || {};
+            window.chrome.runtime = window.chrome.runtime || {};
+            window.chrome.loadTimes = window.chrome.loadTimes || function() {};
+            window.chrome.csi = window.chrome.csi || function() {};
+            
+            // Remove properties that might indicate Electron
+            delete window.process;
+            delete window.Buffer;
+            delete window.global;
+            delete window.require;
+            delete window.exports;
+            delete window.module;
+
+            console.log('Browser compatibility enhancements applied inside webview.');
+          } catch (e) {
+            console.error('Error applying compatibility enhancements inside webview:', e.message);
+          }
+        `).catch(err => {
+          console.error('Failed to inject compatibility enhancements into webview:', err.message);
+        });
+      }
+    });
     
     // Select this tab
     selectTab(tabId);
@@ -3330,32 +3403,18 @@ async function extractPageContent(specificWebview = null, options = {}) {
       }
     }
     
-    // Default options
+    // Default options - ALWAYS extract maximum content for better LLM analysis
     const defaultOptions = {
-      includeHtml: false,       // By default, extract just text
-      preserveLinks: false,     // By default, don't preserve links
-      detectContentType: true   // Auto-detect what format to use based on the query
+      includeHtml: true,        // Always extract HTML for link preservation
+      preserveLinks: true,      // Always preserve links 
+      detectContentType: true,  // Auto-detect what format to use based on the query
+      waitForDynamic: true,     // Wait for dynamic content to load
+      includeBlogContent: true  // Specifically look for blog content
     };
     
     const opts = {...defaultOptions, ...options};
     
-    // Auto-detect content type based on query if enabled
-    if (opts.detectContentType) {
-      const chatInput = document.getElementById('chatInput');
-      if (chatInput && chatInput.value) {
-        const query = chatInput.value.toLowerCase();
-        // Keywords that suggest we need HTML and link preservation
-        if (query.includes('link') || query.includes('url') || 
-            query.includes('click') || query.includes('button') ||
-            query.includes('navigation') || query.includes('href') ||
-            query.includes('download') || query.includes('menu') ||
-            query.includes('sidebar') || query.includes('layout')) {
-          console.log('Detected query about links or UI elements, preserving HTML structure');
-          opts.preserveLinks = true;
-          opts.includeHtml = true;
-        }
-      }
-    }
+    // NOTE: HTML content and links are now extracted by default for better LLM analysis
     
     // Get title safely
     let title = '';
