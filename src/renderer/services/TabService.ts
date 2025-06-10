@@ -104,8 +104,8 @@ export class TabService {
           
           for (const tab of savedTabs) {
             try {
-              if (tab.url) {
-                this.createNewTab(tab.url);
+              if ((tab as any).url) {
+                this.createNewTab((tab as any).url);
                 restoredCount++;
               }
             } catch (tabErr) {

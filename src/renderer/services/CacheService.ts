@@ -254,7 +254,7 @@ export class CacheService {
   clearByType(type: CacheType): number {
     try {
       let cleared = 0;
-      const keysToDelete = [];
+      const keysToDelete: string[] = [];
       
       for (const [key, metadata] of Object.entries(this.metadata)) {
         if (metadata.type === type) {

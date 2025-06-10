@@ -389,8 +389,8 @@ function restoreTabs(): void {
         
         for (const tab of savedTabs) {
           try {
-            if (tab.url) {
-              createNewTab(tab.url);
+            if ((tab as any).url) {
+              createNewTab((tab as any).url);
               restoredCount++;
             }
           } catch (tabErr) {
