@@ -577,6 +577,8 @@ class TopicAgent:
         
         # Check if we have any full content sources
         has_full_content = any(source.get('is_full_content', False) for source in summaries)
+        # Check if any sources contain HTML content with links
+        has_html_content = any(source.get('has_html', False) for source in summaries)
         
         # Include the sources in the prompt
         if summaries:
@@ -593,6 +595,12 @@ class TopicAgent:
                         user_prompt += "IMPORTANT: This is the complete content of the webpage, not a summary. "
                         user_prompt += "The answer to the question is likely contained within this content. "
                         user_prompt += "Please read through the full content carefully to find relevant information.\n\n"
+                        
+                        # Add special instructions for HTML content with links
+                        if source.get('has_html', False):
+                            user_prompt += "NOTE: This content includes HTML with actual links in the format 'text [LINK: url]'. "
+                            user_prompt += "When referring to links, use the exact URLs provided. Do not create or guess URLs. "
+                            user_prompt += "If asked about links or articles, only mention those that are explicitly present in the content.\n\n"
             else:
                 # Regular processing for summarized content
                 for idx, source in enumerate(summaries, 1):
@@ -866,8 +874,15 @@ class TopicAgent:
             if query_is_question and page_content and isinstance(page_content, dict) and model_info:
                 log_event(f'Direct question with page content detected - using full content')
                 
-                # Extract content details
-                content = page_content.get('content', '')
+                # Extract content details - prefer HTML content if available
+                has_html = 'htmlContent' in page_content and page_content.get('htmlContent')
+                if has_html:
+                    content = page_content.get('htmlContent', '')
+                    log_event(f'Using HTML content with links ({len(content)} chars)')
+                else:
+                    content = page_content.get('content', '')
+                    log_event(f'Using text content ({len(content)} chars)')
+                
                 title = page_content.get('title', 'Untitled Page')
                 url = page_content.get('url', query)
                 
@@ -877,8 +892,9 @@ class TopicAgent:
                     summaries = [{
                         'title': title,
                         'url': url,
-                        'summary': content,  # Use the full content instead of summarizing
-                        'is_full_content': True  # Flag to indicate this is full content
+                        'summary': content,  # Now using HTML content when available
+                        'is_full_content': True,  # Flag to indicate this is full content
+                        'has_html': has_html  # Track whether this contains HTML
                     }]
                     log_event(f'Using full page content for question: {title}')
                     
@@ -898,8 +914,15 @@ class TopicAgent:
             if page_content and isinstance(page_content, dict):
                 log_event(f'Processing direct page content: {page_content.get("title", "Untitled")}')
                 
-                # Extract the content
-                content = page_content.get('content', '')
+                # Prefer HTML content if available, otherwise use text content
+                has_html = 'htmlContent' in page_content and page_content.get('htmlContent')
+                if has_html:
+                    content = page_content.get('htmlContent', '')
+                    log_event(f'Using HTML content for processing ({len(content)} chars)')
+                else:
+                    content = page_content.get('content', '')
+                    log_event(f'Using text content for processing ({len(content)} chars)')
+                    
                 title = page_content.get('title', 'Untitled Page')
                 url = page_content.get('url', query)
                 
@@ -908,7 +931,8 @@ class TopicAgent:
                     summaries.append({
                         'title': title,
                         'url': url,
-                        'summary': summary
+                        'summary': summary,
+                        'has_html': has_html
                     })
                     log_event(f'Added summary for direct page: {title}')
                 else:
