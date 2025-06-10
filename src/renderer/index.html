@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Browzer</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="styles.css">
+    <script>
+        console.log("HTML loaded - Inline script running");
+        window.onload = function() {
+            console.log("Window fully loaded");
+        };
+    </script>
+</head>
+<body>
+    <div class="browser-container">
+        <div class="tab-bar">
+            <div class="tabs-container" id="tabsContainer">
+                <!-- Tabs will be added here dynamically -->
+            </div>
+            <button id="newTabBtn" class="new-tab-btn">+</button>
+        </div>
+        <div class="toolbar">
+            <button id="backBtn" class="nav-btn">←</button>
+            <button id="forwardBtn" class="nav-btn">→</button>
+            <button id="reloadBtn" class="nav-btn">↻</button>
+            <input type="text" id="urlBar" class="url-bar" placeholder="Enter URL or search query">
+            <button id="goBtn" class="nav-btn">Go</button>
+            <button id="historyBtn" class="nav-btn" title="History (Ctrl+H)">📚</button>
+            <button id="extensionsBtn" class="nav-btn">Extensions</button>
+        </div>
+        <div class="content-container">
+            <div class="webviews-container">
+                <!-- Webviews will be added dynamically here -->
+            </div>
+            <div id="dragbar"></div>
+            <div class="agent-container">
+                <div class="agent-header">
+                    <h3>AI Browser Assistant</h3>
+                    <div class="agent-controls">
+                        <div class="controls-row">
+                            <select id="modelSelector" class="model-selector">
+                                <option value="anthropic">Claude (Anthropic)</option>
+                                <option value="openai">GPT-4 (OpenAI)</option>
+                                <option value="perplexity">Perplexity</option>
+                                <option value="chutes">Chutes</option>
+                            </select>
+                            <button id="runAgentBtn" class="primary-btn">
+                                <span class="btn-icon">🔍</span>Analyze Page
+                            </button>
+                        </div>
+                        <div class="auto-summarize-container">
+                            <label class="switch">
+                                <input type="checkbox" id="autoSummarizeToggle" checked>
+                                <span class="slider"></span>
+                            </label>
+                            <span class="auto-summarize-label">Auto-summarize pages</span>
+                        </div>
+                    </div>
+                </div>
+                <div id="agentResults" class="agent-results">
+                    <div class="welcome-container">
+                        <div class="welcome-icon">🔍</div>
+                        <h3>AI Browser Assistant</h3><br/><br/>
+                        <p>Click "Analyze Page" to summarize the current page or get insights about its content.</p>
+                        <p>You can also select text on any webpage and add it to this chat.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Extensions Panel -->
+        <div id="extensionsPanel" class="extensions-panel hidden">
+            <div class="extensions-header">
+                <h3>Extensions & Settings</h3>
+                <button id="closeExtensionsBtn" class="close-btn">×</button>
+            </div>
+            <div class="extensions-content">
+                
+                <!-- API Keys Section -->
+                <div class="api-keys-section">
+                    <h4>API Keys</h4>
+                    <div class="api-key-inputs">
+                        <div class="api-key-input">
+                            <label>OpenAI API Key</label>
+                            <input type="password" id="openaiApiKey" placeholder="sk-...">
+                            <button class="save-api-key" data-provider="openai">Save</button>
+                        </div>
+                        <div class="api-key-input">
+                            <label>Anthropic API Key</label>
+                            <input type="password" id="anthropicApiKey" placeholder="sk-ant-...">
+                            <button class="save-api-key" data-provider="anthropic">Save</button>
+                        </div>
+                        <div class="api-key-input">
+                            <label>Perplexity API Key</label>
+                            <input type="password" id="perplexityApiKey" placeholder="pplx-...">
+                            <button class="save-api-key" data-provider="perplexity">Save</button>
+                        </div>
+                        <div class="api-key-input">
+                            <label>Chutes API Key</label>
+                            <input type="password" id="chutesApiKey" placeholder="ch-...">
+                            <button class="save-api-key" data-provider="chutes">Save</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Memory Management Section -->
+                <div class="memory-section">
+                    <h4>AI Memory Management</h4>
+                    <div class="memory-controls">
+                        <div class="memory-stats">
+                            <span id="memoryCount">0</span> memories stored
+                        </div>
+                        <div class="memory-actions">
+                            <button id="clearMemoryBtn" class="btn-warning">Clear Memory</button>
+                            <button id="exportMemoryBtn">Export</button>
+                            <button id="importMemoryBtn">Import</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Cache Management Section -->
+                <div class="cache-section">
+                    <h4>Cache Management</h4>
+                    <div class="cache-stats">
+                        <div class="cache-stat-item">
+                            <span class="cache-stat-label">Cache Size:</span>
+                            <span id="cacheSize">Loading...</span>
+                        </div>
+                        <div class="cache-stat-item">
+                            <span class="cache-stat-label">Items Cached:</span>
+                            <span id="cacheItems">Loading...</span>
+                        </div>
+                        <div class="cache-stat-item">
+                            <span class="cache-stat-label">Hit Rate:</span>
+                            <span id="cacheHitRate">Loading...</span>
+                        </div>
+                        <div class="cache-stat-item">
+                            <span class="cache-stat-label">Cache Utilization:</span>
+                            <span id="cacheUtilization">Loading...</span>
+                        </div>
+                    </div>
+                    <div class="cache-controls">
+                        <div class="cache-type-controls">
+                            <button id="clearPageCacheBtn" class="btn-secondary">Clear Page Cache</button>
+                            <button id="clearApiCacheBtn" class="btn-secondary">Clear API Cache</button>
+                            <button id="clearAllCacheBtn" class="btn-warning">Clear All Cache</button>
+                        </div>
+                        <div class="cache-settings">
+                            <label>
+                                <span>Max Cache Size (MB):</span>
+                                <input type="number" id="maxCacheSize" min="10" max="500" step="10" value="50">
+                            </label>
+                            <label>
+                                <span>Auto Cleanup:</span>
+                                <input type="checkbox" id="autoCleanupEnabled" checked>
+                            </label>
+                            <button id="saveCacheSettingsBtn" class="btn-primary">Save Settings</button>
+                        </div>
+                    </div>
+                    <div class="cache-actions">
+                        <button id="cleanupExpiredBtn" class="btn-secondary">Cleanup Expired</button>
+                        <button id="exportCacheStatsBtn" class="btn-secondary">Export Stats</button>
+                    </div>
+                </div>
+
+                <!-- Homepage Setting -->
+                <div class="homepage-section">
+                    <h4>New Tab Homepage</h4>
+                    <div class="homepage-input">
+                        <input type="text" id="homepageInput" placeholder="Enter homepage URL" value="https://www.google.com">
+                        <button id="saveHomepageBtn">Save</button>
+                    </div>
+                </div>
+
+                <!-- Extensions Management -->
+                <div class="extensions-management">
+                    <h4>Chrome Extensions</h4>
+                    <div class="developer-mode">
+                        <label class="switch">
+                            <input type="checkbox" id="developerModeToggle">
+                            <span class="slider"></span>
+                        </label>
+                        <span>Developer Mode</span>
+                    </div>
+                    <div class="extension-install">
+                        <input type="file" id="extensionFile" accept=".crx,.py" class="hidden">
+                        <button id="installExtensionBtn" class="install-btn">Load Unpacked Extension</button>
+                        <button id="loadExtensionBtn" class="install-btn">Load Packed Extension</button>
+                    </div>
+                    <div class="chrome-store-section">
+                        <button id="openChromeStoreBtn" class="btn-secondary">Open Chrome Web Store</button>
+                        <div class="store-install">
+                            <input type="text" id="extensionIdInput" placeholder="Extension ID from Chrome Store">
+                            <button id="installFromStoreBtn">Install from Store</button>
+                        </div>
+                    </div>
+                    <div id="extensionsList" class="extensions-list">
+                        <!-- Extensions will be listed here -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast container -->
+    <div id="toast" class="toast"></div>
+
+    <!-- Scripts -->
+    <script src="index.js"></script>
+</body>
+</html> 

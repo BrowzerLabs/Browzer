@@ -1,0 +1,17 @@
+# Add directories or file patterns to ignore during indexing (e.g. foo/ or *.csv)
+.venv/
+.gitignore
+.cursorignore
+.cursorrules
+.cursorconfig
+.cursorconfig.json
+.cursorconfig.jsonc
+.cursorconfig.jsonc
+*.venv/
+*.git/
+*.gitignore
+*.cursorignore
+*.cursorrules
+*.cursorconfig
+*.cursorconfig.json
+*.cursorconfig.jsonc
