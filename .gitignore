@@ -23,8 +23,6 @@ env/
 ENV/
 env.bak/
 venv.bak/
-agents/venv/
-*venv/*
 
 # Build artifacts and distribution files (generated during build)
 dist/

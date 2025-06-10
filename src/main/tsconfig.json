@@ -7,7 +7,7 @@
     "types": ["node"]
   },
   "include": [
-    "**/*",
-    "../shared/**/*"
+    "./**/*.ts",
+    "../shared/**/*.ts"
   ]
 } 
