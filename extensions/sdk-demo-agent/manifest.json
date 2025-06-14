@@ -1,0 +1,26 @@
+{
+  "id": "sdk-demo-agent",
+  "name": "SDK Demo Agent",
+  "version": "1.0.0",
+  "description": "Demonstration agent built with the new Browzer Agent SDK",
+  "author": "Browzer Team",
+  "main": "sdk_demo_agent.py",
+  "type": "python_agent",
+  "permissions": [
+    "ai_api_access",
+    "python_execution",
+    "network_access"
+  ],
+  "requirements": [
+    "browzer-agent-sdk>=1.0.0"
+  ],
+  "tags": ["demo", "sdk", "test", "example"],
+  "category": "utility",
+  "keywords": ["demo", "test", "sdk", "example", "tutorial"],
+  "intents": ["demo", "test", "tutorial", "example"],
+  "priority": 5,
+  "icon": "🚀",
+  "homepage": "https://docs.browzer.com/sdk",
+  "repository": "https://github.com/browzer/browzer-agent-sdk",
+  "license": "MIT"
+} 

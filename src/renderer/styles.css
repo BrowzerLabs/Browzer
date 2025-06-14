@@ -244,9 +244,12 @@ html, body {
 
 .agent-results {
     flex: 1;
-    padding: 16px;
-    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    padding: 0;
     background-color: #f8f9fa;
+    height: 100%;
+    min-height: 0;
 }
 
 /* Extensions Panel Styles */
@@ -1276,8 +1279,6 @@ input:checked + .slider:before {
 
 /* Chat input area */
 .chat-input-area {
-    position: sticky;
-    bottom: 0;
     display: flex;
     align-items: center;
     padding: 12px 16px;
@@ -1289,8 +1290,8 @@ input:checked + .slider:before {
     z-index: 10;
     flex-shrink: 0;
     background: linear-gradient(to bottom, #f8f9fa, #ffffff);
-    /* Ensure this stays at the bottom */
-    margin-top: auto;
+    /* Remove sticky positioning and use flex-shrink: 0 to keep at bottom */
+    order: 999; /* Ensure it appears last in flex container */
 }
 
 #chatInput {
@@ -1437,10 +1438,10 @@ input:checked + .slider:before {
     flex-direction: column;
     align-items: center;
     padding: 40px 20px;
+    margin: 25px 20px;
     text-align: center;
     background: linear-gradient(135deg, #f8f9fc, #eef1f8);
     border-radius: 12px;
-    margin: 25px 20px;
     box-shadow: 0 4px 15px rgba(0,0,0,0.04), 0 2px 8px rgba(0,0,0,0.03);
     transition: all 0.3s ease;
     border: 1px solid rgba(0,0,0,0.03);

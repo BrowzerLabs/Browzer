@@ -2,12 +2,13 @@
   "extends": "../../tsconfig.json",
   "compilerOptions": {
     "outDir": "../../dist/main",
-    "rootDir": "..",
+    "rootDir": "../..",
     "lib": ["ES2020"],
     "types": ["node"]
   },
   "include": [
     "./**/*.ts",
-    "../shared/**/*.ts"
+    "../shared/**/*.ts",
+    "../../extensions-framework/**/*.ts"
   ]
 } 

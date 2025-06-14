@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>API Keys - Browzer Settings</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #1e1e1e 0%, #2d2d2d 100%);
+            color: #ffffff;
+            line-height: 1.6;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 40px 20px;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            font-weight: 300;
+            margin-bottom: 10px;
+            color: #00d4ff;
+        }
+
+        .header p {
+            color: #aaa;
+            font-size: 1.1em;
+        }
+
+        .api-section {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 15px;
+            padding: 30px;
+            margin-bottom: 25px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+        }
+
+        .api-section h2 {
+            color: #00d4ff;
+            margin-bottom: 20px;
+            font-size: 1.4em;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .api-icon {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 12px;
+        }
+
+        .openai { background: #00a67e; }
+        .anthropic { background: #d2691e; }
+        .perplexity { background: #1a73e8; }
+        .chutes { background: #9c27b0; }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: #ccc;
+            font-weight: 500;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 12px 16px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 8px;
+            color: #fff;
+            font-size: 16px;
+            transition: all 0.3s ease;
+        }
+
+        .form-group input:focus {
+            outline: none;
+            border-color: #00d4ff;
+            box-shadow: 0 0 0 3px rgba(0, 212, 255, 0.1);
+        }
+
+        .form-group input::placeholder {
+            color: #666;
+        }
+
+        .save-btn {
+            background: linear-gradient(135deg, #00d4ff 0%, #0099cc 100%);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .save-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(0, 212, 255, 0.3);
+        }
+
+        .status {
+            margin-top: 10px;
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        .status.success {
+            background: rgba(76, 175, 80, 0.2);
+            color: #4caf50;
+            border: 1px solid rgba(76, 175, 80, 0.3);
+        }
+
+        .status.error {
+            background: rgba(244, 67, 54, 0.2);
+            color: #f44336;
+            border: 1px solid rgba(244, 67, 54, 0.3);
+        }
+
+        .help-text {
+            font-size: 13px;
+            color: #888;
+            margin-top: 5px;
+        }
+
+        .test-btn {
+            background: rgba(255, 255, 255, 0.1);
+            color: #fff;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 12px;
+            margin-left: 10px;
+            transition: all 0.3s ease;
+        }
+
+        .test-btn:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        .footer {
+            text-align: center;
+            margin-top: 40px;
+            padding-top: 20px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            color: #666;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>API Keys</h1>
+            <p>Configure your AI service API keys for enhanced browsing</p>
+        </div>
+
+        <div class="api-section">
+            <h2>
+                <span class="api-icon openai">O</span>
+                OpenAI
+            </h2>
+            <div class="form-group">
+                <label for="openaiKey">API Key</label>
+                <input type="password" id="openaiKey" placeholder="sk-...">
+                <div class="help-text">Get your API key from <a href="https://platform.openai.com/api-keys" style="color: #00d4ff;">OpenAI Platform</a></div>
+            </div>
+            <button class="save-btn" data-provider="openai">Save</button>
+            <button class="test-btn" data-provider="openai">Test Connection</button>
+            <div class="status" id="openai-status" style="display: none;"></div>
+        </div>
+
+        <div class="api-section">
+            <h2>
+                <span class="api-icon anthropic">A</span>
+                Anthropic
+            </h2>
+            <div class="form-group">
+                <label for="anthropicKey">API Key</label>
+                <input type="password" id="anthropicKey" placeholder="sk-ant-...">
+                <div class="help-text">Get your API key from <a href="https://console.anthropic.com/" style="color: #00d4ff;">Anthropic Console</a></div>
+            </div>
+            <button class="save-btn" data-provider="anthropic">Save</button>
+            <button class="test-btn" data-provider="anthropic">Test Connection</button>
+            <div class="status" id="anthropic-status" style="display: none;"></div>
+        </div>
+
+        <div class="api-section">
+            <h2>
+                <span class="api-icon perplexity">P</span>
+                Perplexity
+            </h2>
+            <div class="form-group">
+                <label for="perplexityKey">API Key</label>
+                <input type="password" id="perplexityKey" placeholder="pplx-...">
+                <div class="help-text">Get your API key from <a href="https://www.perplexity.ai/settings/api" style="color: #00d4ff;">Perplexity Settings</a></div>
+            </div>
+            <button class="save-btn" data-provider="perplexity">Save</button>
+            <button class="test-btn" data-provider="perplexity">Test Connection</button>
+            <div class="status" id="perplexity-status" style="display: none;"></div>
+        </div>
+
+        <div class="api-section">
+            <h2>
+                <span class="api-icon chutes">C</span>
+                Chutes AI
+            </h2>
+            <div class="form-group">
+                <label for="chutesKey">API Key</label>
+                <input type="password" id="chutesKey" placeholder="ch-...">
+                <div class="help-text">Get your API key from <a href="https://chutes.ai/" style="color: #00d4ff;">Chutes AI</a></div>
+            </div>
+            <button class="save-btn" data-provider="chutes">Save</button>
+            <button class="test-btn" data-provider="chutes">Test Connection</button>
+            <div class="status" id="chutes-status" style="display: none;"></div>
+        </div>
+
+        <div class="footer">
+            <p>API keys are stored securely in your browser's local storage</p>
+        </div>
+    </div>
+
+    <script>
+        // Load existing API keys
+        document.addEventListener('DOMContentLoaded', () => {
+            const providers = ['openai', 'anthropic', 'perplexity', 'chutes'];
+            
+            providers.forEach(provider => {
+                const savedKey = localStorage.getItem(`${provider}_api_key`);
+                const input = document.getElementById(`${provider}Key`);
+                if (savedKey && input) {
+                    input.value = savedKey;
+                }
+            });
+        });
+
+        // Save API key
+        document.querySelectorAll('.save-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const provider = e.target.dataset.provider;
+                const input = document.getElementById(`${provider}Key`);
+                const status = document.getElementById(`${provider}-status`);
+                
+                if (input.value.trim()) {
+                    localStorage.setItem(`${provider}_api_key`, input.value.trim());
+                    showStatus(status, 'success', `${provider.charAt(0).toUpperCase() + provider.slice(1)} API key saved!`);
+                } else {
+                    showStatus(status, 'error', 'Please enter a valid API key');
+                }
+            });
+        });
+
+        // Test API connection
+        document.querySelectorAll('.test-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const provider = e.target.dataset.provider;
+                const status = document.getElementById(`${provider}-status`);
+                
+                showStatus(status, 'success', 'Testing connection... (Feature coming soon)');
+            });
+        });
+
+        function showStatus(element, type, message) {
+            element.className = `status ${type}`;
+            element.textContent = message;
+            element.style.display = 'block';
+            
+            setTimeout(() => {
+                element.style.display = 'none';
+            }, 3000);
+        }
+    </script>
+</body>
+</html> 

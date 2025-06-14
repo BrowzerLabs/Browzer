@@ -1,0 +1,105 @@
+{
+  "version": "1.0.0",
+  "lastUpdated": "2025-06-12",
+  "extensions": [
+    {
+      "id": "topic-agent",
+      "name": "Topic Agent",
+      "description": "AI-powered topic analysis and question answering agent. Specializes in content summarization and general question answering.",
+      "keywords": [
+        "ai",
+        "analysis",
+        "summarization",
+        "question-answering",
+        "search",
+        "topic",
+        "summarize",
+        "analyze",
+        "content",
+        "page"
+      ],
+      "intents": [
+        "analyze",
+        "summarize", 
+        "topic",
+        "questions",
+        "search",
+        "content_analysis",
+        "page_analysis"
+      ],
+      "category": "content_analysis",
+      "priority": 7,
+      "directory": "cmbs76uhb0001d1qlpwoj9tbr",
+      "type": "python_agent",
+      "enabled": true
+    },
+    {
+      "id": "research-agent",
+      "name": "Research Agent",
+      "description": "An advanced research agent that performs comprehensive analysis, fact-checking, and multi-source information gathering",
+      "keywords": [
+        "research",
+        "analysis",
+        "investigation",
+        "fact-check",
+        "academic",
+        "sources",
+        "comprehensive",
+        "study",
+        "investigate",
+        "verify",
+        "examine"
+      ],
+      "intents": [
+        "research",
+        "analyze",
+        "investigate",
+        "fact-check",
+        "study",
+        "examine",
+        "verify",
+        "sources",
+        "comprehensive_research"
+      ],
+      "category": "research",
+      "priority": 15,
+      "directory": "cmbss0xti000189u7j28kyfic",
+      "type": "python_agent",
+      "enabled": true
+    },
+    {
+      "id": "sdk-demo-agent",
+      "name": "SDK Demo Agent",
+      "description": "Demonstration agent built with the new Browzer Agent SDK. Showcases simplified development and advanced capabilities.",
+      "keywords": [
+        "sdk",
+        "demo",
+        "test",
+        "new",
+        "browzer",
+        "agent",
+        "example",
+        "tutorial",
+        "showcase"
+      ],
+      "intents": [
+        "sdk_demo",
+        "test_sdk",
+        "demo",
+        "tutorial",
+        "showcase"
+      ],
+      "category": "utility",
+      "priority": 7,
+      "directory": "sdk-demo-agent",
+      "type": "python_agent",
+      "enabled": true
+    }
+  ],
+  "routing": {
+    "defaultExtension": "topic-agent",
+    "fallbackStrategy": "use_default",
+    "matchingStrategy": "keyword_and_intent",
+    "confidenceThreshold": 0.3
+  }
+}
