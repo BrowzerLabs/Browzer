@@ -3,8 +3,7 @@ import { spawn, ChildProcess } from 'child_process';
 import * as path from 'path';
 import * as fs from 'fs';
 import * as os from 'os';
-import { AgentParams, AgentResult } from '../shared/types';
-import { IPC_CHANNELS } from '../shared/types';
+import { AgentParams, AgentResult, IPC_CHANNELS } from '../shared/types';
 
 export class AgentManager {
   private readonly agentLogFile: string;

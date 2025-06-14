@@ -118,8 +118,11 @@ export const IPC_CHANNELS = {
   INSTALL_FROM_STORE: 'install-from-store',
   ENABLE_DEVELOPER_MODE: 'enable-developer-mode',
   
-  // Agent execution
+  // Agent execution (legacy)
   EXECUTE_AGENT: 'execute-agent',
+  
+  // Extension execution (new framework)
+  EXECUTE_PYTHON_EXTENSION: 'execute-python-extension',
   
   // Logging
   RENDERER_LOG: 'renderer-log',
@@ -129,5 +132,13 @@ export const IPC_CHANNELS = {
   MENU_CLOSE_TAB: 'menu-close-tab',
   MENU_RELOAD: 'menu-reload',
   MENU_BACK: 'menu-back',
-  MENU_FORWARD: 'menu-forward'
+  MENU_FORWARD: 'menu-forward',
+  
+  // Settings menu actions
+  MENU_SETTINGS_API_KEYS: 'menu-settings-api-keys',
+  MENU_SETTINGS_AI_MEMORY: 'menu-settings-ai-memory',
+  MENU_SETTINGS_CACHE: 'menu-settings-cache',
+  MENU_SETTINGS_EXTENSIONS: 'menu-settings-extensions',
+  MENU_SETTINGS_GENERAL: 'menu-settings-general',
+  MENU_SETTINGS_ADVANCED: 'menu-settings-advanced'
 } as const; 

@@ -1,0 +1,48 @@
+{
+  "id": "example-js-module",
+  "name": "Page Enhancer",
+  "version": "1.0.0",
+  "description": "A lightweight JavaScript module that enhances web pages",
+  "author": "Browzer Team",
+  "type": "js_module",
+  "main": "index.js",
+  "permissions": [
+    "activeTab",
+    "storage",
+    "tabs"
+  ],
+  "files": [
+    "index.js",
+    "styles.css",
+    "config.json"
+  ],
+  "icon": "icon.png",
+  "configSchema": {
+    "enableDarkMode": {
+      "type": "boolean",
+      "description": "Enable dark mode enhancement",
+      "default": false
+    },
+    "fontSize": {
+      "type": "string",
+      "description": "Default font size",
+      "default": "medium",
+      "options": ["small", "medium", "large", "extra-large"]
+    },
+    "highlightColor": {
+      "type": "string",
+      "description": "Highlight color for important elements",
+      "default": "#ffff00"
+    }
+  },
+  "contentScripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["index.js"],
+      "css": ["styles.css"],
+      "run_at": "document_end"
+    }
+  ],
+  "minBrowserVersion": "1.0.0",
+  "keywords": ["enhancement", "ui", "accessibility", "javascript"]
+} 

@@ -1,4 +1,6 @@
 import './styles.css';
+import './components/ExtensionStore.css';
+import { ExtensionStore } from './components/ExtensionStore';
 
 // Import Electron APIs
 const { ipcRenderer, shell } = require('electron');
@@ -55,14 +57,21 @@ function isProblematicSite(url: string): boolean {
 document.addEventListener('DOMContentLoaded', () => {
   console.log('DOM fully loaded, initializing browser...');
   
+  console.log('[Init] Calling initializeUI...');
   initializeUI();
+  console.log('[Init] Calling setupEventListeners...');
   setupEventListeners();
+  console.log('[Init] Calling setupExtensionsPanel...');
   setupExtensionsPanel();
+  console.log('[Init] Calling setupAgentControls...');
   setupAgentControls();
+  console.log('[Init] Calling restoreTabs...');
   restoreTabs();
+  console.log('[Init] Calling setupGlobalErrorHandler...');
   setupGlobalErrorHandler();
   
   console.log('Browser initialized successfully');
+  console.log('[Init] Final autoSummarizeEnabled state:', autoSummarizeEnabled);
 });
 
 function initializeUI(): void {
@@ -87,14 +96,22 @@ function initializeUI(): void {
 
   // Load auto-summarize setting
   const savedAutoSummarize = localStorage.getItem(AUTO_SUMMARIZE_KEY);
+  console.log('[Init] AUTO_SUMMARIZE_KEY:', AUTO_SUMMARIZE_KEY);
+  console.log('[Init] savedAutoSummarize from localStorage:', savedAutoSummarize);
+  console.log('[Init] autoSummarizeEnabled before:', autoSummarizeEnabled);
+  
   if (savedAutoSummarize !== null) {
     autoSummarizeEnabled = JSON.parse(savedAutoSummarize);
   }
   
+  console.log('[Init] autoSummarizeEnabled after:', autoSummarizeEnabled);
+  
   // Update auto-summarize toggle
   const autoSummarizeToggle = document.getElementById('autoSummarizeToggle') as HTMLInputElement;
+  console.log('[Init] autoSummarizeToggle found during init:', !!autoSummarizeToggle);
   if (autoSummarizeToggle) {
     autoSummarizeToggle.checked = autoSummarizeEnabled;
+    console.log('[Init] Set toggle checked to:', autoSummarizeEnabled);
   }
 }
 
@@ -147,11 +164,27 @@ function setupEventListeners(): void {
     historyBtn.addEventListener('click', showHistoryPage);
   }
 
-  // Extensions button
+  // Settings button (renamed from Extensions)
   if (extensionsBtn) {
     extensionsBtn.addEventListener('click', () => {
       if (extensionsPanel) {
         extensionsPanel.classList.toggle('hidden');
+      }
+    });
+  }
+
+  // New Extensions button
+  const newExtensionsBtn = document.getElementById('newExtensionsBtn') as HTMLButtonElement;
+  if (newExtensionsBtn) {
+    newExtensionsBtn.addEventListener('click', () => {
+      // For now, just open the extensions section of the panel
+      if (extensionsPanel) {
+        extensionsPanel.classList.remove('hidden');
+        // Scroll to extensions section
+        const extensionsSection = document.querySelector('.extensions-management');
+        if (extensionsSection) {
+          extensionsSection.scrollIntoView({ behavior: 'smooth' });
+        }
       }
     });
   }
@@ -178,12 +211,17 @@ function setupEventListeners(): void {
 
   // Auto-summarize toggle
   const autoSummarizeToggle = document.getElementById('autoSummarizeToggle') as HTMLInputElement;
+  console.log('[Toggle Setup] autoSummarizeToggle found:', !!autoSummarizeToggle);
   if (autoSummarizeToggle) {
+    console.log('[Toggle Setup] Initial toggle state:', autoSummarizeToggle.checked);
+    console.log('[Toggle Setup] autoSummarizeEnabled variable:', autoSummarizeEnabled);
     autoSummarizeToggle.addEventListener('change', (e) => {
       autoSummarizeEnabled = (e.target as HTMLInputElement).checked;
       localStorage.setItem(AUTO_SUMMARIZE_KEY, JSON.stringify(autoSummarizeEnabled));
-      console.log('Auto-summarize set to:', autoSummarizeEnabled);
+      console.log('Auto-summarize toggled to:', autoSummarizeEnabled);
     });
+  } else {
+    console.log('[Toggle Setup] autoSummarizeToggle element not found in DOM');
   }
 
   // Global keyboard shortcuts
@@ -254,6 +292,8 @@ function setupEventListeners(): void {
       webview.goForward();
     }
   });
+
+
 }
 
 function setupGlobalErrorHandler(): void {
@@ -277,6 +317,12 @@ function navigateToUrl(): void {
 
   let url = urlBar.value.trim();
   if (!url) return;
+
+  // Handle special internal URLs
+  if (url === 'file://browzer-store' || url === 'browzer-store') {
+    showExtensionStore();
+    return;
+  }
 
   // If it looks like a search query rather than a URL, use Google search
   if (!url.includes('.') || url.includes(' ')) {
@@ -516,6 +562,7 @@ function createNewTab(url: string = NEW_TAB_URL): string | null {
 
 function configureWebview(webview: any, url: string): void {
   const needsSpecialSettings = url && isProblematicSite(url);
+  const isLocalSettingsPage = url && url.startsWith('file://') && url.includes('settings-');
   
   // Enhanced user agent that's more likely to be accepted by OAuth providers
   const userAgent = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36 Edg/121.0.0.0';
@@ -540,9 +587,9 @@ function configureWebview(webview: any, url: string): void {
     'enablePreferredSizeMode=false',
     'enableBlinkFeatures=',
     'disableBlinkFeatures=',
-    // Security features that OAuth providers expect
-    'allowFileAccessFromFileUrls=false',
-    'allowUniversalAccessFromFileUrls=false',
+    // Security features - allow file access for settings pages
+    `allowFileAccessFromFileUrls=${isLocalSettingsPage}`,
+    `allowUniversalAccessFromFileUrls=${isLocalSettingsPage}`,
     'enableCrossDomainRequestsForMobileApps=false',
     // Essential for OAuth flows
     'nativeWindowOpen=true',
@@ -554,7 +601,7 @@ function configureWebview(webview: any, url: string): void {
   webview.setAttribute('useragent', userAgent);
   webview.setAttribute('webpreferences', webPreferencesArray.join(', '));
   webview.setAttribute('allowpopups', 'true');
-  webview.setAttribute('disablewebsecurity', 'false');
+  webview.setAttribute('disablewebsecurity', isLocalSettingsPage ? 'true' : 'false');
   webview.setAttribute('nodeintegration', 'false');
   webview.setAttribute('nodeintegrationinsubframes', 'false');
   webview.setAttribute('plugins', 'true');
@@ -562,7 +609,9 @@ function configureWebview(webview: any, url: string): void {
   webview.setAttribute('preload', '');
   
   // Enhanced partition strategy for better authentication support
-  if (needsSpecialSettings) {
+  if (isLocalSettingsPage) {
+    webview.setAttribute('partition', 'persist:settings-session');
+  } else if (needsSpecialSettings) {
     webview.setAttribute('partition', 'persist:compat-session');
   } else {
     // Use a dedicated authentication session for OAuth flows
@@ -650,15 +699,30 @@ function setupWebviewEvents(webview: any): void {
     }
     
     // Auto-summarize if enabled
+    console.log('[Auto-summarize Check] autoSummarizeEnabled:', autoSummarizeEnabled);
+    console.log('[Auto-summarize Check] url:', url);
+    console.log('[Auto-summarize Check] url.startsWith("http"):', url && url.startsWith('http'));
+    
     if (autoSummarizeEnabled && url && url.startsWith('http')) {
       const tabId = getTabIdFromWebview(webview.id);
       const isActiveTab = tabId === activeTabId;
-      if (isActiveTab && !isProblematicSite(url)) {
+      const isProblematic = isProblematicSite(url);
+      
+      console.log('[Auto-summarize Check] tabId:', tabId);
+      console.log('[Auto-summarize Check] activeTabId:', activeTabId);
+      console.log('[Auto-summarize Check] isActiveTab:', isActiveTab);
+      console.log('[Auto-summarize Check] isProblematicSite:', isProblematic);
+      
+      if (isActiveTab && !isProblematic) {
         console.log('Auto-summarize enabled for active tab, will summarize:', url);
         setTimeout(() => {
           autoSummarizePage(url, webview);
         }, 1500);
+      } else {
+        console.log('[Auto-summarize] Conditions not met - isActiveTab:', isActiveTab, 'isProblematic:', isProblematic);
       }
+    } else {
+      console.log('[Auto-summarize] Not enabled or invalid URL - enabled:', autoSummarizeEnabled, 'valid URL:', !!(url && url.startsWith('http')));
     }
   });
 
@@ -803,21 +867,48 @@ function selectTab(tabId: string): void {
       tabElement.classList.add('active');
     }
     
-    // Show corresponding webview
+    // Show corresponding webview or extension store
     document.querySelectorAll('.webview').forEach((view: any) => {
       view.style.display = 'none';
       view.classList.remove('active');
     });
     
     const tab = tabs[tabIndex];
-    const webview = document.getElementById(tab.webviewId) as any;
     
-    if (webview) {
-      webview.style.display = 'flex';
-      webview.classList.add('active');
+    // Check if this tab is showing the extension store
+    if (tab.url === 'file://browzer-store') {
+      // Show extension store instead of webview
+      const storeContainer = document.getElementById('extension-store-container');
+      if (storeContainer) {
+        storeContainer.style.display = 'block';
+        storeContainer.classList.add('active');
+      }
       
       if (urlBar) {
-        urlBar.value = webview.src;
+        urlBar.value = 'file://browzer-store';
+      }
+      
+      // Disable navigation buttons for the store
+      if (backBtn) backBtn.disabled = true;
+      if (forwardBtn) forwardBtn.disabled = true;
+    } else {
+      // Hide extension store if it's visible
+      const storeContainer = document.getElementById('extension-store-container');
+      if (storeContainer) {
+        storeContainer.style.display = 'none';
+        storeContainer.classList.remove('active');
+      }
+      
+      // Show regular webview
+      const webview = document.getElementById(tab.webviewId) as any;
+      
+      if (webview) {
+        webview.style.display = 'flex';
+        webview.classList.add('active');
+        
+        if (urlBar) {
+          urlBar.value = webview.src;
+        }
       }
     }
     
@@ -1016,42 +1107,97 @@ function updateMemoryCount(): void {
 }
 
 function setupAgentControls(): void {
+  console.log('[setupAgentControls] Starting setup...');
   // Initialize chat UI
   if (agentResults) {
+    console.log('[setupAgentControls] agentResults element found');
     // Add chat input area if it doesn't exist
     let chatInputArea = document.querySelector('.chat-input-area');
     if (!chatInputArea) {
+      console.log('[setupAgentControls] Creating chat input area');
       chatInputArea = document.createElement('div');
       chatInputArea.className = 'chat-input-area';
       chatInputArea.innerHTML = `
         <input type="text" id="chatInput" placeholder="Ask a follow-up question..." />
         <button id="sendMessageBtn" class="chat-send-btn">Send</button>
       `;
-      agentResults.appendChild(chatInputArea);
+      // Check if there's a chat container to position after
+      const existingChatContainer = document.getElementById('chatContainer');
+      if (existingChatContainer && existingChatContainer.parentNode === agentResults) {
+        existingChatContainer.insertAdjacentElement('afterend', chatInputArea);
+      } else {
+        agentResults.appendChild(chatInputArea);
+      }
       
       // Set up chat input handlers
-      const sendButton = document.getElementById('sendMessageBtn');
-      const chatInput = document.getElementById('chatInput') as HTMLInputElement;
-      
-      if (sendButton && chatInput) {
-        const sendMessage = () => {
-          const message = chatInput.value.trim();
-          if (message) {
-            addMessageToChat('user', message);
-            processFollowupQuestion(message);
-            chatInput.value = '';
-          }
-        };
-        
-        sendButton.addEventListener('click', sendMessage);
-        chatInput.addEventListener('keypress', (e) => {
-          if (e.key === 'Enter') {
-            sendMessage();
-          }
-        });
-      }
+      setupChatInputHandlers();
+    } else {
+      console.log('[setupAgentControls] Chat input area already exists, ensuring handlers are set up');
+      // Ensure handlers are set up even if area already exists
+      setupChatInputHandlers();
     }
   }
+}
+
+// Dedicated function to set up chat input event handlers
+function setupChatInputHandlers(): void {
+  console.log('[setupChatInputHandlers] Setting up chat input handlers...');
+  
+  // Wait a bit for DOM to be ready
+  setTimeout(() => {
+    const sendButton = document.getElementById('sendMessageBtn');
+    const chatInput = document.getElementById('chatInput') as HTMLInputElement;
+    
+    if (!sendButton || !chatInput) {
+      console.error('[setupChatInputHandlers] Chat input elements not found');
+      console.log('[setupChatInputHandlers] Available elements:', {
+        sendButton: !!sendButton,
+        chatInput: !!chatInput,
+        allButtons: document.querySelectorAll('button').length,
+        allInputs: document.querySelectorAll('input').length
+      });
+      return;
+    }
+    
+    console.log('[setupChatInputHandlers] Found chat elements, attaching handlers...');
+    
+    // Check if handlers are already set up
+    if ((sendButton as any).hasHandlers) {
+      console.log('[setupChatInputHandlers] Handlers already set up, skipping');
+      return;
+    }
+    
+    const sendMessage = () => {
+      const message = chatInput.value.trim();
+      if (message) {
+        console.log('[sendMessage] Sending message:', message);
+        addMessageToChat('user', message);
+        processFollowupQuestion(message);
+        chatInput.value = '';
+      }
+    };
+    
+    // Add click handler to send button
+    sendButton.addEventListener('click', (e) => {
+      console.log('[setupChatInputHandlers] Send button clicked');
+      e.preventDefault();
+      sendMessage();
+    });
+    
+    // Add keypress handler for Enter key
+    chatInput.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') {
+        console.log('[setupChatInputHandlers] Enter key pressed');
+        e.preventDefault();
+        sendMessage();
+      }
+    });
+    
+    // Mark as having handlers
+    (sendButton as any).hasHandlers = true;
+    
+    console.log('[setupChatInputHandlers] Chat input handlers set up successfully');
+  }, 100); // Small delay to ensure DOM is ready
 }
 
 // ========================= HISTORY PAGE =========================
@@ -1118,6 +1264,21 @@ function showHistoryPage(): void {
 
 // ========================= AGENT EXECUTION =========================
 
+// Helper function to gather all browser API keys
+function getBrowserApiKeys(): Record<string, string> {
+  const providers = ['openai', 'anthropic', 'perplexity', 'chutes'];
+  const apiKeys: Record<string, string> = {};
+  
+  providers.forEach(provider => {
+    const key = localStorage.getItem(`${provider}_api_key`);
+    if (key) {
+      apiKeys[provider] = key;
+    }
+  });
+  
+  return apiKeys;
+}
+
 async function executeAgent(): Promise<void> {
   try {
     console.log("executeAgent function called - running agent");
@@ -1172,24 +1333,40 @@ async function executeAgent(): Promise<void> {
     // Set up chat container if it doesn't exist
     if (agentResults) {
       let chatContainer = document.getElementById('chatContainer');
+      let chatInputArea = document.querySelector('.chat-input-area');
+      
       if (!chatContainer) {
-        console.log('Chat container not found, creating one');
-        agentResults.innerHTML = '';
+        console.log('[executeAgent] Chat container not found, creating one');
+        
+        // Remove any existing welcome containers when starting chat
+        const existingWelcome = agentResults.querySelector('.welcome-container');
+        if (existingWelcome) {
+          existingWelcome.remove();
+        }
         
         chatContainer = document.createElement('div');
         chatContainer.id = 'chatContainer';
         chatContainer.className = 'chat-container';
         agentResults.appendChild(chatContainer);
+      }
+      
+      if (!chatInputArea) {
+        console.log('[executeAgent] Chat input area not found, creating one');
         
-        const chatInputArea = document.createElement('div');
+        chatInputArea = document.createElement('div');
         chatInputArea.className = 'chat-input-area';
         chatInputArea.innerHTML = `
           <input type="text" id="chatInput" placeholder="Ask a follow-up question..." />
           <button id="sendMessageBtn" class="chat-send-btn">Send</button>
         `;
-        agentResults.appendChild(chatInputArea);
+        // Ensure it's positioned after the chat container for proper sticky positioning
+        if (chatContainer && chatContainer.parentNode === agentResults) {
+          chatContainer.insertAdjacentElement('afterend', chatInputArea);
+        } else {
+          agentResults.appendChild(chatInputArea);
+        }
         
-        setupAgentControls();
+        setupChatInputHandlers();
       }
     }
     
@@ -1199,25 +1376,34 @@ async function executeAgent(): Promise<void> {
     // Extract page content
     const pageContent = await extractPageContent(webview);
     
-    const agentParams = {
+    // Get available Python extensions
+    // Route request to appropriate extension using intelligent routing
+    const routingResult = await ipcRenderer.invoke('route-extension-request', query);
+    console.log('Extension routing result:', routingResult);
+    
+    const extensionId = routingResult.extensionId;
+    const action = 'process_page';
+    const data = {
       query,
-      pageContent: pageContent,
-      modelInfo: {
-        provider,
-        apiKey
-      }
+      pageContent,
+      isQuestion: false
     };
     
-    const agentPath = path.join(process.cwd(), 'agents', 'topic_agent.py');
+    console.log(`Executing extension: ${extensionId} (confidence: ${routingResult.confidence}) with action: ${action}`);
+    console.log(`Routing reason: ${routingResult.reason}`);
     
-    console.log(`Executing agent at: ${agentPath}`);
-    
-    const result = await ipcRenderer.invoke('execute-agent', {
-      agentPath,
-      agentParams
+    const result = await ipcRenderer.invoke('execute-python-extension', {
+      extensionId,
+      action,
+      data,
+      browserApiKeys: getBrowserApiKeys(),
+      selectedProvider: provider
     });
     
     console.log(`Agent result received:`, result);
+    console.log(`Agent result structure:`, JSON.stringify(result, null, 2));
+    console.log(`Result data:`, result.data);
+    console.log(`Result success:`, result.success);
     
     // Remove loading indicators
     const loadingMessages = document.querySelectorAll('.loading');
@@ -1231,6 +1417,7 @@ async function executeAgent(): Promise<void> {
     if (result.success === false) {
       addMessageToChat('assistant', `Error: ${result.error}`);
     } else {
+      console.log('Calling displayAgentResults with:', result.data);
       displayAgentResults(result.data);
     }
   } catch (error) {
@@ -1264,24 +1451,40 @@ async function autoSummarizePage(url: string, webview: any): Promise<void> {
   // Ensure chat container exists
   if (agentResults) {
     let chatContainer = document.getElementById('chatContainer');
+    let chatInputArea = document.querySelector('.chat-input-area');
+    
     if (!chatContainer) {
-      console.log('Chat container not found, creating one for auto-summarize');
-      agentResults.innerHTML = '';
+      console.log('[autoSummarizePage] Chat container not found, creating one');
+      
+      // Remove any existing welcome containers when starting chat
+      const existingWelcome = agentResults.querySelector('.welcome-container');
+      if (existingWelcome) {
+        existingWelcome.remove();
+      }
       
       chatContainer = document.createElement('div');
       chatContainer.id = 'chatContainer';
       chatContainer.className = 'chat-container';
       agentResults.appendChild(chatContainer);
+    }
+    
+    if (!chatInputArea) {
+      console.log('[autoSummarizePage] Chat input area not found, creating one');
       
-      const chatInputArea = document.createElement('div');
+      chatInputArea = document.createElement('div');
       chatInputArea.className = 'chat-input-area';
       chatInputArea.innerHTML = `
         <input type="text" id="chatInput" placeholder="Ask a follow-up question..." />
         <button id="sendMessageBtn" class="chat-send-btn">Send</button>
       `;
-      agentResults.appendChild(chatInputArea);
+      // Ensure it's positioned after the chat container for proper sticky positioning
+      if (chatContainer && chatContainer.parentNode === agentResults) {
+        chatContainer.insertAdjacentElement('afterend', chatInputArea);
+      } else {
+        agentResults.appendChild(chatInputArea);
+      }
       
-      setupAgentControls();
+      setupChatInputHandlers();
     }
     
     addMessageToChat('assistant', '<div class="loading">Auto-summarizing...</div>');
@@ -1290,23 +1493,35 @@ async function autoSummarizePage(url: string, webview: any): Promise<void> {
   try {
     const pageContent = await extractPageContent(webview);
     
-    const agentParams = {
-      query: webview.getTitle() || url,
-      pageContent: pageContent,
-      isDirectPage: true,
-      modelInfo: {
-        provider,
-        apiKey
-      }
+    // Route request to appropriate extension for auto-summarization
+    const pageTitle = webview.getTitle() || url;
+    const autoSummarizeRequest = `Analyze and summarize this page: ${pageTitle}`;
+    
+    const routingResult = await ipcRenderer.invoke('route-extension-request', autoSummarizeRequest);
+    console.log('Auto-summarize routing result:', routingResult);
+    
+    const extensionId = routingResult.extensionId;
+    const action = 'process_page';
+    const data = {
+      query: pageTitle,
+      pageContent,
+      isQuestion: false
     };
     
-    const agentPath = path.join(process.cwd(), 'agents', 'topic_agent.py');
-    
-    console.log('Executing agent for auto-summarize');
-    const result = await ipcRenderer.invoke('execute-agent', {
-      agentPath,
-      agentParams
+    console.log(`Executing extension for auto-summarize: ${extensionId} (confidence: ${routingResult.confidence})`);
+    console.log(`Auto-summarize routing reason: ${routingResult.reason}`);
+    const result = await ipcRenderer.invoke('execute-python-extension', {
+      extensionId,
+      action,
+      data,
+      browserApiKeys: getBrowserApiKeys(),
+      selectedProvider: provider
     });
+    
+    console.log('Auto-summarize result received:', result);
+    console.log('Auto-summarize result structure:', JSON.stringify(result, null, 2));
+    console.log('Auto-summarize result data:', result.data);
+    console.log('Auto-summarize result success:', result.success);
     
     // Clear loading indicators
     const loadingMessages = document.querySelectorAll('.loading');
@@ -1320,6 +1535,7 @@ async function autoSummarizePage(url: string, webview: any): Promise<void> {
     if (result.success === false) {
       addMessageToChat('assistant', `Error: ${result.error}`);
     } else {
+      console.log('Auto-summarize calling displayAgentResults with:', result.data);
       displayAgentResults(result.data);
     }
   } catch (error) {
@@ -1390,19 +1606,39 @@ async function extractPageContent(webview: any): Promise<any> {
 
 function addMessageToChat(role: string, content: string, timing?: number): void {
   const chatContainer = document.getElementById('chatContainer');
-  if (!chatContainer) return;
+  if (!chatContainer) {
+    console.error('[addMessageToChat] Chat container not found');
+    return;
+  }
   
-  if (!content || content.trim() === '') return;
+  if (!content || content.trim() === '') {
+    console.log('[addMessageToChat] Empty content, skipping');
+    return;
+  }
+  
+  console.log(`[addMessageToChat] Adding ${role} message:`, content.substring(0, 100) + '...');
   
   const messageDiv = document.createElement('div');
   
-  if (role === 'user') {
+  if (role === 'context') {
+    // Special handling for context messages
+    messageDiv.className = 'chat-message context-message';
+    messageDiv.innerHTML = `<div class="message-content">${content}</div>`;
+    messageDiv.dataset.role = 'context';
+  } else if (role === 'user') {
     messageDiv.className = 'chat-message user-message';
     messageDiv.innerHTML = `<div class="message-content">${content}</div>`;
+    messageDiv.dataset.role = 'user';
+    messageDiv.dataset.timestamp = new Date().toISOString();
   } else if (role === 'assistant') {
     messageDiv.className = 'chat-message assistant-message';
+    messageDiv.dataset.role = 'assistant';
+    messageDiv.dataset.timestamp = new Date().toISOString();
     
-    if (timing && !content.includes('class="loading"')) {
+    // Check if content contains only a loading indicator
+    const isLoading = content.includes('class="loading"') && !content.replace(/<div class="loading">.*?<\/div>/g, '').trim();
+    
+    if (timing && !isLoading) {
       messageDiv.innerHTML = `
         <div class="timing-info">
           <span>Response generated in</span>
@@ -1410,38 +1646,68 @@ function addMessageToChat(role: string, content: string, timing?: number): void 
         </div>
         <div class="message-content">${content}</div>
       `;
+      messageDiv.dataset.genTime = timing.toFixed(2);
     } else {
       messageDiv.innerHTML = `<div class="message-content">${content}</div>`;
     }
   }
   
   chatContainer.appendChild(messageDiv);
+  
+  // Scroll to bottom with smooth behavior
   chatContainer.scrollTop = chatContainer.scrollHeight;
+  
+  console.log(`[addMessageToChat] Message added successfully. Total messages: ${chatContainer.children.length}`);
 }
 
 function displayAgentResults(data: any): void {
+  console.log('[displayAgentResults] Called with data:', data);
+  console.log('[displayAgentResults] Data type:', typeof data);
+  console.log('[displayAgentResults] Data keys:', data ? Object.keys(data) : 'null');
+  
   if (!data) {
+    console.log('[displayAgentResults] No data - showing fallback message');
     addMessageToChat('assistant', 'No data received from agent');
     return;
   }
 
-  console.log("Agent result data:", data);
+  console.log("[displayAgentResults] Agent result data:", data);
+  console.log('[displayAgentResults] Has consolidated_summary:', !!data.consolidated_summary);
+  console.log('[displayAgentResults] Has summaries:', !!data.summaries);
+  console.log('[displayAgentResults] Summaries length:', data.summaries ? data.summaries.length : 'none');
   
   if (data.consolidated_summary) {
+    console.log('[displayAgentResults] Displaying consolidated summary:', data.consolidated_summary.substring(0, 100) + '...');
     addMessageToChat('assistant', data.consolidated_summary, data.generation_time);
   } else if (data.summaries && data.summaries.length > 0) {
+    console.log('[displayAgentResults] Displaying individual summaries');
     const summariesText = data.summaries.map((s: any) => `<b>${s.title}</b>\n${s.summary}`).join('\n\n');
     addMessageToChat('assistant', summariesText, data.generation_time);
   } else {
+    console.log('[displayAgentResults] No summaries found - showing fallback message');
     addMessageToChat('assistant', 'No relevant information found.', data.generation_time);
   }
 }
 
 async function processFollowupQuestion(question: string): Promise<void> {
+  console.log('[processFollowupQuestion] Processing question:', question);
+  
+  // Helper function to clear loading indicators
+  const clearLoadingIndicators = () => {
+    const loadingMessages = document.querySelectorAll('.loading');
+    loadingMessages.forEach(message => {
+      const parentMessage = message.closest('.chat-message');
+      if (parentMessage) {
+        parentMessage.remove();
+      }
+    });
+  };
+  
   try {
     addMessageToChat('assistant', '<div class="loading">Processing your question...</div>');
     
     if (!modelSelector) {
+      clearLoadingIndicators();
       addMessageToChat('assistant', 'Error: Model selector not found.');
       return;
     }
@@ -1450,60 +1716,123 @@ async function processFollowupQuestion(question: string): Promise<void> {
     const apiKey = localStorage.getItem(`${provider}_api_key`);
     
     if (!apiKey) {
+      clearLoadingIndicators();
       addMessageToChat('assistant', 'Please configure your API key in the Extensions panel.');
       return;
     }
     
     const activeWebview = getActiveWebview();
     if (!activeWebview) {
+      clearLoadingIndicators();
       addMessageToChat('assistant', 'No active webview found.');
       return;
     }
     
     const currentUrl = activeWebview.src || '';
+    console.log('[processFollowupQuestion] Extracting page content from:', currentUrl);
     const pageContent = await extractPageContent(activeWebview);
     
-    const agentParams = {
+    // Route request to appropriate extension for question answering
+    const questionRequest = `Answer this question about the page: ${question}`;
+    
+    console.log('[processFollowupQuestion] Routing extension request...');
+    const routingResult = await ipcRenderer.invoke('route-extension-request', questionRequest);
+    console.log('Follow-up question routing result:', routingResult);
+    
+    const extensionId = routingResult.extensionId;
+    const action = 'process_page';
+    const data = {
       query: `DIRECT QUESTION: ${question}`,
-      originalQuery: question,
-      pageContent: pageContent,
-      isDirectPage: true,
-      isQuestion: true,
-      modelInfo: {
-        provider,
-        apiKey
-      }
+      pageContent,
+      isQuestion: true
     };
     
-    const agentPath = path.join(process.cwd(), 'agents', 'topic_agent.py');
+    console.log(`[processFollowupQuestion] Executing extension with question: ${extensionId} (confidence: ${routingResult.confidence}) - ${question}`);
+    console.log(`Follow-up routing reason: ${routingResult.reason}`);
     
-    console.log(`Executing topic agent with question: ${question}`);
-    
-    const result = await ipcRenderer.invoke('execute-agent', {
-      agentPath,
-      agentParams
+    const result = await ipcRenderer.invoke('execute-python-extension', {
+      extensionId,
+      action,
+      data,
+      browserApiKeys: getBrowserApiKeys(),
+      selectedProvider: provider
     });
     
-    // Clear loading indicators
-    const loadingMessages = document.querySelectorAll('.loading');
-    loadingMessages.forEach(message => {
-      const parentMessage = message.closest('.chat-message');
-      if (parentMessage) {
-        parentMessage.remove();
-      }
-    });
+    console.log('[processFollowupQuestion] Extension result received:', result);
+    
+    // Always clear loading indicators
+    clearLoadingIndicators();
     
     if (result.success === false) {
       addMessageToChat('assistant', `Error: ${result.error || 'Unknown error'}`);
       return;
     }
     
+    console.log('[processFollowupQuestion] Displaying results...');
     displayAgentResults(result.data);
     
   } catch (error) {
     console.error('Error in processFollowupQuestion:', error);
+    
+    // Ensure loading indicators are cleared even on error
+    clearLoadingIndicators();
+    
     addMessageToChat('assistant', `Error: ${(error as Error).message}`);
   }
+}
+
+// ========================= EXTENSION STORE =========================
+
+function showExtensionStore(): void {
+  console.log('Showing extension store');
+  
+  // Hide the current webview
+  const currentWebview = getActiveWebview();
+  if (currentWebview) {
+    currentWebview.style.display = 'none';
+  }
+  
+  // Get or create the extension store container
+  let storeContainer = document.getElementById('extension-store-container');
+  if (!storeContainer) {
+    storeContainer = document.createElement('div');
+    storeContainer.id = 'extension-store-container';
+    storeContainer.className = 'webview'; // Use same styles as webview
+    storeContainer.style.display = 'none';
+    webviewsContainer.appendChild(storeContainer);
+  }
+  
+  // Show the store container
+  storeContainer.style.display = 'block';
+  
+  // Initialize and render the extension store
+  const extensionStore = new ExtensionStore(storeContainer);
+  extensionStore.render();
+  
+  // Make it globally available for onclick handlers
+  (window as any).extensionStore = extensionStore;
+  
+  // Update URL bar
+  if (urlBar) {
+    urlBar.value = 'file://browzer-store';
+  }
+  
+  // Update tab title
+  if (activeTabId) {
+    const tab = tabs.find(t => t.id === activeTabId);
+    if (tab) {
+      tab.title = 'Browzer Extension Store';
+      tab.url = 'file://browzer-store';
+      const titleElement = document.querySelector(`#${activeTabId} .tab-title`);
+      if (titleElement) {
+        titleElement.textContent = 'Extension Store';
+      }
+    }
+  }
+  
+  // Update navigation buttons (disable them for the store)
+  if (backBtn) backBtn.disabled = true;
+  if (forwardBtn) forwardBtn.disabled = true;
 }
 
 // ========================= EXPORTS FOR DEBUGGING =========================
@@ -1518,5 +1847,6 @@ async function processFollowupQuestion(question: string): Promise<void> {
   closeTab,
   navigateToUrl,
   showHistoryPage,
-  executeAgent
+  executeAgent,
+  showExtensionStore
 }; 
