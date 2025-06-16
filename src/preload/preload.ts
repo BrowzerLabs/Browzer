@@ -24,6 +24,19 @@ contextBridge.exposeInMainWorld('electronAPI', {
   enableDeveloperMode: (): Promise<{ success: boolean; error?: string }> =>
     ipcRenderer.invoke('enable-developer-mode'),
   
+  // Workflow progress listeners
+  onWorkflowProgress: (callback: (data: any) => void) => {
+    ipcRenderer.on('workflow-progress', (_, data) => callback(data));
+  },
+  
+  onWorkflowComplete: (callback: (data: any) => void) => {
+    ipcRenderer.on('workflow-complete', (_, data) => callback(data));
+  },
+  
+  onWorkflowError: (callback: (data: any) => void) => {
+    ipcRenderer.on('workflow-error', (_, data) => callback(data));
+  },
+  
   // Logging
   log: (message: string): void =>
     ipcRenderer.send('renderer-log', message),
@@ -59,6 +72,9 @@ declare global {
       getExtensions: () => Promise<Extension[]>;
       installFromStore: (extensionId: string) => Promise<{ success: boolean; extension?: Extension; error?: string }>;
       enableDeveloperMode: () => Promise<{ success: boolean; error?: string }>;
+      onWorkflowProgress: (callback: (data: any) => void) => void;
+      onWorkflowComplete: (callback: (data: any) => void) => void;
+      onWorkflowError: (callback: (data: any) => void) => void;
       log: (message: string) => void;
       onMenuAction: (callback: (channel: string) => void) => void;
       removeAllListeners: (channel: string) => void;

@@ -29,11 +29,13 @@ class BrowzerApp {
     // Initialize all managers
     await this.appManager.initialize();
     await this.extensionManager.initialize();
-    this.agentManager.initialize();
+    
+    // Create the main window first
+    const mainWindow = await this.windowManager.createMainWindow();
+    
+    // Initialize agent manager with main window reference for workflow progress
+    this.agentManager.initialize(mainWindow);
     this.menuManager.initialize();
-
-    // Create the main window
-    await this.windowManager.createMainWindow();
     
     // Load extensions
     await this.extensionManager.loadExtensions();

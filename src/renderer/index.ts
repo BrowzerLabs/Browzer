@@ -1,6 +1,8 @@
 import './styles.css';
 import './components/ExtensionStore.css';
+import './components/WorkflowProgress.css';
 import { ExtensionStore } from './components/ExtensionStore';
+import WorkflowProgressIndicator from './components/WorkflowProgress';
 
 // Import Electron APIs
 const { ipcRenderer, shell } = require('electron');
@@ -10,6 +12,77 @@ const path = require('path');
 let tabs: any[] = [];
 let activeTabId: string | null = null;
 let autoSummarizeEnabled = true;
+let isWorkflowExecuting = false; // Prevent duplicate executions
+let workflowProgressIndicator: WorkflowProgressIndicator | null = null;
+let workflowProgressSetup = false; // Prevent duplicate event listener setup
+
+// Add global call tracking for debugging duplicates
+let displayAgentResultsCallCount = 0;
+const displayAgentResultsCalls: Array<{callNumber: number, timestamp: number, stackTrace: string, data: any}> = [];
+
+// Add global execution flow tracking
+const executionFlow: Array<{timestamp: number, function: string, details: any}> = [];
+
+function logExecutionFlow(functionName: string, details: any = {}): void {
+  const entry = {
+    timestamp: Date.now(),
+    function: functionName,
+    details
+  };
+  executionFlow.push(entry);
+  
+  console.log(`🔄 [FLOW] ${functionName}:`, details);
+  
+  // Keep only last 50 entries to avoid memory issues
+  if (executionFlow.length > 50) {
+    executionFlow.splice(0, executionFlow.length - 50);
+  }
+}
+
+// Export flow for debugging
+(window as any).getExecutionFlow = () => executionFlow;
+(window as any).getDisplayAgentResultsCalls = () => displayAgentResultsCalls;
+
+function trackDisplayAgentResultsCall(data: any): void {
+  displayAgentResultsCallCount++;
+  const callInfo = {
+    callNumber: displayAgentResultsCallCount,
+    timestamp: Date.now(),
+    stackTrace: new Error().stack || 'No stack trace available',
+    data: data
+  };
+  displayAgentResultsCalls.push(callInfo);
+  
+  console.log(`🔍 [DUPLICATE DEBUG] displayAgentResults called #${displayAgentResultsCallCount}`);
+  console.log(`🔍 [DUPLICATE DEBUG] Call timestamp: ${new Date(callInfo.timestamp).toISOString()}`);
+  console.log(`🔍 [DUPLICATE DEBUG] Data summary:`, {
+    hasData: !!data,
+    hasConsolidatedSummary: !!(data && data.consolidated_summary),
+    hasSummaries: !!(data && data.summaries),
+    dataKeys: data ? Object.keys(data) : 'null',
+    dataType: typeof data,
+    dataStringified: data ? JSON.stringify(data).substring(0, 200) + '...' : 'null'
+  });
+  console.log(`🔍 [DUPLICATE DEBUG] Stack trace:`);
+  console.log(callInfo.stackTrace);
+  
+  // Check for recent duplicate calls
+  const recentCalls = displayAgentResultsCalls.filter(call => 
+    callInfo.timestamp - call.timestamp < 5000 && call.callNumber !== callInfo.callNumber
+  );
+  
+  if (recentCalls.length > 0) {
+    console.warn(`🚨 [DUPLICATE DEBUG] POTENTIAL DUPLICATE DETECTED! Recent calls within 5 seconds:`);
+    recentCalls.forEach(call => {
+      console.warn(`🚨 [DUPLICATE DEBUG] Call #${call.callNumber} at ${new Date(call.timestamp).toISOString()}`);
+      console.warn(`🚨 [DUPLICATE DEBUG] Previous data:`, {
+        hasConsolidatedSummary: !!(call.data && call.data.consolidated_summary),
+        hasSummaries: !!(call.data && call.data.summaries),
+        dataKeys: call.data ? Object.keys(call.data) : 'null'
+      });
+    });
+  }
+}
 
 // UI Elements
 let urlBar: HTMLInputElement;
@@ -27,6 +100,7 @@ let newTabBtn: HTMLElement;
 let webviewsContainer: HTMLElement;
 let extensionsPanel: HTMLElement;
 let closeExtensionsBtn: HTMLElement;
+let workflowProgressContainer: HTMLElement;
 
 // Constants
 const AUTO_SUMMARIZE_KEY = 'auto_summarize_enabled';
@@ -61,6 +135,8 @@ document.addEventListener('DOMContentLoaded', () => {
   initializeUI();
   console.log('[Init] Calling setupEventListeners...');
   setupEventListeners();
+  console.log('[Init] Calling setupWorkflowEventListeners...');
+  setupWorkflowEventListeners();
   console.log('[Init] Calling setupExtensionsPanel...');
   setupExtensionsPanel();
   console.log('[Init] Calling setupAgentControls...');
@@ -75,7 +151,7 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 function initializeUI(): void {
-  console.log('Initializing UI elements...');
+  console.log('Initializing UI...');
   
   // Get UI elements
   urlBar = document.getElementById('urlBar') as HTMLInputElement;
@@ -93,7 +169,22 @@ function initializeUI(): void {
   webviewsContainer = document.querySelector('.webviews-container') as HTMLElement;
   extensionsPanel = document.getElementById('extensionsPanel') as HTMLElement;
   closeExtensionsBtn = document.getElementById('closeExtensionsBtn') as HTMLElement;
-
+  workflowProgressContainer = document.getElementById('workflowProgress') as HTMLElement;
+  
+  // Create workflow progress container if it doesn't exist
+  if (!workflowProgressContainer) {
+    workflowProgressContainer = document.createElement('div');
+    workflowProgressContainer.id = 'workflowProgress';
+    workflowProgressContainer.className = 'workflow-progress-container';
+    
+    // Insert after agent results
+    if (agentResults && agentResults.parentNode) {
+      agentResults.parentNode.insertBefore(workflowProgressContainer, agentResults);
+    } else {
+      document.body.appendChild(workflowProgressContainer);
+    }
+  }
+  
   // Load auto-summarize setting
   const savedAutoSummarize = localStorage.getItem(AUTO_SUMMARIZE_KEY);
   console.log('[Init] AUTO_SUMMARIZE_KEY:', AUTO_SUMMARIZE_KEY);
@@ -113,10 +204,192 @@ function initializeUI(): void {
     autoSummarizeToggle.checked = autoSummarizeEnabled;
     console.log('[Init] Set toggle checked to:', autoSummarizeEnabled);
   }
+  
+  // If no tabs were restored, create a new one
+  if (tabs.length === 0) {
+    createNewTab();
+  }
+  
+  // Sync API keys with backend
+  syncApiKeysWithBackend().catch(error => {
+    console.error('Failed to sync API keys during initialization:', error);
+  });
+  
+  console.log('UI initialization complete');
+}
+
+function setupWorkflowEventListeners(): void {
+  console.log('Setting up workflow event listeners...');
+  
+  // IMPORTANT: Remove any existing listeners first to prevent duplicates
+  ipcRenderer.removeAllListeners('workflow-start');
+  ipcRenderer.removeAllListeners('workflow-step-start');
+  ipcRenderer.removeAllListeners('workflow-step-complete');
+  ipcRenderer.removeAllListeners('workflow-complete');
+  ipcRenderer.removeAllListeners('workflow-error');
+  ipcRenderer.removeAllListeners('workflow-progress');
+  
+  console.log('🚨 [DUPLICATE FIX] Cleared all existing workflow event listeners');
+
+  // Set up IPC event listeners for workflow progress
+  ipcRenderer.on('workflow-start', (event: any, data: any) => {
+    console.log('[WorkflowProgress] workflow-start event received:', data);
+    
+    // Convert snake_case to camelCase for compatibility, including step fields
+    const workflowData = {
+      workflowId: data.workflow_id || `workflow-${Date.now()}`,
+      type: data.type || 'workflow',
+      steps: (data.steps || []).map((step: any) => ({
+        extensionId: step.extension_id,
+        extensionName: step.extension_name
+      }))
+    };
+    
+    console.log('[WorkflowProgress] Creating new workflow progress in chat:', workflowData);
+    
+    // Create workflow progress as a chat message instead of using fixed container
+    addWorkflowProgressToChat(workflowData);
+  });
+
+  ipcRenderer.on('workflow-step-start', (event: any, data: any) => {
+    console.log('📡 [IPC DEBUG] workflow-step-start event received:', data);
+    
+    // Find the workflow progress message in chat
+    const workflowMessage = findWorkflowProgressInChat(data.workflow_id);
+    if (workflowMessage && (workflowMessage as any).progressIndicator) {
+      console.log('[WorkflowProgress] Updating progress for step start:', {
+        workflowId: data.workflow_id,
+        currentStep: data.current_step,
+        stepStatus: 'running'
+      });
+      
+      // Convert snake_case to camelCase
+      (workflowMessage as any).progressIndicator.updateProgress({
+        workflowId: data.workflow_id,
+        currentStep: data.current_step,
+        stepStatus: 'running'
+      });
+    } else {
+      console.warn('[WorkflowProgress] Workflow progress message not found for step-start:', data.workflow_id);
+    }
+  });
+
+  ipcRenderer.on('workflow-step-complete', (event: any, data: any) => {
+    console.log('📡 [IPC DEBUG] workflow-step-complete event received:', data);
+    
+    // Find the workflow progress message in chat
+    const workflowMessage = findWorkflowProgressInChat(data.workflow_id);
+    if (workflowMessage && (workflowMessage as any).progressIndicator) {
+      console.log('[WorkflowProgress] Calling updateProgress with:', {
+        workflowId: data.workflow_id,
+        currentStep: data.current_step,
+        stepStatus: data.step_status,
+        stepResult: data.step_result,
+        stepError: data.step_error
+      });
+      
+      // Convert snake_case to camelCase  
+      (workflowMessage as any).progressIndicator.updateProgress({
+        workflowId: data.workflow_id,
+        currentStep: data.current_step,
+        stepStatus: data.step_status,
+        stepResult: data.step_result,
+        stepError: data.step_error
+      });
+    } else {
+      console.warn('[WorkflowProgress] Workflow progress message not found for step-complete:', data.workflow_id);
+    }
+  });
+
+  ipcRenderer.on('workflow-complete', (event: any, data: any) => {
+    console.log('📡 [IPC DEBUG] workflow-complete event received:', data);
+    console.log('📡 [IPC DEBUG] workflow-complete data keys:', Object.keys(data));
+    console.log('📡 [IPC DEBUG] workflow-complete data.result keys:', data.result ? Object.keys(data.result) : 'no result');
+    console.log('📡 [IPC DEBUG] workflow-complete has consolidated_summary:', !!(data.result && data.result.consolidated_summary));
+    
+    logExecutionFlow('workflow-complete-event', { workflowId: data.workflow_id, hasResult: !!data.result });
+    
+    // Clear execution flag
+    isWorkflowExecuting = false;
+    console.log('[WorkflowProgress] Clearing execution flag on workflow completion');
+    
+    // Find the workflow progress message in chat
+    const workflowMessage = findWorkflowProgressInChat(data.workflow_id);
+    if (workflowMessage && (workflowMessage as any).progressIndicator) {
+      // Convert snake_case to camelCase
+      (workflowMessage as any).progressIndicator.completeWorkflow({
+        workflowId: data.workflow_id,
+        result: data.result
+      });
+    } else {
+      console.warn('[WorkflowProgress] Workflow progress message not found for completion:', data.workflow_id);
+    }
+    
+    // Display the final workflow result with enhanced error handling
+    try {
+      console.log('[WorkflowProgress] Checking data.result:', !!data.result);
+      console.log('[WorkflowProgress] Data.result type:', typeof data.result);
+      
+      if (data.result) {
+        console.log('[WorkflowProgress] Displaying final workflow result');
+        console.log('[WorkflowProgress] Result keys:', data.result ? Object.keys(data.result) : 'null');
+        console.log('🎯 [WORKFLOW-COMPLETE] About to call displayAgentResults from workflow-complete event');
+        displayAgentResults(data.result);
+        console.log('[WorkflowProgress] displayAgentResults call completed successfully');
+      } else {
+        console.warn('[WorkflowProgress] No result data found in workflow-complete event');
+        console.log('[WorkflowProgress] Complete event data keys:', Object.keys(data));
+      }
+    } catch (error) {
+      console.error('[WorkflowProgress] Error displaying workflow result:', error);
+      console.error('[WorkflowProgress] Error stack:', error instanceof Error ? error.stack : 'No stack trace');
+      // Fallback - show error message to user
+      addMessageToChat('assistant', 'Error displaying workflow results: ' + (error instanceof Error ? error.message : 'Unknown error'));
+    }
+  });
+
+  ipcRenderer.on('workflow-error', (event: any, data: any) => {
+    console.log('📡 [IPC DEBUG] workflow-error event received:', data);
+    
+    // Clear execution flag
+    isWorkflowExecuting = false;
+    console.log('[WorkflowProgress] Clearing execution flag on workflow error');
+    
+    // Find the workflow progress message in chat
+    const workflowMessage = findWorkflowProgressInChat(data.workflow_id || 'unknown');
+    if (workflowMessage && (workflowMessage as any).progressIndicator) {
+      // Convert snake_case to camelCase
+      (workflowMessage as any).progressIndicator.handleWorkflowError({
+        workflowId: data.workflow_id || 'unknown',
+        error: data.error
+      });
+    } else {
+      console.warn('[WorkflowProgress] Workflow progress message not found for error:', data.workflow_id);
+      // Show error message directly in chat if we can't find the progress indicator
+      addMessageToChat('assistant', `Workflow error: ${data.error}`);
+    }
+  });
+
+  ipcRenderer.on('workflow-progress', (event: any, data: any) => {
+    console.log('📡 [IPC DEBUG] workflow-progress event received:', data);
+    // Handle any other progress events
+  });
+
+  console.log('Workflow progress system initialized');
+  workflowProgressSetup = true; // Mark as set up to prevent duplicates
 }
 
 function setupEventListeners(): void {
   console.log('Setting up event listeners...');
+
+  // IMPORTANT: Remove any existing listeners first to prevent duplicates
+  if (newTabBtn) {
+    // Clone the button to remove all event listeners
+    const newNewTabBtn = newTabBtn.cloneNode(true) as HTMLElement;
+    newTabBtn.parentNode?.replaceChild(newNewTabBtn, newTabBtn);
+    newTabBtn = newNewTabBtn;
+    console.log('🚨 [DUPLICATE FIX] Cleared existing new tab button listeners');
+  }
 
   // Navigation buttons
   if (backBtn) {
@@ -202,11 +475,16 @@ function setupEventListeners(): void {
     runAgentBtn.addEventListener('click', executeAgent);
   }
 
-  // New tab button
+  // New tab button - with debugging
   if (newTabBtn) {
-    newTabBtn.addEventListener('click', () => {
+    console.log('🚨 [NEW TAB DEBUG] Adding event listener to new tab button');
+    newTabBtn.addEventListener('click', (e) => {
+      console.log('🚨 [NEW TAB DEBUG] New tab button clicked!', { timestamp: Date.now(), target: e.target });
       createNewTab();
     });
+    console.log('🚨 [NEW TAB DEBUG] Event listener added successfully');
+  } else {
+    console.error('🚨 [NEW TAB DEBUG] newTabBtn element not found!');
   }
 
   // Auto-summarize toggle
@@ -491,7 +769,8 @@ function saveTabs(): void {
 }
 
 function createNewTab(url: string = NEW_TAB_URL): string | null {
-  console.log('createNewTab called with URL:', url);
+  console.log('🚨 [NEW TAB DEBUG] createNewTab called with URL:', url);
+  console.log('🚨 [NEW TAB DEBUG] Call stack:', new Error().stack);
   
   if (!tabsContainer || !webviewsContainer) {
     console.error('Cannot create tab: containers not found');
@@ -500,6 +779,8 @@ function createNewTab(url: string = NEW_TAB_URL): string | null {
   
   const tabId = 'tab-' + Date.now();
   const webviewId = 'webview-' + tabId;
+  
+  console.log('🚨 [NEW TAB DEBUG] Creating tab with ID:', tabId);
   
   try {
     // Create tab element
@@ -552,7 +833,7 @@ function createNewTab(url: string = NEW_TAB_URL): string | null {
     // Save tab state
     saveTabs();
     
-    console.log('Tab created successfully:', tabId);
+    console.log('🚨 [NEW TAB DEBUG] Tab created successfully:', tabId);
     return tabId;
   } catch (error) {
     console.error('Error creating tab:', error);
@@ -716,7 +997,16 @@ function setupWebviewEvents(webview: any): void {
       if (isActiveTab && !isProblematic) {
         console.log('Auto-summarize enabled for active tab, will summarize:', url);
         setTimeout(() => {
-          autoSummarizePage(url, webview);
+          console.log('🕒 [TIMEOUT DEBUG] Auto-summarize timeout triggered for URL:', url);
+          console.log('🕒 [TIMEOUT DEBUG] isWorkflowExecuting at timeout:', isWorkflowExecuting);
+          logExecutionFlow('timeoutCallback', { url, isWorkflowExecuting });
+          // Check execution flag before calling autoSummarizePage to prevent race conditions
+          if (!isWorkflowExecuting) {
+            console.log('🕒 [TIMEOUT DEBUG] Calling autoSummarizePage from timeout');
+            autoSummarizePage(url, webview);
+          } else {
+            console.log('🕒 [TIMEOUT DEBUG] Workflow already executing, skipping auto-summarize from timeout');
+          }
         }, 1500);
       } else {
         console.log('[Auto-summarize] Conditions not met - isActiveTab:', isActiveTab, 'isProblematic:', isProblematic);
@@ -1264,24 +1554,87 @@ function showHistoryPage(): void {
 
 // ========================= AGENT EXECUTION =========================
 
+// Helper function to get extension display name from ID
+function getExtensionDisplayName(extensionId: string): string {
+  const displayNames: Record<string, string> = {
+    'topic-agent': 'Topic Agent',
+    'research-agent': 'Research Agent',
+    'conversation-agent': 'Conversation Agent'
+  };
+  
+  return displayNames[extensionId] || extensionId.replace('-', ' ').replace(/\b\w/g, l => l.toUpperCase());
+}
+
+// Helper function to get the currently selected AI provider
+function getSelectedProvider(): string {
+  const modelSelector = document.getElementById('modelSelector') as HTMLSelectElement;
+  return modelSelector ? modelSelector.value : 'anthropic'; // Default to anthropic
+}
+
 // Helper function to gather all browser API keys
 function getBrowserApiKeys(): Record<string, string> {
   const providers = ['openai', 'anthropic', 'perplexity', 'chutes'];
   const apiKeys: Record<string, string> = {};
   
+  console.log('[DEBUG] Reading API keys from localStorage...');
+  
   providers.forEach(provider => {
     const key = localStorage.getItem(`${provider}_api_key`);
     if (key) {
       apiKeys[provider] = key;
+      // Log partial key for debugging (mask sensitive parts)
+      const maskedKey = key.length > 12 ? key.substring(0, 8) + '...' + key.substring(key.length - 4) : 'short_key';
+      console.log(`[DEBUG] ${provider}: ${maskedKey} (length: ${key.length})`);
+    } else {
+      console.log(`[DEBUG] ${provider}: NO KEY FOUND`);
     }
   });
   
+  console.log(`[DEBUG] Total API keys found: ${Object.keys(apiKeys).length}`);
   return apiKeys;
 }
 
+// Helper function to sync API keys with backend ExtensionManager
+async function syncApiKeysWithBackend(): Promise<void> {
+  try {
+    const apiKeys = getBrowserApiKeys();
+    const provider = getSelectedProvider();
+    
+    console.log('[DEBUG] Syncing API keys with backend...');
+    
+    // Update API keys in ExtensionManager
+    await ipcRenderer.invoke('update-browser-api-keys', apiKeys);
+    
+    // Update selected provider in ExtensionManager
+    await ipcRenderer.invoke('update-selected-provider', provider);
+    
+    console.log('[DEBUG] Successfully synced API keys and provider with backend');
+  } catch (error) {
+    console.error('[DEBUG] Failed to sync API keys with backend:', error);
+  }
+}
+
 async function executeAgent(): Promise<void> {
+  logExecutionFlow('executeAgent', { isWorkflowExecuting });
+  console.log('🎯 [EXECUTION DEBUG] executeAgent() called');
+  console.log('🎯 [EXECUTION DEBUG] isWorkflowExecuting:', isWorkflowExecuting);
+  
+  // Prevent manual execution when workflow is already executing
+  if (isWorkflowExecuting) {
+    console.log('[executeAgent] Workflow already executing, skipping manual execution');
+    showToast('Workflow already in progress...', 'info');
+    return;
+  }
+  
+  // Set execution flag immediately to prevent race conditions
+  isWorkflowExecuting = true;
+  console.log('[executeAgent] Setting execution flag at start to prevent conflicts');
+  
   try {
     console.log("executeAgent function called - running agent");
+    
+    // Sync API keys with backend first
+    await syncApiKeysWithBackend();
     
     const webview = getActiveWebview();
     if (!webview) {
@@ -1369,43 +1722,20 @@ async function executeAgent(): Promise<void> {
         setupChatInputHandlers();
       }
     }
-    
+
     // Show loading
-    addMessageToChat('assistant', '<div class="loading">Analyzing page...</div>');
+    addMessageToChat('assistant', '<div class="loading">Analyzing request and routing to appropriate agents...</div>');
     
     // Extract page content
     const pageContent = await extractPageContent(webview);
     
-    // Get available Python extensions
-    // Route request to appropriate extension using intelligent routing
+    // Route request to appropriate extension or workflow
+    console.log('Routing extension request for query:', query);
+    
     const routingResult = await ipcRenderer.invoke('route-extension-request', query);
-    console.log('Extension routing result:', routingResult);
+    console.log('Agent execution routing result:', routingResult);
     
-    const extensionId = routingResult.extensionId;
-    const action = 'process_page';
-    const data = {
-      query,
-      pageContent,
-      isQuestion: false
-    };
-    
-    console.log(`Executing extension: ${extensionId} (confidence: ${routingResult.confidence}) with action: ${action}`);
-    console.log(`Routing reason: ${routingResult.reason}`);
-    
-    const result = await ipcRenderer.invoke('execute-python-extension', {
-      extensionId,
-      action,
-      data,
-      browserApiKeys: getBrowserApiKeys(),
-      selectedProvider: provider
-    });
-    
-    console.log(`Agent result received:`, result);
-    console.log(`Agent result structure:`, JSON.stringify(result, null, 2));
-    console.log(`Result data:`, result.data);
-    console.log(`Result success:`, result.success);
-    
-    // Remove loading indicators
+    // Clear loading indicators first  
     const loadingMessages = document.querySelectorAll('.loading');
     loadingMessages.forEach(message => {
       const parentMessage = message.closest('.chat-message');
@@ -1414,29 +1744,185 @@ async function executeAgent(): Promise<void> {
       }
     });
     
-    if (result.success === false) {
-      addMessageToChat('assistant', `Error: ${result.error}`);
-    } else {
-      console.log('Calling displayAgentResults with:', result.data);
-      displayAgentResults(result.data);
+    // Check if routing returned a workflow result - execute asynchronously with progress
+    if (routingResult.type === 'workflow') {
+      console.log('Agent execution detected workflow - using async execution with progress events');
+      
+      // Don't initialize workflow progress indicator here - let the backend workflow-start event handle it
+      // This fixes the workflow ID mismatch issue where frontend uses Date.now() but backend uses uuid4()
+      console.log('Workflow detected - progress will be initialized by backend workflow-start event');
+      
+      // Execute workflow asynchronously - progress events will update the UI
+      // The workflow-complete event listener will call displayAgentResults when done
+      try {
+        const workflowData = {
+          pageContent,
+          browserApiKeys: getBrowserApiKeys(),
+          selectedProvider: provider,
+          selectedModel: modelSelector.selectedOptions[0]?.dataset.model || 'claude-3-7-sonnet-latest',
+          isQuestion: false,
+          conversationHistory: []
+        };
+
+        await ipcRenderer.invoke('execute-workflow', {
+          query,
+          data: workflowData
+        });
+        
+        // Workflow execution is async - progress events will handle UI updates
+        // The workflow-complete event listener will call displayAgentResults when done
+        
+      } catch (workflowError) {
+        console.error('Workflow execution failed:', workflowError);
+        addMessageToChat('assistant', `Workflow execution failed: ${(workflowError as Error).message}`);
+      } finally {
+        // Always clear the execution flag
+        isWorkflowExecuting = false;
+        console.log('[executeAgent] Workflow execution finished, clearing execution flag');
+      }
+      
+      return; // Don't execute single extension path
+    }
+    
+    // Handle single extension result
+    const extensionId = routingResult.extensionId;
+    if (!extensionId) {
+      addMessageToChat('assistant', 'Error: No extension available for your request');
+      return;
+    }
+    
+    // Create progress indicator for single extension execution
+    const singleExtensionWorkflowData = {
+      workflowId: `single-${Date.now()}`,
+      type: 'single_extension',
+      steps: [{
+        extensionId: extensionId,
+        extensionName: getExtensionDisplayName(extensionId)
+      }]
+    };
+    
+    console.log('🚨 [SINGLE EXTENSION DEBUG] Creating progress indicator for single extension:', singleExtensionWorkflowData);
+    const progressElement = addWorkflowProgressToChat(singleExtensionWorkflowData);
+    
+    // Start the progress indicator
+    if (progressElement && (progressElement as any).progressIndicator) {
+      (progressElement as any).progressIndicator.startWorkflow(singleExtensionWorkflowData);
+      
+      // Update to running state
+      (progressElement as any).progressIndicator.updateProgress({
+        workflowId: singleExtensionWorkflowData.workflowId,
+        currentStep: 0,
+        stepStatus: 'running'
+      });
+    }
+    
+    const action = 'process_page';
+    const data = {
+      query,
+      pageContent,
+      isQuestion: false
+    };
+    
+    console.log(`Executing single extension: ${extensionId} (confidence: ${routingResult.confidence}) with action: ${action}`);
+    console.log(`Routing reason: ${routingResult.reason}`);
+    
+    const startTime = Date.now();
+    
+    try {
+      const result = await ipcRenderer.invoke('execute-python-extension', {
+        extensionId,
+        action,
+        data,
+        browserApiKeys: getBrowserApiKeys(),
+        selectedProvider: provider
+      });
+      
+      const endTime = Date.now();
+      const executionTime = endTime - startTime;
+      
+      console.log(`Agent result received:`, result);
+      
+      // Complete the progress indicator
+      if (progressElement && (progressElement as any).progressIndicator) {
+        (progressElement as any).progressIndicator.updateProgress({
+          workflowId: singleExtensionWorkflowData.workflowId,
+          currentStep: 0,
+          stepStatus: 'completed',
+          stepResult: result.data
+        });
+        
+        (progressElement as any).progressIndicator.completeWorkflow({
+          workflowId: singleExtensionWorkflowData.workflowId,
+          result: result.data
+        });
+      }
+      
+      if (result.success === false) {
+        addMessageToChat('assistant', `Error: ${result.error}`);
+      } else {
+        console.log('Calling displayAgentResults with:', result.data);
+        displayAgentResults(result.data);
+      }
+    } catch (extensionError) {
+      console.error('Single extension execution failed:', extensionError);
+      
+      // Mark progress as failed
+      if (progressElement && (progressElement as any).progressIndicator) {
+        (progressElement as any).progressIndicator.handleWorkflowError({
+          workflowId: singleExtensionWorkflowData.workflowId,
+          error: (extensionError as Error).message
+        });
+      }
+      
+      addMessageToChat('assistant', `Error: ${(extensionError as Error).message}`);
     }
   } catch (error) {
     console.error("Agent execution error:", error);
+    
+    // Remove any loading indicators
+    const loadingMessages = document.querySelectorAll('.loading');
+    loadingMessages.forEach(message => {
+      const parentMessage = message.closest('.chat-message');
+      if (parentMessage) {
+        parentMessage.remove();
+      }
+    });
+    
     addMessageToChat('assistant', `Error: ${(error as Error).message}`);
+  } finally {
+    // Always clear the execution flag when function ends
+    isWorkflowExecuting = false;
+    console.log('[executeAgent] Clearing execution flag on function completion');
   }
 }
 
 async function autoSummarizePage(url: string, webview: any): Promise<void> {
-  console.log('Auto-summarizing page:', url);
+  console.log('🎯 [EXECUTION DEBUG] autoSummarizePage() called for URL:', url);
+  console.log('🎯 [EXECUTION DEBUG] isWorkflowExecuting:', isWorkflowExecuting);
+  console.log('🎯 [EXECUTION DEBUG] autoSummarizeEnabled:', autoSummarizeEnabled);
+  
+  logExecutionFlow('autoSummarizePage', { url, isWorkflowExecuting, autoSummarizeEnabled });
+  
+  // Prevent auto-summarize when workflow is already executing
+  if (isWorkflowExecuting) {
+    console.log('[autoSummarizePage] Workflow already executing, skipping auto-summarize');
+    return;
+  }
+  
+  // Set execution flag immediately to prevent race conditions
+  isWorkflowExecuting = true;
+  console.log('[autoSummarizePage] Setting execution flag at start to prevent conflicts');
   
   if (isProblematicSite(url)) {
     console.log('Skipping auto-summarization for problematic site:', url);
     addMessageToChat('assistant', '<div class="info-message"><p>Auto-summarization disabled for this site to prevent rendering issues.</p></div>');
+    isWorkflowExecuting = false; // Clear flag if not proceeding
     return;
   }
   
   if (!modelSelector) {
     console.error('Model selector not found');
+    isWorkflowExecuting = false; // Clear flag if not proceeding
     return;
   }
   
@@ -1445,6 +1931,7 @@ async function autoSummarizePage(url: string, webview: any): Promise<void> {
   
   if (!apiKey) {
     addMessageToChat('assistant', '<div class="error-message"><p>Please configure your API key in the Extensions panel first.</p></div>');
+    isWorkflowExecuting = false; // Clear flag if not proceeding
     return;
   }
   
@@ -1500,30 +1987,7 @@ async function autoSummarizePage(url: string, webview: any): Promise<void> {
     const routingResult = await ipcRenderer.invoke('route-extension-request', autoSummarizeRequest);
     console.log('Auto-summarize routing result:', routingResult);
     
-    const extensionId = routingResult.extensionId;
-    const action = 'process_page';
-    const data = {
-      query: pageTitle,
-      pageContent,
-      isQuestion: false
-    };
-    
-    console.log(`Executing extension for auto-summarize: ${extensionId} (confidence: ${routingResult.confidence})`);
-    console.log(`Auto-summarize routing reason: ${routingResult.reason}`);
-    const result = await ipcRenderer.invoke('execute-python-extension', {
-      extensionId,
-      action,
-      data,
-      browserApiKeys: getBrowserApiKeys(),
-      selectedProvider: provider
-    });
-    
-    console.log('Auto-summarize result received:', result);
-    console.log('Auto-summarize result structure:', JSON.stringify(result, null, 2));
-    console.log('Auto-summarize result data:', result.data);
-    console.log('Auto-summarize result success:', result.success);
-    
-    // Clear loading indicators
+    // Clear loading indicators first
     const loadingMessages = document.querySelectorAll('.loading');
     loadingMessages.forEach(message => {
       const parentMessage = message.closest('.chat-message');
@@ -1532,11 +1996,132 @@ async function autoSummarizePage(url: string, webview: any): Promise<void> {
       }
     });
     
-    if (result.success === false) {
-      addMessageToChat('assistant', `Error: ${result.error}`);
-    } else {
-      console.log('Auto-summarize calling displayAgentResults with:', result.data);
-      displayAgentResults(result.data);
+    // Check if routing returned a workflow result
+    if (routingResult.type === 'workflow') {
+      console.log('Auto-summarize received workflow result:', routingResult);
+      
+      // Don't initialize workflow progress indicator here - let the backend workflow-start event handle it
+      // This fixes the workflow ID mismatch issue where frontend uses Date.now() but backend uses uuid4()
+      console.log('Auto-summarize workflow detected - progress will be initialized by backend workflow-start event');
+      
+      // Execute workflow asynchronously with progress events
+      try {
+        const workflowData = {
+          pageContent,
+          browserApiKeys: getBrowserApiKeys(),
+          selectedProvider: provider,
+          selectedModel: modelSelector.selectedOptions[0]?.dataset.model || 'claude-3-7-sonnet-latest',
+          isQuestion: false,
+          conversationHistory: []
+        };
+
+        await ipcRenderer.invoke('execute-workflow', {
+          query: autoSummarizeRequest,
+          data: workflowData
+        });
+        
+        // Workflow execution is async - progress events will handle UI updates
+        // The workflow-complete event listener will call displayAgentResults when done
+        
+      } catch (workflowError) {
+        console.error('Auto-summarize workflow execution failed:', workflowError);
+        addMessageToChat('assistant', `Auto-summarization workflow failed: ${(workflowError as Error).message}`);
+      }
+      
+      return; // Don't execute single extension path
+    }
+    
+    // Handle single extension result
+    const extensionId = routingResult.extensionId;
+    if (!extensionId) {
+      addMessageToChat('assistant', 'Error: No extension available for auto-summarization');
+      return;
+    }
+    
+    // Create progress indicator for single extension execution
+    const singleExtensionWorkflowData = {
+      workflowId: `auto-single-${Date.now()}`,
+      type: 'single_extension',
+      steps: [{
+        extensionId: extensionId,
+        extensionName: getExtensionDisplayName(extensionId)
+      }]
+    };
+    
+    console.log('🚨 [AUTO-SUMMARIZE DEBUG] Creating progress indicator for single extension:', singleExtensionWorkflowData);
+    const progressElement = addWorkflowProgressToChat(singleExtensionWorkflowData);
+    
+    // Start the progress indicator
+    if (progressElement && (progressElement as any).progressIndicator) {
+      (progressElement as any).progressIndicator.startWorkflow(singleExtensionWorkflowData);
+      
+      // Update to running state
+      (progressElement as any).progressIndicator.updateProgress({
+        workflowId: singleExtensionWorkflowData.workflowId,
+        currentStep: 0,
+        stepStatus: 'running'
+      });
+    }
+    
+    const action = 'process_page';
+    const data = {
+      query: autoSummarizeRequest,
+      pageContent,
+      isQuestion: false
+    };
+    
+    console.log(`Executing extension for auto-summarize: ${extensionId} (confidence: ${routingResult.confidence})`);
+    console.log(`Auto-summarize routing reason: ${routingResult.reason}`);
+    
+    const startTime = Date.now();
+    
+    try {
+      const result = await ipcRenderer.invoke('execute-python-extension', {
+        extensionId,
+        action,
+        data,
+        browserApiKeys: getBrowserApiKeys(),
+        selectedProvider: provider
+      });
+      
+      const endTime = Date.now();
+      const executionTime = endTime - startTime;
+      
+      console.log('Auto-summarize result received:', result);
+      
+      // Complete the progress indicator
+      if (progressElement && (progressElement as any).progressIndicator) {
+        (progressElement as any).progressIndicator.updateProgress({
+          workflowId: singleExtensionWorkflowData.workflowId,
+          currentStep: 0,
+          stepStatus: 'completed',
+          stepResult: result.data
+        });
+        
+        (progressElement as any).progressIndicator.completeWorkflow({
+          workflowId: singleExtensionWorkflowData.workflowId,
+          result: result.data
+        });
+      }
+      
+      if (result.success === false) {
+        addMessageToChat('assistant', `Error: ${result.error}`);
+      } else {
+        console.log('Auto-summarize calling displayAgentResults with:', result.data);
+        displayAgentResults(result.data);
+      }
+    } catch (extensionError) {
+      console.error('Auto-summarize extension execution failed:', extensionError);
+      
+      // Mark progress as failed
+      if (progressElement && (progressElement as any).progressIndicator) {
+        (progressElement as any).progressIndicator.handleWorkflowError({
+          workflowId: singleExtensionWorkflowData.workflowId,
+          error: (extensionError as Error).message
+        });
+      }
+      
+      addMessageToChat('assistant', `Auto-summarization failed: ${(extensionError as Error).message}`);
     }
   } catch (error) {
     console.error('Error in autoSummarizePage:', error);
@@ -1550,6 +2135,10 @@ async function autoSummarizePage(url: string, webview: any): Promise<void> {
     });
     
     addMessageToChat('assistant', 'Auto-summarization failed: ' + (error as Error).message);
+  } finally {
+    // Always clear the execution flag when function ends
+    isWorkflowExecuting = false;
+    console.log('[autoSummarizePage] Clearing execution flag on function completion');
   }
 }
 
@@ -1605,92 +2194,131 @@ async function extractPageContent(webview: any): Promise<any> {
 }
 
 function addMessageToChat(role: string, content: string, timing?: number): void {
-  const chatContainer = document.getElementById('chatContainer');
-  if (!chatContainer) {
-    console.error('[addMessageToChat] Chat container not found');
-    return;
-  }
-  
-  if (!content || content.trim() === '') {
-    console.log('[addMessageToChat] Empty content, skipping');
-    return;
-  }
-  
-  console.log(`[addMessageToChat] Adding ${role} message:`, content.substring(0, 100) + '...');
-  
-  const messageDiv = document.createElement('div');
-  
-  if (role === 'context') {
-    // Special handling for context messages
-    messageDiv.className = 'chat-message context-message';
-    messageDiv.innerHTML = `<div class="message-content">${content}</div>`;
-    messageDiv.dataset.role = 'context';
-  } else if (role === 'user') {
-    messageDiv.className = 'chat-message user-message';
-    messageDiv.innerHTML = `<div class="message-content">${content}</div>`;
-    messageDiv.dataset.role = 'user';
-    messageDiv.dataset.timestamp = new Date().toISOString();
-  } else if (role === 'assistant') {
-    messageDiv.className = 'chat-message assistant-message';
-    messageDiv.dataset.role = 'assistant';
-    messageDiv.dataset.timestamp = new Date().toISOString();
-    
-    // Check if content contains only a loading indicator
-    const isLoading = content.includes('class="loading"') && !content.replace(/<div class="loading">.*?<\/div>/g, '').trim();
-    
-    if (timing && !isLoading) {
-      messageDiv.innerHTML = `
-        <div class="timing-info">
-          <span>Response generated in</span>
-          <span class="time-value">${timing.toFixed(2)}s</span>
-        </div>
-        <div class="message-content">${content}</div>
-      `;
-      messageDiv.dataset.genTime = timing.toFixed(2);
-    } else {
-      messageDiv.innerHTML = `<div class="message-content">${content}</div>`;
+  try {
+    const chatContainer = document.getElementById('chatContainer');
+    if (!chatContainer) {
+      console.error('[addMessageToChat] Chat container not found');
+      return;
     }
+    
+    if (!content || content.trim() === '') {
+      console.log('[addMessageToChat] Empty content, skipping');
+      return;
+    }
+    
+    console.log(`[addMessageToChat] Adding ${role} message:`, content.substring(0, 100) + '...');
+    
+    const messageDiv = document.createElement('div');
+    
+    if (role === 'context') {
+      // Special handling for context messages
+      messageDiv.className = 'chat-message context-message';
+      messageDiv.innerHTML = `<div class="message-content">${content}</div>`;
+      messageDiv.dataset.role = 'context';
+    } else if (role === 'user') {
+      messageDiv.className = 'chat-message user-message';
+      messageDiv.innerHTML = `<div class="message-content">${content}</div>`;
+      messageDiv.dataset.role = 'user';
+      messageDiv.dataset.timestamp = new Date().toISOString();
+    } else if (role === 'assistant') {
+      messageDiv.className = 'chat-message assistant-message';
+      messageDiv.dataset.role = 'assistant';
+      messageDiv.dataset.timestamp = new Date().toISOString();
+      
+      // Check if content contains only a loading indicator
+      const isLoading = content.includes('class="loading"') && !content.replace(/<div class="loading">.*?<\/div>/g, '').trim();
+      
+      if (timing && !isLoading) {
+        messageDiv.innerHTML = `
+          <div class="timing-info">
+            <span>Response generated in</span>
+            <span class="time-value">${timing.toFixed(2)}s</span>
+          </div>
+          <div class="message-content">${content}</div>
+        `;
+        messageDiv.dataset.genTime = timing.toFixed(2);
+      } else {
+        messageDiv.innerHTML = `<div class="message-content">${content}</div>`;
+      }
+    }
+    
+    chatContainer.appendChild(messageDiv);
+    
+    // Scroll to bottom with smooth behavior
+    chatContainer.scrollTop = chatContainer.scrollHeight;
+    
+    console.log(`[addMessageToChat] Message added successfully. Total messages: ${chatContainer.children.length}`);
+  } catch (error) {
+    console.error('[addMessageToChat] Error adding message to chat:', error);
+    console.error('[addMessageToChat] Error stack:', error instanceof Error ? error.stack : 'No stack trace');
+    console.error('[addMessageToChat] Parameters that caused error:', { role, content: content?.substring(0, 100), timing });
   }
-  
-  chatContainer.appendChild(messageDiv);
-  
-  // Scroll to bottom with smooth behavior
-  chatContainer.scrollTop = chatContainer.scrollHeight;
-  
-  console.log(`[addMessageToChat] Message added successfully. Total messages: ${chatContainer.children.length}`);
 }
 
 function displayAgentResults(data: any): void {
-  console.log('[displayAgentResults] Called with data:', data);
-  console.log('[displayAgentResults] Data type:', typeof data);
-  console.log('[displayAgentResults] Data keys:', data ? Object.keys(data) : 'null');
+  // Track this call for duplicate debugging
+  trackDisplayAgentResultsCall(data);
+  logExecutionFlow('displayAgentResults', { hasData: !!data, hasConsolidatedSummary: !!(data && data.consolidated_summary) });
   
-  if (!data) {
-    console.log('[displayAgentResults] No data - showing fallback message');
-    addMessageToChat('assistant', 'No data received from agent');
-    return;
-  }
+  try {
+    console.log('[displayAgentResults] Called with data:', data);
+    console.log('[displayAgentResults] Data type:', typeof data);
+    console.log('[displayAgentResults] Data keys:', data ? Object.keys(data) : 'null');
+    
+    if (!data) {
+      console.log('[displayAgentResults] No data - showing fallback message');
+      addMessageToChat('assistant', 'No data received from agent');
+      return;
+    }
 
-  console.log("[displayAgentResults] Agent result data:", data);
-  console.log('[displayAgentResults] Has consolidated_summary:', !!data.consolidated_summary);
-  console.log('[displayAgentResults] Has summaries:', !!data.summaries);
-  console.log('[displayAgentResults] Summaries length:', data.summaries ? data.summaries.length : 'none');
-  
-  if (data.consolidated_summary) {
-    console.log('[displayAgentResults] Displaying consolidated summary:', data.consolidated_summary.substring(0, 100) + '...');
-    addMessageToChat('assistant', data.consolidated_summary, data.generation_time);
-  } else if (data.summaries && data.summaries.length > 0) {
-    console.log('[displayAgentResults] Displaying individual summaries');
-    const summariesText = data.summaries.map((s: any) => `<b>${s.title}</b>\n${s.summary}`).join('\n\n');
-    addMessageToChat('assistant', summariesText, data.generation_time);
-  } else {
-    console.log('[displayAgentResults] No summaries found - showing fallback message');
-    addMessageToChat('assistant', 'No relevant information found.', data.generation_time);
+    console.log("[displayAgentResults] Agent result data:", data);
+    console.log('[displayAgentResults] Has consolidated_summary:', !!data.consolidated_summary);
+    console.log('[displayAgentResults] Has summaries:', !!data.summaries);
+    console.log('[displayAgentResults] Summaries length:', data.summaries ? data.summaries.length : 'none');
+    
+    if (data.consolidated_summary) {
+      console.log('[displayAgentResults] Displaying consolidated summary:', data.consolidated_summary.substring(0, 100) + '...');
+      addMessageToChat('assistant', data.consolidated_summary, data.generation_time);
+      console.log('[displayAgentResults] Consolidated summary displayed successfully');
+    } else if (data.summaries && data.summaries.length > 0) {
+      console.log('[displayAgentResults] Displaying individual summaries');
+      const summariesText = data.summaries.map((s: any) => `<b>${s.title}</b>\n${s.summary}`).join('\n\n');
+      addMessageToChat('assistant', summariesText, data.generation_time);
+      console.log('[displayAgentResults] Individual summaries displayed successfully');
+    } else {
+      console.log('[displayAgentResults] No summaries found - showing fallback message');
+      addMessageToChat('assistant', 'No relevant information found.', data.generation_time);
+      console.log('[displayAgentResults] Fallback message displayed successfully');
+    }
+    
+    console.log('[displayAgentResults] Function completed successfully');
+  } catch (error) {
+    console.error('[displayAgentResults] Error in displayAgentResults:', error);
+    console.error('[displayAgentResults] Error stack:', error instanceof Error ? error.stack : 'No stack trace');
+    console.error('[displayAgentResults] Data that caused error:', data);
+    
+    // Fallback error handling - show user-friendly message
+    try {
+      addMessageToChat('assistant', 'Error displaying results: ' + (error instanceof Error ? error.message : 'Unknown error'));
+    } catch (chatError) {
+      console.error('[displayAgentResults] Even fallback chat message failed:', chatError);
+    }
   }
 }
 
 async function processFollowupQuestion(question: string): Promise<void> {
   console.log('[processFollowupQuestion] Processing question:', question);
+  
+  // Prevent follow-up execution when workflow is already executing
+  if (isWorkflowExecuting) {
+    console.log('[processFollowupQuestion] Workflow already executing, skipping follow-up execution');
+    showToast('Workflow already in progress...', 'info');
+    return;
+  }
+  
+  // Set execution flag immediately to prevent race conditions
+  isWorkflowExecuting = true;
+  console.log('[processFollowupQuestion] Setting execution flag at start to prevent conflicts');
   
   // Helper function to clear loading indicators
   const clearLoadingIndicators = () => {
@@ -1709,6 +2337,7 @@ async function processFollowupQuestion(question: string): Promise<void> {
     if (!modelSelector) {
       clearLoadingIndicators();
       addMessageToChat('assistant', 'Error: Model selector not found.');
+      isWorkflowExecuting = false; // Clear flag if not proceeding
       return;
     }
     
@@ -1718,6 +2347,7 @@ async function processFollowupQuestion(question: string): Promise<void> {
     if (!apiKey) {
       clearLoadingIndicators();
       addMessageToChat('assistant', 'Please configure your API key in the Extensions panel.');
+      isWorkflowExecuting = false; // Clear flag if not proceeding
       return;
     }
     
@@ -1725,6 +2355,7 @@ async function processFollowupQuestion(question: string): Promise<void> {
     if (!activeWebview) {
       clearLoadingIndicators();
       addMessageToChat('assistant', 'No active webview found.');
+      isWorkflowExecuting = false; // Clear flag if not proceeding
       return;
     }
     
@@ -1738,11 +2369,83 @@ async function processFollowupQuestion(question: string): Promise<void> {
     console.log('[processFollowupQuestion] Routing extension request...');
     const routingResult = await ipcRenderer.invoke('route-extension-request', questionRequest);
     console.log('Follow-up question routing result:', routingResult);
+    console.log('Follow-up question routing result type:', routingResult.type);
+    console.log('Follow-up question workflow_info:', routingResult.workflow_info);
     
+    // Clear loading indicators first
+    clearLoadingIndicators();
+    
+    // Check if routing returned a workflow result
+    if (routingResult.type === 'workflow') {
+      console.log('Follow-up question received workflow result:', routingResult);
+      console.log('workflowProgressIndicator exists:', !!workflowProgressIndicator);
+      
+      // Don't initialize workflow progress indicator here - let the backend workflow-start event handle it
+      // This fixes the workflow ID mismatch issue where frontend uses Date.now() but backend uses uuid4()
+      console.log('Follow-up workflow detected - progress will be initialized by backend workflow-start event');
+      
+      // Execute workflow asynchronously with progress events
+      try {
+        const workflowData = {
+          pageContent,
+          browserApiKeys: getBrowserApiKeys(),
+          selectedProvider: provider,
+          selectedModel: modelSelector.selectedOptions[0]?.dataset.model || 'claude-3-7-sonnet-latest',
+          isQuestion: true,
+          conversationHistory: []
+        };
+
+        await ipcRenderer.invoke('execute-workflow', {
+          query: questionRequest,
+          data: workflowData
+        });
+        
+        // Workflow execution is async - progress events will handle UI updates
+        // The workflow-complete event listener will call displayAgentResults when done
+        
+      } catch (workflowError) {
+        console.error('Follow-up workflow execution failed:', workflowError);
+        addMessageToChat('assistant', `Workflow execution failed: ${(workflowError as Error).message}`);
+      }
+      
+      return; // Don't execute single extension path
+    }
+    
+    // Handle single extension result
     const extensionId = routingResult.extensionId;
+    if (!extensionId) {
+      addMessageToChat('assistant', 'Error: No extension available to answer your question');
+      return;
+    }
+    
+    // Create progress indicator for single extension execution
+    const singleExtensionWorkflowData = {
+      workflowId: `followup-single-${Date.now()}`,
+      type: 'single_extension',
+      steps: [{
+        extensionId: extensionId,
+        extensionName: getExtensionDisplayName(extensionId)
+      }]
+    };
+    
+    console.log('🚨 [FOLLOWUP DEBUG] Creating progress indicator for single extension:', singleExtensionWorkflowData);
+    const progressElement = addWorkflowProgressToChat(singleExtensionWorkflowData);
+    
+    // Start the progress indicator
+    if (progressElement && (progressElement as any).progressIndicator) {
+      (progressElement as any).progressIndicator.startWorkflow(singleExtensionWorkflowData);
+      
+      // Update to running state
+      (progressElement as any).progressIndicator.updateProgress({
+        workflowId: singleExtensionWorkflowData.workflowId,
+        currentStep: 0,
+        stepStatus: 'running'
+      });
+    }
+    
     const action = 'process_page';
     const data = {
-      query: `DIRECT QUESTION: ${question}`,
+      query: questionRequest,
       pageContent,
       isQuestion: true
     };
@@ -1750,27 +2453,57 @@ async function processFollowupQuestion(question: string): Promise<void> {
     console.log(`[processFollowupQuestion] Executing extension with question: ${extensionId} (confidence: ${routingResult.confidence}) - ${question}`);
     console.log(`Follow-up routing reason: ${routingResult.reason}`);
     
-    const result = await ipcRenderer.invoke('execute-python-extension', {
-      extensionId,
-      action,
-      data,
-      browserApiKeys: getBrowserApiKeys(),
-      selectedProvider: provider
-    });
+    const startTime = Date.now();
     
-    console.log('[processFollowupQuestion] Extension result received:', result);
-    
-    // Always clear loading indicators
-    clearLoadingIndicators();
-    
-    if (result.success === false) {
-      addMessageToChat('assistant', `Error: ${result.error || 'Unknown error'}`);
-      return;
+    try {
+      const result = await ipcRenderer.invoke('execute-python-extension', {
+        extensionId,
+        action,
+        data,
+        browserApiKeys: getBrowserApiKeys(),
+        selectedProvider: provider
+      });
+      
+      const endTime = Date.now();
+      const executionTime = endTime - startTime;
+      
+      console.log('[processFollowupQuestion] Extension result received:', result);
+      
+      // Complete the progress indicator
+      if (progressElement && (progressElement as any).progressIndicator) {
+        (progressElement as any).progressIndicator.updateProgress({
+          workflowId: singleExtensionWorkflowData.workflowId,
+          currentStep: 0,
+          stepStatus: 'completed',
+          stepResult: result.data
+        });
+        
+        (progressElement as any).progressIndicator.completeWorkflow({
+          workflowId: singleExtensionWorkflowData.workflowId,
+          result: result.data
+        });
+      }
+      
+      if (result.success === false) {
+        addMessageToChat('assistant', `Error: ${result.error || 'Unknown error'}`);
+        return;
+      }
+      
+      console.log('[processFollowupQuestion] Displaying results...');
+      displayAgentResults(result.data);
+    } catch (extensionError) {
+      console.error('Follow-up extension execution failed:', extensionError);
+      
+      // Mark progress as failed
+      if (progressElement && (progressElement as any).progressIndicator) {
+        (progressElement as any).progressIndicator.handleWorkflowError({
+          workflowId: singleExtensionWorkflowData.workflowId,
+          error: (extensionError as Error).message
+        });
+      }
+      
+      addMessageToChat('assistant', `Error: ${(extensionError as Error).message}`);
     }
-    
-    console.log('[processFollowupQuestion] Displaying results...');
-    displayAgentResults(result.data);
-    
   } catch (error) {
     console.error('Error in processFollowupQuestion:', error);
     
@@ -1778,6 +2511,10 @@ async function processFollowupQuestion(question: string): Promise<void> {
     clearLoadingIndicators();
     
     addMessageToChat('assistant', `Error: ${(error as Error).message}`);
+  } finally {
+    // Always clear the execution flag when function ends
+    isWorkflowExecuting = false;
+    console.log('[processFollowupQuestion] Clearing execution flag on function completion');
   }
 }
 
@@ -1850,3 +2587,48 @@ function showExtensionStore(): void {
   executeAgent,
   showExtensionStore
 }; 
+
+function addWorkflowProgressToChat(workflowData: any): HTMLElement {
+  const chatContainer = document.getElementById('chatContainer');
+  if (!chatContainer) {
+    console.error('[addWorkflowProgressToChat] Chat container not found');
+    return document.createElement('div');
+  }
+
+  console.log('[addWorkflowProgressToChat] Creating workflow progress for:', workflowData);
+
+  // Create workflow progress message container
+  const messageDiv = document.createElement('div');
+  messageDiv.className = 'chat-message workflow-progress-message';
+  messageDiv.dataset.role = 'workflow-progress';
+  messageDiv.dataset.workflowId = workflowData.workflowId;
+  messageDiv.dataset.timestamp = new Date().toISOString();
+
+  // Create container for the workflow progress component
+  const progressContainer = document.createElement('div');
+  progressContainer.className = 'workflow-progress-container';
+  
+  messageDiv.appendChild(progressContainer);
+  chatContainer.appendChild(messageDiv);
+
+  // Initialize WorkflowProgressIndicator for this specific workflow
+  const progressIndicator = new WorkflowProgressIndicator(progressContainer);
+  progressIndicator.startWorkflow(workflowData);
+
+  // Store reference to the progress indicator on the message element
+  (messageDiv as any).progressIndicator = progressIndicator;
+
+  // Scroll to bottom
+  chatContainer.scrollTop = chatContainer.scrollHeight;
+
+  console.log('[addWorkflowProgressToChat] Workflow progress message added to chat');
+  return messageDiv;
+}
+
+function findWorkflowProgressInChat(workflowId: string): HTMLElement | null {
+  const chatContainer = document.getElementById('chatContainer');
+  if (!chatContainer) return null;
+
+  const workflowMessages = chatContainer.querySelectorAll(`[data-workflow-id="${workflowId}"]`);
+  return workflowMessages.length > 0 ? workflowMessages[0] as HTMLElement : null;
+}
