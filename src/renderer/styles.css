@@ -617,7 +617,7 @@ input:checked + .slider:before {
     justify-content: center;
     align-items: center;
     padding: 20px;
-    color: #5f6368;
+    color: #000000;
     font-style: italic;
 }
 
@@ -1556,18 +1556,18 @@ input:checked + .slider:before {
     display: flex;
     align-items: center;
     gap: 12px;
-    color: #5f6368;
+    color: #333333;
     font-style: italic;
     padding: 16px;
 }
 
 .loading:before {
-    content: "";
+    content: '';
     width: 20px;
     height: 20px;
-    border: 2px solid #e0e0e0;
+    border: 2px solid rgba(0, 0, 0, 0.2);
+    border-top: 2px solid #3b82f6;
     border-radius: 50%;
-    border-top-color: #1a73e8;
     animation: spin 1s linear infinite;
 }
 
@@ -2209,4 +2209,58 @@ input:checked + .slider:before {
 
 .save-api-key:hover {
   background: #218838;
+}
+
+/* Workflow Progress Container Integration */
+.workflow-progress-container {
+  margin: 16px 0;
+  padding: 0 16px;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+/* Ensure workflow progress appears above agent results */
+.right-panel {
+  display: flex;
+  flex-direction: column;
+}
+
+.workflow-progress-container + #agentResults {
+  margin-top: 0;
+}
+
+/* Loading message updates for workflow context */
+.loading {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-style: italic;
+  color: #333333;
+}
+
+.loading::before {
+  content: '';
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(0, 0, 0, 0.2);
+  border-top: 2px solid #3b82f6;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+/* Responsive workflow progress */
+@media (max-width: 768px) {
+  .workflow-progress-container {
+    padding: 0 8px;
+    margin: 12px 0;
+  }
+}
+
+/* Integration with chat container */
+.chat-container + .workflow-progress-container {
+  margin-top: 16px;
+}
+
+.workflow-progress-container + .chat-container {
+  margin-top: 16px;
 } 

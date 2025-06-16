@@ -1053,6 +1053,14 @@ def main():
         log_event(f"Selected provider: {selected_provider}")
         log_event(f"Available API keys: {list(browser_api_keys.keys())}")
         
+        # Debug: Log partial API key to verify it's being passed correctly
+        for provider, key in browser_api_keys.items():
+            if key:
+                masked_key = key[:8] + "..." + key[-4:] if len(key) > 12 else "short_key"
+                log_event(f"API key for {provider}: {masked_key} (length: {len(key)})")
+            else:
+                log_event(f"API key for {provider}: EMPTY or None")
+        
         # Create model_info using browser's configured API keys
         model_info = {
             'provider': selected_provider,

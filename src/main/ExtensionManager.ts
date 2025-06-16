@@ -152,7 +152,7 @@ export class ExtensionManager {
   }
 
   // Route request to appropriate extension based on user intent
-  async routeRequest(userRequest: string): Promise<{extensionId: string, confidence: number, reason: string, matchedKeywords: string[]}> {
+  async routeRequest(userRequest: string): Promise<{extensionId: string, confidence: number, reason: string, matchedKeywords: string[]} & {type?: string, success?: boolean, error?: string, data?: any, workflow_info?: any}> {
     try {
       // Use the smart router for better semantic understanding
       const routerPath = path.join(__dirname, '../../extensions-framework/core/smart_extension_router.py');
@@ -160,9 +160,28 @@ export class ExtensionManager {
       
       console.log(`[ExtensionManager] Routing request: "${userRequest}"`);
       
+      // Prepare workflow data with API keys for the router
+      const workflowData = {
+        query: userRequest,
+        pageContent: null,
+        browserApiKeys: this.getBrowserApiKeys(),
+        selectedProvider: this.getSelectedProvider(),
+        selectedModel: 'claude-3-7-sonnet-latest',
+        isQuestion: true,
+        conversationHistory: []
+      };
+      
+      console.log(`[ExtensionManager] Passing API keys to router:`, Object.keys(workflowData.browserApiKeys));
+      
       return new Promise((resolve, reject) => {
         const { spawn } = require('child_process');
-        const python = spawn(pythonExecutable, [routerPath, this.extensionsDir, userRequest]);
+        // Add --routing-only flag to ensure the smart router only does routing, not execution
+        const python = spawn(pythonExecutable, [routerPath, this.extensionsDir, userRequest, '--routing-only'], {
+          env: {
+            ...process.env,
+            WORKFLOW_DATA: JSON.stringify(workflowData)
+          }
+        });
         
         let output = '';
         let errorOutput = '';
@@ -183,7 +202,10 @@ export class ExtensionManager {
               extensionId: 'topic-agent',
               confidence: 0,
               reason: `Router failed: ${errorOutput}`,
-              matchedKeywords: []
+              matchedKeywords: [],
+              type: 'workflow',
+              success: false,
+              error: errorOutput
             });
             return;
           }
@@ -191,14 +213,45 @@ export class ExtensionManager {
           try {
             const result = JSON.parse(output.trim());
             console.log(`[ExtensionManager] Routing result:`, result);
-            resolve(result);
+            
+            // Handle workflow vs single extension results
+            if (result.type === 'workflow') {
+              // For workflow results, preserve the complete workflow information
+              resolve({
+                type: 'workflow',
+                success: result.success,
+                error: result.error,
+                data: result.data,
+                workflow_info: result.workflow_info,
+                // Legacy fields for backward compatibility
+                extensionId: result.data?.extensionId || 'topic-agent',
+                confidence: result.workflow_info?.confidence || 0.8,
+                reason: result.workflow_info?.reasoning || 'Workflow routing',
+                matchedKeywords: []
+              });
+            } else if (result.type === 'single_extension') {
+              // For single extension results
+              resolve({
+                type: 'single_extension',
+                extensionId: result.data?.extensionId || 'topic-agent',
+                confidence: result.data?.confidence || 0,
+                reason: result.data?.reason || 'Single extension routing',
+                matchedKeywords: result.data?.matchedKeywords || []
+              });
+            } else {
+              // Legacy format support
+              resolve(result);
+            }
           } catch (parseError) {
             console.error(`[ExtensionManager] Failed to parse router output: ${output}`);
             resolve({
               extensionId: 'topic-agent',
               confidence: 0,
               reason: 'Failed to parse router output',
-              matchedKeywords: []
+              matchedKeywords: [],
+              type: 'workflow',
+              success: false,
+              error: 'Failed to parse router output'
             });
           }
         });
@@ -208,8 +261,11 @@ export class ExtensionManager {
           resolve({
             extensionId: 'topic-agent',
             confidence: 0,
-            reason: `Router process error: ${error.message}`,
-            matchedKeywords: []
+            reason: `Router process error: ${(error as Error).message}`,
+            matchedKeywords: [],
+            type: 'workflow',
+            success: false,
+            error: (error as Error).message
           });
         });
       });
@@ -219,7 +275,10 @@ export class ExtensionManager {
         extensionId: 'topic-agent',
         confidence: 0,
         reason: `Routing error: ${(error as Error).message}`,
-        matchedKeywords: []
+        matchedKeywords: [],
+        type: 'workflow',
+        success: false,
+        error: (error as Error).message
       };
     }
   }
@@ -268,6 +327,18 @@ export class ExtensionManager {
 
   private getSelectedProvider(): string {
     return this.currentSelectedProvider;
+  }
+
+  // Method to update API keys from renderer
+  updateBrowserApiKeys(apiKeys: Record<string, string>): void {
+    this.currentBrowserApiKeys = apiKeys;
+    console.log(`[ExtensionManager] Updated API keys for providers:`, Object.keys(apiKeys));
+  }
+
+  // Method to update selected provider from renderer  
+  updateSelectedProvider(provider: string): void {
+    this.currentSelectedProvider = provider;
+    console.log(`[ExtensionManager] Updated selected provider:`, provider);
   }
 
   private async updateMasterJson(extensionId: string): Promise<void> {
@@ -567,8 +638,33 @@ export class ExtensionManager {
           extensionId: 'topic-agent',
           confidence: 0,
           reason: `Error: ${(error as Error).message}`,
-          matchedKeywords: []
+          matchedKeywords: [],
+          type: 'workflow',
+          success: false,
+          error: (error as Error).message
         };
+      }
+    });
+
+    // Update browser API keys
+    ipcMain.handle('update-browser-api-keys', async (event: IpcMainInvokeEvent, apiKeys: Record<string, string>) => {
+      try {
+        this.updateBrowserApiKeys(apiKeys);
+        return { success: true };
+      } catch (error) {
+        console.error('Error updating browser API keys:', error);
+        return { success: false, error: (error as Error).message };
+      }
+    });
+
+    // Update selected provider
+    ipcMain.handle('update-selected-provider', async (event: IpcMainInvokeEvent, provider: string) => {
+      try {
+        this.updateSelectedProvider(provider);
+        return { success: true };
+      } catch (error) {
+        console.error('Error updating selected provider:', error);
+        return { success: false, error: (error as Error).message };
       }
     });
 
