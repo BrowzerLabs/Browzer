@@ -25,6 +25,31 @@ def log_event(message):
     with open(LOG_FILE, 'a') as f:
         f.write(f"[{datetime.now().isoformat()}] {message}\n")
 
+# Add token estimation function
+def estimate_tokens(text: str) -> int:
+    """Rough estimation of token count - approximately 4 characters per token"""
+    if not text:
+        return 0
+    return len(text) // 4
+
+def truncate_content_by_tokens(text: str, max_tokens: int) -> str:
+    """Truncate text to fit within token limit"""
+    if not text:
+        return text
+    
+    estimated_tokens = estimate_tokens(text)
+    if estimated_tokens <= max_tokens:
+        return text
+    
+    # Calculate how much to keep (with safety margin)
+    ratio = (max_tokens * 0.9) / estimated_tokens
+    target_length = int(len(text) * ratio)
+    
+    if target_length < 100:
+        return text[:100] + "... [truncated due to length]"
+    
+    return text[:target_length] + "... [truncated due to length]"
+
 class TopicAgent:
     def __init__(self):
         log_event("Initializing TopicAgent")
@@ -409,6 +434,14 @@ class TopicAgent:
         """Generate an answer to a question using available sources and model knowledge"""
         log_event(f"Creating answer for question: {query}")
         
+        # Set token limits - leave room for system prompt and response
+        MAX_TOTAL_TOKENS = 180000  # Leave 20k tokens for system prompt and response
+        MAX_CONTENT_TOKENS = 150000  # For main content
+        MAX_MEMORY_TOKENS = 20000   # For conversation history
+        MAX_SOURCE_TOKENS = 100000  # For sources
+        
+        current_token_count = 0
+        
         # Clean any DIRECT QUESTION: prefix for better prompt formatting
         clean_query = query.replace("DIRECT QUESTION:", "").strip()
         
@@ -431,9 +464,15 @@ class TopicAgent:
             "8. When memory items contain information from pages visited at different times, clearly identify temporal relationships like 'according to more recent information' or 'previously known information'."
         )
         
-        user_prompt = f"QUESTION: {clean_query}\n\n"
+        # Track tokens for system prompt
+        system_tokens = estimate_tokens(system_prompt)
+        current_token_count += system_tokens
+        log_event(f"System prompt tokens: {system_tokens}")
         
-        # Include conversation history if available
+        user_prompt = f"QUESTION: {clean_query}\n\n"
+        current_token_count += estimate_tokens(user_prompt)
+        
+        # Include conversation history if available (with token limiting)
         memory_items = []
         current_conversation = []
         
@@ -485,19 +524,20 @@ class TopicAgent:
         has_multiple_sources = len(memory_domains) > 1
         has_temporal_differences = len(memory_timestamps) > 1 and max(memory_timestamps) - min(memory_timestamps) > 24 * 60 * 60 * 1000  # 24 hours in ms
         
-        user_prompt += "Here is the relevant conversation and memory context:\n\n"
+        memory_section = ""
         
         # Add note about comparison context if appropriate
         if is_comparison_question and has_multiple_sources:
-            user_prompt += "COMPARISON CONTEXT: This question appears to be comparing information across multiple sources "
-            user_prompt += f"from domains: {', '.join(memory_domains)}. "
+            comparison_note = "COMPARISON CONTEXT: This question appears to be comparing information across multiple sources "
+            comparison_note += f"from domains: {', '.join(memory_domains)}. "
             if has_temporal_differences:
-                user_prompt += "These sources were accessed at different times, so temporal context may be relevant. "
-            user_prompt += "When answering, explicitly compare and contrast information from different sources.\n\n"
+                comparison_note += "These sources were accessed at different times, so temporal context may be relevant. "
+            comparison_note += "When answering, explicitly compare and contrast information from different sources.\n\n"
+            memory_section += comparison_note
         
-        # First add memory items if available
+        # First add memory items if available (with token limiting)
         if memory_items:
-            user_prompt += "MEMORY CONTEXT (Information from previous conversations):\n"
+            memory_content = "MEMORY CONTEXT (Information from previous conversations):\n"
             
             # Group memory items by domain for easier source comparison
             domain_groups = {}
@@ -518,9 +558,9 @@ class TopicAgent:
             
             # Output memory items by domain groups for easier comparison
             if domain_groups and len(domain_groups) > 1 and is_comparison_question:
-                user_prompt += "--- MEMORY GROUPED BY SOURCE ---\n"
+                memory_content += "--- MEMORY GROUPED BY SOURCE ---\n"
                 for domain, items in domain_groups.items():
-                    user_prompt += f"\nFrom {domain}:\n"
+                    memory_content += f"\nFrom {domain}:\n"
                     for item in items:
                         role = item.get('role', '')
                         content = item.get('content', '')
@@ -536,10 +576,10 @@ class TopicAgent:
                                 pass
                         
                         if role == 'user':
-                            user_prompt += f"Question{date_str}: {content}\n\n"
+                            memory_content += f"Question{date_str}: {content}\n\n"
                         elif role == 'assistant':
-                            user_prompt += f"Answer{date_str}: {content}\n\n"
-                user_prompt += "--- END OF GROUPED MEMORY ---\n\n"
+                            memory_content += f"Answer{date_str}: {content}\n\n"
+                memory_content += "--- END OF GROUPED MEMORY ---\n\n"
             
             # Output remaining ungrouped memories
             for item in ungrouped_memories:
@@ -548,75 +588,135 @@ class TopicAgent:
                 
                 # Format differently based on role
                 if role == 'user':
-                    user_prompt += f"Previous Question: {content}\n\n"
+                    memory_content += f"Previous Question: {content}\n\n"
                 elif role == 'assistant':
-                    user_prompt += f"Previous Answer: {content}\n\n"
+                    memory_content += f"Previous Answer: {content}\n\n"
             
-            user_prompt += "---\n\n"
+            memory_content += "---\n\n"
             
             # Add explicit comparison instruction if needed
             if is_comparison_question and has_multiple_sources:
-                user_prompt += "IMPORTANT: The question is asking to compare information across different sources or time periods. "
-                user_prompt += "Please clearly identify differences and similarities between sources "
-                user_prompt += "and explain any discrepancies you find.\n\n"
+                memory_content += "IMPORTANT: The question is asking to compare information across different sources or time periods. "
+                memory_content += "Please clearly identify differences and similarities between sources "
+                memory_content += "and explain any discrepancies you find.\n\n"
+            
+            # Check if memory content fits within token limit
+            memory_tokens = estimate_tokens(memory_content)
+            if memory_tokens > MAX_MEMORY_TOKENS:
+                log_event(f"Memory content too large ({memory_tokens} tokens), truncating to {MAX_MEMORY_TOKENS}")
+                memory_content = truncate_content_by_tokens(memory_content, MAX_MEMORY_TOKENS)
+                memory_tokens = estimate_tokens(memory_content)
+            
+            memory_section += memory_content
+            current_token_count += memory_tokens
+            log_event(f"Memory section tokens: {memory_tokens}")
         
-        # Then add recent conversation
+        # Then add recent conversation (with token limiting)
+        conversation_section = ""
         if current_conversation:
-            user_prompt += "RECENT CONVERSATION:\n"
+            conv_content = "RECENT CONVERSATION:\n"
             for item in current_conversation:
                 role = item.get('role', '')
                 content = item.get('content', '')
                 
                 if role == 'user':
-                    user_prompt += f"User: {content}\n\n"
+                    conv_content += f"User: {content}\n\n"
                 elif role == 'assistant':
-                    user_prompt += f"Assistant: {content}\n\n"
-            user_prompt += "---\n\n"
+                    conv_content += f"Assistant: {content}\n\n"
+            conv_content += "---\n\n"
+            
+            # Check tokens and truncate if needed
+            conv_tokens = estimate_tokens(conv_content)
+            remaining_memory_tokens = MAX_MEMORY_TOKENS - estimate_tokens(memory_section)
+            if conv_tokens > remaining_memory_tokens:
+                log_event(f"Conversation content too large ({conv_tokens} tokens), truncating to {remaining_memory_tokens}")
+                conv_content = truncate_content_by_tokens(conv_content, remaining_memory_tokens)
+                conv_tokens = estimate_tokens(conv_content)
+            
+            conversation_section = conv_content
+            current_token_count += conv_tokens
+            log_event(f"Conversation section tokens: {conv_tokens}")
         
-        user_prompt += "CURRENT QUESTION AND SOURCES:\n"
+        # Build sources section with token limiting
+        sources_section = "CURRENT QUESTION AND SOURCES:\n"
         
         # Check if we have any full content sources
         has_full_content = any(source.get('is_full_content', False) for source in summaries)
         # Check if any sources contain HTML content with links
         has_html_content = any(source.get('has_html', False) for source in summaries)
         
-        # Include the sources in the prompt
+        # Include the sources in the prompt (with aggressive token limiting for sources)
         if summaries:
+            sources_content = ""
+            
             # If we have full content sources, prioritize them and make it clear
             if has_full_content:
-                user_prompt += "FULL WEBPAGE CONTENT (complete, not summarized):\n\n"
+                sources_content += "FULL WEBPAGE CONTENT (complete, not summarized):\n\n"
+                
+                # Calculate available tokens for sources
+                used_tokens = current_token_count + estimate_tokens(sources_section)
+                available_source_tokens = min(MAX_SOURCE_TOKENS, MAX_TOTAL_TOKENS - used_tokens - 5000)  # Leave 5k for response
+                
+                log_event(f"Available tokens for sources: {available_source_tokens}")
+                
+                # Process sources, prioritizing full content but limiting size
+                tokens_per_source = available_source_tokens // len([s for s in summaries if s.get('is_full_content', False)])
+                
                 for idx, source in enumerate(summaries, 1):
                     if source.get('is_full_content', False):
-                        user_prompt += f"Title: {source.get('title', 'Untitled')}\n"
-                        user_prompt += f"URL: {source.get('url', 'No URL')}\n"
-                        user_prompt += f"Content: {source.get('summary', '')}\n\n"
+                        source_content = f"Title: {source.get('title', 'Untitled')}\n"
+                        source_content += f"URL: {source.get('url', 'No URL')}\n"
+                        
+                        # Limit the content size per source
+                        full_content = source.get('summary', '')
+                        content_tokens = estimate_tokens(full_content)
+                        
+                        if content_tokens > tokens_per_source:
+                            log_event(f"Source {idx} too large ({content_tokens} tokens), truncating to {tokens_per_source}")
+                            full_content = truncate_content_by_tokens(full_content, tokens_per_source)
+                        
+                        source_content += f"Content: {full_content}\n\n"
                         
                         # Add explicit instruction to use this full content
-                        user_prompt += "IMPORTANT: This is the complete content of the webpage, not a summary. "
-                        user_prompt += "The answer to the question is likely contained within this content. "
-                        user_prompt += "Please read through the full content carefully to find relevant information.\n\n"
+                        source_content += "IMPORTANT: This is content from the webpage. "
+                        source_content += "The answer to the question is likely contained within this content. "
+                        source_content += "Please read through the content carefully to find relevant information.\n\n"
                         
                         # Add special instructions for HTML content with links
                         if source.get('has_html', False):
-                            user_prompt += "NOTE: This content includes HTML with actual links in the format 'text [LINK: url]'. "
-                            user_prompt += "When referring to links, use the exact URLs provided. Do not create or guess URLs. "
-                            user_prompt += "If asked about links or articles, only mention those that are explicitly present in the content.\n\n"
+                            source_content += "NOTE: This content includes HTML with actual links in the format 'text [LINK: url]'. "
+                            source_content += "When referring to links, use the exact URLs provided. Do not create or guess URLs. "
+                            source_content += "If asked about links or articles, only mention those that are explicitly present in the content.\n\n"
+                        
+                        sources_content += source_content
             else:
                 # Regular processing for summarized content
+                available_source_tokens = min(MAX_SOURCE_TOKENS, MAX_TOTAL_TOKENS - current_token_count - estimate_tokens(sources_section) - 5000)
+                tokens_per_source = available_source_tokens // len(summaries)
+                
                 for idx, source in enumerate(summaries, 1):
                     # Truncate long summaries
                     summary_text = source.get('summary', '')
-                    if len(summary_text) > 500 and not source.get('is_full_content', False):
-                        summary_text = summary_text[:497] + "..."
+                    summary_tokens = estimate_tokens(summary_text)
                     
-                    user_prompt += f"Source {idx}:\n"
-                    user_prompt += f"Title: {source.get('title', 'Untitled')}\n"
-                    user_prompt += f"URL: {source.get('url', 'No URL')}\n"
-                    user_prompt += f"Content: {summary_text}\n\n"
+                    if summary_tokens > tokens_per_source or len(summary_text) > 500:
+                        max_tokens = min(tokens_per_source, estimate_tokens("." * 500))
+                        summary_text = truncate_content_by_tokens(summary_text, max_tokens)
+                    
+                    sources_content += f"Source {idx}:\n"
+                    sources_content += f"Title: {source.get('title', 'Untitled')}\n"
+                    sources_content += f"URL: {source.get('url', 'No URL')}\n"
+                    sources_content += f"Content: {summary_text}\n\n"
         else:
-            user_prompt += "No recent sources are available. Please answer based on memory context and your general knowledge.\n\n"
-            
-        user_prompt += (
+            sources_content = "No recent sources are available. Please answer based on memory context and your general knowledge.\n\n"
+        
+        sources_section += sources_content
+        source_tokens = estimate_tokens(sources_section)
+        current_token_count += source_tokens
+        log_event(f"Sources section tokens: {source_tokens}")
+        
+        # Build final instruction
+        final_instruction = (
             "Now answer the question directly and specifically. "
             "If the answer is in the sources or memory context, cite the source. "
             "If the information is not in the sources but in memory, indicate which memory item contains the information. "
@@ -626,13 +726,29 @@ class TopicAgent:
         
         # For comparison questions, add extra guidance
         if is_comparison_question:
-            user_prompt += (
+            final_instruction += (
                 "\n\nSince this question involves comparing information, please structure your answer to clearly "
                 "highlight similarities and differences between sources. You may use a structured format like:\n"
                 "* Point of comparison 1: [Source A says X, Source B says Y]\n"
                 "* Point of comparison 2: [Source A says P, Source B says Q]\n"
                 "Conclude with insights about why these differences might exist."
             )
+        
+        # Combine all sections
+        user_prompt += memory_section + conversation_section + sources_section + final_instruction
+        
+        # Final token check
+        total_user_tokens = estimate_tokens(user_prompt)
+        total_tokens = system_tokens + total_user_tokens
+        
+        log_event(f"Final token count - System: {system_tokens}, User: {total_user_tokens}, Total: {total_tokens}")
+        
+        if total_tokens > MAX_TOTAL_TOKENS:
+            log_event(f"WARNING: Total tokens ({total_tokens}) still exceed limit ({MAX_TOTAL_TOKENS}), final truncation needed")
+            # Emergency truncation of user prompt
+            available_user_tokens = MAX_TOTAL_TOKENS - system_tokens - 1000  # Leave 1k buffer
+            user_prompt = truncate_content_by_tokens(user_prompt, available_user_tokens)
+            log_event(f"Emergency truncation applied, new user prompt tokens: {estimate_tokens(user_prompt)}")
         
         # Generate the answer using LLM
         success, answer, generation_time = self.generate_llm_response(
@@ -698,6 +814,10 @@ class TopicAgent:
         """Generate a summary from the provided content"""
         log_event(f"Creating summary for: {query}")
         
+        # Set token limits for summary generation
+        MAX_TOTAL_TOKENS = 180000  # Leave room for system prompt and response
+        MAX_SOURCE_TOKENS = 150000  # For sources content
+        
         # Create the prompt for summarization
         system_prompt = (
             "You are a helpful assistant that creates concise, accurate summaries. "
@@ -705,21 +825,42 @@ class TopicAgent:
             "Focus on accuracy and clarity."
         )
         
+        # Track tokens
+        system_tokens = estimate_tokens(system_prompt)
+        log_event(f"Summary system prompt tokens: {system_tokens}")
+        
         user_prompt = f"Please create a summary for: {query}\n\n"
         user_prompt += "Here are the sources to summarize:\n\n"
         
-        # Include the sources in the prompt
+        current_tokens = system_tokens + estimate_tokens(user_prompt)
+        
+        # Include the sources in the prompt with token limiting
         if summaries:
+            sources_content = ""
+            available_tokens = MAX_SOURCE_TOKENS
+            tokens_per_source = available_tokens // len(summaries) if summaries else available_tokens
+            
             for idx, source in enumerate(summaries, 1):
-                # Truncate long summaries
+                # Truncate long summaries based on token limits
                 summary_text = source.get('summary', '')
-                if len(summary_text) > 500:
+                summary_tokens = estimate_tokens(summary_text)
+                
+                # Apply token limit per source
+                if summary_tokens > tokens_per_source:
+                    log_event(f"Summary source {idx} too large ({summary_tokens} tokens), truncating to {tokens_per_source}")
+                    summary_text = truncate_content_by_tokens(summary_text, tokens_per_source)
+                elif len(summary_text) > 500:
+                    # Fallback character limit for backwards compatibility
                     summary_text = summary_text[:497] + "..."
                 
-                user_prompt += f"Source {idx}:\n"
-                user_prompt += f"Title: {source.get('title', 'Untitled')}\n"
-                user_prompt += f"URL: {source.get('url', 'No URL')}\n"
-                user_prompt += f"Content: {summary_text}\n\n"
+                source_content = f"Source {idx}:\n"
+                source_content += f"Title: {source.get('title', 'Untitled')}\n"
+                source_content += f"URL: {source.get('url', 'No URL')}\n"
+                source_content += f"Content: {summary_text}\n\n"
+                
+                sources_content += source_content
+            
+            user_prompt += sources_content
         else:
             user_prompt += "No sources are available for summarization.\n\n"
             
@@ -728,6 +869,18 @@ class TopicAgent:
             "Focus on accuracy and readability. "
             "Keep the consolidated summary concise (less than 150 words)."
         )
+        
+        # Final token check
+        total_user_tokens = estimate_tokens(user_prompt)
+        total_tokens = system_tokens + total_user_tokens
+        
+        log_event(f"Summary final token count - System: {system_tokens}, User: {total_user_tokens}, Total: {total_tokens}")
+        
+        if total_tokens > MAX_TOTAL_TOKENS:
+            log_event(f"Summary prompt too large ({total_tokens} tokens), applying emergency truncation")
+            available_user_tokens = MAX_TOTAL_TOKENS - system_tokens - 1000  # Leave 1k buffer
+            user_prompt = truncate_content_by_tokens(user_prompt, available_user_tokens)
+            log_event(f"Summary emergency truncation applied, new user prompt tokens: {estimate_tokens(user_prompt)}")
         
         # Generate the summary using LLM
         success, summary, generation_time = self.generate_llm_response(
@@ -870,6 +1023,56 @@ class TopicAgent:
                 # If HTML analysis fails, fall back to standard processing
                 log_event('HTML analysis failed, falling back to standard processing')
             
+            # Initialize summaries list
+            summaries = []
+            
+            # Check for additionalContexts from @ mentions
+            additional_contexts = []
+            if model_info and isinstance(model_info, dict) and 'additionalContexts' in model_info:
+                additional_contexts = model_info.get('additionalContexts', [])
+                log_event(f'Found {len(additional_contexts)} additional contexts from @ mentions')
+                
+                # Process each additional context
+                for i, ctx in enumerate(additional_contexts):
+                    if isinstance(ctx, dict) and 'content' in ctx:
+                        ctx_content = ctx.get('content', {})
+                        ctx_title = ctx.get('title', f'Context {i+1}')
+                        ctx_url = ctx.get('url', '')
+                        
+                        # Get content - prefer HTML if available
+                        if isinstance(ctx_content, dict):
+                            content_text = ctx_content.get('content', '')
+                            content_html = ctx_content.get('html', '')
+                            has_html = bool(content_html)
+                            
+                            # Use HTML content if available, otherwise text content
+                            content_to_use = content_html if has_html else content_text
+                            
+                            log_event(f'Processing additional context {i+1}: {ctx_title}')
+                            log_event(f'  Content length: {len(content_to_use)} chars')
+                            log_event(f'  Has HTML: {has_html}')
+                            
+                            if content_to_use and len(content_to_use) > 50:
+                                # For questions, use full content; for summaries, create summary
+                                if query_is_question:
+                                    summaries.append({
+                                        'title': ctx_title,
+                                        'url': ctx_url,
+                                        'summary': content_to_use,
+                                        'is_full_content': True,
+                                        'has_html': has_html
+                                    })
+                                    log_event(f'Added full content for context: {ctx_title}')
+                                else:
+                                    summary_text = self.summarize_text(content_to_use)
+                                    summaries.append({
+                                        'title': ctx_title,
+                                        'url': ctx_url,
+                                        'summary': summary_text,
+                                        'has_html': has_html
+                                    })
+                                    log_event(f'Added summary for context: {ctx_title}')
+            
             # Special handling for direct page content with questions
             if query_is_question and page_content and isinstance(page_content, dict) and model_info:
                 log_event(f'Direct question with page content detected - using full content')
@@ -886,32 +1089,35 @@ class TopicAgent:
                 title = page_content.get('title', 'Untitled Page')
                 url = page_content.get('url', query)
                 
+                # Only add page content if it has substantial content (not just "Google")
                 if content and len(content) > 200:
                     # Create a special "full content" summary that preserves all the original content
                     # This ensures we don't lose information in the summarization process
-                    summaries = [{
+                    page_summary = {
                         'title': title,
                         'url': url,
                         'summary': content,  # Now using HTML content when available
                         'is_full_content': True,  # Flag to indicate this is full content
                         'has_html': has_html  # Track whether this contains HTML
-                    }]
-                    log_event(f'Using full page content for question: {title}')
-                    
-                    # Generate answer directly from full content
+                    }
+                    summaries.append(page_summary)
+                    log_event(f'Added full page content for question: {title}')
+                else:
+                    log_event(f'Skipping minimal page content: {title} ({len(content)} chars)')
+                
+                # If we have summaries (from additional contexts or substantial page content), 
+                # generate answer directly
+                if summaries:
                     success, result = self.create_question_answer(clean_query, summaries, model_info, conversation_history)
                     if success:
                         return {'success': True, 'data': result}
                     else:
-                        log_event('Failed to answer question with full content')
+                        log_event('Failed to answer question with available content')
                         # Continue with normal processing as fallback
             
-            # Generate summaries from sources
-            summaries = []
-            
             # Normal processing path for non-questions or if direct handling failed
-            # If direct page content is provided, just summarize that
-            if page_content and isinstance(page_content, dict):
+            # If direct page content is provided and we haven't already processed it
+            if page_content and isinstance(page_content, dict) and not summaries:
                 log_event(f'Processing direct page content: {page_content.get("title", "Untitled")}')
                 
                 # Prefer HTML content if available, otherwise use text content
@@ -940,16 +1146,16 @@ class TopicAgent:
             # If URLs are provided directly, use them instead of searching
             elif provided_urls and len(provided_urls) > 0:
                 log_event(f'Using {len(provided_urls)} provided URLs')
-                summaries = self.process_urls(provided_urls, clean_query)
-            else:
+                summaries.extend(self.process_urls(provided_urls, clean_query))
+            elif not summaries:  # Only search if we don't have any content yet
                 # Otherwise, perform a search to find URLs
                 log_event('No URLs provided, performing search')
                 search_urls = self.get_google_search_results(clean_query)
                 
                 if search_urls:
-                    summaries = self.process_urls(search_urls, clean_query)
+                    summaries.extend(self.process_urls(search_urls, clean_query))
             
-            log_event(f'Generated {len(summaries)} summaries')
+            log_event(f'Generated {len(summaries)} summaries total')
             
             # Default response for no summaries
             if not summaries:
@@ -1092,14 +1298,21 @@ def main():
             conversation_history = data.get('conversationHistory')
             is_about_links = data.get('isAboutLinks', False)
             
+            # Fix: additionalContexts are inside pageContent, not in data directly
+            additional_contexts = page_content.get('additionalContexts', []) if page_content else []
+            
             log_event(f"Processing page with query: {query}")
             log_event(f"Is question: {is_question}")
             log_event(f"Has page content: {page_content is not None}")
             log_event(f"URLs provided: {len(urls) if urls else 0}")
+            log_event(f"Additional contexts: {len(additional_contexts)}")
             
-            # Add isAboutLinks to model_info if needed
+            # Add isAboutLinks and additionalContexts to model_info if needed
             if is_about_links:
                 model_info['isAboutLinks'] = is_about_links
+            if additional_contexts:
+                model_info['additionalContexts'] = additional_contexts
+                log_event(f"Added {len(additional_contexts)} additional contexts to model_info")
             
             # Process the query using the existing topic agent logic
             result = agent.process_query(

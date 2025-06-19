@@ -195,11 +195,16 @@ export class AgentManager {
             this.logWorkflowEvent(`Parsing workflow result: ${result}`);
             const parsedResult = JSON.parse(result);
             
-            // Progress events already handle workflow completion notifications
-            // Don't send duplicate workflow-complete event here
-            // if (workflowStarted && parsedResult.type === 'workflow' && sender && !sender.isDestroyed()) {
-            //   sender.send('workflow-complete', { result: parsedResult });
-            // }
+            // ALWAYS send workflow completion event for successful workflows
+            if (sender && !sender.isDestroyed()) {
+              console.log(`Sending workflow-complete event for result:`, parsedResult);
+              this.logWorkflowEvent(`Sending workflow-complete event for result: ${JSON.stringify(parsedResult)}`);
+              
+              sender.send('workflow-complete', { 
+                workflow_id: parsedResult.workflow_info?.workflow_id || `workflow-${Date.now()}`,
+                result: parsedResult 
+              });
+            }
             
             resolve(parsedResult);
           } catch (e) {
@@ -301,16 +306,170 @@ export class AgentManager {
       // Prepare agent parameters
       const processedParams = this.prepareAgentParams(agentParams, cleanedQuery);
       
-      // Execute the agent
-      const result = await this.runPythonProcess(pythonPath, agentPath, processedParams);
+      // Execute the agent with completion notifications
+      const result = await this.runPythonProcessWithNotifications(pythonPath, agentPath, processedParams, event.sender);
       
       return result;
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       console.error(`Exception in execute-agent: ${errorMessage}`);
       this.logAgentEvent(`Exception in execute-agent: ${errorMessage}`);
+      
+      // Send error event to frontend
+      if (event.sender && !event.sender.isDestroyed()) {
+        event.sender.send('workflow-error', { error: errorMessage });
+      }
+      
       return { success: false, error: errorMessage };
     }
+  }
+
+  private async runPythonProcessWithNotifications(pythonPath: string, agentPath: string, params: any, sender: Electron.WebContents): Promise<AgentResult> {
+    const pythonArgs = [agentPath, JSON.stringify(params)];
+    
+    console.log(`Starting Python process: ${pythonPath} ${pythonArgs.join(' ')}`);
+    this.logAgentEvent(`Starting Python process: ${pythonPath} ${pythonArgs.join(' ')}`);
+    
+    // Generate workflow ID once and reuse it
+    const agentName = path.basename(agentPath, '.py');
+    const workflowId = `single-agent-${Date.now()}`;
+    
+    // Send agent start notification
+    if (sender && !sender.isDestroyed()) {
+      // Send workflow start event for single agent
+      sender.send('workflow-start', {
+        workflow_id: workflowId,
+        agents: [agentName],
+        total_steps: 1
+      });
+      
+      // Send step start event
+      sender.send('workflow-step-start', {
+        workflow_id: workflowId,
+        step_number: 1,
+        agent_name: agentName,
+        step_type: 'single_agent'
+      });
+    }
+    
+    return new Promise((resolve) => {
+      const pythonProcess: ChildProcess = spawn(pythonPath, pythonArgs);
+      let result = '';
+      let error = '';
+
+      pythonProcess.stdout?.on('data', (data) => {
+        const dataStr = data.toString();
+        result += dataStr;
+        console.log(`Python stdout: ${dataStr}`);
+        this.logAgentEvent(`Python stdout: ${dataStr}`);
+      });
+
+      pythonProcess.stderr?.on('data', (data) => {
+        const dataStr = data.toString();
+        error += dataStr;
+        console.error(`Python stderr: ${dataStr}`);
+        this.logAgentEvent(`Python stderr: ${dataStr}`);
+      });
+
+      // Set timeout
+      const timeout = setTimeout(() => {
+        if (!pythonProcess.killed) {
+          pythonProcess.kill();
+          error = 'Process timeout: Agent execution took too long and was terminated.';
+          console.error(error);
+          this.logAgentEvent(error);
+          
+          // Send timeout error to frontend
+          if (sender && !sender.isDestroyed()) {
+            sender.send('workflow-error', { 
+              workflow_id: workflowId,
+              error: 'Agent execution timed out' 
+            });
+          }
+        }
+      }, 45000);
+
+      pythonProcess.on('close', (code) => {
+        clearTimeout(timeout);
+        
+        console.log(`Python process exited with code ${code}`);
+        this.logAgentEvent(`Python process exited with code ${code}`);
+        
+        if (code !== 0) {
+          console.error(`Error running agent: ${error}`);
+          this.logAgentEvent(`Error running agent: ${error}`);
+          
+          // Send error to frontend
+          if (sender && !sender.isDestroyed()) {
+            sender.send('workflow-error', { 
+              workflow_id: workflowId,
+              error: error || `Python process exited with code ${code}` 
+            });
+          }
+          
+          resolve({ success: false, error: error || `Python process exited with code ${code}` });
+        } else {
+          try {
+            console.log(`Parsing result: ${result}`);
+            this.logAgentEvent(`Parsing result: ${result}`);
+            const parsedResult = JSON.parse(result);
+            
+            // Send completion events to frontend with consistent workflow ID
+            if (sender && !sender.isDestroyed()) {
+              console.log(`Sending completion events for workflow ID: ${workflowId}`);
+              
+              // Send step complete event
+              sender.send('workflow-step-complete', {
+                workflow_id: workflowId,
+                step_number: 1,
+                agent_name: agentName,
+                step_type: 'single_agent',
+                result: parsedResult
+              });
+              
+              // Send workflow complete event
+              sender.send('workflow-complete', {
+                workflow_id: workflowId,
+                result: parsedResult
+              });
+            }
+            
+            resolve(parsedResult);
+          } catch (e) {
+            const parseError = `Failed to parse Python output: ${(e as Error).message}`;
+            console.error(parseError);
+            this.logAgentEvent(`${parseError} Result was: ${result}`);
+            
+            // Send parse error to frontend
+            if (sender && !sender.isDestroyed()) {
+              sender.send('workflow-error', { 
+                workflow_id: workflowId,
+                error: parseError 
+              });
+            }
+            
+            resolve({ success: false, error: parseError });
+          }
+        }
+      });
+      
+      pythonProcess.on('error', (err) => {
+        clearTimeout(timeout);
+        const processError = `Process error: ${err.message}`;
+        console.error(processError);
+        this.logAgentEvent(processError);
+        
+        // Send process error to frontend
+        if (sender && !sender.isDestroyed()) {
+          sender.send('workflow-error', { 
+            workflow_id: workflowId,
+            error: processError 
+          });
+        }
+        
+        resolve({ success: false, error: processError });
+      });
+    });
   }
 
   private cleanQueryString(query: string): string {
@@ -390,76 +549,6 @@ export class AgentManager {
         conversationHistory: agentParams.conversationHistory || null
       };
     }
-  }
-
-  private async runPythonProcess(pythonPath: string, agentPath: string, params: any): Promise<AgentResult> {
-    const pythonArgs = [agentPath, JSON.stringify(params)];
-    
-    console.log(`Starting Python process: ${pythonPath} ${pythonArgs.join(' ')}`);
-    this.logAgentEvent(`Starting Python process: ${pythonPath} ${pythonArgs.join(' ')}`);
-    
-    return new Promise((resolve) => {
-      const pythonProcess: ChildProcess = spawn(pythonPath, pythonArgs);
-      let result = '';
-      let error = '';
-
-      pythonProcess.stdout?.on('data', (data) => {
-        const dataStr = data.toString();
-        result += dataStr;
-        console.log(`Python stdout: ${dataStr}`);
-        this.logAgentEvent(`Python stdout: ${dataStr}`);
-      });
-
-      pythonProcess.stderr?.on('data', (data) => {
-        const dataStr = data.toString();
-        error += dataStr;
-        console.error(`Python stderr: ${dataStr}`);
-        this.logAgentEvent(`Python stderr: ${dataStr}`);
-      });
-
-      // Set timeout
-      const timeout = setTimeout(() => {
-        if (!pythonProcess.killed) {
-          pythonProcess.kill();
-          error = 'Process timeout: Agent execution took too long and was terminated.';
-          console.error(error);
-          this.logAgentEvent(error);
-        }
-      }, 45000);
-
-      pythonProcess.on('close', (code) => {
-        clearTimeout(timeout);
-        
-        console.log(`Python process exited with code ${code}`);
-        this.logAgentEvent(`Python process exited with code ${code}`);
-        
-        if (code !== 0) {
-          console.error(`Error running agent: ${error}`);
-          this.logAgentEvent(`Error running agent: ${error}`);
-          resolve({ success: false, error: error || `Python process exited with code ${code}` });
-        } else {
-          try {
-            console.log(`Parsing result: ${result}`);
-            this.logAgentEvent(`Parsing result: ${result}`);
-            const parsedResult = JSON.parse(result);
-            resolve(parsedResult);
-          } catch (e) {
-            const parseError = `Failed to parse Python output: ${(e as Error).message}`;
-            console.error(parseError);
-            this.logAgentEvent(`${parseError} Result was: ${result}`);
-            resolve({ success: false, error: parseError });
-          }
-        }
-      });
-      
-      pythonProcess.on('error', (err) => {
-        clearTimeout(timeout);
-        const processError = `Process error: ${err.message}`;
-        console.error(processError);
-        this.logAgentEvent(processError);
-        resolve({ success: false, error: processError });
-      });
-    });
   }
 
   private logAgentEvent(message: string): void {
