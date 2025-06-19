@@ -8,13 +8,63 @@ import WorkflowProgressIndicator from './components/WorkflowProgress';
 const { ipcRenderer, shell } = require('electron');
 const path = require('path');
 
+// Type definitions
+interface TabInfo {
+  id: string;
+  url: string;
+  title: string;
+  isActive: boolean;
+  webviewId: string;
+  history: any[];
+  currentHistoryIndex: number;
+  isProblematicSite: boolean;
+}
+
 // Global variables and state
-let tabs: any[] = [];
-let activeTabId: string | null = null;
-let autoSummarizeEnabled = true;
-let isWorkflowExecuting = false; // Prevent duplicate executions
+let tabs: TabInfo[] = [];
+let activeTabId: string = '';
+let nextTabId = 1;
+let webviewsContainer: HTMLElement | null = null;
+let urlBar: HTMLInputElement | null = null;
+let backBtn: HTMLButtonElement | null = null;
+let forwardBtn: HTMLButtonElement | null = null;
+let reloadBtn: HTMLButtonElement | null = null;
+let addTabBtn: HTMLButtonElement | null = null;
+let modelSelector: HTMLSelectElement | null = null;
+let agentResults: HTMLElement | null = null;
+let isWorkflowExecuting = false;
+let lastProcessedQuery = '';
+let lastProcessedTimestamp = 0;
 let workflowProgressIndicator: WorkflowProgressIndicator | null = null;
 let workflowProgressSetup = false; // Prevent duplicate event listener setup
+
+// Global query execution tracker to prevent duplicates across all paths
+const globalQueryTracker = new Map<string, number>();
+
+function isQueryRecentlyProcessed(query: string, windowMs: number = 3000): boolean {
+  const normalizedQuery = query.toLowerCase().trim();
+  const currentTime = Date.now();
+  const lastProcessedTime = globalQueryTracker.get(normalizedQuery) || 0;
+  
+  if (currentTime - lastProcessedTime < windowMs) {
+    console.log('🚨 [GLOBAL DUPLICATE FIX] Query recently processed, skipping:', normalizedQuery.substring(0, 50));
+    return true;
+  }
+  
+  globalQueryTracker.set(normalizedQuery, currentTime);
+  
+  // Clean up old entries to prevent memory leaks
+  if (globalQueryTracker.size > 100) {
+    const cutoffTime = currentTime - (windowMs * 10);
+    for (const [key, time] of globalQueryTracker.entries()) {
+      if (time < cutoffTime) {
+        globalQueryTracker.delete(key);
+      }
+    }
+  }
+  
+  return false;
+}
 
 // Add global call tracking for debugging duplicates
 let displayAgentResultsCallCount = 0;
@@ -22,6 +72,24 @@ const displayAgentResultsCalls: Array<{callNumber: number, timestamp: number, st
 
 // Add global execution flow tracking
 const executionFlow: Array<{timestamp: number, function: string, details: any}> = [];
+
+// Webpage context management for @ mentions
+interface WebpageContext {
+  id: string;
+  title: string;
+  url: string;
+  timestamp: number;
+  content?: {
+    title: string;
+    description: string;
+    content: string;
+    html: string;
+    url: string;
+  };
+}
+
+let selectedWebpageContexts: WebpageContext[] = [];
+let isShowingMentionDropdown = false;
 
 function logExecutionFlow(functionName: string, details: any = {}): void {
   const entry = {
@@ -85,19 +153,12 @@ function trackDisplayAgentResultsCall(data: any): void {
 }
 
 // UI Elements
-let urlBar: HTMLInputElement;
-let backBtn: HTMLButtonElement;
-let forwardBtn: HTMLButtonElement;
-let reloadBtn: HTMLButtonElement;
 let goBtn: HTMLButtonElement;
 let historyBtn: HTMLButtonElement;
 let extensionsBtn: HTMLButtonElement;
-let modelSelector: HTMLSelectElement;
 let runAgentBtn: HTMLButtonElement;
-let agentResults: HTMLElement;
 let tabsContainer: HTMLElement;
 let newTabBtn: HTMLElement;
-let webviewsContainer: HTMLElement;
 let extensionsPanel: HTMLElement;
 let closeExtensionsBtn: HTMLElement;
 let workflowProgressContainer: HTMLElement;
@@ -147,7 +208,8 @@ document.addEventListener('DOMContentLoaded', () => {
   setupGlobalErrorHandler();
   
   console.log('Browser initialized successfully');
-  console.log('[Init] Final autoSummarizeEnabled state:', autoSummarizeEnabled);
+  // DISABLED: Auto-summarize feature commented out
+  // console.log('[Init] Final autoSummarizeEnabled state:', autoSummarizeEnabled);
 });
 
 function initializeUI(): void {
@@ -183,26 +245,6 @@ function initializeUI(): void {
     } else {
       document.body.appendChild(workflowProgressContainer);
     }
-  }
-  
-  // Load auto-summarize setting
-  const savedAutoSummarize = localStorage.getItem(AUTO_SUMMARIZE_KEY);
-  console.log('[Init] AUTO_SUMMARIZE_KEY:', AUTO_SUMMARIZE_KEY);
-  console.log('[Init] savedAutoSummarize from localStorage:', savedAutoSummarize);
-  console.log('[Init] autoSummarizeEnabled before:', autoSummarizeEnabled);
-  
-  if (savedAutoSummarize !== null) {
-    autoSummarizeEnabled = JSON.parse(savedAutoSummarize);
-  }
-  
-  console.log('[Init] autoSummarizeEnabled after:', autoSummarizeEnabled);
-  
-  // Update auto-summarize toggle
-  const autoSummarizeToggle = document.getElementById('autoSummarizeToggle') as HTMLInputElement;
-  console.log('[Init] autoSummarizeToggle found during init:', !!autoSummarizeToggle);
-  if (autoSummarizeToggle) {
-    autoSummarizeToggle.checked = autoSummarizeEnabled;
-    console.log('[Init] Set toggle checked to:', autoSummarizeEnabled);
   }
   
   // If no tabs were restored, create a new one
@@ -307,6 +349,20 @@ function setupWorkflowEventListeners(): void {
     console.log('📡 [IPC DEBUG] workflow-complete data.result keys:', data.result ? Object.keys(data.result) : 'no result');
     console.log('📡 [IPC DEBUG] workflow-complete has consolidated_summary:', !!(data.result && data.result.consolidated_summary));
     
+    // Add workflow-level deduplication to prevent duplicate processing
+    const workflowId = data.workflow_id;
+    const currentTime = Date.now();
+    const workflowCompleteKey = `workflowComplete_${workflowId}`;
+    const lastCompleteTime = parseInt(localStorage.getItem(workflowCompleteKey) || '0');
+    
+    if (currentTime - lastCompleteTime < 2000) {
+      console.log('🚨 [DUPLICATE FIX] Same workflow completed recently, skipping duplicate processing:', workflowId);
+      return;
+    }
+    
+    // Store current completion time
+    localStorage.setItem(workflowCompleteKey, currentTime.toString());
+    
     logExecutionFlow('workflow-complete-event', { workflowId: data.workflow_id, hasResult: !!data.result });
     
     // Clear execution flag
@@ -325,26 +381,21 @@ function setupWorkflowEventListeners(): void {
       console.warn('[WorkflowProgress] Workflow progress message not found for completion:', data.workflow_id);
     }
     
-    // Display the final workflow result with enhanced error handling
-    try {
-      console.log('[WorkflowProgress] Checking data.result:', !!data.result);
-      console.log('[WorkflowProgress] Data.result type:', typeof data.result);
+    // Display results if available
+    if (data.result) {
+      console.log('🎯 [WORKFLOW-COMPLETE] About to call displayAgentResults from workflow-complete event');
       
-      if (data.result) {
-        console.log('[WorkflowProgress] Displaying final workflow result');
-        console.log('[WorkflowProgress] Result keys:', data.result ? Object.keys(data.result) : 'null');
-        console.log('🎯 [WORKFLOW-COMPLETE] About to call displayAgentResults from workflow-complete event');
-        displayAgentResults(data.result);
-        console.log('[WorkflowProgress] displayAgentResults call completed successfully');
-      } else {
-        console.warn('[WorkflowProgress] No result data found in workflow-complete event');
-        console.log('[WorkflowProgress] Complete event data keys:', Object.keys(data));
+      // For workflow results, extract the inner data to normalize the structure
+      let resultData = data.result;
+      if (data.result.type === 'workflow' && data.result.data) {
+        console.log('🎯 [WORKFLOW-COMPLETE] Extracting inner data from workflow result');
+        resultData = data.result.data;
       }
-    } catch (error) {
-      console.error('[WorkflowProgress] Error displaying workflow result:', error);
-      console.error('[WorkflowProgress] Error stack:', error instanceof Error ? error.stack : 'No stack trace');
-      // Fallback - show error message to user
-      addMessageToChat('assistant', 'Error displaying workflow results: ' + (error instanceof Error ? error.message : 'Unknown error'));
+      
+      displayAgentResults(resultData);
+      console.log('🎯 [WORKFLOW-COMPLETE] displayAgentResults called successfully');
+    } else {
+      console.warn('[WorkflowProgress] No result data found in workflow-complete event');
     }
   });
 
@@ -485,21 +536,6 @@ function setupEventListeners(): void {
     console.log('🚨 [NEW TAB DEBUG] Event listener added successfully');
   } else {
     console.error('🚨 [NEW TAB DEBUG] newTabBtn element not found!');
-  }
-
-  // Auto-summarize toggle
-  const autoSummarizeToggle = document.getElementById('autoSummarizeToggle') as HTMLInputElement;
-  console.log('[Toggle Setup] autoSummarizeToggle found:', !!autoSummarizeToggle);
-  if (autoSummarizeToggle) {
-    console.log('[Toggle Setup] Initial toggle state:', autoSummarizeToggle.checked);
-    console.log('[Toggle Setup] autoSummarizeEnabled variable:', autoSummarizeEnabled);
-    autoSummarizeToggle.addEventListener('change', (e) => {
-      autoSummarizeEnabled = (e.target as HTMLInputElement).checked;
-      localStorage.setItem(AUTO_SUMMARIZE_KEY, JSON.stringify(autoSummarizeEnabled));
-      console.log('Auto-summarize toggled to:', autoSummarizeEnabled);
-    });
-  } else {
-    console.log('[Toggle Setup] autoSummarizeToggle element not found in DOM');
   }
 
   // Global keyboard shortcuts
@@ -979,6 +1015,8 @@ function setupWebviewEvents(webview: any): void {
       trackPageVisit(url, title);
     }
     
+    // DISABLED: Auto-summarize feature commented out
+    /*
     // Auto-summarize if enabled
     console.log('[Auto-summarize Check] autoSummarizeEnabled:', autoSummarizeEnabled);
     console.log('[Auto-summarize Check] url:', url);
@@ -1014,6 +1052,7 @@ function setupWebviewEvents(webview: any): void {
     } else {
       console.log('[Auto-summarize] Not enabled or invalid URL - enabled:', autoSummarizeEnabled, 'valid URL:', !!(url && url.startsWith('http')));
     }
+    */
   });
 
   webview.addEventListener('page-title-updated', (e: any) => {
@@ -1287,6 +1326,18 @@ function getTabIdFromWebview(webviewId: string): string | null {
 function trackPageVisit(url: string, title: string): void {
   if (!url || url === 'about:blank') return;
   
+  // Skip internal pages and invalid URLs
+  if (url.startsWith('file://') || 
+      url.includes('localhost') ||
+      url.startsWith('chrome://') ||
+      url.startsWith('edge://') ||
+      !title ||
+      title.length === 0 ||
+      title === 'New Tab') {
+    console.log('🔍 [HISTORY DEBUG] Skipping page visit:', { url, title });
+    return;
+  }
+  
   try {
     let history = JSON.parse(localStorage.getItem(HISTORY_STORAGE_KEY) || '[]');
     
@@ -1298,8 +1349,19 @@ function trackPageVisit(url: string, title: string): void {
       timestamp: Date.now()
     };
     
+    console.log('🔍 [HISTORY DEBUG] Tracking page visit:', { 
+      title: visit.title, 
+      url: visit.url.substring(0, 50) + (visit.url.length > 50 ? '...' : '') 
+    });
+    
     // Remove any existing entry for this URL to avoid duplicates
+    const beforeLength = history.length;
     history = history.filter((item: any) => item.url !== url);
+    const afterLength = history.length;
+    
+    if (beforeLength !== afterLength) {
+      console.log('🔍 [HISTORY DEBUG] Removed duplicate entry for URL');
+    }
     
     // Add new visit to the beginning
     history.unshift(visit);
@@ -1310,6 +1372,7 @@ function trackPageVisit(url: string, title: string): void {
     }
     
     localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(history));
+    console.log('🔍 [HISTORY DEBUG] Total history items after update:', history.length);
   } catch (error) {
     console.error('Error tracking page visit:', error);
   }
@@ -1461,9 +1524,38 @@ function setupChatInputHandlers(): void {
       const message = chatInput.value.trim();
       if (message) {
         console.log('[sendMessage] Sending message:', message);
+        console.log('[sendMessage] Selected contexts:', selectedWebpageContexts.length);
+        
+        // Debug: Log detailed context information
+        if (selectedWebpageContexts.length > 0) {
+          console.log('🚨 [SEND DEBUG] Found contexts, calling processFollowupQuestionWithContexts');
+          selectedWebpageContexts.forEach((ctx, index) => {
+            console.log(`🚨 [SEND DEBUG] Context ${index + 1}:`, {
+              title: ctx.title,
+              url: ctx.url,
+              hasContent: !!ctx.content,
+              contentKeys: ctx.content ? Object.keys(ctx.content) : 'none'
+            });
+          });
+        } else {
+          console.log('🚨 [SEND DEBUG] No contexts found, calling regular processFollowupQuestion');
+        }
+        
+        // Add user message to chat
         addMessageToChat('user', message);
-        processFollowupQuestion(message);
+        
+        // Process the message with contexts
+        if (selectedWebpageContexts.length > 0) {
+          console.log('🚨 [SEND DEBUG] Calling processFollowupQuestionWithContexts');
+          processFollowupQuestionWithContexts(message, selectedWebpageContexts);
+        } else {
+          console.log('🚨 [SEND DEBUG] Calling processFollowupQuestion');
+          processFollowupQuestion(message);
+        }
+        
+        // Clear input and contexts
         chatInput.value = '';
+        clearAllWebpageContexts();
       }
     };
     
@@ -1471,22 +1563,104 @@ function setupChatInputHandlers(): void {
     sendButton.addEventListener('click', (e) => {
       console.log('[setupChatInputHandlers] Send button clicked');
       e.preventDefault();
+      hideMentionDropdown(); // Hide dropdown before sending
       sendMessage();
     });
     
-    // Add keypress handler for Enter key
+    // Enhanced keypress handler for Enter key and @ mentions
     chatInput.addEventListener('keypress', (e) => {
       if (e.key === 'Enter') {
         console.log('[setupChatInputHandlers] Enter key pressed');
         e.preventDefault();
+        hideMentionDropdown(); // Hide dropdown before sending
         sendMessage();
       }
+    });
+    
+    // Add input handler for @ mention detection
+    chatInput.addEventListener('input', (e) => {
+      const value = chatInput.value;
+      const cursorPosition = chatInput.selectionStart || 0;
+      
+      console.log('🚨 [INPUT HANDLER] Input event triggered');
+      console.log('🚨 [INPUT HANDLER] Value:', value);
+      console.log('🚨 [INPUT HANDLER] Cursor position:', cursorPosition);
+      console.log('🚨 [INPUT HANDLER] Character at cursor-1:', value.charAt(cursorPosition - 1));
+      
+      // Check if user just typed @
+      if (value.charAt(cursorPosition - 1) === '@') {
+        console.log('🔍 [MENTION] @ detected, showing dropdown');
+        console.log('🚨 [INPUT HANDLER] Calling showMentionDropdown');
+        showMentionDropdown(chatInput);
+      } else if (isShowingMentionDropdown) {
+        console.log('🚨 [INPUT HANDLER] Dropdown is showing, checking if should hide');
+        // Check if we should hide the dropdown
+        const lastAtIndex = value.lastIndexOf('@');
+        console.log('🚨 [INPUT HANDLER] Last @ index:', lastAtIndex, 'cursor position:', cursorPosition);
+        if (lastAtIndex === -1 || cursorPosition <= lastAtIndex) {
+          console.log('🚨 [INPUT HANDLER] Hiding dropdown');
+          hideMentionDropdown();
+        }
+      }
+    });
+    
+    // Hide dropdown when clicking outside
+    document.addEventListener('click', (e) => {
+      const target = e.target as HTMLElement;
+      if (isShowingMentionDropdown && 
+          !target.closest('#mentionDropdown') && 
+          target !== chatInput) {
+        hideMentionDropdown();
+      }
+    });
+    
+    // Add keyboard navigation for dropdown
+    chatInput.addEventListener('keydown', (e) => {
+      if (isShowingMentionDropdown) {
+        const dropdown = document.getElementById('mentionDropdown');
+        if (dropdown) {
+          const items = dropdown.querySelectorAll('.mention-item:not(.empty)');
+          const currentActive = dropdown.querySelector('.mention-item.active');
+          let activeIndex = currentActive ? Array.from(items).indexOf(currentActive) : -1;
+          
+          if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            activeIndex = Math.min(activeIndex + 1, items.length - 1);
+          } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            activeIndex = Math.max(activeIndex - 1, 0);
+          } else if (e.key === 'Enter' && activeIndex >= 0) {
+            e.preventDefault();
+            (items[activeIndex] as HTMLElement).click();
+            return;
+          } else if (e.key === 'Escape') {
+            e.preventDefault();
+            hideMentionDropdown();
+            return;
+          }
+          
+          // Update active state
+          items.forEach((item, index) => {
+            item.classList.toggle('active', index === activeIndex);
+          });
+        }
+      }
+    });
+    
+    // Add blur handler to hide dropdown
+    chatInput.addEventListener('blur', (e) => {
+      // Small delay to allow clicking on dropdown items
+      setTimeout(() => {
+        if (isShowingMentionDropdown && !document.querySelector('#mentionDropdown:hover')) {
+          hideMentionDropdown();
+        }
+      }, 150);
     });
     
     // Mark as having handlers
     (sendButton as any).hasHandlers = true;
     
-    console.log('[setupChatInputHandlers] Chat input handlers set up successfully');
+    console.log('[setupChatInputHandlers] Enhanced chat input handlers with @ mentions set up successfully');
   }, 100); // Small delay to ensure DOM is ready
 }
 
@@ -1619,9 +1793,9 @@ async function executeAgent(): Promise<void> {
   console.log('🎯 [EXECUTION DEBUG] executeAgent() called');
   console.log('🎯 [EXECUTION DEBUG] isWorkflowExecuting:', isWorkflowExecuting);
   
-  // Prevent manual execution when workflow is already executing
+  // Prevent manual execution when workflow is already executing (from chat input)
   if (isWorkflowExecuting) {
-    console.log('[executeAgent] Workflow already executing, skipping manual execution');
+    console.log('[executeAgent] Workflow already executing (likely from chat input), skipping Run Agent button execution');
     showToast('Workflow already in progress...', 'info');
     return;
   }
@@ -1683,25 +1857,35 @@ async function executeAgent(): Promise<void> {
       query = title;
     }
     
+    // Global duplicate check - prevent same query from any path
+    if (isQueryRecentlyProcessed(query)) {
+      console.log('🚨 [GLOBAL DUPLICATE FIX] Duplicate query detected in executeAgent, aborting');
+      showToast('This query was just processed, skipping duplicate', 'info');
+      return;
+    }
+    
+    // Prevent duplicate processing of the same query within 5 seconds
+    const currentTime = Date.now();
+    const queryKey = `${query}-${url}`;
+    const lastProcessedKey = `lastProcessed_${queryKey}`;
+    const lastProcessedTime = parseInt(localStorage.getItem(lastProcessedKey) || '0');
+    
+    if (currentTime - lastProcessedTime < 5000) {
+      console.log('[executeAgent] Same query processed recently, skipping duplicate execution');
+      showToast('This query was just processed, skipping duplicate execution', 'info');
+      return;
+    }
+    
+    // Store current processing time
+    localStorage.setItem(lastProcessedKey, currentTime.toString());
+    
     // Set up chat container if it doesn't exist
     if (agentResults) {
       let chatContainer = document.getElementById('chatContainer');
       let chatInputArea = document.querySelector('.chat-input-area');
       
-      if (!chatContainer) {
-        console.log('[executeAgent] Chat container not found, creating one');
-        
-        // Remove any existing welcome containers when starting chat
-        const existingWelcome = agentResults.querySelector('.welcome-container');
-        if (existingWelcome) {
-          existingWelcome.remove();
-        }
-        
-        chatContainer = document.createElement('div');
-        chatContainer.id = 'chatContainer';
-        chatContainer.className = 'chat-container';
-        agentResults.appendChild(chatContainer);
-      }
+      // Chat container creation is now handled by addMessageToChat
+      // Just ensure we have a reference to check for input area positioning
       
       if (!chatInputArea) {
         console.log('[executeAgent] Chat input area not found, creating one');
@@ -1712,13 +1896,9 @@ async function executeAgent(): Promise<void> {
           <input type="text" id="chatInput" placeholder="Ask a follow-up question..." />
           <button id="sendMessageBtn" class="chat-send-btn">Send</button>
         `;
-        // Ensure it's positioned after the chat container for proper sticky positioning
-        if (chatContainer && chatContainer.parentNode === agentResults) {
-          chatContainer.insertAdjacentElement('afterend', chatInputArea);
-        } else {
-          agentResults.appendChild(chatInputArea);
-        }
         
+        // Position the input area after the chat container (will be created by addMessageToChat if needed)
+        agentResults.appendChild(chatInputArea);
         setupChatInputHandlers();
       }
     }
@@ -1728,6 +1908,13 @@ async function executeAgent(): Promise<void> {
     
     // Extract page content
     const pageContent = await extractPageContent(webview);
+    
+    // Debug: Log that HTML content is being passed to agent
+    console.log('🔍 [CONTENT DEBUG] Page content extracted for agent:');
+    console.log('📄 Title:', pageContent.title);
+    console.log('📝 Text content length:', pageContent.content?.length || 0, 'chars');
+    console.log('🌐 HTML content length:', pageContent.html?.length || 0, 'chars');
+    console.log('🔗 HTML includes links:', pageContent.html?.includes('<a ') || false);
     
     // Route request to appropriate extension or workflow
     console.log('Routing extension request for query:', query);
@@ -1896,252 +2083,6 @@ async function executeAgent(): Promise<void> {
   }
 }
 
-async function autoSummarizePage(url: string, webview: any): Promise<void> {
-  console.log('🎯 [EXECUTION DEBUG] autoSummarizePage() called for URL:', url);
-  console.log('🎯 [EXECUTION DEBUG] isWorkflowExecuting:', isWorkflowExecuting);
-  console.log('🎯 [EXECUTION DEBUG] autoSummarizeEnabled:', autoSummarizeEnabled);
-  
-  logExecutionFlow('autoSummarizePage', { url, isWorkflowExecuting, autoSummarizeEnabled });
-  
-  // Prevent auto-summarize when workflow is already executing
-  if (isWorkflowExecuting) {
-    console.log('[autoSummarizePage] Workflow already executing, skipping auto-summarize');
-    return;
-  }
-  
-  // Set execution flag immediately to prevent race conditions
-  isWorkflowExecuting = true;
-  console.log('[autoSummarizePage] Setting execution flag at start to prevent conflicts');
-  
-  if (isProblematicSite(url)) {
-    console.log('Skipping auto-summarization for problematic site:', url);
-    addMessageToChat('assistant', '<div class="info-message"><p>Auto-summarization disabled for this site to prevent rendering issues.</p></div>');
-    isWorkflowExecuting = false; // Clear flag if not proceeding
-    return;
-  }
-  
-  if (!modelSelector) {
-    console.error('Model selector not found');
-    isWorkflowExecuting = false; // Clear flag if not proceeding
-    return;
-  }
-  
-  const provider = modelSelector.value;
-  const apiKey = localStorage.getItem(`${provider}_api_key`);
-  
-  if (!apiKey) {
-    addMessageToChat('assistant', '<div class="error-message"><p>Please configure your API key in the Extensions panel first.</p></div>');
-    isWorkflowExecuting = false; // Clear flag if not proceeding
-    return;
-  }
-  
-  // Ensure chat container exists
-  if (agentResults) {
-    let chatContainer = document.getElementById('chatContainer');
-    let chatInputArea = document.querySelector('.chat-input-area');
-    
-    if (!chatContainer) {
-      console.log('[autoSummarizePage] Chat container not found, creating one');
-      
-      // Remove any existing welcome containers when starting chat
-      const existingWelcome = agentResults.querySelector('.welcome-container');
-      if (existingWelcome) {
-        existingWelcome.remove();
-      }
-      
-      chatContainer = document.createElement('div');
-      chatContainer.id = 'chatContainer';
-      chatContainer.className = 'chat-container';
-      agentResults.appendChild(chatContainer);
-    }
-    
-    if (!chatInputArea) {
-      console.log('[autoSummarizePage] Chat input area not found, creating one');
-      
-      chatInputArea = document.createElement('div');
-      chatInputArea.className = 'chat-input-area';
-      chatInputArea.innerHTML = `
-        <input type="text" id="chatInput" placeholder="Ask a follow-up question..." />
-        <button id="sendMessageBtn" class="chat-send-btn">Send</button>
-      `;
-      // Ensure it's positioned after the chat container for proper sticky positioning
-      if (chatContainer && chatContainer.parentNode === agentResults) {
-        chatContainer.insertAdjacentElement('afterend', chatInputArea);
-      } else {
-        agentResults.appendChild(chatInputArea);
-      }
-      
-      setupChatInputHandlers();
-    }
-    
-    addMessageToChat('assistant', '<div class="loading">Auto-summarizing...</div>');
-  }
-  
-  try {
-    const pageContent = await extractPageContent(webview);
-    
-    // Route request to appropriate extension for auto-summarization
-    const pageTitle = webview.getTitle() || url;
-    const autoSummarizeRequest = `Analyze and summarize this page: ${pageTitle}`;
-    
-    const routingResult = await ipcRenderer.invoke('route-extension-request', autoSummarizeRequest);
-    console.log('Auto-summarize routing result:', routingResult);
-    
-    // Clear loading indicators first
-    const loadingMessages = document.querySelectorAll('.loading');
-    loadingMessages.forEach(message => {
-      const parentMessage = message.closest('.chat-message');
-      if (parentMessage) {
-        parentMessage.remove();
-      }
-    });
-    
-    // Check if routing returned a workflow result
-    if (routingResult.type === 'workflow') {
-      console.log('Auto-summarize received workflow result:', routingResult);
-      
-      // Don't initialize workflow progress indicator here - let the backend workflow-start event handle it
-      // This fixes the workflow ID mismatch issue where frontend uses Date.now() but backend uses uuid4()
-      console.log('Auto-summarize workflow detected - progress will be initialized by backend workflow-start event');
-      
-      // Execute workflow asynchronously with progress events
-      try {
-        const workflowData = {
-          pageContent,
-          browserApiKeys: getBrowserApiKeys(),
-          selectedProvider: provider,
-          selectedModel: modelSelector.selectedOptions[0]?.dataset.model || 'claude-3-7-sonnet-latest',
-          isQuestion: false,
-          conversationHistory: []
-        };
-
-        await ipcRenderer.invoke('execute-workflow', {
-          query: autoSummarizeRequest,
-          data: workflowData
-        });
-        
-        // Workflow execution is async - progress events will handle UI updates
-        // The workflow-complete event listener will call displayAgentResults when done
-        
-      } catch (workflowError) {
-        console.error('Auto-summarize workflow execution failed:', workflowError);
-        addMessageToChat('assistant', `Auto-summarization workflow failed: ${(workflowError as Error).message}`);
-      }
-      
-      return; // Don't execute single extension path
-    }
-    
-    // Handle single extension result
-    const extensionId = routingResult.extensionId;
-    if (!extensionId) {
-      addMessageToChat('assistant', 'Error: No extension available for auto-summarization');
-      return;
-    }
-    
-    // Create progress indicator for single extension execution
-    const singleExtensionWorkflowData = {
-      workflowId: `auto-single-${Date.now()}`,
-      type: 'single_extension',
-      steps: [{
-        extensionId: extensionId,
-        extensionName: getExtensionDisplayName(extensionId)
-      }]
-    };
-    
-    console.log('🚨 [AUTO-SUMMARIZE DEBUG] Creating progress indicator for single extension:', singleExtensionWorkflowData);
-    const progressElement = addWorkflowProgressToChat(singleExtensionWorkflowData);
-    
-    // Start the progress indicator
-    if (progressElement && (progressElement as any).progressIndicator) {
-      (progressElement as any).progressIndicator.startWorkflow(singleExtensionWorkflowData);
-      
-      // Update to running state
-      (progressElement as any).progressIndicator.updateProgress({
-        workflowId: singleExtensionWorkflowData.workflowId,
-        currentStep: 0,
-        stepStatus: 'running'
-      });
-    }
-    
-    const action = 'process_page';
-    const data = {
-      query: autoSummarizeRequest,
-      pageContent,
-      isQuestion: false
-    };
-    
-    console.log(`Executing extension for auto-summarize: ${extensionId} (confidence: ${routingResult.confidence})`);
-    console.log(`Auto-summarize routing reason: ${routingResult.reason}`);
-    
-    const startTime = Date.now();
-    
-    try {
-      const result = await ipcRenderer.invoke('execute-python-extension', {
-        extensionId,
-        action,
-        data,
-        browserApiKeys: getBrowserApiKeys(),
-        selectedProvider: provider
-      });
-      
-      const endTime = Date.now();
-      const executionTime = endTime - startTime;
-      
-      console.log('Auto-summarize result received:', result);
-      
-      // Complete the progress indicator
-      if (progressElement && (progressElement as any).progressIndicator) {
-        (progressElement as any).progressIndicator.updateProgress({
-          workflowId: singleExtensionWorkflowData.workflowId,
-          currentStep: 0,
-          stepStatus: 'completed',
-          stepResult: result.data
-        });
-        
-        (progressElement as any).progressIndicator.completeWorkflow({
-          workflowId: singleExtensionWorkflowData.workflowId,
-          result: result.data
-        });
-      }
-      
-      if (result.success === false) {
-        addMessageToChat('assistant', `Error: ${result.error}`);
-      } else {
-        console.log('Auto-summarize calling displayAgentResults with:', result.data);
-        displayAgentResults(result.data);
-      }
-    } catch (extensionError) {
-      console.error('Auto-summarize extension execution failed:', extensionError);
-      
-      // Mark progress as failed
-      if (progressElement && (progressElement as any).progressIndicator) {
-        (progressElement as any).progressIndicator.handleWorkflowError({
-          workflowId: singleExtensionWorkflowData.workflowId,
-          error: (extensionError as Error).message
-        });
-      }
-      
-      addMessageToChat('assistant', `Auto-summarization failed: ${(extensionError as Error).message}`);
-    }
-  } catch (error) {
-    console.error('Error in autoSummarizePage:', error);
-    
-    const loadingMessages = document.querySelectorAll('.loading');
-    loadingMessages.forEach(message => {
-      const parentMessage = message.closest('.chat-message');
-      if (parentMessage) {
-        parentMessage.remove();
-      }
-    });
-    
-    addMessageToChat('assistant', 'Auto-summarization failed: ' + (error as Error).message);
-  } finally {
-    // Always clear the execution flag when function ends
-    isWorkflowExecuting = false;
-    console.log('[autoSummarizePage] Clearing execution flag on function completion');
-  }
-}
-
 // ========================= UTILITY FUNCTIONS =========================
 
 async function extractPageContent(webview: any): Promise<any> {
@@ -2159,6 +2100,7 @@ async function extractPageContent(webview: any): Promise<any> {
             console.error('Error getting meta description:', e);
           }
           
+          // Get both text content and full HTML
           const mainContent = document.querySelector('article') || 
                             document.querySelector('main') || 
                             document.querySelector('.content') ||
@@ -2166,11 +2108,13 @@ async function extractPageContent(webview: any): Promise<any> {
                             document.body;
           
           const bodyText = mainContent ? mainContent.innerText.replace(/\\s+/g, ' ').trim() : '';
+          const bodyHTML = mainContent ? mainContent.innerHTML : document.body.innerHTML;
           
           return {
             title: title,
             description: description,
             content: bodyText,
+            html: bodyHTML,
             url: window.location.href
           };
         } catch(finalError) {
@@ -2179,6 +2123,7 @@ async function extractPageContent(webview: any): Promise<any> {
             title: document.title || '',
             description: '',
             content: 'Error extracting content: ' + finalError.message,
+            html: '',
             url: window.location.href
           };
         }
@@ -2186,19 +2131,40 @@ async function extractPageContent(webview: any): Promise<any> {
     `;
     
     const result = await webview.executeJavaScript(extractScript);
-    return result || { title: '', description: '', content: '', url: '' };
+    return result || { title: '', description: '', content: '', html: '', url: '' };
   } catch (error) {
     console.error('Error in extractPageContent:', error);
-    return { title: '', description: '', content: '', url: '' };
+    return { title: '', description: '', content: '', html: '', url: '' };
   }
 }
 
 function addMessageToChat(role: string, content: string, timing?: number): void {
   try {
-    const chatContainer = document.getElementById('chatContainer');
+    let chatContainer = document.getElementById('chatContainer');
+    
+    // Create chat container if it doesn't exist
     if (!chatContainer) {
-      console.error('[addMessageToChat] Chat container not found');
-      return;
+      console.log('[addMessageToChat] Chat container not found, creating one');
+      
+      const agentResults = document.getElementById('agentResults');
+      if (!agentResults) {
+        console.error('[addMessageToChat] agentResults container not found');
+        return;
+      }
+      
+      // Remove any existing welcome containers when starting chat
+      const existingWelcome = agentResults.querySelector('.welcome-container');
+      if (existingWelcome) {
+        existingWelcome.remove();
+      }
+      
+      // Create the chat container
+      chatContainer = document.createElement('div');
+      chatContainer.id = 'chatContainer';
+      chatContainer.className = 'chat-container';
+      agentResults.appendChild(chatContainer);
+      
+      console.log('[addMessageToChat] Chat container created successfully');
     }
     
     if (!content || content.trim() === '') {
@@ -2247,6 +2213,22 @@ function addMessageToChat(role: string, content: string, timing?: number): void 
     // Scroll to bottom with smooth behavior
     chatContainer.scrollTop = chatContainer.scrollHeight;
     
+    // Ensure chat input area exists for follow-up questions
+    const agentResults = document.getElementById('agentResults');
+    if (agentResults && !document.querySelector('.chat-input-area')) {
+      console.log('[addMessageToChat] Creating chat input area for follow-up questions');
+      
+      const chatInputArea = document.createElement('div');
+      chatInputArea.className = 'chat-input-area';
+      chatInputArea.innerHTML = `
+        <input type="text" id="chatInput" placeholder="Ask a follow-up question..." />
+        <button id="sendMessageBtn" class="chat-send-btn">Send</button>
+      `;
+      
+      agentResults.appendChild(chatInputArea);
+      setupChatInputHandlers();
+    }
+    
     console.log(`[addMessageToChat] Message added successfully. Total messages: ${chatContainer.children.length}`);
   } catch (error) {
     console.error('[addMessageToChat] Error adding message to chat:', error);
@@ -2270,6 +2252,20 @@ function displayAgentResults(data: any): void {
       addMessageToChat('assistant', 'No data received from agent');
       return;
     }
+
+    // Prevent duplicate results within 3 seconds
+    const currentTime = Date.now();
+    const contentHash = JSON.stringify(data).substring(0, 200); // Use first 200 chars as hash
+    const lastDisplayKey = `lastDisplayed_${contentHash}`;
+    const lastDisplayTime = parseInt(localStorage.getItem(lastDisplayKey) || '0');
+    
+    if (currentTime - lastDisplayTime < 3000) {
+      console.log('[displayAgentResults] Same content displayed recently, skipping duplicate');
+      return;
+    }
+    
+    // Store current display time
+    localStorage.setItem(lastDisplayKey, currentTime.toString());
 
     console.log("[displayAgentResults] Agent result data:", data);
     console.log('[displayAgentResults] Has consolidated_summary:', !!data.consolidated_summary);
@@ -2309,12 +2305,34 @@ function displayAgentResults(data: any): void {
 async function processFollowupQuestion(question: string): Promise<void> {
   console.log('[processFollowupQuestion] Processing question:', question);
   
+  // Global duplicate check - prevent same query from any path
+  if (isQueryRecentlyProcessed(question)) {
+    console.log('🚨 [GLOBAL DUPLICATE FIX] Duplicate query detected in processFollowupQuestion, aborting');
+    showToast('This question was just processed, skipping duplicate', 'info');
+    return;
+  }
+  
   // Prevent follow-up execution when workflow is already executing
   if (isWorkflowExecuting) {
     console.log('[processFollowupQuestion] Workflow already executing, skipping follow-up execution');
     showToast('Workflow already in progress...', 'info');
     return;
   }
+  
+  // Prevent duplicate processing of the same query within 5 seconds
+  const currentTime = Date.now();
+  const queryKey = `followup_${question}`;
+  const lastProcessedKey = `lastProcessed_${queryKey}`;
+  const lastProcessedTime = parseInt(localStorage.getItem(lastProcessedKey) || '0');
+  
+  if (currentTime - lastProcessedTime < 5000) {
+    console.log('[processFollowupQuestion] Same question processed recently, skipping duplicate execution');
+    showToast('This question was just processed, skipping duplicate execution', 'info');
+    return;
+  }
+  
+  // Store current processing time
+  localStorage.setItem(lastProcessedKey, currentTime.toString());
   
   // Set execution flag immediately to prevent race conditions
   isWorkflowExecuting = true;
@@ -2362,6 +2380,13 @@ async function processFollowupQuestion(question: string): Promise<void> {
     const currentUrl = activeWebview.src || '';
     console.log('[processFollowupQuestion] Extracting page content from:', currentUrl);
     const pageContent = await extractPageContent(activeWebview);
+    
+    // Debug: Log that HTML content is being passed to agent
+    console.log('🔍 [CONTENT DEBUG] Page content extracted for agent:');
+    console.log('📄 Title:', pageContent.title);
+    console.log('📝 Text content length:', pageContent.content?.length || 0, 'chars');
+    console.log('🌐 HTML content length:', pageContent.html?.length || 0, 'chars');
+    console.log('🔗 HTML includes links:', pageContent.html?.includes('<a ') || false);
     
     // Route request to appropriate extension for question answering
     const questionRequest = `Answer this question about the page: ${question}`;
@@ -2518,6 +2543,252 @@ async function processFollowupQuestion(question: string): Promise<void> {
   }
 }
 
+async function processFollowupQuestionWithContexts(question: string, contexts: WebpageContext[]): Promise<void> {
+  console.log('[processFollowupQuestionWithContexts] Processing question:', question);
+  console.log('[processFollowupQuestionWithContexts] Contexts:', contexts.length);
+  
+  // Prevent follow-up execution when workflow is already executing
+  if (isWorkflowExecuting) {
+    console.log('[processFollowupQuestionWithContexts] Workflow already executing, skipping follow-up execution');
+    showToast('Workflow already in progress...', 'info');
+    return;
+  }
+  
+  // Set execution flag immediately to prevent race conditions
+  isWorkflowExecuting = true;
+  console.log('[processFollowupQuestionWithContexts] Setting execution flag at start to prevent conflicts');
+  
+  // Helper function to clear loading indicators
+  const clearLoadingIndicators = () => {
+    const loadingMessages = document.querySelectorAll('.loading');
+    loadingMessages.forEach(message => {
+      const parentMessage = message.closest('.chat-message');
+      if (parentMessage) {
+        parentMessage.remove();
+      }
+    });
+  };
+  
+  try {
+    addMessageToChat('assistant', '<div class="loading">Processing your question with webpage contexts...</div>');
+    
+    if (!modelSelector) {
+      clearLoadingIndicators();
+      addMessageToChat('assistant', 'Error: Model selector not found.');
+      isWorkflowExecuting = false;
+      return;
+    }
+    
+    const provider = modelSelector.value;
+    const apiKey = localStorage.getItem(`${provider}_api_key`);
+    
+    if (!apiKey) {
+      clearLoadingIndicators();
+      addMessageToChat('assistant', 'Please configure your API key in the Extensions panel.');
+      isWorkflowExecuting = false;
+      return;
+    }
+    
+    const activeWebview = getActiveWebview();
+    if (!activeWebview) {
+      clearLoadingIndicators();
+      addMessageToChat('assistant', 'No active webview found.');
+      isWorkflowExecuting = false;
+      return;
+    }
+    
+    const currentUrl = activeWebview.src || '';
+    console.log('[processFollowupQuestionWithContexts] Extracting page content from:', currentUrl);
+    const pageContent = await extractPageContent(activeWebview);
+    
+    // Debug: Log enhanced content and contexts
+    console.log('🔍 [CONTEXT DEBUG] Page content extracted for agent:');
+    console.log('📄 Title:', pageContent.title);
+    console.log('📝 Text content length:', pageContent.content?.length || 0, 'chars');
+    console.log('🌐 HTML content length:', pageContent.html?.length || 0, 'chars');
+    console.log('🔗 HTML includes links:', pageContent.html?.includes('<a ') || false);
+    console.log('📋 Additional contexts:', contexts.length);
+    
+    // Log each additional context in detail
+    if (contexts.length > 0) {
+      console.log('🔍 [CONTEXT DEBUG] Additional webpage contexts:');
+      for (let i = 0; i < contexts.length; i++) {
+        const ctx = contexts[i];
+        console.log(`  📄 Context ${i + 1}:`);
+        console.log(`    Title: ${ctx.title}`);
+        console.log(`    URL: ${ctx.url}`);
+        console.log(`    Content length: ${ctx.content?.content?.length || 0} chars`);
+        console.log(`    HTML length: ${ctx.content?.html?.length || 0} chars`);
+        console.log(`    Has actual content: ${(ctx.content?.content?.length || 0) > 50}`);
+      }
+    }
+    
+    // Prepare enhanced page content with additional contexts
+    const enhancedPageContent = {
+      ...pageContent,
+      additionalContexts: contexts.map(ctx => ({
+        title: ctx.title,
+        url: ctx.url,
+        content: ctx.content || {}
+      }))
+    };
+    
+    // Debug: Log the final enhanced page content structure
+    console.log('🔍 [CONTEXT DEBUG] Enhanced page content structure:');
+    console.log('  Current page content length:', enhancedPageContent.content?.length || 0);
+    console.log('  Current page HTML length:', enhancedPageContent.html?.length || 0);
+    console.log('  Additional contexts count:', enhancedPageContent.additionalContexts?.length || 0);
+    enhancedPageContent.additionalContexts?.forEach((ctx: any, index: number) => {
+      console.log(`  Additional context ${index + 1} content length:`, ctx.content?.content?.length || 0);
+    });
+    
+    // Route request to appropriate extension for question answering
+    const questionRequest = `Answer this question using the current page and any provided webpage contexts: ${question}`;
+    
+    console.log('[processFollowupQuestionWithContexts] Routing extension request...');
+    const routingResult = await ipcRenderer.invoke('route-extension-request', questionRequest);
+    console.log('Follow-up question with contexts routing result:', routingResult);
+    
+    // Clear loading indicators first
+    clearLoadingIndicators();
+    
+    // Check if routing returned a workflow result
+    if (routingResult.type === 'workflow') {
+      console.log('Follow-up question with contexts received workflow result:', routingResult);
+      
+      console.log('Follow-up workflow detected - progress will be initialized by backend workflow-start event');
+      
+      // Execute workflow asynchronously with progress events
+      try {
+        const workflowData = {
+          pageContent: enhancedPageContent,
+          browserApiKeys: getBrowserApiKeys(),
+          selectedProvider: provider,
+          selectedModel: modelSelector.selectedOptions[0]?.dataset.model || 'claude-3-7-sonnet-latest',
+          isQuestion: true,
+          conversationHistory: []
+        };
+
+        await ipcRenderer.invoke('execute-workflow', {
+          query: questionRequest,
+          data: workflowData
+        });
+        
+      } catch (workflowError) {
+        console.error('Follow-up workflow with contexts execution failed:', workflowError);
+        addMessageToChat('assistant', `Workflow execution failed: ${(workflowError as Error).message}`);
+      }
+      
+      return;
+    }
+    
+    // Handle single extension result
+    const extensionId = routingResult.extensionId;
+    if (!extensionId) {
+      addMessageToChat('assistant', 'Error: No extension available to answer your question');
+      return;
+    }
+    
+    // Create progress indicator for single extension execution
+    const singleExtensionWorkflowData = {
+      workflowId: `followup-context-single-${Date.now()}`,
+      type: 'single_extension',
+      steps: [{
+        extensionId: extensionId,
+        extensionName: getExtensionDisplayName(extensionId)
+      }]
+    };
+    
+    console.log('🚨 [FOLLOWUP CONTEXT DEBUG] Creating progress indicator for single extension:', singleExtensionWorkflowData);
+    const progressElement = addWorkflowProgressToChat(singleExtensionWorkflowData);
+    
+    // Start the progress indicator
+    if (progressElement && (progressElement as any).progressIndicator) {
+      (progressElement as any).progressIndicator.startWorkflow(singleExtensionWorkflowData);
+      
+      // Update to running state
+      (progressElement as any).progressIndicator.updateProgress({
+        workflowId: singleExtensionWorkflowData.workflowId,
+        currentStep: 0,
+        stepStatus: 'running'
+      });
+    }
+    
+    const action = 'process_page';
+    const data = {
+      query: questionRequest,
+      pageContent: enhancedPageContent,
+      isQuestion: true
+    };
+    
+    console.log(`[processFollowupQuestionWithContexts] Executing extension with question: ${extensionId} (confidence: ${routingResult.confidence}) - ${question}`);
+    console.log(`Follow-up with contexts routing reason: ${routingResult.reason}`);
+    
+    const startTime = Date.now();
+    
+    try {
+      const result = await ipcRenderer.invoke('execute-python-extension', {
+        extensionId,
+        action,
+        data,
+        browserApiKeys: getBrowserApiKeys(),
+        selectedProvider: provider
+      });
+      
+      const endTime = Date.now();
+      const executionTime = endTime - startTime;
+      
+      console.log('[processFollowupQuestionWithContexts] Extension result received:', result);
+      
+      // Complete the progress indicator
+      if (progressElement && (progressElement as any).progressIndicator) {
+        (progressElement as any).progressIndicator.updateProgress({
+          workflowId: singleExtensionWorkflowData.workflowId,
+          currentStep: 0,
+          stepStatus: 'completed',
+          stepResult: result.data
+        });
+        
+        (progressElement as any).progressIndicator.completeWorkflow({
+          workflowId: singleExtensionWorkflowData.workflowId,
+          result: result.data
+        });
+      }
+      
+      if (result.success === false) {
+        addMessageToChat('assistant', `Error: ${result.error || 'Unknown error'}`);
+        return;
+      }
+      
+      console.log('[processFollowupQuestionWithContexts] Displaying results...');
+      displayAgentResults(result.data);
+    } catch (extensionError) {
+      console.error('Follow-up extension with contexts execution failed:', extensionError);
+      
+      // Mark progress as failed
+      if (progressElement && (progressElement as any).progressIndicator) {
+        (progressElement as any).progressIndicator.handleWorkflowError({
+          workflowId: singleExtensionWorkflowData.workflowId,
+          error: (extensionError as Error).message
+        });
+      }
+      
+      addMessageToChat('assistant', `Error: ${(extensionError as Error).message}`);
+    }
+  } catch (error) {
+    console.error('Error in processFollowupQuestionWithContexts:', error);
+    
+    // Ensure loading indicators are cleared even on error
+    clearLoadingIndicators();
+    
+    addMessageToChat('assistant', `Error: ${(error as Error).message}`);
+  } finally {
+    // Always clear the execution flag when function ends
+    isWorkflowExecuting = false;
+    console.log('[processFollowupQuestionWithContexts] Clearing execution flag on function completion');
+  }
+}
+
 // ========================= EXTENSION STORE =========================
 
 function showExtensionStore(): void {
@@ -2536,7 +2807,9 @@ function showExtensionStore(): void {
     storeContainer.id = 'extension-store-container';
     storeContainer.className = 'webview'; // Use same styles as webview
     storeContainer.style.display = 'none';
-    webviewsContainer.appendChild(storeContainer);
+    if (webviewsContainer) {
+      webviewsContainer.appendChild(storeContainer);
+    }
   }
   
   // Show the store container
@@ -2589,10 +2862,31 @@ function showExtensionStore(): void {
 }; 
 
 function addWorkflowProgressToChat(workflowData: any): HTMLElement {
-  const chatContainer = document.getElementById('chatContainer');
+  let chatContainer = document.getElementById('chatContainer');
+  
+  // Create chat container if it doesn't exist
   if (!chatContainer) {
-    console.error('[addWorkflowProgressToChat] Chat container not found');
-    return document.createElement('div');
+    console.log('[addWorkflowProgressToChat] Chat container not found, creating one');
+    
+    const agentResults = document.getElementById('agentResults');
+    if (!agentResults) {
+      console.error('[addWorkflowProgressToChat] agentResults container not found');
+      return document.createElement('div');
+    }
+    
+    // Remove any existing welcome containers when starting chat
+    const existingWelcome = agentResults.querySelector('.welcome-container');
+    if (existingWelcome) {
+      existingWelcome.remove();
+    }
+    
+    // Create the chat container
+    chatContainer = document.createElement('div');
+    chatContainer.id = 'chatContainer';
+    chatContainer.className = 'chat-container';
+    agentResults.appendChild(chatContainer);
+    
+    console.log('[addWorkflowProgressToChat] Chat container created successfully');
   }
 
   console.log('[addWorkflowProgressToChat] Creating workflow progress for:', workflowData);
@@ -2631,4 +2925,339 @@ function findWorkflowProgressInChat(workflowId: string): HTMLElement | null {
 
   const workflowMessages = chatContainer.querySelectorAll(`[data-workflow-id="${workflowId}"]`);
   return workflowMessages.length > 0 ? workflowMessages[0] as HTMLElement : null;
+}
+
+// ========================= WEBPAGE CONTEXT MANAGEMENT =========================
+
+function getAvailableWebpages(): WebpageContext[] {
+  try {
+    const history = JSON.parse(localStorage.getItem(HISTORY_STORAGE_KEY) || '[]');
+    console.log('🔍 [DROPDOWN DEBUG] Total history items:', history.length);
+    
+    // Filter out internal pages and take up to 15 items for @ mentions
+    const filteredHistory = history.filter((item: any) => {
+      return item.url && 
+             !item.url.startsWith('about:') && 
+             !item.url.startsWith('file://') &&
+             !item.url.includes('localhost') &&
+             item.title && 
+             item.title.length > 0 &&
+             item.title !== 'New Tab';
+    });
+    
+    console.log('🔍 [DROPDOWN DEBUG] Filtered history items:', filteredHistory.length);
+    
+    const webpages = filteredHistory.slice(0, 15).map((item: any) => ({
+      id: item.id.toString(),
+      title: item.title,
+      url: item.url,
+      timestamp: item.timestamp
+    }));
+    
+    console.log('🔍 [DROPDOWN DEBUG] Available webpages for dropdown:', webpages.length);
+    webpages.forEach((webpage: WebpageContext, index: number) => {
+      console.log(`🔍 [DROPDOWN DEBUG] ${index + 1}. ${webpage.title} - ${webpage.url}`);
+    });
+    
+    return webpages;
+  } catch (error) {
+    console.error('Error getting available webpages:', error);
+    return [];
+  }
+}
+
+function addWebpageContext(webpage: WebpageContext): void {
+  console.log('🚨 [ADD CONTEXT] Adding webpage context:', webpage.title);
+  console.log('🚨 [ADD CONTEXT] Current contexts before add:', selectedWebpageContexts.length);
+  
+  // Avoid duplicates
+  if (!selectedWebpageContexts.find(ctx => ctx.url === webpage.url)) {
+    selectedWebpageContexts.push(webpage);
+    console.log('🔍 [CONTEXT] Added webpage context:', webpage.title);
+    console.log('🚨 [ADD CONTEXT] Context added successfully, new total:', selectedWebpageContexts.length);
+    updateContextVisualIndicators();
+  } else {
+    console.log('🚨 [ADD CONTEXT] Context already exists, skipping duplicate');
+  }
+}
+
+function removeWebpageContext(webpageId: string): void {
+  console.log('🚨 [REMOVE CONTEXT] Removing context with ID:', webpageId);
+  const beforeCount = selectedWebpageContexts.length;
+  selectedWebpageContexts = selectedWebpageContexts.filter(ctx => ctx.id !== webpageId);
+  console.log('🔍 [CONTEXT] Removed webpage context:', webpageId);
+  console.log('🚨 [REMOVE CONTEXT] Contexts before/after:', beforeCount, '→', selectedWebpageContexts.length);
+  updateContextVisualIndicators();
+}
+
+function clearAllWebpageContexts(): void {
+  console.log('🚨 [CLEAR CONTEXTS] Clearing all contexts, current count:', selectedWebpageContexts.length);
+  selectedWebpageContexts = [];
+  console.log('🔍 [CONTEXT] Cleared all webpage contexts');
+  updateContextVisualIndicators();
+}
+
+async function fetchWebpageContent(url: string): Promise<any> {
+  try {
+    // Check if we can get content from an open tab with this URL
+    const matchingTab = tabs.find(tab => tab.url === url);
+    if (matchingTab) {
+      const webview = document.getElementById(matchingTab.webviewId);
+      if (webview) {
+        console.log('🔍 [FETCH] Found open tab for URL:', url);
+        return await extractPageContent(webview);
+      }
+    }
+    
+    console.log('🔍 [FETCH] Creating hidden webview to fetch content for:', url);
+    
+    // Create a hidden webview to fetch the content
+    return new Promise((resolve, reject) => {
+      const hiddenWebview = document.createElement('webview') as any;
+      hiddenWebview.style.display = 'none';
+      hiddenWebview.style.position = 'absolute';
+      hiddenWebview.style.top = '-10000px';
+      hiddenWebview.style.width = '1024px';
+      hiddenWebview.style.height = '768px';
+      
+      // Add timeout to prevent hanging
+      const timeout = setTimeout(() => {
+        console.warn('🔍 [FETCH] Timeout fetching content for:', url);
+        hiddenWebview.remove();
+        resolve({
+          title: '',
+          description: '',
+          content: `Timeout loading content from ${url}`,
+          html: '',
+          url: url
+        });
+      }, 15000); // 15 second timeout
+      
+      hiddenWebview.addEventListener('did-finish-load', async () => {
+        try {
+          console.log('🔍 [FETCH] Hidden webview loaded, extracting content for:', url);
+          clearTimeout(timeout);
+          
+          // Extract content from the hidden webview
+          const content = await extractPageContent(hiddenWebview);
+          console.log('🔍 [FETCH] Content extracted successfully:', content.title);
+          
+          // Clean up
+          hiddenWebview.remove();
+          resolve(content);
+        } catch (error) {
+          console.error('🔍 [FETCH] Error extracting content:', error);
+          clearTimeout(timeout);
+          hiddenWebview.remove();
+          resolve({
+            title: '',
+            description: '',
+            content: `Error extracting content from ${url}`,
+            html: '',
+            url: url
+          });
+        }
+      });
+      
+      hiddenWebview.addEventListener('did-fail-load', (event: any) => {
+        console.error('🔍 [FETCH] Failed to load webpage:', url, event);
+        clearTimeout(timeout);
+        hiddenWebview.remove();
+        resolve({
+          title: '',
+          description: '',
+          content: `Failed to load content from ${url}`,
+          html: '',
+          url: url
+        });
+      });
+      
+      // Add to DOM and load URL
+      document.body.appendChild(hiddenWebview);
+      hiddenWebview.src = url;
+    });
+    
+  } catch (error) {
+    console.error('🔍 [FETCH] Error in fetchWebpageContent:', error);
+    return {
+      title: '',
+      description: '',
+      content: `Error loading content from ${url}`,
+      html: '',
+      url: url
+    };
+  }
+}
+
+function updateContextVisualIndicators(): void {
+  console.log('🚨 [VISUAL INDICATORS] Updating context visual indicators');
+  console.log('🚨 [VISUAL INDICATORS] Selected contexts count:', selectedWebpageContexts.length);
+  
+  // Update UI to show selected contexts
+  const chatInputArea = document.querySelector('.chat-input-area');
+  if (!chatInputArea) {
+    console.log('🚨 [VISUAL INDICATORS] Chat input area not found, returning');
+    return;
+  }
+  
+  // Remove existing context indicators
+  const existingIndicators = document.querySelectorAll('.context-indicators');
+  console.log('🚨 [VISUAL INDICATORS] Removing existing indicators:', existingIndicators.length);
+  existingIndicators.forEach(indicator => indicator.remove());
+  
+  // Add context indicators directly attached to the chat input area
+  if (selectedWebpageContexts.length > 0) {
+    console.log('🚨 [VISUAL INDICATORS] Creating context container for', selectedWebpageContexts.length, 'contexts');
+    
+    const contextContainer = document.createElement('div');
+    contextContainer.className = 'context-indicators';
+    
+    selectedWebpageContexts.forEach(context => {
+      console.log('🚨 [VISUAL INDICATORS] Creating indicator for:', context.title);
+      const indicator = document.createElement('div');
+      indicator.className = 'context-indicator';
+      indicator.innerHTML = `
+        <span class="context-title">${context.title}</span>
+        <button class="context-remove" data-context-id="${context.id}">×</button>
+      `;
+      contextContainer.appendChild(indicator);
+    });
+    
+    // Insert the context container right before the chat input area to create seamless connection
+    chatInputArea.parentElement?.insertBefore(contextContainer, chatInputArea);
+    console.log('🚨 [VISUAL INDICATORS] Context container inserted before chat input area');
+    
+    // Add CSS class to chat input area to modify its styling when context is present
+    chatInputArea.classList.add('has-context');
+    console.log('🚨 [VISUAL INDICATORS] Added has-context class to chat input area');
+    
+    // Add remove event listeners
+    contextContainer.querySelectorAll('.context-remove').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const contextId = (e.target as HTMLElement).dataset.contextId;
+        if (contextId) {
+          console.log('🚨 [VISUAL INDICATORS] Remove button clicked for context:', contextId);
+          removeWebpageContext(contextId);
+        }
+      });
+    });
+  } else {
+    console.log('🚨 [VISUAL INDICATORS] No contexts, removing has-context class');
+    // Remove the has-context class when no contexts
+    chatInputArea.classList.remove('has-context');
+  }
+}
+
+// ========================= MENTION DROPDOWN =========================
+
+function createMentionDropdown(): HTMLElement {
+  const dropdown = document.createElement('div');
+  dropdown.className = 'mention-dropdown';
+  dropdown.id = 'mentionDropdown';
+  
+  const webpages = getAvailableWebpages();
+  
+  if (webpages.length === 0) {
+    dropdown.innerHTML = '<div class="mention-item empty">No recent webpages found</div>';
+  } else {
+    dropdown.innerHTML = webpages.map(webpage => `
+      <div class="mention-item" data-webpage-id="${webpage.id}" data-webpage-url="${webpage.url}">
+        <div class="mention-title">${webpage.title}</div>
+        <div class="mention-url">${webpage.url}</div>
+      </div>
+    `).join('');
+  }
+  
+  // Add click handlers
+  dropdown.querySelectorAll('.mention-item:not(.empty)').forEach(item => {
+    item.addEventListener('click', async (e) => {
+      const webpageId = (e.currentTarget as HTMLElement).dataset.webpageId;
+      const webpageUrl = (e.currentTarget as HTMLElement).dataset.webpageUrl;
+      
+      console.log('🚨 [MENTION CLICK] Webpage selected:', { webpageId, webpageUrl });
+      
+      if (webpageId && webpageUrl) {
+        const webpage = webpages.find(w => w.id === webpageId);
+        if (webpage) {
+          console.log('🚨 [MENTION CLICK] Found webpage object:', webpage.title);
+          console.log('🚨 [MENTION CLICK] Calling fetchWebpageContent for:', webpageUrl);
+          
+          // Fetch content for this webpage
+          const content = await fetchWebpageContent(webpageUrl);
+          console.log('🚨 [MENTION CLICK] Content fetched:', {
+            title: content.title,
+            contentLength: content.content?.length || 0,
+            htmlLength: content.html?.length || 0
+          });
+          
+          webpage.content = content;
+          
+          console.log('🚨 [MENTION CLICK] Adding webpage context');
+          addWebpageContext(webpage);
+          console.log('🚨 [MENTION CLICK] Context added, total contexts:', selectedWebpageContexts.length);
+          
+          hideMentionDropdown();
+          
+          // Update chat input to remove the @ trigger
+          const chatInput = document.getElementById('chatInput') as HTMLInputElement;
+          if (chatInput) {
+            const value = chatInput.value;
+            const lastAtIndex = value.lastIndexOf('@');
+            if (lastAtIndex !== -1) {
+              console.log('🚨 [MENTION CLICK] Removing @ from input');
+              chatInput.value = value.substring(0, lastAtIndex);
+              chatInput.focus();
+            }
+          }
+        } else {
+          console.error('🚨 [MENTION CLICK] Webpage object not found for ID:', webpageId);
+        }
+      } else {
+        console.error('🚨 [MENTION CLICK] Missing webpageId or webpageUrl');
+      }
+    });
+  });
+  
+  return dropdown;
+}
+
+function showMentionDropdown(chatInput: HTMLInputElement): void {
+  console.log('🚨 [MENTION DROPDOWN] showMentionDropdown called');
+  console.log('🚨 [MENTION DROPDOWN] isShowingMentionDropdown:', isShowingMentionDropdown);
+  
+  if (isShowingMentionDropdown) {
+    console.log('🚨 [MENTION DROPDOWN] Already showing, returning');
+    return;
+  }
+  
+  console.log('🚨 [MENTION DROPDOWN] Creating mention dropdown');
+  const dropdown = createMentionDropdown();
+  isShowingMentionDropdown = true;
+  
+  // Position dropdown above the input
+  const inputRect = chatInput.getBoundingClientRect();
+  dropdown.style.position = 'fixed';
+  dropdown.style.left = `${inputRect.left}px`;
+  dropdown.style.bottom = `${window.innerHeight - inputRect.top + 5}px`;
+  dropdown.style.width = `${inputRect.width}px`;
+  dropdown.style.maxHeight = '200px';
+  
+  document.body.appendChild(dropdown);
+  console.log('🚨 [MENTION DROPDOWN] Dropdown added to body');
+  
+  console.log('🔍 [MENTION] Showing mention dropdown');
+}
+
+function hideMentionDropdown(): void {
+  console.log('🚨 [MENTION DROPDOWN] hideMentionDropdown called');
+  
+  const dropdown = document.getElementById('mentionDropdown');
+  if (dropdown) {
+    console.log('🚨 [MENTION DROPDOWN] Removing dropdown from DOM');
+    dropdown.remove();
+    isShowingMentionDropdown = false;
+    console.log('🔍 [MENTION] Hiding mention dropdown');
+  } else {
+    console.log('🚨 [MENTION DROPDOWN] No dropdown found to remove');
+  }
 }

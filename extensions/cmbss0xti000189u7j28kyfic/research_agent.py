@@ -21,6 +21,31 @@ import openai
 from typing import Dict, List, Optional, Tuple
 import traceback
 
+# Add token estimation functions
+def estimate_tokens(text: str) -> int:
+    """Rough estimation of token count - approximately 4 characters per token"""
+    if not text:
+        return 0
+    return len(text) // 4
+
+def truncate_content_by_tokens(text: str, max_tokens: int) -> str:
+    """Truncate text to fit within token limit"""
+    if not text:
+        return text
+    
+    estimated_tokens = estimate_tokens(text)
+    if estimated_tokens <= max_tokens:
+        return text
+    
+    # Calculate how much to keep (with safety margin)
+    ratio = (max_tokens * 0.9) / estimated_tokens
+    target_length = int(len(text) * ratio)
+    
+    if target_length < 100:
+        return text[:100] + "... [truncated due to length]"
+    
+    return text[:target_length] + "... [truncated due to length]"
+
 # Set up logging
 LOG_FILE = os.path.join(os.path.dirname(__file__), 'research_agent.log')
 def log_event(message):
@@ -358,11 +383,19 @@ class ResearchAgent:
         if not sources:
             return {"error": "No sources available for analysis"}
         
+        # Set token limits for source analysis
+        MAX_TOTAL_TOKENS = 180000  # Leave room for system prompt and response
+        MAX_SOURCE_TOKENS = 150000  # For sources content
+        
         system_prompt = (
             "You are a research analyst specializing in information extraction and source analysis. "
             "Your task is to carefully analyze multiple sources and extract the most relevant, accurate, "
             "and comprehensive information based on the research intent."
         )
+        
+        # Track tokens
+        system_tokens = estimate_tokens(system_prompt)
+        log_event(f"Research analysis system prompt tokens: {system_tokens}")
         
         user_prompt = f"""
         Research Intent: {intent_analysis['intent']}
@@ -374,11 +407,32 @@ class ResearchAgent:
         
         """
         
+        # Calculate available tokens for sources
+        base_prompt_tokens = estimate_tokens(user_prompt)
+        available_source_tokens = min(MAX_SOURCE_TOKENS, MAX_TOTAL_TOKENS - system_tokens - base_prompt_tokens - 5000)  # Leave 5k for final instruction
+        
+        # Distribute tokens among sources
+        tokens_per_source = available_source_tokens // len(sources) if sources else available_source_tokens
+        log_event(f"Available tokens per source: {tokens_per_source}")
+        
+        sources_content = ""
         for idx, source in enumerate(sources, 1):
-            user_prompt += f"SOURCE {idx}:\n"
-            user_prompt += f"Title: {source['title']}\n"
-            user_prompt += f"URL: {source['url']}\n"
-            user_prompt += f"Content: {source['content']}\n\n"
+            source_content = f"SOURCE {idx}:\n"
+            source_content += f"Title: {source['title']}\n"
+            source_content += f"URL: {source['url']}\n"
+            
+            # Limit content size
+            content = source['content']
+            content_tokens = estimate_tokens(content)
+            
+            if content_tokens > tokens_per_source:
+                log_event(f"Research source {idx} too large ({content_tokens} tokens), truncating to {tokens_per_source}")
+                content = truncate_content_by_tokens(content, tokens_per_source)
+            
+            source_content += f"Content: {content}\n\n"
+            sources_content += source_content
+        
+        user_prompt += sources_content
         
         user_prompt += """
         Please provide a comprehensive analysis with:
@@ -392,6 +446,18 @@ class ResearchAgent:
         
         Focus on accuracy, comprehensiveness, and highlighting the most valuable insights.
         """
+        
+        # Final token check
+        total_user_tokens = estimate_tokens(user_prompt)
+        total_tokens = system_tokens + total_user_tokens
+        
+        log_event(f"Research analysis final token count - System: {system_tokens}, User: {total_user_tokens}, Total: {total_tokens}")
+        
+        if total_tokens > MAX_TOTAL_TOKENS:
+            log_event(f"Research analysis prompt too large ({total_tokens} tokens), applying emergency truncation")
+            available_user_tokens = MAX_TOTAL_TOKENS - system_tokens - 1000  # Leave 1k buffer
+            user_prompt = truncate_content_by_tokens(user_prompt, available_user_tokens)
+            log_event(f"Research analysis emergency truncation applied")
         
         success, analysis, _ = self.generate_llm_response(
             "source_analysis", 
@@ -414,13 +480,21 @@ class ResearchAgent:
         """Generate comprehensive research response"""
         log_event("Generating comprehensive research response")
         
+        # Set token limits for research response generation
+        MAX_TOTAL_TOKENS = 180000  # Leave room for system prompt and response
+        MAX_CONTEXT_TOKENS = 150000  # For research context
+        
         system_prompt = (
             "You are an expert research analyst and writer. You provide comprehensive, well-structured "
             "research responses that are thorough, accurate, and insightful. Your responses should be "
             "scholarly in quality while remaining accessible and well-organized."
         )
         
-        # Build comprehensive context
+        # Track tokens
+        system_tokens = estimate_tokens(system_prompt)
+        log_event(f"Research response system prompt tokens: {system_tokens}")
+        
+        # Build comprehensive context with token limiting
         research_context = f"""
         RESEARCH QUERY: {query}
         
@@ -437,17 +511,36 @@ class ResearchAgent:
         RESEARCH SOURCES:
         """
         
+        # Add source references
         for idx, source in enumerate(sources, 1):
             research_context += f"{idx}. {source['title']} ({source['url']})\n"
         
-        # Include conversation history if available
+        # Calculate available tokens for conversation history
+        base_context_tokens = estimate_tokens(research_context)
+        available_history_tokens = min(20000, MAX_CONTEXT_TOKENS - base_context_tokens)  # Max 20k for history
+        
+        # Include conversation history if available (with token limiting)
+        history_content = ""
         if conversation_history and len(conversation_history) > 0:
-            research_context += "\n\nCONVERSATION CONTEXT:\n"
+            history_content = "\n\nCONVERSATION CONTEXT:\n"
             for item in conversation_history[-5:]:  # Last 5 items for context
                 role = item.get('role', '')
                 content = item.get('content', '')
                 if content.strip():
-                    research_context += f"{role.title()}: {content[:200]}...\n"
+                    item_content = f"{role.title()}: {content[:200]}...\n"
+                    if estimate_tokens(history_content + item_content) > available_history_tokens:
+                        break
+                    history_content += item_content
+        
+        research_context += history_content
+        
+        # Check if research context is within token limits
+        context_tokens = estimate_tokens(research_context)
+        if context_tokens > MAX_CONTEXT_TOKENS:
+            log_event(f"Research context too large ({context_tokens} tokens), truncating to {MAX_CONTEXT_TOKENS}")
+            research_context = truncate_content_by_tokens(research_context, MAX_CONTEXT_TOKENS)
+            context_tokens = estimate_tokens(research_context)
+            log_event(f"Research context truncated to {context_tokens} tokens")
         
         user_prompt = f"""
         Based on this comprehensive research, provide a detailed response to the query.
@@ -478,6 +571,18 @@ class ResearchAgent:
         
         Focus on delivering maximum value and insight for the research query.
         """
+        
+        # Final token check
+        total_user_tokens = estimate_tokens(user_prompt)
+        total_tokens = system_tokens + total_user_tokens
+        
+        log_event(f"Research response final token count - System: {system_tokens}, User: {total_user_tokens}, Total: {total_tokens}")
+        
+        if total_tokens > MAX_TOTAL_TOKENS:
+            log_event(f"Research response prompt too large ({total_tokens} tokens), applying emergency truncation")
+            available_user_tokens = MAX_TOTAL_TOKENS - system_tokens - 1000  # Leave 1k buffer
+            user_prompt = truncate_content_by_tokens(user_prompt, available_user_tokens)
+            log_event(f"Research response emergency truncation applied")
         
         success, response, _ = self.generate_llm_response(
             "research_response", 
@@ -513,6 +618,46 @@ class ResearchAgent:
             log_event("Step 2: Gathering research sources")
             sources = []
             
+            # Check for additionalContexts from @ mentions first
+            additional_contexts = []
+            if model_info and isinstance(model_info, dict) and 'additionalContexts' in model_info:
+                additional_contexts = model_info.get('additionalContexts', [])
+                log_event(f'Found {len(additional_contexts)} additional contexts from @ mentions for research')
+                
+                # Process each additional context as a research source
+                for i, ctx in enumerate(additional_contexts):
+                    if isinstance(ctx, dict) and 'content' in ctx:
+                        ctx_content = ctx.get('content', {})
+                        ctx_title = ctx.get('title', f'Research Context {i+1}')
+                        ctx_url = ctx.get('url', '')
+                        
+                        # Get content - prefer HTML if available for research
+                        if isinstance(ctx_content, dict):
+                            content_text = ctx_content.get('content', '')
+                            content_html = ctx_content.get('html', '')
+                            
+                            # Use HTML content if available, otherwise text content
+                            content_to_use = content_html if content_html else content_text
+                            
+                            log_event(f'Processing additional research context {i+1}: {ctx_title}')
+                            log_event(f'  Content length: {len(content_to_use)} chars')
+                            log_event(f'  Has HTML: {bool(content_html)}')
+                            
+                            if content_to_use and len(content_to_use) > 300:
+                                # For research, keep substantial content but limit to reasonable size
+                                if len(content_to_use) > 8000:
+                                    content_to_use = content_to_use[:8000] + "... [Content truncated for research analysis]"
+                                
+                                sources.append({
+                                    'title': ctx_title,
+                                    'url': ctx_url,
+                                    'content': content_to_use,
+                                    'word_count': len(content_to_use.split()),
+                                    'is_additional_context': True,
+                                    'from_mention': True
+                                })
+                                log_event(f'Added @ mentioned source for research: {ctx_title}')
+            
             # If page content is provided, include it as primary source
             if page_content and isinstance(page_content, dict):
                 log_event("Including provided page content as primary source")
@@ -521,16 +666,24 @@ class ResearchAgent:
                     content = page_content.get('htmlContent', '')
                 
                 if content and len(content) > 300:
+                    # For research, keep substantial content
+                    if len(content) > 8000:
+                        content = content[:8000] + "... [Content truncated for research analysis]"
+                    
                     sources.append({
                         'title': page_content.get('title', 'Primary Source'),
                         'url': page_content.get('url', query),
-                        'content': content[:5000],  # Keep substantial content for research
+                        'content': content,
                         'word_count': len(content.split()),
                         'is_primary': True
                     })
+                    log_event(f'Added primary page content for research')
             
-            # Gather additional sources from web search
-            additional_sources = self.gather_research_sources(query, intent_analysis, 4)
+            # Gather additional sources from web search (fewer if we already have @ mentioned sources)
+            web_search_limit = 4 if len(sources) == 0 else max(1, 4 - len(sources))
+            log_event(f'Gathering {web_search_limit} additional web sources (already have {len(sources)} sources)')
+            
+            additional_sources = self.gather_research_sources(query, intent_analysis, web_search_limit)
             sources.extend(additional_sources)
             
             if not sources:
@@ -588,6 +741,10 @@ class ResearchAgent:
             )
             
             # Step 5: Build metadata
+            mentioned_sources = [s for s in sources if s.get('from_mention', False)]
+            primary_sources = [s for s in sources if s.get('is_primary', False)]
+            web_sources = [s for s in sources if not s.get('from_mention', False) and not s.get('is_primary', False)]
+            
             metadata = {
                 'query_analysis': {
                     'intent': intent_analysis.get('intent', 'research'),
@@ -596,7 +753,13 @@ class ResearchAgent:
                     'research_type': intent_analysis.get('research_type', 'unknown')
                 },
                 'sources_analyzed': len(sources),
-                'primary_source_included': any(s.get('is_primary') for s in sources),
+                'source_breakdown': {
+                    'mentioned_sources': len(mentioned_sources),
+                    'primary_sources': len(primary_sources),
+                    'web_sources': len(web_sources)
+                },
+                'primary_source_included': len(primary_sources) > 0,
+                'mentioned_sources_included': len(mentioned_sources) > 0,
                 'processing_time': self.get_processing_time(),
                 'workflow_steps': ['intent_analysis', 'source_gathering', 'source_analysis', 'response_generation']
             }
@@ -604,13 +767,21 @@ class ResearchAgent:
             # Convert sources to summaries format for compatibility
             summaries = []
             for source in sources:
+                summary_text = source['content'][:1000] + '...' if len(source['content']) > 1000 else source['content']
+                source_type = ""
+                if source.get('from_mention'):
+                    source_type = " (@ mentioned)"
+                elif source.get('is_primary'):
+                    source_type = " (current page)"
+                
                 summaries.append({
-                    'title': source['title'],
+                    'title': source['title'] + source_type,
                     'url': source['url'],
-                    'summary': source['content'][:1000] + '...' if len(source['content']) > 1000 else source['content']
+                    'summary': summary_text
                 })
             
             log_event(f'Research workflow completed successfully in {self.get_processing_time():.2f} seconds')
+            log_event(f'Research sources breakdown: {len(mentioned_sources)} mentioned, {len(primary_sources)} primary, {len(web_sources)} web')
             
             return {
                 'success': True,
@@ -695,9 +866,18 @@ def main():
             is_question = data.get('isQuestion')
             conversation_history = data.get('conversationHistory')
             
+            # Fix: additionalContexts are inside pageContent, not in data directly
+            additional_contexts = page_content.get('additionalContexts', []) if page_content else []
+            
             log_event(f"Processing research query: {query}")
             log_event(f"Is question: {is_question}")
             log_event(f"Has page content: {page_content is not None}")
+            log_event(f"Additional contexts for research: {len(additional_contexts)}")
+            
+            # Add additionalContexts to model_info if available
+            if additional_contexts:
+                model_info['additionalContexts'] = additional_contexts
+                log_event(f"Added {len(additional_contexts)} additional contexts to model_info for research")
             
             # Conduct research
             result = agent.conduct_research(
