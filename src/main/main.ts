@@ -1,10 +1,11 @@
-import { app, BrowserWindow } from 'electron';
+import { app, BrowserWindow, ipcMain } from 'electron';
 import * as path from 'path';
 import { AppManager } from '../main/AppManager';
 import { WindowManager } from '../main/WindowManager';
 import { ExtensionManager } from '../main/ExtensionManager';
 import { AgentManager } from '../main/AgentManager';
 import { MenuManager } from '../main/MenuManager';
+import { LLMService, LLMRequest } from '../main/LLMService';
 
 // Set the application name early
 app.setName('Browzer');
@@ -16,6 +17,7 @@ class BrowzerApp {
   private extensionManager: ExtensionManager;
   private agentManager: AgentManager;
   private menuManager: MenuManager;
+  private llmService: LLMService;
 
   constructor() {
     this.appManager = new AppManager();
@@ -23,9 +25,13 @@ class BrowzerApp {
     this.extensionManager = new ExtensionManager();
     this.agentManager = new AgentManager();
     this.menuManager = new MenuManager();
+    this.llmService = new LLMService();
   }
 
   async initialize(): Promise<void> {
+    // Set up IPC handlers
+    this.setupIpcHandlers();
+    
     // Initialize all managers
     await this.appManager.initialize();
     await this.extensionManager.initialize();
@@ -39,6 +45,26 @@ class BrowzerApp {
     
     // Load extensions
     await this.extensionManager.loadExtensions();
+  }
+
+  private setupIpcHandlers(): void {
+    // LLM API call handler
+    ipcMain.handle('call-llm', async (event, request: LLMRequest) => {
+      try {
+        console.log('[Main] Handling LLM call for provider:', request.provider);
+        const response = await this.llmService.callLLM(request);
+        console.log('[Main] LLM call completed, success:', response.success);
+        return response;
+      } catch (error) {
+        console.error('[Main] LLM call failed:', error);
+        return {
+          success: false,
+          error: (error as Error).message
+        };
+      }
+    });
+
+    console.log('[Main] IPC handlers set up for LLM service');
   }
 }
 
