@@ -398,7 +398,7 @@ export class DoAgent {
         element.dispatchEvent(inputEvent);
         element.dispatchEvent(changeEvent);
         
-        return { success: true, selector: ${this.escapeForJS(selector)}, text: ${this.escapeForJS(text)} };
+        return { success: true, selector: selector, text: text };
       })();
     `;
 
@@ -426,7 +426,7 @@ export class DoAgent {
           element.click();
         }, 100);
         
-        return { success: true, selector: ${this.escapeForJS(selector)} };
+        return { success: true, selector: selector };
       })();
     `;
 
@@ -451,7 +451,7 @@ export class DoAgent {
         window.scrollBy(0, scrollAmount);
         return { 
           success: true, 
-          direction: '${direction}',
+          direction: direction,
           scrollY: window.scrollY,
           scrollHeight: document.body.scrollHeight
         };
@@ -731,4 +731,4 @@ export class DoAgent {
   private escapeForJS(value: string): string {
     return JSON.stringify(value);
   }
-}          
+}                    
