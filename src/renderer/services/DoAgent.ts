@@ -385,20 +385,20 @@ export class DoAgent {
   async type(selector: string, text: string): Promise<any> {
     const script = `
       (function() {
-        const element = document.querySelector('${selector}');
+        const element = document.querySelector(${this.escapeForJS(selector)});
         if (!element) {
-          throw new Error('Element not found: ${selector}');
+          throw new Error('Element not found: ' + ${this.escapeForJS(selector)});
         }
         
         element.focus();
-        element.value = '${text}';
+        element.value = ${this.escapeForJS(text)};
         
         const inputEvent = new Event('input', { bubbles: true });
         const changeEvent = new Event('change', { bubbles: true });
         element.dispatchEvent(inputEvent);
         element.dispatchEvent(changeEvent);
         
-        return { success: true, selector: '${selector}', text: '${text}' };
+        return { success: true, selector: ${this.escapeForJS(selector)}, text: ${this.escapeForJS(text)} };
       })();
     `;
 
@@ -415,9 +415,9 @@ export class DoAgent {
   async click(selector: string): Promise<any> {
     const script = `
       (function() {
-        const element = document.querySelector('${selector}');
+        const element = document.querySelector(${this.escapeForJS(selector)});
         if (!element) {
-          throw new Error('Element not found: ${selector}');
+          throw new Error('Element not found: ' + ${this.escapeForJS(selector)});
         }
         
         element.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -426,7 +426,7 @@ export class DoAgent {
           element.click();
         }, 100);
         
-        return { success: true, selector: '${selector}' };
+        return { success: true, selector: ${this.escapeForJS(selector)} };
       })();
     `;
 
@@ -642,7 +642,7 @@ export class DoAgent {
   private async scrollElementIntoView(selector: string): Promise<void> {
     await this.webview.executeJavaScript(`
       (function() {
-        const element = document.querySelector('${selector}');
+        const element = document.querySelector(${this.escapeForJS(selector)});
         if (element) {
           element.scrollIntoView({ behavior: 'smooth', block: 'center' });
           return true;
@@ -657,7 +657,7 @@ export class DoAgent {
       (function() {
         return new Promise((resolve) => {
           const checkElement = () => {
-            const element = document.querySelector('${selector}');
+            const element = document.querySelector(${this.escapeForJS(selector)});
             if (element && element.offsetParent !== null) {
               resolve(true);
             } else {
@@ -673,7 +673,7 @@ export class DoAgent {
   private async tryFuzzyElementMatching(selector: string): Promise<void> {
     await this.webview.executeJavaScript(`
       (function() {
-        const originalSelector = '${selector}';
+        const originalSelector = ${this.escapeForJS(selector)};
         const elements = document.querySelectorAll('*');
         
         for (const element of elements) {
@@ -727,4 +727,8 @@ export class DoAgent {
   isCurrentlyExecuting(): boolean {
     return this.isExecuting;
   }
-}       
+
+  private escapeForJS(value: string): string {
+    return JSON.stringify(value);
+  }
+}          
