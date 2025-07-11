@@ -2866,26 +2866,8 @@ async function processDoTask(taskInstruction: string): Promise<void> {
     const { DoAgent } = await import('./services/DoAgent');
     
     // Create DoAgent instance with enhanced progress callback
-    const doAgent = new DoAgent((task, step) => {
-      console.log('[DoAgent Progress]', `Step ${step.id}: ${step.description} - ${step.status}`);
-      
-      // Create detailed progress message with LLM reasoning
-      let progressMessage = `**${step.id}:** ${step.description}`;
-      
-      if (step.reasoning) {
-        progressMessage += `\n  *AI Reasoning: ${step.reasoning}*`;
-      }
-      
-      if (step.status === 'completed') {
-        progressMessage += ' ✅';
-      } else if (step.status === 'failed') {
-        progressMessage += ' ❌';
-        if (step.error) {
-          progressMessage += `\n  Error: ${step.error}`;
-        }
-      } else if (step.status === 'running') {
-        progressMessage += ' ⏳';
-      }
+    const doAgent = new DoAgent((message: string) => {
+      console.log('[DoAgent Progress]', message);
       
       // Find the latest assistant message and update it with progress
       const chatContainer = document.getElementById('chatContainer');
@@ -2894,10 +2876,10 @@ async function processDoTask(taskInstruction: string): Promise<void> {
         if (lastMessage) {
           // If it's a loading message, replace it
           if (lastMessage.innerHTML.includes('class="loading"')) {
-            lastMessage.innerHTML = progressMessage;
+            lastMessage.innerHTML = message;
           } else {
             // Add to existing message
-            lastMessage.innerHTML += `<br/>${progressMessage}`;
+            lastMessage.innerHTML += `<br/>${message}`;
           }
         }
       }
@@ -2922,30 +2904,30 @@ async function processDoTask(taskInstruction: string): Promise<void> {
     if (result.success) {
       let resultMessage = `✅ **Task completed successfully!**\n⏱️ *Execution time: ${(result.executionTime / 1000).toFixed(2)}s*`;
       
-      if (result.data) {
+      if (result.extractedContent) {
         // Handle generic extracted content format
-        if (typeof result.data === 'string') {
+        if (typeof result.extractedContent === 'string') {
           // Simple string result (like summaries)
-          resultMessage += `\n\n📄 **Result:**\n${result.data}`;
-        } else if (result.data.error) {
+          resultMessage += `\n\n📄 **Result:**\n${result.extractedContent}`;
+        } else if (result.extractedContent.error) {
           // Error in extraction
-          resultMessage += `\n\n⚠️ **Note:** ${result.data.error}`;
-        } else if (result.data.url) {
+          resultMessage += `\n\n⚠️ **Note:** ${result.extractedContent.error}`;
+        } else if (result.extractedContent.url) {
           // Generic extracted content structure
-          resultMessage += `\n\n📄 **Extracted from:** ${result.data.url}`;
+          resultMessage += `\n\n📄 **Extracted from:** ${result.extractedContent.url}`;
           
           // Show headings if available
-          if (result.data.headings && result.data.headings.length > 0) {
+          if (result.extractedContent.headings && result.extractedContent.headings.length > 0) {
             resultMessage += '\n\n📋 **Page Structure:**\n';
-            result.data.headings.slice(0, 5).forEach((heading: any) => {
+            result.extractedContent.headings.slice(0, 5).forEach((heading: any) => {
               resultMessage += `${'#'.repeat(heading.level === 'h1' ? 1 : heading.level === 'h2' ? 2 : 3)} ${heading.text}\n`;
             });
           }
           
           // Show main content if available
-          if (result.data.textContent && result.data.textContent.length > 0) {
+          if (result.extractedContent.textContent && result.extractedContent.textContent.length > 0) {
             resultMessage += '\n\n📝 **Main Content:**\n';
-            result.data.textContent.slice(0, 3).forEach((content: any, index: number) => {
+            result.extractedContent.textContent.slice(0, 3).forEach((content: any, index: number) => {
               if (content.text && content.text.length > 50) {
                 resultMessage += `${index + 1}. ${content.text.substring(0, 200)}${content.text.length > 200 ? '...' : ''}\n`;
               }
@@ -2953,17 +2935,17 @@ async function processDoTask(taskInstruction: string): Promise<void> {
           }
           
           // Show links if available
-          if (result.data.links && result.data.links.length > 0) {
+          if (result.extractedContent.links && result.extractedContent.links.length > 0) {
             resultMessage += '\n\n🔗 **Links found:**\n';
-            result.data.links.slice(0, 5).forEach((link: any, index: number) => {
+            result.extractedContent.links.slice(0, 5).forEach((link: any, index: number) => {
               resultMessage += `${index + 1}. [${link.text}](${link.href})\n`;
             });
           }
           
           // Show lists if available
-          if (result.data.lists && result.data.lists.length > 0) {
+          if (result.extractedContent.lists && result.extractedContent.lists.length > 0) {
             resultMessage += '\n\n📝 **Lists found:**\n';
-            result.data.lists.slice(0, 2).forEach((list: any, index: number) => {
+            result.extractedContent.lists.slice(0, 2).forEach((list: any, index: number) => {
               resultMessage += `**List ${index + 1}:**\n`;
               list.items.slice(0, 3).forEach((item: string) => {
                 resultMessage += `• ${item}\n`;
@@ -2972,8 +2954,8 @@ async function processDoTask(taskInstruction: string): Promise<void> {
           }
           
           // Show page type information
-          if (result.data.pageStructure) {
-            const structure = result.data.pageStructure;
+          if (result.extractedContent.pageStructure) {
+            const structure = result.extractedContent.pageStructure;
             const pageTypes = [];
             if (structure.hasPosts) pageTypes.push('Posts');
             if (structure.hasBookmarks) pageTypes.push('Bookmarks');
@@ -2988,14 +2970,14 @@ async function processDoTask(taskInstruction: string): Promise<void> {
           }
           
           // Show fallback content if no structured data
-          if (result.data.fallbackContent && 
-              (!result.data.textContent || result.data.textContent.length === 0) &&
-              (!result.data.headings || result.data.headings.length === 0)) {
-            resultMessage += `\n\n📄 **Page content:**\n${result.data.fallbackContent}`;
+          if (result.extractedContent.fallbackContent && 
+              (!result.extractedContent.textContent || result.extractedContent.textContent.length === 0) &&
+              (!result.extractedContent.headings || result.extractedContent.headings.length === 0)) {
+            resultMessage += `\n\n📄 **Page content:**\n${result.extractedContent.fallbackContent}`;
           }
         } else {
           // Unknown result format, show as is
-          resultMessage += `\n\n📄 **Result:**\n${JSON.stringify(result.data, null, 2)}`;
+          resultMessage += `\n\n📄 **Result:**\n${JSON.stringify(result.extractedContent, null, 2)}`;
         }
       }
       
