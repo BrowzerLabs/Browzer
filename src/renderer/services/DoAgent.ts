@@ -96,8 +96,164 @@ export class DoAgent {
     try {
       const script = `
         (function() {
-          const detector = new (${ElementDetector.toString()})();
-          return detector.analyze();
+          const INTERACTIVE_TAGS = ['a', 'button', 'input', 'select', 'textarea', 'form', 'label'];
+          const CLICKABLE_ROLES = ['button', 'link', 'menuitem', 'tab', 'option'];
+          
+          function isInteractiveElement(element) {
+            const tagName = element.tagName.toLowerCase();
+            const role = element.getAttribute('role');
+            const onclick = element.getAttribute('onclick');
+            const cursor = window.getComputedStyle(element).cursor;
+
+            return (
+              INTERACTIVE_TAGS.includes(tagName) ||
+              (role && CLICKABLE_ROLES.includes(role)) ||
+              onclick !== null ||
+              cursor === 'pointer' ||
+              element.hasAttribute('data-testid') ||
+              element.classList.contains('btn') ||
+              element.classList.contains('button') ||
+              element.classList.contains('link')
+            );
+          }
+          
+          function isElementVisible(element) {
+            const rect = element.getBoundingClientRect();
+            const style = window.getComputedStyle(element);
+            
+            return (
+              rect.width > 0 &&
+              rect.height > 0 &&
+              style.visibility !== 'hidden' &&
+              style.display !== 'none' &&
+              style.opacity !== '0' &&
+              rect.top < window.innerHeight &&
+              rect.bottom > 0 &&
+              rect.left < window.innerWidth &&
+              rect.right > 0
+            );
+          }
+          
+          function generateSelector(element) {
+            if (element.id) {
+              return '#' + element.id;
+            }
+
+            const tagName = element.tagName.toLowerCase();
+            const className = element.className;
+            
+            if (className && typeof className === 'string') {
+              const classes = className.split(' ').filter(c => c.length > 0);
+              if (classes.length > 0) {
+                return tagName + '.' + classes[0];
+              }
+            }
+
+            const parent = element.parentElement;
+            if (parent) {
+              const siblings = Array.from(parent.children);
+              const index = siblings.indexOf(element);
+              return generateSelector(parent) + ' > ' + tagName + ':nth-child(' + (index + 1) + ')';
+            }
+
+            return tagName;
+          }
+          
+          function detectInteractiveElements() {
+            const elements = [];
+            const allElements = document.querySelectorAll('*');
+            
+            for (const element of Array.from(allElements)) {
+              if (isInteractiveElement(element) && isElementVisible(element)) {
+                const rect = element.getBoundingClientRect();
+                elements.push({
+                  tag: element.tagName.toLowerCase(),
+                  id: element.id || undefined,
+                  class: element.className || undefined,
+                  text: element.textContent?.trim() || element.getAttribute('aria-label') || element.getAttribute('title') || '',
+                  value: element.value || undefined,
+                  placeholder: element.placeholder || undefined,
+                  href: element.href || undefined,
+                  type: element.type || undefined,
+                  selector: generateSelector(element),
+                  visible: true,
+                  interactable: true
+                });
+              }
+            }
+            
+            return elements.slice(0, 100);
+          }
+          
+          function detectForms() {
+            const forms = Array.from(document.querySelectorAll('form'));
+            return forms.map(form => ({
+              action: form.action,
+              method: form.method,
+              fields: Array.from(form.querySelectorAll('input, select, textarea')).map(field => ({
+                name: field.name,
+                type: field.type,
+                required: field.hasAttribute('required'),
+                placeholder: field.placeholder
+              }))
+            }));
+          }
+          
+          function detectLinks() {
+            const links = Array.from(document.querySelectorAll('a[href]'));
+            return links.slice(0, 50).map(link => ({
+              href: link.href,
+              text: link.textContent?.trim() || '',
+              title: link.getAttribute('title') || ''
+            }));
+          }
+          
+          function extractVisibleText() {
+            const walker = document.createTreeWalker(
+              document.body,
+              NodeFilter.SHOW_TEXT,
+              {
+                acceptNode: function(node) {
+                  const parent = node.parentElement;
+                  if (!parent) return NodeFilter.FILTER_REJECT;
+                  
+                  const style = window.getComputedStyle(parent);
+                  if (style.display === 'none' || style.visibility === 'hidden') {
+                    return NodeFilter.FILTER_REJECT;
+                  }
+                  
+                  return NodeFilter.FILTER_ACCEPT;
+                }
+              }
+            );
+
+            const textNodes = [];
+            let node;
+            
+            while (node = walker.nextNode()) {
+              const text = node.textContent?.trim();
+              if (text && text.length > 0) {
+                textNodes.push(text);
+              }
+            }
+
+            return textNodes.join(' ').substring(0, 2000);
+          }
+          
+          const elements = detectInteractiveElements();
+          const forms = detectForms();
+          const links = detectLinks();
+          const text = extractVisibleText();
+          
+          return {
+            url: window.location.href,
+            title: document.title,
+            elements: elements,
+            forms: forms,
+            links: links,
+            text: text,
+            html: document.documentElement.outerHTML.substring(0, 10000)
+          };
         })();
       `;
 
@@ -571,4 +727,4 @@ export class DoAgent {
   isCurrentlyExecuting(): boolean {
     return this.isExecuting;
   }
-}     
+}       
