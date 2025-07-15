@@ -5,6 +5,7 @@ export interface LLMRequest {
   provider: 'anthropic' | 'openai';
   apiKey: string;
   prompt: string;
+  systemPrompt?: string; // New: Optional system prompt
   model?: string;
   maxTokens?: number;
 }
@@ -84,7 +85,11 @@ export class LLMService {
 
   private async callAnthropicAPI(request: LLMRequest): Promise<LLMResponse> {
     try {
-      const requestBody = JSON.stringify({
+      // Build messages array with optional system message
+      const messages: any[] = [];
+      
+      // Add system message if provided (Anthropic supports system parameter)
+      const requestBody: any = {
         model: request.model || 'claude-sonnet-4-20250514',
         max_tokens: request.maxTokens || 1000,
         messages: [
@@ -93,7 +98,12 @@ export class LLMService {
             content: request.prompt
           }
         ]
-      });
+      };
+
+      // Add system prompt if provided
+      if (request.systemPrompt) {
+        requestBody.system = request.systemPrompt;
+      }
 
       const headers = {
         'Content-Type': 'application/json',
@@ -105,7 +115,7 @@ export class LLMService {
         'api.anthropic.com',
         '/v1/messages',
         headers,
-        requestBody
+        JSON.stringify(requestBody)
       );
       
       if (!data.content || !data.content[0] || !data.content[0].text) {
@@ -130,15 +140,27 @@ export class LLMService {
 
   private async callOpenAIAPI(request: LLMRequest): Promise<LLMResponse> {
     try {
+      // Build messages array with optional system message
+      const messages: any[] = [];
+      
+      // Add system message if provided (OpenAI format)
+      if (request.systemPrompt) {
+        messages.push({
+          role: 'system',
+          content: request.systemPrompt
+        });
+      }
+
+      // Add user message
+      messages.push({
+        role: 'user',
+        content: request.prompt
+      });
+
       const requestBody = JSON.stringify({
         model: request.model || 'gpt-4o',
         max_tokens: request.maxTokens || 1000,
-        messages: [
-          {
-            role: 'user',
-            content: request.prompt
-          }
-        ]
+        messages: messages
       });
 
       const headers = {

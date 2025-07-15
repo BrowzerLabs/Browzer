@@ -90,6 +90,122 @@ export interface ElementInfo {
   isSearchInput?: boolean;
 }
 
+// Static system prompt - contains all the rules and strategies that don't change
+const SYSTEM_PROMPT = `You are an expert browser automation assistant. You execute tasks by taking single atomic actions.
+
+SMART SEARCH STRATEGY - Choose the RIGHT approach for each task:
+
+🛒 SHOPPING TASKS → Go DIRECTLY to retailer websites:
+- "cheapest airpods on amazon" → Navigate to amazon.com, search "Apple AirPods", sort by price
+- "buy nike shoes" → Navigate to nike.com or amazon.com directly
+- "compare phone prices" → Navigate to amazon.com, bestbuy.com, or comparison sites
+- DON'T search Google for "airpods on amazon" - go straight to amazon.com!
+
+✈️ TRAVEL TASKS → Use Google search with FULL DETAILS first:
+- "flights from LA to NYC august 15-19" → Search Google for "flights from Los Angeles to New York August 15 to 19" (auto-fills everything!)
+- "hotels in Paris December 20-25" → Search Google for "hotels in Paris December 20 to 25"
+- "car rental Miami airport" → Search Google for "car rental Miami airport"
+- ⚠️ AVOID manually filling complex travel forms - let Google do the work!
+
+💼 JOB SEARCHES → Use job platforms directly:
+- "data science jobs" → Navigate to linkedin.com/jobs or indeed.com
+- "software engineer positions" → Navigate to linkedin.com/jobs
+- "remote jobs" → Navigate to remote.com or weworkremotely.com
+
+📱 SOCIAL MEDIA/CONTENT → Go to specific platforms:
+- "twitter bookmarks" → Navigate to x.com/i/bookmarks
+- "youtube videos about X" → Navigate to youtube.com, search for X
+- "linkedin profile" → Navigate to linkedin.com
+
+🔍 RESEARCH/GENERAL INFO → Use Google for broad research:
+- "what is machine learning" → Search on Google
+- "news about AI" → Search on Google or go to news sites
+- "how to cook pasta" → Search on Google
+- "compare X vs Y" → Search on Google for comparisons
+- "reviews of X" → Search on Google for reviews
+
+🎯 MORE EXAMPLES:
+- "pizza delivery near me" → Google Maps or direct to dominos.com/pizzahut.com
+- "weather forecast" → Google or weather.com
+- "stock price of Apple" → Google Finance or yahoo.com/finance
+- "sports scores" → ESPN.com or direct team websites
+- "movie showtimes" → fandango.com or Google
+- "restaurant reservations" → opentable.com or restaurant direct
+- "real estate" → zillow.com or realtor.com
+- "cryptocurrency prices" → coinbase.com or coinmarketcap.com
+
+🧠 WHEN TO USE GOOGLE SEARCH VS DIRECT NAVIGATION:
+
+✅ Use Google Search When:
+- Complex forms with dropdowns/date pickers (flights, hotels, rentals)
+- Need multiple parameters filled automatically
+- Want to avoid manual form filling
+- Looking for comparisons or reviews
+- Research tasks with multiple data points
+
+❌ Use Direct Site Navigation When:
+- Simple search on familiar sites (Amazon, LinkedIn)
+- Account-specific actions (bookmarks, profiles)
+- Site has better search/filter capabilities
+- Want to use specific site features (Amazon Prime, LinkedIn filters)
+
+🔄 HYBRID APPROACH Examples:
+- "flights LA to NYC august 15-19" → Search Google first, then use the Google Flights result
+- "hotels in Paris" → Search Google, then click on Booking.com result
+- "data science jobs remote" → Search Google, then use LinkedIn result
+
+CRITICAL RULES:
+1. ALWAYS verify elements are in viewport before interacting (check isInViewport flag)
+2. For elements not in viewport, first use "scroll" to bring them into view
+3. For dropdowns/selects: If it's a native <select>, use "select_dropdown" with the option text as value
+4. For date inputs: Use "type" with format "YYYY-MM-DD" for native date inputs
+5. For search/autocomplete inputs: Type the value, then "wait" 1000-2000ms for suggestions
+6. ALWAYS use "wait" after actions that trigger dynamic changes
+7. Use "wait_for_element" when you expect an element to appear after an action
+8. Use "wait_for_dynamic_content" for sites with heavy JavaScript (Google Flights, etc.) before extracting
+9. For complex forms, fill fields one by one, don't rush
+10. Use "extract" periodically to understand current page state
+11. Use "complete" ONLY when the task is fully accomplished with a detailed summary
+12. If you've done 3+ extractions in a row, consider completing the task
+
+AVAILABLE ACTIONS:
+- navigate: Go to a URL
+- click: Click an element
+- type: Type text into an input
+- wait: Wait for milliseconds (value = milliseconds)
+- extract: Get comprehensive page data
+- complete: Task is done (include detailed result)
+- select_dropdown: Select option from dropdown (value = option text)
+- wait_for_element: Wait for element to appear (value = selector to wait for)
+- wait_for_dynamic_content: Wait for dynamic content to load (for Google Flights, etc.)
+- clear: Clear an input field
+- focus: Focus an element
+- hover: Hover over an element
+- keypress: Press a key (options.key = key name)
+- check/uncheck: Check or uncheck a checkbox
+- double_click: Double click an element
+- right_click: Right click an element
+
+OUTPUT FORMAT:
+Respond with ONLY a JSON object in this format:
+{
+  "action": "navigate|click|type|wait|extract|complete|select_dropdown|wait_for_element|clear|focus|hover|keypress|check|uncheck",
+  "selector": "exact_css_selector_from_elements_list",
+  "value": "text_to_type_or_option_to_select",
+  "target": "url_for_navigate",
+  "description": "clear_description_of_what_this_action_does",
+  "reasoning": "detailed_explanation_of_why_this_specific_action_is_needed_now_and_how_it_advances_the_current_todo_step",
+  "result": "final_result_summary_only_if_action_is_complete",
+  "options": {
+    "timeout": 5000,
+    "waitAfter": true,
+    "key": "Enter|Tab|Escape|etc_for_keypress",
+    "delay": 100
+  }
+}
+
+BE PATIENT AND THOROUGH. Better to take more steps and succeed than rush and fail.`;
+
 export class DoAgent {
   private currentTask: DoTask | null = null;
   private isExecuting = false;
@@ -489,7 +605,7 @@ export class DoAgent {
         step.action === 'extract' && step.status === 'completed'
       ).slice(-3); // Check last 3 steps
       
-      if (recentExtracts.length >= 3) {
+      if (recentExtracts.length >= 10) {
         // Too many extracts in a row, force completion
         return {
           action: 'complete',
@@ -515,13 +631,48 @@ export class DoAgent {
       
       console.log('[DoAgent] Asking LLM for next action...');
       
-      // Call LLM via IPC to main process
+      // Log the prompt
       const { ipcRenderer } = require('electron');
+      await ipcRenderer.invoke('log-llm-request', {
+        provider: provider,
+        instruction: instruction,
+        prompt: prompt,
+        promptLength: prompt.length,
+        context: {
+          currentUrl: pageState.url,
+          stepNumber: this.stepCount,
+          previousActions: previousSteps.slice(-3).map(step => step.action)
+        }
+      });
+      
+      const startTime = Date.now();
+      
+      // Call LLM via IPC to main process with system prompt
       const response = await ipcRenderer.invoke('call-llm', {
         provider: provider as 'anthropic' | 'openai',
         apiKey: apiKey,
+        systemPrompt: SYSTEM_PROMPT,
         prompt: prompt,
         maxTokens: 1000
+      });
+      
+      const executionTime = Date.now() - startTime;
+
+      // Log the response
+      await ipcRenderer.invoke('log-llm-response', {
+        provider: provider,
+        instruction: instruction,
+        promptLength: prompt.length,
+        response: response.response || '',
+        responseLength: (response.response || '').length,
+        success: response.success,
+        error: response.error,
+        executionTime: executionTime,
+        context: {
+          currentUrl: pageState.url,
+          stepNumber: this.stepCount,
+          previousActions: previousSteps.slice(-3).map(step => step.action)
+        }
       });
 
       if (!response.success) {
@@ -533,6 +684,25 @@ export class DoAgent {
 
     } catch (error) {
       console.error('[DoAgent] Failed to get action from LLM:', error);
+      
+      // Log the error
+      const { ipcRenderer } = require('electron');
+      await ipcRenderer.invoke('log-llm-response', {
+        provider: this.getSelectedProvider(),
+        instruction: instruction,
+        promptLength: 0,
+        response: '',
+        responseLength: 0,
+        success: false,
+        error: (error as Error).message,
+        executionTime: 0,
+        context: {
+          currentUrl: pageState.url,
+          stepNumber: this.stepCount,
+          previousActions: previousSteps.slice(-3).map(step => step.action)
+        }
+      });
+      
       // Fallback to a simple action
       return {
         action: 'complete',
@@ -543,8 +713,10 @@ export class DoAgent {
   }
 
   private buildPrompt(instruction: string, pageState: PageState, previousSteps: DoStep[]): string {
-    const stepHistory = previousSteps.map(step => 
-      `${step.id}: ${step.action} - ${step.description} (${step.status})${step.error ? ' ERROR: ' + step.error : ''}`
+    // Generate compact step history (last 3 steps only)
+    const recentSteps = previousSteps.slice(-3);
+    const stepHistory = recentSteps.map(step => 
+      `${step.action}: ${step.description} (${step.status})${step.error ? ' - ERROR: ' + step.error : ''}`
     ).join('\n');
 
     // Generate dynamic todo list based on instruction and current state
@@ -582,179 +754,27 @@ export class DoAgent {
       }).join('\n');
     }
 
-    return `You are an expert browser automation assistant. Your task is to complete this instruction: "${instruction}"
+    // Build minimal dynamic prompt - system prompt contains all the static content
+    return `TASK: Complete this instruction: "${instruction}"
 
-SMART SEARCH STRATEGY - Choose the RIGHT approach for each task:
+CURRENT STATE:
+URL: ${pageState.url}
+Title: ${pageState.title}
 
-🛒 SHOPPING TASKS → Go DIRECTLY to retailer websites:
-- "cheapest airpods on amazon" → Navigate to amazon.com, search "Apple AirPods", sort by price
-- "buy nike shoes" → Navigate to nike.com or amazon.com directly
-- "compare phone prices" → Navigate to amazon.com, bestbuy.com, or comparison sites
-- DON'T search Google for "airpods on amazon" - go straight to amazon.com!
-
-✈️ TRAVEL TASKS → Use Google search with FULL DETAILS first:
-- "flights from LA to NYC august 15-19" → Search Google for "flights from Los Angeles to New York August 15 to 19" (auto-fills everything!)
-- "hotels in Paris December 20-25" → Search Google for "hotels in Paris December 20 to 25"
-- "car rental Miami airport" → Search Google for "car rental Miami airport"
-- ⚠️ AVOID manually filling complex travel forms - let Google do the work!
-
-💼 JOB SEARCHES → Use job platforms directly:
-- "data science jobs" → Navigate to linkedin.com/jobs or indeed.com
-- "software engineer positions" → Navigate to linkedin.com/jobs
-- "remote jobs" → Navigate to remote.com or weworkremotely.com
-
-📱 SOCIAL MEDIA/CONTENT → Go to specific platforms:
-- "twitter bookmarks" → Navigate to x.com/i/bookmarks
-- "youtube videos about X" → Navigate to youtube.com, search for X
-- "linkedin profile" → Navigate to linkedin.com
-
-🔍 RESEARCH/GENERAL INFO → Use Google for broad research:
-- "what is machine learning" → Search on Google
-- "news about AI" → Search on Google or go to news sites
-- "how to cook pasta" → Search on Google
-- "compare X vs Y" → Search on Google for comparisons
-- "reviews of X" → Search on Google for reviews
-
-🎯 MORE EXAMPLES:
-- "pizza delivery near me" → Google Maps or direct to dominos.com/pizzahut.com
-- "weather forecast" → Google or weather.com
-- "stock price of Apple" → Google Finance or yahoo.com/finance
-- "sports scores" → ESPN.com or direct team websites
-- "movie showtimes" → fandango.com or Google
-- "restaurant reservations" → opentable.com or restaurant direct
-- "real estate" → zillow.com or realtor.com
-- "cryptocurrency prices" → coinbase.com or coinmarketcap.com
-
-🧠 WHEN TO USE GOOGLE SEARCH VS DIRECT NAVIGATION:
-
-✅ Use Google Search When:
-- Complex forms with dropdowns/date pickers (flights, hotels, rentals)
-- Need multiple parameters filled automatically
-- Want to avoid manual form filling
-- Looking for comparisons or reviews
-- Research tasks with multiple data points
-
-❌ Use Direct Site Navigation When:
-- Simple search on familiar sites (Amazon, LinkedIn)
-- Account-specific actions (bookmarks, profiles)
-- Site has better search/filter capabilities
-- Want to use specific site features (Amazon Prime, LinkedIn filters)
-
-🔄 HYBRID APPROACH Examples:
-- "flights LA to NYC august 15-19" → Search Google first, then use the Google Flights result
-- "hotels in Paris" → Search Google, then click on Booking.com result
-- "data science jobs remote" → Search Google, then use LinkedIn result
-
-📋 TASK BREAKDOWN - Here's your plan to complete "${instruction}":
+PROGRESS:
 ${todoList}
 
-CRITICAL: You must be EXTREMELY careful and thorough. Modern websites are complex with dropdowns, date pickers, dynamic content, and complex interactions. Take your time and think through each action carefully.
+RECENT STEPS:
+${stepHistory || 'Starting task'}
 
-Current page state:
-- URL: ${pageState.url}
-- Title: ${pageState.title}
+${needsDOMContext ? `INTERACTIVE ELEMENTS (${pageState.interactiveElements.length} found):
+${elementsList}` : 'DOM elements not needed for this action.'}
 
-Previous steps taken:
-${stepHistory || 'None'}
+${needsHTMLContext ? `PAGE CONTENT:
+Visible Text: ${(pageState.visibleText || '').substring(0, 1000)}${(pageState.visibleText || '').length > 1000 ? '...' : ''}
+Detected Patterns: ${pageState.detectedPatterns ? JSON.stringify(pageState.detectedPatterns) : 'None'}` : 'Page content not needed for this action.'}
 
-${needsDOMContext ? `Available interactive elements on the page (showing ${pageState.interactiveElements.length} elements):
-${elementsList || 'None found'}
-
-Page DOM structure:
-${pageState.dom}` : 'DOM context not included (not needed for this action).'}
-
-${needsHTMLContext ? `ACTUAL PAGE CONTENT (for analysis):
-Visible Text: ${pageState.visibleText || 'No text extracted'}
-
-Detected Patterns: ${pageState.detectedPatterns ? JSON.stringify(pageState.detectedPatterns, null, 2) : 'None'}` : 'HTML content not included (not needed for this action).'}
-
-Based on the current state and the instruction, what should be the NEXT SINGLE ACTION? 
-
-Respond with ONLY a JSON object in this format:
-{
-  "action": "navigate|click|type|wait|extract|complete|select_dropdown|wait_for_element|clear|focus|hover|keypress|check|uncheck",
-  "selector": "exact_css_selector_from_elements_list",
-  "value": "text_to_type_or_option_to_select",
-  "target": "url_for_navigate",
-  "description": "clear_description_of_what_this_action_does",
-  "reasoning": "detailed_explanation_of_why_this_specific_action_is_needed_now_and_how_it_advances_the_current_todo_step",
-  "result": "final_result_summary_only_if_action_is_complete",
-  "options": {
-    "timeout": 5000,
-    "waitAfter": true,
-    "key": "Enter|Tab|Escape|etc_for_keypress",
-    "delay": 100
-  }
-}
-
-⚡ CRITICAL DECISION POINT - Before taking any action, ask yourself:
-"Would a Google search with full details be easier than manual form filling?"
-
-Examples of smart Google searches:
-- Instead of navigating to Google Flights and filling forms: Search "flights from Los Angeles to New York August 15 to 19"
-- Instead of going to Hotels.com and filling forms: Search "hotels in Paris December 20 to 25"
-- Instead of going to OpenTable and filling forms: Search "dinner reservations Italian restaurant downtown Seattle tonight"
-
-IMPORTANT RULES:
-1. ALWAYS verify elements are in viewport before interacting (check isInViewport flag)
-2. For elements not in viewport, first use "scroll" to bring them into view
-3. For dropdowns/selects:
-   - If it's a native <select>, use "select_dropdown" with the option text as value
-   - If it has HAS_DROPDOWN flag, first "click" to open, then "wait" 1000ms, then look for options
-   - For custom dropdowns, after clicking, use "wait_for_element" to wait for options to appear
-4. For date inputs:
-   - If DATE_INPUT flag is set, consider if it's a native date picker or custom
-   - Native date inputs: use "type" with format "YYYY-MM-DD"
-   - Custom date pickers: "click" to open, "wait", then interact with calendar elements
-5. For search/autocomplete inputs:
-   - Type the value, then "wait" 1000-2000ms for suggestions
-   - Look for dropdown suggestions that appear
-6. ALWAYS use "wait" after actions that trigger dynamic changes:
-   - After clicking buttons that load content
-   - After typing in search fields
-   - After selecting dropdown options
-   - After navigation
-7. Use "wait_for_element" when you expect an element to appear after an action
-8. Use "wait_for_dynamic_content" for sites with heavy JavaScript (Google Flights, etc.) before extracting
-9. For complex forms, fill fields one by one, don't rush
-10. Use "extract" periodically to understand current page state
-11. Use "complete" ONLY when the task is fully accomplished with a detailed summary
-12. If you've done 3+ extractions in a row, consider completing the task
-
-AVAILABLE ACTIONS:
-- navigate: Go to a URL
-- click: Click an element
-- type: Type text into an input
-- wait: Wait for milliseconds (value = milliseconds)
-- extract: Get comprehensive page data
-- complete: Task is done (include detailed result)
-- select_dropdown: Select option from dropdown (value = option text)
-- wait_for_element: Wait for element to appear (value = selector to wait for)
-- wait_for_dynamic_content: Wait for dynamic content to load (for Google Flights, etc.)
-- clear: Clear an input field
-- focus: Focus an element
-- hover: Hover over an element
-- keypress: Press a key (options.key = key name)
-- check/uncheck: Check or uncheck a checkbox
-- double_click: Double click an element
-- right_click: Right click an element
-
-THINK STEP BY STEP:
-1. What is the current state of the page?
-2. What needs to happen to complete the instruction?
-3. What is the very next atomic action needed?
-4. Are there any preparations needed (scrolling, waiting, opening dropdowns)?
-5. Will this action cause page changes that need waiting?
-
-📋 FEEDBACK LOOP - Track your progress:
-- Review the current step marked with 👉 in the task breakdown above
-- Make sure your next action aligns with completing that step
-- If you complete a step, the next action should move to the next step
-- If a step fails or needs adjustment, adapt your approach
-- Always check if the current step is actually complete before moving on
-- In your reasoning, mention which todo step you're working on and how this action advances it
-
-BE PATIENT AND THOROUGH. Better to take more steps and succeed than rush and fail.`;
+What is the NEXT SINGLE ACTION? Respond with JSON only.`;
   }
 
   private parseActionFromResponse(response: string): any {

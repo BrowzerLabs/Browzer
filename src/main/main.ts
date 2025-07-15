@@ -6,6 +6,7 @@ import { ExtensionManager } from '../main/ExtensionManager';
 import { AgentManager } from '../main/AgentManager';
 import { MenuManager } from '../main/MenuManager';
 import { LLMService, LLMRequest } from '../main/LLMService';
+import { LLMLogger } from '../main/LLMLogger';
 
 // Set the application name early
 app.setName('Browzer');
@@ -61,6 +62,25 @@ class BrowzerApp {
           success: false,
           error: (error as Error).message
         };
+      }
+    });
+
+    // LLM logging handlers
+    ipcMain.handle('log-llm-request', async (event, logData) => {
+      try {
+        const logger = LLMLogger.getInstance();
+        logger.logRequest(logData);
+      } catch (error) {
+        console.error('[Main] Failed to log LLM request:', error);
+      }
+    });
+
+    ipcMain.handle('log-llm-response', async (event, logData) => {
+      try {
+        const logger = LLMLogger.getInstance();
+        logger.logRequest(logData);
+      } catch (error) {
+        console.error('[Main] Failed to log LLM response:', error);
       }
     });
 
