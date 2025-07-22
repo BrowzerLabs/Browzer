@@ -234,6 +234,9 @@ Respond with ONLY a JSON object in this format:
 
 BE PATIENT AND THOROUGH. Better to take more steps and succeed than rush and fail.`;
 
+// Development feature flag - set to false to disable DoAgent entirely
+const DOAGENT_ENABLED = false;
+
 export class DoAgent {
   private currentTask: DoTask | null = null;
   private isExecuting = false;
@@ -245,6 +248,14 @@ export class DoAgent {
   constructor(private onProgress?: (task: DoTask, step: DoStep) => void) {}
 
   async executeTask(instruction: string, webview: any): Promise<DoResult> {
+    if (!DOAGENT_ENABLED) {
+      return {
+        success: false,
+        error: 'DoAgent functionality is disabled in this build',
+        executionTime: 0
+      };
+    }
+    
     if (this.isExecuting) {
       throw new Error('DoAgent is already executing a task');
     }

@@ -8,6 +8,8 @@ import { devToolsManager } from './components/DevToolsManager';
 // Import Electron APIs
 const { ipcRenderer, shell } = require('electron');
 const path = require('path');
+// Development feature flag - set to false to disable DoAgent entirely
+const DOAGENT_ENABLED = false;
 
 // Type definitions
 interface TabInfo {
@@ -1482,10 +1484,12 @@ function setupAgentControls(): void {
             <input type="radio" name="chatMode" value="ask" checked />
             <span>Ask</span>
           </label>
+          ${DOAGENT_ENABLED ? `
           <label class="mode-option">
             <input type="radio" name="chatMode" value="do" />
             <span>Do</span>
           </label>
+          ` : ''}
         </div>
         <div class="chat-input-row">
           <input type="text" id="chatInput" placeholder="Ask a follow-up question..." />
@@ -1930,10 +1934,12 @@ async function executeAgent(): Promise<void> {
               <input type="radio" name="chatMode" value="ask" checked />
               <span>Ask</span>
             </label>
+            ${DOAGENT_ENABLED ? `
             <label class="mode-option">
               <input type="radio" name="chatMode" value="do" />
               <span>Do</span>
             </label>
+            ` : ''}
           </div>
           <div class="chat-input-row">
             <input type="text" id="chatInput" placeholder="Ask a follow-up question..." />
@@ -2270,10 +2276,12 @@ function addMessageToChat(role: string, content: string, timing?: number): void 
             <input type="radio" name="chatMode" value="ask" checked />
             <span>Ask</span>
           </label>
+          ${DOAGENT_ENABLED ? `
           <label class="mode-option">
             <input type="radio" name="chatMode" value="do" />
             <span>Do</span>
           </label>
+          ` : ''}
         </div>
         <div class="chat-input-row">
           <input type="text" id="chatInput" placeholder="Ask a follow-up question..." />
@@ -2847,6 +2855,11 @@ async function processFollowupQuestionWithContexts(question: string, contexts: W
 
 async function processDoTask(taskInstruction: string): Promise<void> {
   console.log('[processDoTask] Processing task:', taskInstruction);
+  
+  if (!DOAGENT_ENABLED) {
+    addMessageToChat('assistant', 'DoAgent functionality is disabled in this build.');
+    return;
+  }
   
   // Prevent duplicate execution
   if (isWorkflowExecuting) {
