@@ -992,6 +992,7 @@ function setupWebviewEvents(webview: any): void {
         const tab = document.getElementById(tabId);
         if (tab) {
           tab.classList.add('loading');
+          console.log(`[Tab Loading] Started loading for tab: ${tabId}`);
         }
       }
     }
@@ -1005,6 +1006,7 @@ function setupWebviewEvents(webview: any): void {
         const tab = document.getElementById(tabId);
         if (tab) {
           tab.classList.remove('loading');
+          console.log(`[Tab Loading] Finished loading for tab: ${tabId}`);
         }
       }
     }
@@ -1469,9 +1471,10 @@ function updateMemoryCount(): void {
 
 function setupAgentControls(): void {
   console.log('[setupAgentControls] Starting setup...');
-  // Initialize chat UI
-  if (agentResults) {
-    console.log('[setupAgentControls] agentResults element found');
+  // Initialize chat UI in the fixed container
+  const chatInputContainer = document.querySelector('.chat-input-container');
+  if (chatInputContainer) {
+    console.log('[setupAgentControls] Chat input container found');
     // Add chat input area if it doesn't exist
     let chatInputArea = document.querySelector('.chat-input-area');
     if (!chatInputArea) {
@@ -1496,13 +1499,8 @@ function setupAgentControls(): void {
           <button id="sendMessageBtn" class="chat-send-btn">Send</button>
         </div>
       `;
-      // Check if there's a chat container to position after
-      const existingChatContainer = document.getElementById('chatContainer');
-      if (existingChatContainer && existingChatContainer.parentNode === agentResults) {
-        existingChatContainer.insertAdjacentElement('afterend', chatInputArea);
-      } else {
-        agentResults.appendChild(chatInputArea);
-      }
+      
+      chatInputContainer.appendChild(chatInputArea);
       
       // Set up chat input handlers
       setupChatInputHandlers();
@@ -1915,42 +1913,34 @@ async function executeAgent(): Promise<void> {
     // Store current processing time
     localStorage.setItem(lastProcessedKey, currentTime.toString());
     
-    // Set up chat container if it doesn't exist
-    if (agentResults) {
-      let chatContainer = document.getElementById('chatContainer');
-      let chatInputArea = document.querySelector('.chat-input-area');
+    // Ensure chat input area exists in the fixed container
+    const chatInputContainer = document.querySelector('.chat-input-container');
+    if (chatInputContainer && !document.querySelector('.chat-input-area')) {
+      console.log('[executeAgent] Chat input area not found, creating one');
       
-      // Chat container creation is now handled by addMessageToChat
-      // Just ensure we have a reference to check for input area positioning
+      const chatInputArea = document.createElement('div');
+      chatInputArea.className = 'chat-input-area';
+      chatInputArea.innerHTML = `
+        <div class="chat-mode-selector">
+          <label class="mode-option">
+            <input type="radio" name="chatMode" value="ask" checked />
+            <span>Ask</span>
+          </label>
+          ${DOAGENT_ENABLED ? `
+          <label class="mode-option">
+            <input type="radio" name="chatMode" value="do" />
+            <span>Do</span>
+          </label>
+          ` : ''}
+        </div>
+        <div class="chat-input-row">
+          <input type="text" id="chatInput" placeholder="Ask a follow-up question..." />
+          <button id="sendMessageBtn" class="chat-send-btn">Send</button>
+        </div>
+      `;
       
-      if (!chatInputArea) {
-        console.log('[executeAgent] Chat input area not found, creating one');
-        
-        chatInputArea = document.createElement('div');
-        chatInputArea.className = 'chat-input-area';
-        chatInputArea.innerHTML = `
-          <div class="chat-mode-selector">
-            <label class="mode-option">
-              <input type="radio" name="chatMode" value="ask" checked />
-              <span>Ask</span>
-            </label>
-            ${DOAGENT_ENABLED ? `
-            <label class="mode-option">
-              <input type="radio" name="chatMode" value="do" />
-              <span>Do</span>
-            </label>
-            ` : ''}
-          </div>
-          <div class="chat-input-row">
-            <input type="text" id="chatInput" placeholder="Ask a follow-up question..." />
-            <button id="sendMessageBtn" class="chat-send-btn">Send</button>
-          </div>
-        `;
-        
-        // Position the input area after the chat container (will be created by addMessageToChat if needed)
-        agentResults.appendChild(chatInputArea);
-        setupChatInputHandlers();
-      }
+      chatInputContainer.appendChild(chatInputArea);
+      setupChatInputHandlers();
     }
 
     // Show loading
@@ -2263,9 +2253,9 @@ function addMessageToChat(role: string, content: string, timing?: number): void 
     // Scroll to bottom with smooth behavior
     chatContainer.scrollTop = chatContainer.scrollHeight;
     
-    // Ensure chat input area exists for follow-up questions
-    const agentResults = document.getElementById('agentResults');
-    if (agentResults && !document.querySelector('.chat-input-area')) {
+    // Ensure chat input area exists in the fixed container
+    const chatInputContainer = document.querySelector('.chat-input-container');
+    if (chatInputContainer && !document.querySelector('.chat-input-area')) {
       console.log('[addMessageToChat] Creating chat input area for follow-up questions');
       
       const chatInputArea = document.createElement('div');
@@ -2289,7 +2279,7 @@ function addMessageToChat(role: string, content: string, timing?: number): void 
         </div>
       `;
       
-      agentResults.appendChild(chatInputArea);
+      chatInputContainer.appendChild(chatInputArea);
       setupChatInputHandlers();
     }
     
