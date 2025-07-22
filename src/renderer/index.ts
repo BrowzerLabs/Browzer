@@ -225,6 +225,10 @@ document.addEventListener('DOMContentLoaded', () => {
   console.log('[Init] Initializing MemoryService...');
   memoryService = new MemoryService();
   
+  // Expose memory service to window for debugging
+  (window as any).memoryService = memoryService;
+  console.log('[Init] MemoryService exposed to window.memoryService for debugging');
+  
   console.log('[Init] Setting up text selection message listener...');
   setupTextSelectionListener();
   
@@ -415,6 +419,41 @@ function setupWorkflowEventListeners(): void {
       
       displayAgentResults(resultData);
       console.log('🎯 [WORKFLOW-COMPLETE] displayAgentResults called successfully');
+      
+      // Store memory if available - try multiple content sources
+      if (memoryService && resultData) {
+        let summary = '';
+        let memoryQuery = data.workflow_id || 'Agent Query';
+        
+        // Try different content sources in order of preference
+        if (resultData.consolidated_summary) {
+          summary = resultData.consolidated_summary;
+        } else if (resultData.summaries && resultData.summaries.length > 0) {
+          summary = resultData.summaries.map((s: any) => `${s.title}: ${s.summary}`).join('\n\n');
+        } else if (typeof resultData === 'string') {
+          // Handle simple string responses
+          summary = resultData;
+        } else if (resultData.content) {
+          // Handle responses with content field
+          summary = resultData.content;
+        } else if (resultData.response) {
+          // Handle responses with response field
+          summary = resultData.response;
+        }
+        
+        if (summary && summary.trim()) {
+          console.log('[Memory] Storing agent result in memory from workflow-complete');
+          
+          // Get current page info for memory context
+          const webview = getActiveWebview();
+          const url = webview?.src || '';
+          const title = webview?.getTitle ? webview.getTitle() : '';
+          
+          memoryService.storeMemory(url, memoryQuery, summary, title);
+        } else {
+          console.log('[Memory] No suitable content found for memory storage in workflow-complete');
+        }
+      }
     } else {
       console.warn('[WorkflowProgress] No result data found in workflow-complete event');
     }
@@ -2127,13 +2166,31 @@ async function executeAgent(): Promise<void> {
               console.log('Calling displayAgentResults with:', result.data);
       displayAgentResults(result.data);
       
-      // Store memory if available
-      if (memoryService && result.data && (result.data.consolidated_summary || result.data.summaries)) {
-        const summary = result.data.consolidated_summary || 
-                       (result.data.summaries && result.data.summaries.length > 0 ? result.data.summaries[0].summary : '');
-        if (summary) {
+      // Store memory if available - try multiple content sources
+      if (memoryService && result.data) {
+        let summary = '';
+        
+        // Try different content sources in order of preference
+        if (result.data.consolidated_summary) {
+          summary = result.data.consolidated_summary;
+        } else if (result.data.summaries && result.data.summaries.length > 0) {
+          summary = result.data.summaries.map((s: any) => `${s.title}: ${s.summary}`).join('\n\n');
+        } else if (typeof result.data === 'string') {
+          // Handle simple string responses
+          summary = result.data;
+        } else if (result.data.content) {
+          // Handle responses with content field
+          summary = result.data.content;
+        } else if (result.data.response) {
+          // Handle responses with response field
+          summary = result.data.response;
+        }
+        
+        if (summary && summary.trim()) {
           console.log('[Memory] Storing agent result in memory');
           memoryService.storeMemory(url, query, summary, title);
+        } else {
+          console.log('[Memory] No suitable content found for memory storage');
         }
       }
       }
@@ -2617,6 +2674,40 @@ async function processFollowupQuestion(question: string): Promise<void> {
       
       console.log('[processFollowupQuestion] Displaying results...');
       displayAgentResults(result.data);
+      
+      // Store memory if available - try multiple content sources
+      if (memoryService && result.data) {
+        let summary = '';
+        
+        // Try different content sources in order of preference
+        if (result.data.consolidated_summary) {
+          summary = result.data.consolidated_summary;
+        } else if (result.data.summaries && result.data.summaries.length > 0) {
+          summary = result.data.summaries.map((s: any) => `${s.title}: ${s.summary}`).join('\n\n');
+        } else if (typeof result.data === 'string') {
+          // Handle simple string responses
+          summary = result.data;
+        } else if (result.data.content) {
+          // Handle responses with content field
+          summary = result.data.content;
+        } else if (result.data.response) {
+          // Handle responses with response field
+          summary = result.data.response;
+        }
+        
+        if (summary && summary.trim()) {
+          console.log('[Memory] Storing followup result in memory');
+          
+          // Get current page info for memory context
+          const webview = getActiveWebview();
+          const url = webview?.src || '';
+          const title = webview?.getTitle ? webview.getTitle() : '';
+          
+          memoryService.storeMemory(url, question, summary, title);
+        } else {
+          console.log('[Memory] No suitable content found for memory storage in followup');
+        }
+      }
     } catch (extensionError) {
       console.error('Follow-up extension execution failed:', extensionError);
       
@@ -2863,6 +2954,40 @@ async function processFollowupQuestionWithContexts(question: string, contexts: W
       
       console.log('[processFollowupQuestionWithContexts] Displaying results...');
       displayAgentResults(result.data);
+      
+      // Store memory if available - try multiple content sources
+      if (memoryService && result.data) {
+        let summary = '';
+        
+        // Try different content sources in order of preference
+        if (result.data.consolidated_summary) {
+          summary = result.data.consolidated_summary;
+        } else if (result.data.summaries && result.data.summaries.length > 0) {
+          summary = result.data.summaries.map((s: any) => `${s.title}: ${s.summary}`).join('\n\n');
+        } else if (typeof result.data === 'string') {
+          // Handle simple string responses
+          summary = result.data;
+        } else if (result.data.content) {
+          // Handle responses with content field
+          summary = result.data.content;
+        } else if (result.data.response) {
+          // Handle responses with response field
+          summary = result.data.response;
+        }
+        
+        if (summary && summary.trim()) {
+          console.log('[Memory] Storing followup with contexts result in memory');
+          
+          // Get current page info for memory context
+          const webview = getActiveWebview();
+          const url = webview?.src || '';
+          const title = webview?.getTitle ? webview.getTitle() : '';
+          
+          memoryService.storeMemory(url, question, summary, title);
+        } else {
+          console.log('[Memory] No suitable content found for memory storage in followup with contexts');
+        }
+      }
     } catch (extensionError) {
       console.error('Follow-up extension with contexts execution failed:', extensionError);
       
