@@ -19,12 +19,18 @@ export class WindowManager {
       }
     });
 
+    // Enable DevTools for the main window in development
+    if (process.env.NODE_ENV === 'development' || process.env.DEBUG) {
+      this.mainWindow.webContents.openDevTools();
+    }
+
     // Load the main HTML file
     const htmlPath = path.join(__dirname, '../../renderer/index.html');
     await this.mainWindow.loadFile(htmlPath);
 
     // Setup event handlers
     this.setupWindowEventHandlers();
+    this.setupDevToolsShortcuts();
 
     return this.mainWindow;
   }
@@ -72,5 +78,32 @@ export class WindowManager {
     } catch (error) {
       console.error('Failed to write crash log:', error);
     }
+  }
+
+  private setupDevToolsShortcuts(): void {
+    if (!this.mainWindow) return;
+
+    // Register global shortcuts for DevTools
+    this.mainWindow.webContents.on('before-input-event', (event, input) => {
+      // F12 key
+      if (input.key === 'F12') {
+        event.preventDefault();
+        this.mainWindow!.webContents.toggleDevTools();
+      }
+      
+      // Ctrl+Shift+I (Windows/Linux) or Cmd+Option+I (Mac)
+      if ((input.control || input.meta) && input.shift && input.key === 'I') {
+        event.preventDefault();
+        this.mainWindow!.webContents.toggleDevTools();
+      }
+      
+      // Ctrl+Shift+J (Windows/Linux) or Cmd+Option+J (Mac) - Console
+      if ((input.control || input.meta) && input.shift && input.key === 'J') {
+        event.preventDefault();
+        this.mainWindow!.webContents.openDevTools({ mode: 'detach' });
+      }
+    });
+
+    console.log('DevTools shortcuts registered for main window');
   }
 } 

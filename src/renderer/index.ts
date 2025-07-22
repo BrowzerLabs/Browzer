@@ -3,6 +3,7 @@ import './components/ExtensionStore.css';
 import './components/WorkflowProgress.css';
 import { ExtensionStore } from './components/ExtensionStore';
 import WorkflowProgressIndicator from './components/WorkflowProgress';
+import { devToolsManager } from './components/DevToolsManager';
 
 // Import Electron APIs
 const { ipcRenderer, shell } = require('electron');
@@ -206,6 +207,9 @@ document.addEventListener('DOMContentLoaded', () => {
   restoreTabs();
   console.log('[Init] Calling setupGlobalErrorHandler...');
   setupGlobalErrorHandler();
+  console.log('[Init] Initializing DevTools...');
+  devToolsManager.addDevToolsButton();
+  devToolsManager.enableDevToolsForAllWebviews();
   
   console.log('Browser initialized successfully');
   // DISABLED: Auto-summarize feature commented out
