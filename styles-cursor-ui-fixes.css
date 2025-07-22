@@ -321,6 +321,7 @@ html, body {
     display: flex;
     flex: 1;
     width: 100%;
+    height: calc(100vh - 83px); /* Account for tab bar (35px) + toolbar (48px) */
     overflow: hidden;
     position: relative;
     min-height: 0;
