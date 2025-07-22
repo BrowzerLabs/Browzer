@@ -4,6 +4,8 @@ import './components/WorkflowProgress.css';
 import { ExtensionStore } from './components/ExtensionStore';
 import WorkflowProgressIndicator from './components/WorkflowProgress';
 import { devToolsManager } from './components/DevToolsManager';
+import { MemoryService } from './services/MemoryService';
+import { TextProcessing } from './utils/textProcessing';
 
 // Import Electron APIs
 const { ipcRenderer, shell } = require('electron');
@@ -40,6 +42,13 @@ let lastProcessedQuery = '';
 let lastProcessedTimestamp = 0;
 let workflowProgressIndicator: WorkflowProgressIndicator | null = null;
 let workflowProgressSetup = false; // Prevent duplicate event listener setup
+
+// Initialize services
+let memoryService: MemoryService | null = null;
+
+// Text selection state
+let currentSelection: { text: string; rect: any; webview: any } | null = null;
+let addToChatButton: HTMLElement | null = null;
 
 // Global query execution tracker to prevent duplicates across all paths
 const globalQueryTracker = new Map<string, number>();
@@ -212,6 +221,12 @@ document.addEventListener('DOMContentLoaded', () => {
   console.log('[Init] Initializing DevTools...');
   devToolsManager.addDevToolsButton();
   devToolsManager.enableDevToolsForAllWebviews();
+  
+  console.log('[Init] Initializing MemoryService...');
+  memoryService = new MemoryService();
+  
+  console.log('[Init] Setting up text selection message listener...');
+  setupTextSelectionListener();
   
   console.log('Browser initialized successfully');
   // DISABLED: Auto-summarize feature commented out
@@ -893,9 +908,8 @@ function configureWebview(webview: any, url: string): void {
   // Enhanced web preferences for OAuth compatibility and script execution
   const webPreferencesArray = [
     'contextIsolation=false', // Allow better script execution
-    'nodeIntegration=false',
-    'webSecurity=false', // Disable web security for development
-    'allowRunningInsecureContent=true', // Allow mixed content
+    'nodeIntegration=true', // Enable for IPC communication
+    'webSecurity=true', // Keep web security enabled
     'experimentalFeatures=true',
     'sandbox=false',
     'webgl=true',
@@ -917,18 +931,15 @@ function configureWebview(webview: any, url: string): void {
     // Essential for OAuth flows and script execution
     'nativeWindowOpen=true',
     'contextMenu=true',
-    'devTools=true',
-    // Disable certificate verification for development
-    'ignoreCertificateErrors=true'
+    'devTools=true'
   ];
 
   // Set comprehensive attributes for OAuth compatibility
   webview.setAttribute('useragent', userAgent);
   webview.setAttribute('webpreferences', webPreferencesArray.join(', '));
   webview.setAttribute('allowpopups', 'true');
-  webview.setAttribute('disablewebsecurity', 'true'); // Disable web security for better script execution
-  webview.setAttribute('nodeintegration', 'false');
-  webview.setAttribute('nodeintegrationinsubframes', 'false');
+  webview.setAttribute('nodeintegration', 'true');
+  webview.setAttribute('nodeintegrationinsubframes', 'true');
   webview.setAttribute('plugins', 'true');
   webview.setAttribute('disableguestresize', 'false');
   webview.setAttribute('preload', '');
@@ -1168,6 +1179,32 @@ function setupWebviewEvents(webview: any): void {
     }
   });
   
+  // Listen for IPC messages from webview (for Add to Chat)
+  webview.addEventListener('ipc-message', (event: any) => {
+    console.log('🔍 [IPC DEBUG] Received ipc-message from webview:', webview.id, 'channel:', event.channel, 'args:', event.args);
+    if (event.channel === 'add-to-chat') {
+      console.log('✅ [Add to Chat] Processing IPC message with text:', event.args[0]?.substring(0, 50) + '...');
+      if (event.args[0]) {
+        // Add selected text to @ context system instead of just chat
+        addSelectedTextToContextSystem(event.args[0], webview);
+        showToast('✅ Text added to context!', 'success');
+        console.log('✅ [Add to Chat] Text successfully added to context system via IPC');
+      } else {
+        console.warn('⚠️ [Add to Chat] IPC message received but no text found in args');
+      }
+    }
+  });
+
+  // Inject text selection handler for "Add to Chat" functionality
+  webview.addEventListener('did-finish-load', () => {
+    console.log('[Text Selection] Injecting enhanced selection handler for webview:', webview.id);
+    try {
+      injectEnhancedSelectionHandler(webview);
+    } catch (error) {
+      console.error('[Text Selection] Failed to inject handler:', error);
+    }
+  });
+
   console.log('All webview event listeners set up for:', webview.id);
 }
 
@@ -2087,8 +2124,18 @@ async function executeAgent(): Promise<void> {
       if (result.success === false) {
         addMessageToChat('assistant', `Error: ${result.error}`);
       } else {
-        console.log('Calling displayAgentResults with:', result.data);
-        displayAgentResults(result.data);
+              console.log('Calling displayAgentResults with:', result.data);
+      displayAgentResults(result.data);
+      
+      // Store memory if available
+      if (memoryService && result.data && (result.data.consolidated_summary || result.data.summaries)) {
+        const summary = result.data.consolidated_summary || 
+                       (result.data.summaries && result.data.summaries.length > 0 ? result.data.summaries[0].summary : '');
+        if (summary) {
+          console.log('[Memory] Storing agent result in memory');
+          memoryService.storeMemory(url, query, summary, title);
+        }
+      }
       }
     } catch (extensionError) {
       console.error('Single extension execution failed:', extensionError);
@@ -3087,6 +3134,334 @@ function showExtensionStore(): void {
   if (forwardBtn) forwardBtn.disabled = true;
 }
 
+// ========================= FLOATING ADD TO CHAT BUTTON =========================
+
+function createAddToChatButton(): HTMLElement {
+  if (addToChatButton) {
+    return addToChatButton;
+  }
+  
+  addToChatButton = document.createElement('button');
+  addToChatButton.className = 'add-to-chat-button';
+  addToChatButton.textContent = 'Add to Chat';
+  addToChatButton.setAttribute('title', 'Add selected text to chat conversation');
+  
+  // Add click handler
+  addToChatButton.addEventListener('click', () => {
+    if (currentSelection) {
+      console.log('[Add to Chat] Adding selected text to chat:', currentSelection.text.substring(0, 50) + '...');
+      
+      // Add the selected text as a context message to chat
+      addMessageToChat('context', `**Selected Text:**\n\n${currentSelection.text}`);
+      
+      // Clear selection and hide button
+      hideAddToChatButton();
+      
+      // Show success feedback
+      showToast('Text added to chat!', 'success');
+    }
+  });
+  
+  document.body.appendChild(addToChatButton);
+  return addToChatButton;
+}
+
+function showAddToChatButton(text: string, rect: any, webview: any): void {
+  console.log('[Add to Chat] Showing button for selection:', text.substring(0, 30) + '...');
+  
+  // Store current selection
+  currentSelection = { text, rect, webview };
+  
+  // Create button if it doesn't exist
+  const button = createAddToChatButton();
+  
+  // Get webview container position to calculate absolute coordinates
+  const webviewContainer = document.querySelector('.webviews-container');
+  if (!webviewContainer) return;
+  
+  const containerRect = webviewContainer.getBoundingClientRect();
+  
+  // Position the button above the selection
+  const buttonX = containerRect.left + rect.left + (rect.width / 2);
+  const buttonY = containerRect.top + rect.top - 40; // 40px above selection
+  
+  // Ensure button stays within viewport
+  const buttonWidth = 120; // Approximate button width
+  const adjustedX = Math.max(10, Math.min(buttonX - buttonWidth / 2, window.innerWidth - buttonWidth - 10));
+  const adjustedY = Math.max(10, buttonY);
+  
+  button.style.left = `${adjustedX}px`;
+  button.style.top = `${adjustedY}px`;
+  
+  // Show the button with animation
+  requestAnimationFrame(() => {
+    button.classList.add('show');
+  });
+  
+  // Auto-hide after 5 seconds
+  setTimeout(() => {
+    if (currentSelection && currentSelection.text === text) {
+      hideAddToChatButton();
+    }
+  }, 5000);
+}
+
+function hideAddToChatButton(): void {
+  if (addToChatButton) {
+    addToChatButton.classList.remove('show');
+    currentSelection = null;
+  }
+}
+
+// Hide button when clicking elsewhere
+document.addEventListener('click', (e) => {
+  if (addToChatButton && !addToChatButton.contains(e.target as Node)) {
+    hideAddToChatButton();
+  }
+});
+
+// Hide button when scrolling or resizing
+document.addEventListener('scroll', hideAddToChatButton, true);
+window.addEventListener('resize', hideAddToChatButton);
+
+function setupTextSelectionListener(): void {
+  console.log('[Text Selection] Setting up message listener for text selections');
+  
+  // Listen for messages from webviews about text selections
+  window.addEventListener('message', (event) => {
+    console.log('🔍 [MESSAGE DEBUG] Received window message:', event.data);
+    // Only handle messages from our webviews
+    if (event.data && event.data.type === 'add-to-chat') {
+      console.log('✅ [Add to Chat] Received postMessage with text:', event.data.text?.substring(0, 30) + '...');
+      if (event.data.text) {
+        // Add selected text to @ context system instead of just chat
+        const activeWebview = getActiveWebview();
+        if (activeWebview) {
+          addSelectedTextToContextSystem(event.data.text, activeWebview);
+          showToast('✅ Text added to context!', 'success');
+          console.log('✅ [Add to Chat] Text successfully added to context system via postMessage');
+        }
+      } else {
+        console.warn('⚠️ [Add to Chat] PostMessage received but no text found');
+      }
+    }
+  });
+  
+  console.log('[Text Selection] Message listener set up successfully');
+}
+
+function injectEnhancedSelectionHandler(webview: any): void {
+  if (!webview) return;
+  
+  try {
+    console.log('[Selection Handler] Injecting enhanced selection handler for webview:', webview.id);
+    
+    const injectionScript = `
+      (function() {
+        // Prevent multiple injections
+        if (window.__browzerSelectionHandler) {
+          console.log('Selection handler already installed');
+          return;
+        }
+        
+        console.log('Installing Browzer enhanced selection handler...');
+        window.__browzerSelectionHandler = true;
+        
+        // Create and style the add to chat button
+        let addToChatBtn = null;
+        let selectionTimeout = null;
+        
+        function createAddToChatButton(selectedText, rect) {
+          try {
+            // Remove any existing button
+            hideAddToChatButton();
+            
+            // Create new button
+            addToChatBtn = document.createElement('button');
+                         addToChatBtn.textContent = '@ Add to Context';
+            addToChatBtn.setAttribute('data-browzer-button', 'true');
+            
+            // Apply styles directly
+            const styles = {
+              position: 'fixed',
+              zIndex: '2147483647',
+              padding: '8px 12px',
+              background: '#1a73e8',
+              color: 'white',
+              border: 'none',
+              borderRadius: '6px',
+              fontSize: '12px',
+              fontWeight: '500',
+              cursor: 'pointer',
+              fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, system-ui, sans-serif',
+              boxShadow: '0 4px 16px rgba(26, 115, 232, 0.3), 0 2px 8px rgba(0, 0, 0, 0.1)',
+              transition: 'all 0.2s ease',
+              whiteSpace: 'nowrap',
+              backdropFilter: 'blur(8px)',
+              WebkitBackdropFilter: 'blur(8px)'
+            };
+            
+            Object.assign(addToChatBtn.style, styles);
+            
+            // Position the button above the selection
+            const buttonTop = Math.max(10, rect.top - 40);
+            const buttonLeft = Math.max(10, Math.min(rect.left, window.innerWidth - 140));
+            
+            addToChatBtn.style.top = buttonTop + 'px';
+            addToChatBtn.style.left = buttonLeft + 'px';
+            
+            // Hover effects
+            addToChatBtn.addEventListener('mouseenter', function() {
+              this.style.background = '#1557b0';
+              this.style.transform = 'translateY(-1px)';
+              this.style.boxShadow = '0 6px 20px rgba(26, 115, 232, 0.4), 0 4px 12px rgba(0, 0, 0, 0.15)';
+            });
+            
+            addToChatBtn.addEventListener('mouseleave', function() {
+              this.style.background = '#1a73e8';
+              this.style.transform = 'translateY(0)';
+              this.style.boxShadow = '0 4px 16px rgba(26, 115, 232, 0.3), 0 2px 8px rgba(0, 0, 0, 0.1)';
+            });
+            
+            // Click handler with multiple communication methods
+            addToChatBtn.addEventListener('click', function(e) {
+              e.preventDefault();
+              e.stopPropagation();
+              
+              console.log('Add to Chat clicked, sending text:', selectedText.substring(0, 50));
+              
+              let messageSent = false;
+              
+                             // Method 1: Try IPC (for Electron webviews with node integration)
+               try {
+                 if (typeof require !== 'undefined') {
+                   const { ipcRenderer } = require('electron');
+                   if (ipcRenderer && ipcRenderer.sendToHost) {
+                     ipcRenderer.sendToHost('add-to-chat', selectedText);
+                     messageSent = true;
+                     console.log('Message sent via IPC sendToHost');
+                   }
+                 }
+               } catch (err) {
+                 console.log('IPC sendToHost method failed:', err.message);
+               }
+              
+              // Method 2: PostMessage to parent
+              if (!messageSent) {
+                try {
+                  window.parent.postMessage({
+                    type: 'add-to-chat',
+                    text: selectedText,
+                    source: 'browzer-selection'
+                  }, '*');
+                  messageSent = true;
+                  console.log('Message sent via postMessage to parent');
+                } catch (err) {
+                  console.log('PostMessage to parent failed:', err.message);
+                }
+              }
+              
+              // Method 3: PostMessage to top window
+              if (!messageSent) {
+                try {
+                  window.top.postMessage({
+                    type: 'add-to-chat',
+                    text: selectedText,
+                    source: 'browzer-selection'
+                  }, '*');
+                  messageSent = true;
+                  console.log('Message sent via postMessage to top');
+                } catch (err) {
+                  console.log('PostMessage to top failed:', err.message);
+                }
+              }
+              
+              if (messageSent) {
+                console.log('Text sent to chat:', selectedText.substring(0, 30) + '...');
+                hideAddToChatButton();
+              } else {
+                console.error('Failed to send text to chat - no communication method worked');
+              }
+            });
+            
+            // Add to DOM
+            document.body.appendChild(addToChatBtn);
+            console.log('Add to Chat button created and positioned');
+            
+            // Auto-hide after 7 seconds
+            setTimeout(hideAddToChatButton, 7000);
+            
+          } catch (err) {
+            console.error('Error creating Add to Chat button:', err);
+          }
+        }
+        
+        function hideAddToChatButton() {
+          if (addToChatBtn && addToChatBtn.parentNode) {
+            addToChatBtn.parentNode.removeChild(addToChatBtn);
+          }
+          addToChatBtn = null;
+        }
+        
+        function handleTextSelection() {
+          try {
+            clearTimeout(selectionTimeout);
+            selectionTimeout = setTimeout(() => {
+              const selection = window.getSelection();
+              const text = selection.toString().trim();
+              
+              if (text && text.length >= 5) {
+                const range = selection.rangeCount > 0 ? selection.getRangeAt(0) : null;
+                if (range) {
+                  const rect = range.getBoundingClientRect();
+                  if (rect.width > 0 && rect.height > 0) {
+                    console.log('Text selected for add to chat:', text.substring(0, 30) + '...');
+                    createAddToChatButton(text, rect);
+                  }
+                }
+              } else {
+                hideAddToChatButton();
+              }
+            }, 100);
+          } catch (e) {
+            console.error('Error in selection handler:', e);
+          }
+        }
+        
+        // Add event listeners
+        document.addEventListener('mouseup', handleTextSelection, true);
+        document.addEventListener('selectionchange', handleTextSelection);
+        document.addEventListener('touchend', handleTextSelection);
+        
+        // Hide button when clicking elsewhere
+        document.addEventListener('click', function(e) {
+          if (addToChatBtn && !addToChatBtn.contains(e.target)) {
+            hideAddToChatButton();
+          }
+        });
+        
+        // Hide on scroll
+        document.addEventListener('scroll', hideAddToChatButton, true);
+        window.addEventListener('resize', hideAddToChatButton);
+        
+        console.log('✓ Enhanced selection handler installed successfully');
+        
+      })();
+    `;
+    
+    webview.executeJavaScript(injectionScript, false)
+      .then(() => {
+        console.log('[Selection Handler] ✓ Enhanced selection handler injection successful for webview:', webview.id);
+      })
+      .catch((error: any) => {
+        console.error('[Selection Handler] Failed to inject enhanced selection handler:', error);
+      });
+      
+  } catch (error) {
+    console.error('[Selection Handler] Error setting up enhanced selection handler:', error);
+  }
+}
+
 // ========================= EXPORTS FOR DEBUGGING =========================
 
 // Export for debugging - placed at end after all functions are defined
@@ -3167,6 +3542,47 @@ function findWorkflowProgressInChat(workflowId: string): HTMLElement | null {
 
   const workflowMessages = chatContainer.querySelectorAll(`[data-workflow-id="${workflowId}"]`);
   return workflowMessages.length > 0 ? workflowMessages[0] as HTMLElement : null;
+}
+
+// ========================= SELECTED TEXT TO CONTEXT SYSTEM =========================
+
+async function addSelectedTextToContextSystem(selectedText: string, webview: any): Promise<void> {
+  try {
+    console.log('[Context System] Adding selected text to @ context system:', selectedText.substring(0, 50) + '...');
+    
+    // Get current page info
+    const url = webview.src || '';
+    const title = webview.getTitle ? webview.getTitle() : '';
+    
+    // Create a webpage context with the selected text
+    const contextId = `selected-${Date.now()}`;
+    const contextTitle = `Selected: ${selectedText.substring(0, 30)}${selectedText.length > 30 ? '...' : ''}`;
+    
+    const webpageContext: WebpageContext = {
+      id: contextId,
+      title: contextTitle,
+      url: url,
+      timestamp: Date.now(),
+      content: {
+        title: title,
+        description: `Selected text from ${title || url}`,
+        content: selectedText,
+        html: selectedText,
+        url: url
+      }
+    };
+    
+    // Add to the context system
+    addWebpageContext(webpageContext);
+    
+    console.log('[Context System] Selected text successfully added to @ context system');
+    console.log('[Context System] Total contexts now:', selectedWebpageContexts.length);
+    
+  } catch (error) {
+    console.error('[Context System] Error adding selected text to context system:', error);
+    // Fallback to regular chat message if context system fails
+    addMessageToChat('context', `**Selected Text:**\n\n${selectedText}`);
+  }
 }
 
 // ========================= WEBPAGE CONTEXT MANAGEMENT =========================
