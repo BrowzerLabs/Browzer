@@ -14,61 +14,128 @@
 </head>
 <body>
     <div class="browser-container">
+        <!-- Chrome-like Tab Bar -->
         <div class="tab-bar">
             <div class="tabs-container" id="tabsContainer">
                 <!-- Tabs will be added here dynamically -->
             </div>
-            <button id="newTabBtn" class="new-tab-btn">+</button>
+            <button id="newTabBtn" class="new-tab-btn" title="New tab (Ctrl+T)">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                    <path d="M8 3.5a.5.5 0 0 1 .5.5v4h4a.5.5 0 0 1 0 1h-4v4a.5.5 0 0 1-1 0v-4h-4a.5.5 0 0 1 0-1h4v-4a.5.5 0 0 1 .5-.5z"/>
+                </svg>
+            </button>
         </div>
+
+        <!-- Chrome-like Toolbar -->
         <div class="toolbar">
-            <button id="backBtn" class="nav-btn">←</button>
-            <button id="forwardBtn" class="nav-btn">→</button>
-            <button id="reloadBtn" class="nav-btn">↻</button>
-            <input type="text" id="urlBar" class="url-bar" placeholder="Enter URL or search query">
-            <button id="goBtn" class="nav-btn">Go</button>
-            <button id="historyBtn" class="nav-btn" title="History (Ctrl+H)">📚</button>
-            <button id="extensionsBtn" class="nav-btn">Settings</button>
-            <button id="newExtensionsBtn" class="nav-btn">Extensions</button>
+            <div class="nav-controls">
+                <button id="backBtn" class="nav-btn" title="Back (Alt+Left)">
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                        <path d="M11.354 1.646a.5.5 0 0 1 0 .708L5.707 8l5.647 5.646a.5.5 0 0 1-.708.708l-6-6a.5.5 0 0 1 0-.708l6-6a.5.5 0 0 1 .708 0z"/>
+                    </svg>
+                </button>
+                <button id="forwardBtn" class="nav-btn" title="Forward (Alt+Right)">
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                        <path d="M4.646 1.646a.5.5 0 0 1 .708 0l6 6a.5.5 0 0 1 0 .708l-6 6a.5.5 0 0 1-.708-.708L10.293 8 4.646 2.354a.5.5 0 0 1 0-.708z"/>
+                    </svg>
+                </button>
+                <button id="reloadBtn" class="nav-btn" title="Reload (Ctrl+R)">
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                        <path d="M11.534 7h3.932a.25.25 0 0 1 .192.41l-1.966 2.36a.25.25 0 0 1-.384 0l-1.966-2.36a.25.25 0 0 1 .192-.41zm-11 2h3.932a.25.25 0 0 0 .192-.41L2.692 6.23a.25.25 0 0 0-.384 0L.342 8.59A.25.25 0 0 0 .534 9z"/>
+                        <path d="M8 3c-1.552 0-2.94.707-3.857 1.818a.5.5 0 1 1-.771-.636A6.002 6.002 0 0 1 13.917 7H12.9A5.002 5.002 0 0 0 8 3zM3.1 9a5.002 5.002 0 0 0 8.757 2.182.5.5 0 1 1 .771.636A6.002 6.002 0 0 1 2.083 9H3.1z"/>
+                    </svg>
+                </button>
+            </div>
+
+            <div class="url-container">
+                <input type="text" id="urlBar" class="url-bar" placeholder="Search Google or type a URL">
+                <button id="goBtn" class="go-btn" title="Go">
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                        <path d="M8 0a8 8 0 1 1 0 16A8 8 0 0 1 8 0zM4.5 7.5a.5.5 0 0 0 0 1h5.793l-2.147 2.146a.5.5 0 0 0 .708.708l3-3a.5.5 0 0 0 0-.708l-3-3a.5.5 0 1 0-.708.708L10.293 7.5H4.5z"/>
+                    </svg>
+                </button>
+            </div>
+
+            <div class="toolbar-actions">
+                <button id="historyBtn" class="action-btn" title="History (Ctrl+H)">
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                        <path d="M8 3.5a.5.5 0 0 0-1 0V9a.5.5 0 0 0 .252.434l3.5 2a.5.5 0 0 0 .496-.868L8 8.71V3.5z"/>
+                        <path d="M8 16A8 8 0 1 0 8 0a8 8 0 0 0 0 16zm7-8A7 7 0 1 1 1 8a7 7 0 0 1 14 0z"/>
+                    </svg>
+                </button>
+                <button id="extensionsBtn" class="action-btn" title="Settings">
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                        <path d="M8 4.754a3.246 3.246 0 1 0 0 6.492 3.246 3.246 0 0 0 0-6.492zM5.754 8a2.246 2.246 0 1 1 4.492 0 2.246 2.246 0 0 1-4.492 0z"/>
+                        <path d="M9.796 1.343c-.527-1.79-3.065-1.79-3.592 0l-.094.319a.873.873 0 0 1-1.255.52l-.292-.16c-1.64-.892-3.433.902-2.54 2.541l.159.292a.873.873 0 0 1-.52 1.255l-.319.094c-1.79.527-1.79 3.065 0 3.592l.319.094a.873.873 0 0 1 .52 1.255l-.16.292c-.892 1.64.901 3.434 2.541 2.54l.292-.159a.873.873 0 0 1 1.255.52l.094.319c.527 1.79 3.065 1.79 3.592 0l.094-.319a.873.873 0 0 1 1.255-.52l.292.16c1.64.893 3.434-.902 2.54-2.541l-.159-.292a.873.873 0 0 1 .52-1.255l.319-.094c1.79-.527 1.79-3.065 0-3.592l-.319-.094a.873.873 0 0 1-.52-1.255l.16-.292c.893-1.64-.902-3.433-2.541-2.54l-.292.159a.873.873 0 0 1-1.255-.52l-.094-.319zm-2.633.283c.246-.835 1.428-.835 1.674 0l.094.319a1.873 1.873 0 0 0 2.693 1.115l.292-.16c.764-.415 1.6.42 1.184 1.185l-.159.292a1.873 1.873 0 0 0 1.116 2.692l.318.094c.835.246.835 1.428 0 1.674l-.319.094a1.873 1.873 0 0 0-1.115 2.693l.16.292c.415.764-.42 1.6-1.185 1.184l-.292-.159a1.873 1.873 0 0 0-2.692 1.116l-.094.318c-.246.835-1.428.835-1.674 0l-.094-.319a1.873 1.873 0 0 0-2.693-1.115l-.292.16c-.764.415-1.6-.42-1.184-1.185l.159-.292A1.873 1.873 0 0 0 1.945 8.93l-.319-.094c-.835-.246-.835-1.428 0-1.674l.319-.094A1.873 1.873 0 0 0 3.06 4.377l-.16-.292c-.415-.764.42-1.6 1.185-1.184l.292.159a1.873 1.873 0 0 0 2.692-1.115l.094-.319z"/>
+                    </svg>
+                </button>
+                <button id="newExtensionsBtn" class="action-btn" title="Extensions">
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                        <path d="M6.5 1A1.5 1.5 0 0 0 5 2.5V3H1.5A1.5 1.5 0 0 0 0 4.5v8A1.5 1.5 0 0 0 1.5 14h13a1.5 1.5 0 0 0 1.5-1.5v-8A1.5 1.5 0 0 0 14.5 3H11v-.5A1.5 1.5 0 0 0 9.5 1h-3zm0 1h3a.5.5 0 0 1 .5.5V3H6v-.5a.5.5 0 0 1 .5-.5z"/>
+                    </svg>
+                </button>
+            </div>
         </div>
+
+        <!-- Main Content Area -->
         <div class="content-container">
+            <!-- Web Content -->
             <div class="webviews-container">
                 <!-- Webviews will be added dynamically here -->
             </div>
+
+            <!-- Resizer -->
             <div id="dragbar"></div>
+
+            <!-- AI Assistant Panel -->
             <div class="agent-container">
+                <!-- Header -->
                 <div class="agent-header">
-                    <h3>AI Browser Assistant</h3>
-                    <div class="agent-controls">
-                        <div class="controls-row">
-                            <select id="modelSelector" class="model-selector">
-                                <option value="anthropic">Claude (Anthropic)</option>
-                                <option value="openai">GPT-4 (OpenAI)</option>
-                                <option value="perplexity">Perplexity</option>
-                                <option value="chutes">Chutes</option>
-                            </select>
-                            <button id="runAgentBtn" class="primary-btn">
-                                <span class="btn-icon">🔍</span>Analyze Page
-                            </button>
-                        </div>
-                        <!--
-                        DISABLED: Auto-summarize toggle commented out
-                        <div class="auto-summarize-container">
-                            <label class="switch">
-                                <input type="checkbox" id="autoSummarizeToggle" checked>
-                                <span class="slider"></span>
-                            </label>
-                            <span class="auto-summarize-label">Auto-summarize pages</span>
-                        </div>
-                        -->
+                    <div class="agent-title">
+                        <svg width="20" height="20" viewBox="0 0 16 16" fill="#1a73e8" class="agent-icon">
+                            <path d="M8 4.754a3.246 3.246 0 1 0 0 6.492 3.246 3.246 0 0 0 0-6.492zM5.754 8a2.246 2.246 0 1 1 4.492 0 2.246 2.246 0 0 1-4.492 0z"/>
+                            <path d="M9.796 1.343c-.527-1.79-3.065-1.79-3.592 0l-.094.319a.873.873 0 0 1-1.255.52l-.292-.16c-1.64-.892-3.433.902-2.54 2.541l.159.292a.873.873 0 0 1-.52 1.255l-.319.094c-1.79.527-1.79 3.065 0 3.592l.319.094a.873.873 0 0 1 .52 1.255l-.16.292c-.892 1.64.901 3.434 2.541 2.54l.292-.159a.873.873 0 0 1 1.255.52l.094.319c.527 1.79 3.065 1.79 3.592 0l.094-.319a.873.873 0 0 1 1.255-.52l.292.16c1.64.893 3.434-.902 2.54-2.541l-.159-.292a.873.873 0 0 1 .52-1.255l.319-.094c1.79-.527 1.79-3.065 0-3.592l-.319-.094a.873.873 0 0 1-.52-1.255l.16-.292c.893-1.64-.902-3.433-2.541-2.54l-.292.159a.873.873 0 0 1-1.255-.52l-.094-.319zm-2.633.283c.246-.835 1.428-.835 1.674 0l.094.319a1.873 1.873 0 0 0 2.693 1.115l.292-.16c.764-.415 1.6.42 1.184 1.185l-.159.292a1.873 1.873 0 0 0 1.116 2.692l.318.094c.835.246.835 1.428 0 1.674l-.319.094a1.873 1.873 0 0 0-1.115 2.693l.16.292c.415.764-.42 1.6-1.185 1.184l-.292-.159a1.873 1.873 0 0 0-2.692 1.116l-.094.318c-.246.835-1.428.835-1.674 0l-.094-.319a1.873 1.873 0 0 0-2.693-1.115l-.292.16c-.764.415-1.6-.42-1.184-1.185l.159-.292A1.873 1.873 0 0 0 1.945 8.93l-.319-.094c-.835-.246-.835-1.428 0-1.674l.319-.094A1.873 1.873 0 0 0 3.06 4.377l-.16-.292c-.415-.764.42-1.6 1.185-1.184l.292.159a1.873 1.873 0 0 0 2.692-1.115l.094-.319z"/>
+                        </svg>
+                        <h3>Browzer Assistant</h3>
                     </div>
                 </div>
+
+                <!-- Controls -->
+                <div class="agent-controls">
+                    <div class="model-section">
+                        <label for="modelSelector" class="model-label">AI Model</label>
+                        <select id="modelSelector" class="model-selector">
+                            <option value="anthropic">Claude (Anthropic)</option>
+                            <option value="openai">GPT-4 (OpenAI)</option>
+                            <option value="perplexity">Perplexity</option>
+                            <option value="chutes">Chutes</option>
+                        </select>
+                    </div>
+                    <button id="runAgentBtn" class="analyze-btn">
+                        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                            <path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001c.03.04.062.078.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1.007 1.007 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0z"/>
+                        </svg>
+                        Analyze Page
+                    </button>
+                </div>
+
+                <!-- Results Area -->
                 <div id="agentResults" class="agent-results">
                     <div class="welcome-container">
-                        <div class="welcome-icon">🔍</div>
-                        <h3>AI Browser Assistant</h3><br/><br/>
+                        <div class="welcome-icon">
+                            <svg width="48" height="48" viewBox="0 0 16 16" fill="#1a73e8">
+                                <path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001c.03.04.062.078.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1.007 1.007 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0z"/>
+                            </svg>
+                        </div>
+                        <h3>Browzer Assistant</h3>
                         <p>Click "Analyze Page" to summarize the current page or get insights about its content.</p>
                         <p>You can also select text on any webpage and add it to this chat.</p>
                     </div>
+                </div>
+
+                <!-- Fixed Chat Input (will be positioned at bottom) -->
+                <div class="chat-input-container">
+                    <!-- Chat input will be dynamically added here -->
                 </div>
             </div>
         </div>

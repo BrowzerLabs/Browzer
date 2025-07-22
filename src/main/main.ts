@@ -12,6 +12,22 @@ import { LLMLogger } from '../main/LLMLogger';
 app.setName('Browzer');
 process.title = 'Browzer';
 
+// Proper certificate handling for production
+app.on('certificate-error', (event, webContents, url, error, certificate, callback) => {
+  console.warn('[SSL Certificate Error]', {
+    url: url,
+    error: error,
+    issuer: certificate.issuer,
+    subject: certificate.subject,
+    validFrom: certificate.validStart,
+    validTo: certificate.validExpiry
+  });
+  
+  // Let the system handle certificate validation properly
+  // This will show certificate error pages to users instead of silently failing
+  callback(false);
+});
+
 class BrowzerApp {
   private appManager: AppManager;
   private windowManager: WindowManager;
