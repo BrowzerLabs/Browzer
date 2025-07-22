@@ -40,14 +40,13 @@ html, body {
 /* ============ CHROME-LIKE TAB BAR ============ */
 .tab-bar {
     display: flex;
-    background: #dee1e6;
-    height: 35px;
+    background: #f2f2f2;
+    height: 36px;
     width: 100%;
     overflow: hidden;
-    border-bottom: 1px solid #dadce0;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+    user-select: none;
     flex-shrink: 0;
-    position: relative;
-    z-index: 100;
 }
 
 .tabs-container {
@@ -201,12 +200,10 @@ html, body {
 .toolbar {
     display: flex;
     align-items: center;
-    padding: 8px 16px;
+    padding: 10px;
     background: #f8f9fa;
     border-bottom: 1px solid #e8eaed;
-    height: 48px;
     flex-shrink: 0;
-    gap: 8px;
 }
 
 .nav-controls {
@@ -321,23 +318,19 @@ html, body {
     display: flex;
     flex: 1;
     width: 100%;
-    height: calc(100vh - 83px); /* Account for tab bar (35px) + toolbar (48px) */
     overflow: hidden;
     position: relative;
-    min-height: 0;
-    margin: 0;
-    padding: 0;
+    min-height: 0; /* Critical for proper flex behavior */
 }
 
 .webviews-container {
     position: relative;
-    flex: 1;
+    flex: 1 1 auto;
     height: 100%;
-    width: 100%;
     overflow: hidden;
+    display: flex;
+    min-height: 0; /* Critical for proper flex behavior */
     background: #fff;
-    margin: 0;
-    padding: 0;
 }
 
 .webview {
@@ -354,7 +347,7 @@ html, body {
 }
 
 .webview.active {
-    display: block !important;
+    display: flex !important;
 }
 
 /* Extension store container when used as webview replacement */
@@ -408,14 +401,15 @@ html, body {
 
 /* ============ AI ASSISTANT PANEL ============ */
 .agent-container {
-    width: 400px;
-    flex-shrink: 0;
+    width: 350px;
+    flex: 0 0 350px;
     height: 100%;
-    background: #fff;
-    border-left: 1px solid #e8eaed;
+    overflow: hidden; /* Prevents double scrollbars */
+    background-color: #fff;
+    border-left: 1px solid #e0e0e0;
     display: flex;
     flex-direction: column;
-    box-shadow: -2px 0 8px rgba(0,0,0,0.05);
+    box-shadow: -2px 0 8px rgba(0, 0, 0, 0.05);
     position: relative;
 }
 
