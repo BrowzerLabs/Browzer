@@ -3,10 +3,13 @@ import './components/ExtensionStore.css';
 import './components/WorkflowProgress.css';
 import { ExtensionStore } from './components/ExtensionStore';
 import WorkflowProgressIndicator from './components/WorkflowProgress';
+import { devToolsManager } from './components/DevToolsManager';
 
 // Import Electron APIs
 const { ipcRenderer, shell } = require('electron');
 const path = require('path');
+// Development feature flag - set to false to disable DoAgent entirely
+const DOAGENT_ENABLED = false;
 
 // Type definitions
 interface TabInfo {
@@ -206,6 +209,9 @@ document.addEventListener('DOMContentLoaded', () => {
   restoreTabs();
   console.log('[Init] Calling setupGlobalErrorHandler...');
   setupGlobalErrorHandler();
+  console.log('[Init] Initializing DevTools...');
+  devToolsManager.addDevToolsButton();
+  devToolsManager.enableDevToolsForAllWebviews();
   
   console.log('Browser initialized successfully');
   // DISABLED: Auto-summarize feature commented out
@@ -884,12 +890,12 @@ function configureWebview(webview: any, url: string): void {
   // Enhanced user agent that's more likely to be accepted by OAuth providers
   const userAgent = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36 Edg/121.0.0.0';
 
-  // Enhanced web preferences for OAuth compatibility
+  // Enhanced web preferences for OAuth compatibility and script execution
   const webPreferencesArray = [
-    'contextIsolation=true',
+    'contextIsolation=false', // Allow better script execution
     'nodeIntegration=false',
-    'webSecurity=true',
-    'allowRunningInsecureContent=false',
+    'webSecurity=false', // Disable web security for development
+    'allowRunningInsecureContent=true', // Allow mixed content
     'experimentalFeatures=true',
     'sandbox=false',
     'webgl=true',
@@ -908,17 +914,19 @@ function configureWebview(webview: any, url: string): void {
     `allowFileAccessFromFileUrls=${isLocalSettingsPage}`,
     `allowUniversalAccessFromFileUrls=${isLocalSettingsPage}`,
     'enableCrossDomainRequestsForMobileApps=false',
-    // Essential for OAuth flows
+    // Essential for OAuth flows and script execution
     'nativeWindowOpen=true',
     'contextMenu=true',
-    'devTools=true'
+    'devTools=true',
+    // Disable certificate verification for development
+    'ignoreCertificateErrors=true'
   ];
 
   // Set comprehensive attributes for OAuth compatibility
   webview.setAttribute('useragent', userAgent);
   webview.setAttribute('webpreferences', webPreferencesArray.join(', '));
   webview.setAttribute('allowpopups', 'true');
-  webview.setAttribute('disablewebsecurity', isLocalSettingsPage ? 'true' : 'false');
+  webview.setAttribute('disablewebsecurity', 'true'); // Disable web security for better script execution
   webview.setAttribute('nodeintegration', 'false');
   webview.setAttribute('nodeintegrationinsubframes', 'false');
   webview.setAttribute('plugins', 'true');
@@ -1471,8 +1479,22 @@ function setupAgentControls(): void {
       chatInputArea = document.createElement('div');
       chatInputArea.className = 'chat-input-area';
       chatInputArea.innerHTML = `
-        <input type="text" id="chatInput" placeholder="Ask a follow-up question..." />
-        <button id="sendMessageBtn" class="chat-send-btn">Send</button>
+        <div class="chat-mode-selector">
+          <label class="mode-option">
+            <input type="radio" name="chatMode" value="ask" checked />
+            <span>Ask</span>
+          </label>
+          ${DOAGENT_ENABLED ? `
+          <label class="mode-option">
+            <input type="radio" name="chatMode" value="do" />
+            <span>Do</span>
+          </label>
+          ` : ''}
+        </div>
+        <div class="chat-input-row">
+          <input type="text" id="chatInput" placeholder="Ask a follow-up question..." />
+          <button id="sendMessageBtn" class="chat-send-btn">Send</button>
+        </div>
       `;
       // Check if there's a chat container to position after
       const existingChatContainer = document.getElementById('chatContainer');
@@ -1526,31 +1548,32 @@ function setupChatInputHandlers(): void {
         console.log('[sendMessage] Sending message:', message);
         console.log('[sendMessage] Selected contexts:', selectedWebpageContexts.length);
         
-        // Debug: Log detailed context information
-        if (selectedWebpageContexts.length > 0) {
-          console.log('🚨 [SEND DEBUG] Found contexts, calling processFollowupQuestionWithContexts');
-          selectedWebpageContexts.forEach((ctx, index) => {
-            console.log(`🚨 [SEND DEBUG] Context ${index + 1}:`, {
-              title: ctx.title,
-              url: ctx.url,
-              hasContent: !!ctx.content,
-              contentKeys: ctx.content ? Object.keys(ctx.content) : 'none'
-            });
-          });
-        } else {
-          console.log('🚨 [SEND DEBUG] No contexts found, calling regular processFollowupQuestion');
-        }
+        // Get selected mode
+        const selectedMode = document.querySelector('input[name="chatMode"]:checked') as HTMLInputElement;
+        const mode = selectedMode ? selectedMode.value : 'ask';
+        console.log('[sendMessage] Selected mode:', mode);
+        
+        // Update placeholder based on mode
+        const placeholderText = mode === 'do' ? 'Enter a task to perform...' : 'Ask a follow-up question...';
+        chatInput.placeholder = placeholderText;
         
         // Add user message to chat
         addMessageToChat('user', message);
         
-        // Process the message with contexts
-        if (selectedWebpageContexts.length > 0) {
-          console.log('🚨 [SEND DEBUG] Calling processFollowupQuestionWithContexts');
-          processFollowupQuestionWithContexts(message, selectedWebpageContexts);
+        // Process the message based on mode
+        if (mode === 'do') {
+          // Use DoAgent for automation tasks
+          console.log('[sendMessage] Using DoAgent for automation task');
+          processDoTask(message);
         } else {
-          console.log('🚨 [SEND DEBUG] Calling processFollowupQuestion');
-          processFollowupQuestion(message);
+          // Use existing ask mode logic
+          if (selectedWebpageContexts.length > 0) {
+            console.log('🚨 [SEND DEBUG] Found contexts, calling processFollowupQuestionWithContexts');
+            processFollowupQuestionWithContexts(message, selectedWebpageContexts);
+          } else {
+            console.log('🚨 [SEND DEBUG] Calling processFollowupQuestion');
+            processFollowupQuestion(message);
+          }
         }
         
         // Clear input and contexts
@@ -1655,6 +1678,19 @@ function setupChatInputHandlers(): void {
           hideMentionDropdown();
         }
       }, 150);
+    });
+    
+    // Add mode change handler
+    const modeRadios = document.querySelectorAll('input[name="chatMode"]');
+    modeRadios.forEach(radio => {
+      radio.addEventListener('change', (e) => {
+        const mode = (e.target as HTMLInputElement).value;
+        console.log('[setupChatInputHandlers] Mode changed to:', mode);
+        
+        // Update placeholder based on mode
+        const placeholderText = mode === 'do' ? 'Enter a task to perform...' : 'Ask a follow-up question...';
+        chatInput.placeholder = placeholderText;
+      });
     });
     
     // Mark as having handlers
@@ -1893,8 +1929,22 @@ async function executeAgent(): Promise<void> {
         chatInputArea = document.createElement('div');
         chatInputArea.className = 'chat-input-area';
         chatInputArea.innerHTML = `
-          <input type="text" id="chatInput" placeholder="Ask a follow-up question..." />
-          <button id="sendMessageBtn" class="chat-send-btn">Send</button>
+          <div class="chat-mode-selector">
+            <label class="mode-option">
+              <input type="radio" name="chatMode" value="ask" checked />
+              <span>Ask</span>
+            </label>
+            ${DOAGENT_ENABLED ? `
+            <label class="mode-option">
+              <input type="radio" name="chatMode" value="do" />
+              <span>Do</span>
+            </label>
+            ` : ''}
+          </div>
+          <div class="chat-input-row">
+            <input type="text" id="chatInput" placeholder="Ask a follow-up question..." />
+            <button id="sendMessageBtn" class="chat-send-btn">Send</button>
+          </div>
         `;
         
         // Position the input area after the chat container (will be created by addMessageToChat if needed)
@@ -2221,8 +2271,22 @@ function addMessageToChat(role: string, content: string, timing?: number): void 
       const chatInputArea = document.createElement('div');
       chatInputArea.className = 'chat-input-area';
       chatInputArea.innerHTML = `
-        <input type="text" id="chatInput" placeholder="Ask a follow-up question..." />
-        <button id="sendMessageBtn" class="chat-send-btn">Send</button>
+        <div class="chat-mode-selector">
+          <label class="mode-option">
+            <input type="radio" name="chatMode" value="ask" checked />
+            <span>Ask</span>
+          </label>
+          ${DOAGENT_ENABLED ? `
+          <label class="mode-option">
+            <input type="radio" name="chatMode" value="do" />
+            <span>Do</span>
+          </label>
+          ` : ''}
+        </div>
+        <div class="chat-input-row">
+          <input type="text" id="chatInput" placeholder="Ask a follow-up question..." />
+          <button id="sendMessageBtn" class="chat-send-btn">Send</button>
+        </div>
       `;
       
       agentResults.appendChild(chatInputArea);
@@ -2786,6 +2850,194 @@ async function processFollowupQuestionWithContexts(question: string, contexts: W
     // Always clear the execution flag when function ends
     isWorkflowExecuting = false;
     console.log('[processFollowupQuestionWithContexts] Clearing execution flag on function completion');
+  }
+}
+
+async function processDoTask(taskInstruction: string): Promise<void> {
+  console.log('[processDoTask] Processing task:', taskInstruction);
+  
+  if (!DOAGENT_ENABLED) {
+    addMessageToChat('assistant', 'DoAgent functionality is disabled in this build.');
+    return;
+  }
+  
+  // Prevent duplicate execution
+  if (isWorkflowExecuting) {
+    console.log('[processDoTask] Workflow already executing, skipping task execution');
+    showToast('Task already in progress...', 'info');
+    return;
+  }
+  
+  // Set execution flag
+  isWorkflowExecuting = true;
+  console.log('[processDoTask] Setting execution flag for task execution');
+  
+  try {
+    const activeWebview = getActiveWebview();
+    if (!activeWebview) {
+      addMessageToChat('assistant', 'No active webview found.');
+      return;
+    }
+    
+    // Import DoAgent
+    const { DoAgent } = await import('./services/DoAgent');
+    
+    // Create DoAgent instance with enhanced progress callback
+    const doAgent = new DoAgent((task, step) => {
+      console.log('[DoAgent Progress]', `Step ${step.id}: ${step.description} - ${step.status}`);
+      
+      // Create detailed progress message with LLM reasoning
+      let progressMessage = `**${step.id}:** ${step.description}`;
+      
+      if (step.reasoning) {
+        progressMessage += `\n  *AI Reasoning: ${step.reasoning}*`;
+      }
+      
+      if (step.status === 'completed') {
+        progressMessage += ' ✅';
+      } else if (step.status === 'failed') {
+        progressMessage += ' ❌';
+        if (step.error) {
+          progressMessage += `\n  Error: ${step.error}`;
+        }
+      } else if (step.status === 'running') {
+        progressMessage += ' ⏳';
+      }
+      
+      // Find the latest assistant message and update it with progress
+      const chatContainer = document.getElementById('chatContainer');
+      if (chatContainer) {
+        const lastMessage = chatContainer.querySelector('.chat-message.assistant-message:last-child .message-content');
+        if (lastMessage) {
+          // If it's a loading message, replace it
+          if (lastMessage.innerHTML.includes('class="loading"')) {
+            lastMessage.innerHTML = progressMessage;
+          } else {
+            // Add to existing message
+            lastMessage.innerHTML += `<br/>${progressMessage}`;
+          }
+        }
+      }
+    });
+    
+    // Show initial loading message
+    addMessageToChat('assistant', '<div class="loading">🤖 Analyzing page and planning actions with AI...</div>');
+    
+    // Execute the task
+    const result = await doAgent.executeTask(taskInstruction, activeWebview);
+    
+    // Remove loading message
+    const loadingMessages = document.querySelectorAll('.loading');
+    loadingMessages.forEach(message => {
+      const parentMessage = message.closest('.chat-message');
+      if (parentMessage) {
+        parentMessage.remove();
+      }
+    });
+    
+    // Display results
+    if (result.success) {
+      let resultMessage = `✅ **Task completed successfully!**\n⏱️ *Execution time: ${(result.executionTime / 1000).toFixed(2)}s*`;
+      
+      if (result.data) {
+        // Handle generic extracted content format
+        if (typeof result.data === 'string') {
+          // Simple string result (like summaries)
+          resultMessage += `\n\n📄 **Result:**\n${result.data}`;
+        } else if (result.data.error) {
+          // Error in extraction
+          resultMessage += `\n\n⚠️ **Note:** ${result.data.error}`;
+        } else if (result.data.url) {
+          // Generic extracted content structure
+          resultMessage += `\n\n📄 **Extracted from:** ${result.data.url}`;
+          
+          // Show headings if available
+          if (result.data.headings && result.data.headings.length > 0) {
+            resultMessage += '\n\n📋 **Page Structure:**\n';
+            result.data.headings.slice(0, 5).forEach((heading: any) => {
+              resultMessage += `${'#'.repeat(heading.level === 'h1' ? 1 : heading.level === 'h2' ? 2 : 3)} ${heading.text}\n`;
+            });
+          }
+          
+          // Show main content if available
+          if (result.data.textContent && result.data.textContent.length > 0) {
+            resultMessage += '\n\n📝 **Main Content:**\n';
+            result.data.textContent.slice(0, 3).forEach((content: any, index: number) => {
+              if (content.text && content.text.length > 50) {
+                resultMessage += `${index + 1}. ${content.text.substring(0, 200)}${content.text.length > 200 ? '...' : ''}\n`;
+              }
+            });
+          }
+          
+          // Show links if available
+          if (result.data.links && result.data.links.length > 0) {
+            resultMessage += '\n\n🔗 **Links found:**\n';
+            result.data.links.slice(0, 5).forEach((link: any, index: number) => {
+              resultMessage += `${index + 1}. [${link.text}](${link.href})\n`;
+            });
+          }
+          
+          // Show lists if available
+          if (result.data.lists && result.data.lists.length > 0) {
+            resultMessage += '\n\n📝 **Lists found:**\n';
+            result.data.lists.slice(0, 2).forEach((list: any, index: number) => {
+              resultMessage += `**List ${index + 1}:**\n`;
+              list.items.slice(0, 3).forEach((item: string) => {
+                resultMessage += `• ${item}\n`;
+              });
+            });
+          }
+          
+          // Show page type information
+          if (result.data.pageStructure) {
+            const structure = result.data.pageStructure;
+            const pageTypes = [];
+            if (structure.hasPosts) pageTypes.push('Posts');
+            if (structure.hasBookmarks) pageTypes.push('Bookmarks');
+            if (structure.hasProducts) pageTypes.push('Products');
+            if (structure.hasFlights) pageTypes.push('Flights');
+            if (structure.hasComments) pageTypes.push('Comments');
+            if (structure.hasArticles) pageTypes.push('Articles');
+            
+            if (pageTypes.length > 0) {
+              resultMessage += `\n\n🏷️ **Page Type:** ${pageTypes.join(', ')}`;
+            }
+          }
+          
+          // Show fallback content if no structured data
+          if (result.data.fallbackContent && 
+              (!result.data.textContent || result.data.textContent.length === 0) &&
+              (!result.data.headings || result.data.headings.length === 0)) {
+            resultMessage += `\n\n📄 **Page content:**\n${result.data.fallbackContent}`;
+          }
+        } else {
+          // Unknown result format, show as is
+          resultMessage += `\n\n📄 **Result:**\n${JSON.stringify(result.data, null, 2)}`;
+        }
+      }
+      
+      addMessageToChat('assistant', resultMessage, result.executionTime / 1000);
+    } else {
+      addMessageToChat('assistant', `❌ **Task failed:** ${result.error}`);
+    }
+    
+  } catch (error) {
+    console.error('[processDoTask] Error executing task:', error);
+    
+    // Remove loading message
+    const loadingMessages = document.querySelectorAll('.loading');
+    loadingMessages.forEach(message => {
+      const parentMessage = message.closest('.chat-message');
+      if (parentMessage) {
+        parentMessage.remove();
+      }
+    });
+    
+    addMessageToChat('assistant', `❌ **Task execution failed:** ${(error as Error).message}`);
+  } finally {
+    // Always clear execution flag
+    isWorkflowExecuting = false;
+    console.log('[processDoTask] Clearing execution flag');
   }
 }
 

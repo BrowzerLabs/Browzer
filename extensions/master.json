@@ -66,34 +66,6 @@
       "directory": "cmbss0xti000189u7j28kyfic",
       "type": "python_agent",
       "enabled": true
-    },
-    {
-      "id": "sdk-demo-agent",
-      "name": "SDK Demo Agent",
-      "description": "Demonstration agent built with the new Browzer Agent SDK. Showcases simplified development and advanced capabilities.",
-      "keywords": [
-        "sdk",
-        "demo",
-        "test",
-        "new",
-        "browzer",
-        "agent",
-        "example",
-        "tutorial",
-        "showcase"
-      ],
-      "intents": [
-        "sdk_demo",
-        "test_sdk",
-        "demo",
-        "tutorial",
-        "showcase"
-      ],
-      "category": "utility",
-      "priority": 7,
-      "directory": "sdk-demo-agent",
-      "type": "python_agent",
-      "enabled": true
     }
   ],
   "routing": {
