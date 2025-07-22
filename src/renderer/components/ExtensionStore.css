@@ -20,24 +20,24 @@
 
 .store-logo h1 {
   font-size: 2.5rem;
-  color: #1a73e8;
+  color: var(--chrome-blue);
   margin: 0;
   font-weight: 600;
 }
 
 .store-logo p {
-  color: #5f6368;
+  color: var(--chrome-text-secondary);
   font-size: 1.1rem;
   margin: 5px 0 0 0;
 }
 
 .upload-info {
   background: #e8f0fe;
-  color: #1a73e8;
+  color: var(--chrome-blue);
   padding: 8px 16px;
   border-radius: 20px;
   font-size: 0.9rem;
-  border: 1px solid #dadce0;
+  border: 1px solid var(--chrome-border-light);
   font-weight: 500;
 }
 
@@ -76,19 +76,19 @@
   border: none;
   cursor: pointer;
   font-size: 16px;
-  color: #5f6368;
+  color: var(--chrome-text-secondary);
   transition: all 0.2s;
   border-bottom: 3px solid transparent;
 }
 
 .nav-tab:hover {
   background: #f8f9fa;
-  color: #1a73e8;
+  color: var(--chrome-blue);
 }
 
 .nav-tab.active {
-  color: #1a73e8;
-  border-bottom-color: #1a73e8;
+  color: var(--chrome-blue);
+  border-bottom-color: var(--chrome-blue);
   background: #f8f9fa;
 }
 
@@ -115,7 +115,7 @@
   gap: 10px;
   margin-bottom: 20px;
   padding: 0 0 20px 0;
-  border-bottom: 1px solid #e1e5e9;
+  border-bottom: 1px solid var(--chrome-border-light);
 }
 
 .search-bar input {
@@ -129,7 +129,7 @@
 }
 
 .search-bar input:focus {
-  border-color: #1a73e8;
+  border-color: var(--chrome-blue);
 }
 
 .search-bar button {
@@ -157,7 +157,7 @@
 
 .extension-card {
   background: white;
-  border: 1px solid #e1e5e9;
+  border: 1px solid var(--chrome-border-light);
   border-radius: 8px;
   padding: 20px;
   transition: all 0.2s;
@@ -197,7 +197,7 @@
   align-items: center;
   justify-content: center;
   font-size: 24px;
-  color: #5f6368;
+  color: var(--chrome-text-secondary);
 }
 
 .extension-info {
@@ -266,7 +266,7 @@
 .details-btn {
   background: #f8f9fa;
   color: #5f6368;
-  border: 1px solid #e1e5e9;
+  border: 1px solid var(--chrome-border-light);
   padding: 8px 16px;
   border-radius: 4px;
   cursor: pointer;
@@ -293,7 +293,7 @@
   padding: 15px;
   background: #f8f9fa;
   border-radius: 8px;
-  border: 1px solid #e1e5e9;
+  border: 1px solid var(--chrome-border-light);
 }
 
 .installed-extension-card .extension-icon {
@@ -338,7 +338,7 @@
 
 .installed-extension-card .extension-actions button {
   padding: 6px 12px;
-  border: 1px solid #e1e5e9;
+  border: 1px solid var(--chrome-border-light);
   background: white;
   border-radius: 4px;
   cursor: pointer;
@@ -386,7 +386,7 @@
 .secondary-btn {
   background: #f8f9fa;
   color: #5f6368;
-  border: 1px solid #e1e5e9;
+  border: 1px solid var(--chrome-border-light);
   padding: 12px 24px;
   border-radius: 6px;
   cursor: pointer;
@@ -405,7 +405,7 @@
   background: #f8f9fa;
   padding: 20px;
   border-radius: 8px;
-  border: 1px solid #e1e5e9;
+  border: 1px solid var(--chrome-border-light);
   margin-bottom: 30px;
 }
 
@@ -419,7 +419,7 @@
 .upload-form select {
   width: 100%;
   padding: 12px;
-  border: 1px solid #e1e5e9;
+  border: 1px solid var(--chrome-border-light);
   border-radius: 4px;
   margin-bottom: 15px;
   font-size: 14px;
@@ -454,7 +454,7 @@
   padding: 15px;
   background: #f8f9fa;
   border-radius: 8px;
-  border: 1px solid #e1e5e9;
+  border: 1px solid var(--chrome-border-light);
   margin-bottom: 10px;
 }
 
@@ -479,7 +479,7 @@
 
 .dev-extension-card .extension-actions button {
   background: white;
-  border: 1px solid #e1e5e9;
+  border: 1px solid var(--chrome-border-light);
   padding: 6px 12px;
   border-radius: 4px;
   cursor: pointer;
@@ -573,7 +573,7 @@
 .auth-form input {
   width: 100%;
   padding: 12px 16px;
-  border: 1px solid #e1e5e9;
+  border: 1px solid var(--chrome-border-light);
   border-radius: 4px;
   margin-bottom: 15px;
   font-size: 16px;
@@ -603,7 +603,7 @@
 .auth-form button[type="button"] {
   background: #f8f9fa;
   color: #5f6368;
-  border: 1px solid #e1e5e9;
+  border: 1px solid var(--chrome-border-light);
 }
 
 .auth-form button[type="button"]:hover {
@@ -665,7 +665,7 @@
 
 .upload-instructions {
   background: #f8f9fa;
-  border: 1px solid #e1e5e9;
+  border: 1px solid var(--chrome-border-light);
   border-radius: 8px;
   padding: 20px;
   margin-top: 30px;
@@ -819,4 +819,4 @@
     width: 100%;
     justify-content: flex-end;
   }
-} 
+}      
