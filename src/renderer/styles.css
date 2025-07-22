@@ -58,12 +58,12 @@ html, body {
     flex-shrink: 0;
     height: 48px;
     box-shadow: var(--chrome-shadow-light);
+    gap: 4px;
 }
 
 .nav-btn {
     width: 32px;
     height: 32px;
-    margin-right: 4px;
     border: none;
     background-color: transparent;
     border-radius: 50%;
@@ -75,6 +75,7 @@ html, body {
     color: var(--chrome-text-secondary);
     transition: all 0.15s ease;
     position: relative;
+    flex-shrink: 0;
 }
 
 .nav-btn:hover {
@@ -311,6 +312,7 @@ html, body {
     background-color: var(--chrome-bg-primary);
     height: 100%;
     min-height: 0;
+    overflow-y: auto;
 }
 
 /* Extensions Panel Styles */
@@ -1547,14 +1549,17 @@ input:checked + .slider:before {
     display: flex;
     flex-direction: column;
     align-items: center;
-    padding: 40px 20px;
-    margin: 25px 20px;
+    padding: 20px 16px;
+    margin: 16px 16px;
     text-align: center;
     background: linear-gradient(135deg, #f8f9fc, #eef1f8);
     border-radius: 12px;
     box-shadow: 0 4px 15px rgba(0,0,0,0.04), 0 2px 8px rgba(0,0,0,0.03);
     transition: all 0.3s ease;
     border: 1px solid rgba(0,0,0,0.03);
+    max-width: 318px;
+    width: 100%;
+    box-sizing: border-box;
 }
 
 .welcome-container:hover {
@@ -1563,11 +1568,11 @@ input:checked + .slider:before {
 }
 
 .welcome-icon {
-    font-size: 36px;
-    margin-bottom: 24px;
+    font-size: 32px;
+    margin-bottom: 20px;
     background: linear-gradient(135deg, #e8f0fe, #d2e3fc);
-    width: 90px;
-    height: 90px;
+    width: 80px;
+    height: 80px;
     border-radius: 50%;
     display: flex;
     align-items: center;
@@ -1579,18 +1584,18 @@ input:checked + .slider:before {
 }
 
 .welcome-container h3 {
-    font-size: 22px;
+    font-size: 20px;
     font-weight: 600;
     color: #202124;
-    margin: 0 0 16px 0;
+    margin: 0 0 12px 0;
 }
 
 .welcome-container p {
-    font-size: 15px;
+    font-size: 14px;
     color: #5f6368;
     line-height: 1.6;
     margin: 0 0 8px 0;
-    max-width: 500px;
+    max-width: 100%;
 }
 
 /* Progressive reveal animation for messages */
