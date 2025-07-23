@@ -228,7 +228,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // Expose memory service to window for debugging
   (window as any).memoryService = memoryService;
   console.log('[Init] MemoryService exposed to window.memoryService for debugging');
-  
+
   console.log('[Init] Setting up text selection message listener...');
   setupTextSelectionListener();
   
@@ -449,7 +449,7 @@ function setupWorkflowEventListeners(): void {
           const url = webview?.src || '';
           const title = webview?.getTitle ? webview.getTitle() : '';
           
-          memoryService.storeMemory(url, memoryQuery, summary, title);
+          storeInMemory(url, memoryQuery, summary, title);
         } else {
           console.log('[Memory] No suitable content found for memory storage in workflow-complete');
         }
@@ -1508,6 +1508,66 @@ function setupExtensionsPanel(): void {
     });
   }
 
+  // Export memory
+  const exportMemoryBtn = document.getElementById('exportMemoryBtn');
+  if (exportMemoryBtn) {
+    exportMemoryBtn.addEventListener('click', () => {
+      try {
+        const memory = localStorage.getItem(MEMORY_KEY) || '[]';
+        const blob = new Blob([memory], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'ai_memory_export.json';
+        a.click();
+        
+        URL.revokeObjectURL(url);
+        showToast('Memory exported successfully.', 'success');
+      } catch (e) {
+        console.error('Error exporting memory:', e);
+        showToast('Error exporting memory: ' + (e as Error).message, 'error');
+      }
+    });
+  }
+
+  // Import memory
+  const importMemoryBtn = document.getElementById('importMemoryBtn');
+  if (importMemoryBtn) {
+    importMemoryBtn.addEventListener('click', () => {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = '.json';
+      
+      input.onchange = (e) => {
+        const file = (e.target as HTMLInputElement).files?.[0];
+        if (!file) return;
+        
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          try {
+            const contents = event.target?.result as string;
+            const parsed = JSON.parse(contents);
+            
+            if (Array.isArray(parsed)) {
+              localStorage.setItem(MEMORY_KEY, contents);
+              updateMemoryCount();
+              showToast('Memory imported successfully.', 'success');
+            } else {
+              showToast('Invalid memory file format.', 'error');
+            }
+          } catch (e) {
+            showToast('Error parsing memory file: ' + (e as Error).message, 'error');
+          }
+        };
+        
+        reader.readAsText(file);
+      };
+      
+      input.click();
+    });
+  }
+
   // Homepage setting
   const homepageInput = document.getElementById('homepageInput') as HTMLInputElement;
   const saveHomepageBtn = document.getElementById('saveHomepageBtn');
@@ -1536,6 +1596,7 @@ function updateMemoryCount(): void {
     if (memoryCountSpan) {
       memoryCountSpan.textContent = memory.length.toString();
     }
+    console.log('[Memory] Updated memory count display:', memory.length);
   } catch (e) {
     console.error('Error updating memory count:', e);
     const memoryCountSpan = document.getElementById('memoryCount');
@@ -1784,7 +1845,7 @@ function showHistoryPage(): void {
     console.log('Active webview found:', !!webview);
     
     if (webview) {
-      const historyURL = `file://${path.join(process.cwd(), 'history.html')}`;
+      const historyURL = `file://${path.join(process.cwd(), 'src/renderer/history.html')}`;
       console.log('Loading history URL:', historyURL);
       
       const historyLoadHandler = () => {
@@ -1826,7 +1887,7 @@ function showHistoryPage(): void {
       
     } else {
       console.log('No active webview, creating new tab...');
-      const historyURL = `file://${path.join(process.cwd(), 'history.html')}`;
+      const historyURL = `file://${path.join(process.cwd(), 'src/renderer/history.html')}`;
       const newTabId = createNewTab(historyURL);
       console.log('New history tab created:', newTabId);
     }
@@ -2064,7 +2125,7 @@ async function executeAgent(): Promise<void> {
           selectedProvider: provider,
           selectedModel: modelSelector.selectedOptions[0]?.dataset.model || 'claude-3-7-sonnet-latest',
           isQuestion: false,
-          conversationHistory: []
+          conversationHistory: await buildConversationHistoryWithMemories(url, query)
         };
 
         await ipcRenderer.invoke('execute-workflow', {
@@ -2123,7 +2184,8 @@ async function executeAgent(): Promise<void> {
     const data = {
       query,
       pageContent,
-      isQuestion: false
+      isQuestion: false,
+      conversationHistory: await buildConversationHistoryWithMemories(url, query)
     };
     
     console.log(`Executing single extension: ${extensionId} (confidence: ${routingResult.confidence}) with action: ${action}`);
@@ -2169,6 +2231,7 @@ async function executeAgent(): Promise<void> {
       // Store memory if available - try multiple content sources
       if (memoryService && result.data) {
         let summary = '';
+        let memoryQuery = query || 'Agent Query';
         
         // Try different content sources in order of preference
         if (result.data.consolidated_summary) {
@@ -2187,10 +2250,16 @@ async function executeAgent(): Promise<void> {
         }
         
         if (summary && summary.trim()) {
-          console.log('[Memory] Storing agent result in memory');
-          memoryService.storeMemory(url, query, summary, title);
+          console.log('[Memory] Storing agent result in memory from workflow-complete');
+          
+          // Get current page info for memory context
+          const webview = getActiveWebview();
+          const url = webview?.src || '';
+          const title = webview?.getTitle ? webview.getTitle() : '';
+          
+          storeInMemory(url, memoryQuery, summary, title);
         } else {
-          console.log('[Memory] No suitable content found for memory storage');
+          console.log('[Memory] No suitable content found for memory storage in workflow-complete');
         }
       }
       }
@@ -2575,7 +2644,7 @@ async function processFollowupQuestion(question: string): Promise<void> {
           selectedProvider: provider,
           selectedModel: modelSelector.selectedOptions[0]?.dataset.model || 'claude-3-7-sonnet-latest',
           isQuestion: true,
-          conversationHistory: []
+          conversationHistory: await buildConversationHistoryWithMemories(currentUrl, question)
         };
 
         await ipcRenderer.invoke('execute-workflow', {
@@ -2630,7 +2699,8 @@ async function processFollowupQuestion(question: string): Promise<void> {
     const data = {
       query: questionRequest,
       pageContent,
-      isQuestion: true
+      isQuestion: true,
+      conversationHistory: await buildConversationHistoryWithMemories(currentUrl, question)
     };
     
     console.log(`[processFollowupQuestion] Executing extension with question: ${extensionId} (confidence: ${routingResult.confidence}) - ${question}`);
@@ -2703,7 +2773,7 @@ async function processFollowupQuestion(question: string): Promise<void> {
           const url = webview?.src || '';
           const title = webview?.getTitle ? webview.getTitle() : '';
           
-          memoryService.storeMemory(url, question, summary, title);
+          storeInMemory(url, question, summary, title);
         } else {
           console.log('[Memory] No suitable content found for memory storage in followup');
         }
@@ -2858,7 +2928,7 @@ async function processFollowupQuestionWithContexts(question: string, contexts: W
           selectedProvider: provider,
           selectedModel: modelSelector.selectedOptions[0]?.dataset.model || 'claude-3-7-sonnet-latest',
           isQuestion: true,
-          conversationHistory: []
+          conversationHistory: await buildConversationHistoryWithMemories(currentUrl, question)
         };
 
         await ipcRenderer.invoke('execute-workflow', {
@@ -2910,7 +2980,8 @@ async function processFollowupQuestionWithContexts(question: string, contexts: W
     const data = {
       query: questionRequest,
       pageContent: enhancedPageContent,
-      isQuestion: true
+      isQuestion: true,
+      conversationHistory: await buildConversationHistoryWithMemories(currentUrl, question)
     };
     
     console.log(`[processFollowupQuestionWithContexts] Executing extension with question: ${extensionId} (confidence: ${routingResult.confidence}) - ${question}`);
@@ -2983,7 +3054,7 @@ async function processFollowupQuestionWithContexts(question: string, contexts: W
           const url = webview?.src || '';
           const title = webview?.getTitle ? webview.getTitle() : '';
           
-          memoryService.storeMemory(url, question, summary, title);
+          storeInMemory(url, question, summary, title);
         } else {
           console.log('[Memory] No suitable content found for memory storage in followup with contexts');
         }
@@ -4043,4 +4114,240 @@ function hideMentionDropdown(): void {
   } else {
     console.log('🚨 [MENTION DROPDOWN] No dropdown found to remove');
   }
+}
+
+// Helper function to build conversation history with memories
+async function buildConversationHistoryWithMemories(currentUrl: string, query: string): Promise<any[]> {
+  const conversationHistory: any[] = [];
+  
+  try {
+    // Get recent chat messages from the UI
+    const chatContainer = document.getElementById('chatContainer');
+    if (chatContainer) {
+      const messages = chatContainer.querySelectorAll('.chat-message');
+      
+      // Add recent chat messages (last 10)
+      const recentMessages = Array.from(messages).slice(-10);
+      recentMessages.forEach(message => {
+        // Skip loading messages
+        if (message.querySelector('.loading')) return;
+        
+        // Determine role (user or assistant)
+        let role = 'assistant';
+        if (message.classList.contains('user-message')) {
+          role = 'user';
+        }
+        
+        // Get text content, stripping HTML
+        const contentEl = message.querySelector('.message-content');
+        let content = '';
+        if (contentEl) {
+          // Create a temporary div to extract text without HTML
+          const tempDiv = document.createElement('div');
+          tempDiv.innerHTML = contentEl.innerHTML;
+          content = tempDiv.textContent || tempDiv.innerText || '';
+        }
+        
+        if (content && !content.includes('class="loading"')) {
+          conversationHistory.push({
+            role: role,
+            content: content
+          });
+        }
+      });
+    }
+    
+    // Get relevant memories from localStorage (simple approach)
+    try {
+      const allMemories = JSON.parse(localStorage.getItem(MEMORY_KEY) || '[]');
+      if (allMemories && allMemories.length > 0) {
+        // Simple relevance scoring - get recent memories from same domain or with query keywords
+        const relevantMemories = allMemories.slice(0, 10).filter((memory: any) => {
+          if (!memory) return false;
+          
+          // Check domain match
+          const currentDomain = currentUrl ? new URL(currentUrl).hostname : '';
+          const memoryDomain = memory.domain || '';
+          if (currentDomain && memoryDomain && currentDomain === memoryDomain) {
+            return true;
+          }
+          
+          // Check keyword match in question or answer
+          const queryLower = query.toLowerCase();
+          const questionMatch = memory.question && memory.question.toLowerCase().includes(queryLower);
+          const answerMatch = memory.answer && memory.answer.toLowerCase().includes(queryLower);
+          
+          return questionMatch || answerMatch;
+        }).slice(0, 5); // Take top 5 relevant memories
+        
+        console.log(`[Memory] Found ${relevantMemories.length} relevant memories for query:`, query);
+        
+        // Format memories with proper structure expected by Python agents
+        relevantMemories.forEach((memory: any) => {
+          // Add the original question as a user message with memory flag
+          conversationHistory.push({
+            role: 'user',
+            content: memory.question,
+            isMemory: true,
+            source: {
+              url: memory.url,
+              domain: memory.domain,
+              title: memory.title,
+              timestamp: memory.timestamp,
+              topic: memory.topic
+            }
+          });
+          
+          // Add the answer as an assistant message with memory flag  
+          conversationHistory.push({
+            role: 'assistant',
+            content: memory.answer,
+            isMemory: true,
+            source: {
+              url: memory.url,
+              domain: memory.domain,
+              title: memory.title,
+              timestamp: memory.timestamp,
+              topic: memory.topic
+            }
+          });
+        });
+      }
+    } catch (memoryError) {
+      console.error('[Memory] Error retrieving memories:', memoryError);
+    }
+    
+         console.log(`[Memory] Built conversation history with ${conversationHistory.length} items (${conversationHistory.filter(item => item.isMemory).length} from memory)`);
+     return conversationHistory;
+     
+   } catch (error) {
+     console.error('[Memory] Error building conversation history with memories:', error);
+     return conversationHistory; // Return whatever we have so far
+   }
+ }
+
+// Simple memory functions (based on working deprecated implementation)
+function storeInMemory(url: string, question: string, answer: string, title: string = ''): void {
+  try {
+    // Skip storing memory for empty content
+    if (!url || (!question && !answer)) {
+      console.log('Skipping memory storage due to empty content');
+      return;
+    }
+    
+    // Get existing memory
+    let memory: any[] = [];
+    try {
+      memory = JSON.parse(localStorage.getItem(MEMORY_KEY) || '[]');
+      if (!Array.isArray(memory)) {
+        console.error('Memory is not an array, resetting');
+        memory = [];
+      }
+    } catch (parseError) {
+      console.error('Error parsing memory from localStorage:', parseError);
+      memory = [];
+    }
+    
+    // Get page title from active webview if not provided
+    let pageTitle = title;
+    if (!pageTitle) {
+      const activeWebview = getActiveWebview();
+      if (activeWebview) {
+        try {
+          pageTitle = activeWebview.getTitle ? activeWebview.getTitle() : '';
+        } catch (e) {
+          console.error('Error getting title:', e);
+        }
+      }
+    }
+    
+    // Try to detect the main topic automatically
+    let pageTopic = '';
+    try {
+      pageTopic = extractTopicSimple({
+        title: pageTitle,
+        question: question,
+        answer: answer
+      });
+    } catch (topicError) {
+      console.error('Error extracting topic:', topicError);
+    }
+    
+    // Create memory item with enhanced metadata
+    const memoryItem = {
+      timestamp: Date.now(),
+      url: url || '',
+      title: pageTitle || '',
+      question: question || '',
+      answer: answer || '',
+      domain: url ? (new URL(url)).hostname : '',
+      topic: pageTopic || '',
+      // Track the model used for answers when available
+      modelInfo: {
+        provider: getModelProvider(),
+        name: 'unknown' // We can enhance this later
+      }
+    };
+    
+    // Add to beginning of array
+    memory.unshift(memoryItem);
+    
+    // Limit size
+    if (memory.length > MAX_MEMORY_ITEMS) {
+      memory = memory.slice(0, MAX_MEMORY_ITEMS);
+    }
+    
+    // Save to localStorage immediately
+    try {
+      localStorage.setItem(MEMORY_KEY, JSON.stringify(memory));
+      console.log('Memory stored:', { url, question: question.substring(0, 50), topic: pageTopic });
+    } catch (saveError) {
+      console.error('Error saving memory to localStorage:', saveError);
+    }
+    
+  } catch (error) {
+    console.error('Error storing memory:', error);
+  }
+}
+
+function extractTopicSimple(itemContent: any): string {
+  try {
+    if (!itemContent) return '';
+    
+    // Simple topic extraction - look for knowledge domains, subjects, or key entities
+    const fullText = `${itemContent.title || ''} ${itemContent.question || ''}`.toLowerCase();
+    
+    // Common subjects and entities people might compare
+    const knownDomains = [
+      'python', 'javascript', 'react', 'machine learning', 'ai', 'artificial intelligence',
+      'computer science', 'programming', 'crypto', 'cryptocurrency', 'bitcoin', 'ethereum',
+      'history', 'science', 'physics', 'chemistry', 'biology', 'medicine', 'health',
+      'politics', 'economics', 'finance', 'investing', 'stocks', 'business',
+      'climate', 'environment', 'technology', 'privacy', 'security',
+      'education', 'travel', 'food', 'nutrition', 'diet', 'fitness'
+    ];
+    
+    for (const domain of knownDomains) {
+      if (fullText.includes(domain)) {
+        return domain;
+      }
+    }
+    
+    // If no known domain, try to use first 2-3 significant words from title/question
+    const words = fullText.split(/\s+/).filter(w => w && w.length > 3);
+    if (words.length >= 2) {
+      return words.slice(0, 2).join(' ');
+    }
+    
+    return '';
+  } catch (error) {
+    console.error('Error extracting topic:', error);
+    return '';
+  }
+}
+
+function getModelProvider(): string {
+  const modelSelector = document.getElementById('modelSelector') as HTMLSelectElement;
+  if (!modelSelector) return 'unknown';
+  return modelSelector.value || 'unknown';
 }

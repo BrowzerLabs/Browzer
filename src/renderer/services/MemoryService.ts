@@ -3,7 +3,7 @@ import { TextProcessing } from '../utils/textProcessing';
 import { URLUtils } from '../utils/urlUtils';
 
 export class MemoryService {
-  private readonly MEMORY_STORAGE_KEY = 'browser_memories';
+  private readonly MEMORY_STORAGE_KEY = 'agent_memory';
   private readonly MAX_MEMORIES = 1000;
   private memories: Memory[] = [];
 
