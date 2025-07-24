@@ -1309,6 +1309,11 @@ select:focus-visible {
     outline-offset: 2px;
 }
 
+/* Remove focus outline from URL bar */
+.url-bar:focus-visible {
+    outline: none;
+}
+
 /* ============ HIGH CONTRAST MODE ============ */
 @media (prefers-contrast: high) {
     .tab {
