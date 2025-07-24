@@ -6,6 +6,8 @@ export interface DoTask {
   result?: any;
   error?: string;
 }
+// Development feature flag - set to false to disable DoAgent entirely
+const DOAGENT_ENABLED = false;
 
 export interface DoStep {
   id: string;
@@ -233,9 +235,6 @@ Respond with ONLY a JSON object in this format:
 }
 
 BE PATIENT AND THOROUGH. Better to take more steps and succeed than rush and fail.`;
-
-// Development feature flag - set to false to disable DoAgent entirely
-const DOAGENT_ENABLED = false;
 
 export class DoAgent {
   private currentTask: DoTask | null = null;
