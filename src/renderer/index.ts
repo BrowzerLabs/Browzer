@@ -200,6 +200,74 @@ function isProblematicSite(url: string): boolean {
   }
 }
 
+// Function to apply or remove sidebar layout
+function applySidebarLayout(enabled: boolean): void {
+  const browserContainer = document.querySelector('.browser-container');
+  if (browserContainer) {
+    if (enabled) {
+      browserContainer.classList.add('sidebar-enabled');
+      console.log('[Sidebar] Sidebar layout enabled');
+    } else {
+      browserContainer.classList.remove('sidebar-enabled');
+      console.log('[Sidebar] Sidebar layout disabled');
+    }
+  }
+}
+
+// Function to clear any stuck loading states - AGGRESSIVE CLEANUP
+function clearStuckLoadingStates(): void {
+  const loadingTabs = document.querySelectorAll('.tab.loading');
+  
+  if (loadingTabs.length > 0) {
+    console.log(`[Loading Cleanup] Found ${loadingTabs.length} tabs in loading state - clearing ALL`);
+    
+    // FORCE CLEAR all loading states - be aggressive to fix the stuck issue
+    loadingTabs.forEach(tab => {
+      tab.classList.remove('loading');
+      console.log(`[Loading Cleanup] Force cleared loading state for tab: ${tab.id}`);
+    });
+  }
+}
+
+// Function to setup collapse/expand buttons
+function setupCollapseExpandButtons(): void {
+  const browserContainer = document.querySelector('.browser-container');
+  
+  // Sidebar collapse/expand - single button handles both
+  const sidebarCollapseBtn = document.getElementById('sidebarCollapseBtn');
+  
+  if (sidebarCollapseBtn && browserContainer) {
+    // Load saved sidebar collapsed state
+    const sidebarCollapsed = localStorage.getItem('sidebarCollapsed') === 'true';
+    if (sidebarCollapsed) {
+      browserContainer.classList.add('sidebar-collapsed');
+    }
+    
+    sidebarCollapseBtn.addEventListener('click', () => {
+      const isCurrentlyCollapsed = browserContainer.classList.contains('sidebar-collapsed');
+      
+      if (isCurrentlyCollapsed) {
+        // Currently collapsed, so expand
+        browserContainer.classList.remove('sidebar-collapsed');
+        localStorage.setItem('sidebarCollapsed', 'false');
+        console.log('[Sidebar] Expanded');
+      } else {
+        // Currently expanded, so collapse
+        browserContainer.classList.add('sidebar-collapsed');
+        localStorage.setItem('sidebarCollapsed', 'true');
+        console.log('[Sidebar] Collapsed');
+      }
+    });
+  }
+  
+    // Assistant collapse/expand functionality removed per user request
+  // Clear any persisting assistant collapsed state
+  localStorage.removeItem('assistantCollapsed');
+  if (browserContainer) {
+    browserContainer.classList.remove('assistant-collapsed');
+  }
+}
+
 // Initialize the application when DOM is ready
 document.addEventListener('DOMContentLoaded', () => {
   console.log('DOM fully loaded, initializing browser...');
@@ -1061,6 +1129,28 @@ function setupWebviewEvents(webview: any): void {
       }
     }
     
+    // Update favicon after loading completes
+    setTimeout(() => {
+      if (webview && webview.src) {
+        updateTabFavicon(webview.id, webview.src);
+      }
+    }, 500);
+  });
+
+  // Also handle loading failures
+  webview.addEventListener('did-fail-load', () => {
+    const webviewId = webview.id;
+    if (webviewId) {
+      const tabId = getTabIdFromWebview(webviewId);
+      if (tabId) {
+        const tab = document.getElementById(tabId);
+        if (tab) {
+          tab.classList.remove('loading');
+          console.log(`[Tab Loading] Failed loading for tab: ${tabId}`);
+        }
+      }
+    }
+    
     if (urlBar) {
       urlBar.value = webview.src;
     }
@@ -1567,6 +1657,36 @@ function setupExtensionsPanel(): void {
       input.click();
     });
   }
+
+  // Sidebar setting
+  const sidebarEnabledCheckbox = document.getElementById('sidebarEnabled') as HTMLInputElement;
+  if (sidebarEnabledCheckbox) {
+    // Load saved sidebar preference
+    const savedSidebarEnabled = localStorage.getItem('sidebarEnabled') === 'true';
+    sidebarEnabledCheckbox.checked = savedSidebarEnabled;
+    
+    // Apply sidebar layout if enabled
+    applySidebarLayout(savedSidebarEnabled);
+    
+    // Handle sidebar toggle
+    sidebarEnabledCheckbox.addEventListener('change', () => {
+      const isEnabled = sidebarEnabledCheckbox.checked;
+      localStorage.setItem('sidebarEnabled', isEnabled.toString());
+      applySidebarLayout(isEnabled);
+      showToast(isEnabled ? 'Sidebar enabled' : 'Sidebar disabled', 'success');
+    });
+  }
+
+  // Collapse/Expand functionality
+  setupCollapseExpandButtons();
+
+  // Clear any stuck loading states IMMEDIATELY
+  clearStuckLoadingStates();
+  
+  // Set up periodic cleanup every 5 seconds to prevent stuck states
+  setInterval(() => {
+    clearStuckLoadingStates();
+  }, 5000);
 
   // Homepage setting
   const homepageInput = document.getElementById('homepageInput') as HTMLInputElement;
@@ -2351,6 +2471,56 @@ async function extractPageContent(webview: any): Promise<any> {
   }
 }
 
+// Simple markdown to HTML converter
+function markdownToHtml(text: string): string {
+  let html = text;
+  
+  // Escape HTML entities in content first, but preserve already-escaped entities
+  html = html.replace(/&(?!amp;|lt;|gt;|quot;|#39;|#x27;)/g, '&amp;');
+  
+  // Headers (must come before other processing)
+  html = html.replace(/^### (.*$)/gm, '<h3>$1</h3>');
+  html = html.replace(/^## (.*$)/gm, '<h2>$1</h2>');
+  html = html.replace(/^# (.*$)/gm, '<h1>$1</h1>');
+  
+  // Bold text
+  html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+  
+  // Italic text
+  html = html.replace(/\*(.*?)\*/g, '<em>$1</em>');
+  
+  // Code blocks (triple backticks)
+  html = html.replace(/```([\s\S]*?)```/g, '<pre><code>$1</code></pre>');
+  
+  // Inline code (single backticks)
+  html = html.replace(/`([^`]*)`/g, '<code>$1</code>');
+  
+  // Lists - simple approach
+  // Convert unordered list items
+  html = html.replace(/^\* (.*$)/gm, '<li>$1</li>');
+  html = html.replace(/^\- (.*$)/gm, '<li>$1</li>');
+  
+  // Convert ordered list items  
+  html = html.replace(/^\d+\. (.*$)/gm, '<li>$1</li>');
+  
+  // Wrap consecutive <li> elements in appropriate list tags
+  html = html.replace(/(<li>.*<\/li>)/gms, function(match) {
+    return '<ul>' + match + '</ul>';
+  });
+  
+  // Convert line breaks to <br> but preserve existing HTML structure
+  // Don't add <br> before closing tags, opening tags, or after certain elements
+  html = html.replace(/\n(?!<\/|<h|<ul|<ol|<li|<pre|<blockquote|<strong|<em)/g, '<br>');
+  
+  // Links [text](url)
+  html = html.replace(/\[([^\]]*)\]\(([^\)]*)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
+  
+  // Blockquotes
+  html = html.replace(/^> (.*$)/gm, '<blockquote>$1</blockquote>');
+  
+  return html;
+}
+
 function addMessageToChat(role: string, content: string, timing?: number): void {
   try {
     let chatContainer = document.getElementById('chatContainer');
@@ -2392,11 +2562,11 @@ function addMessageToChat(role: string, content: string, timing?: number): void 
     if (role === 'context') {
       // Special handling for context messages
       messageDiv.className = 'chat-message context-message';
-      messageDiv.innerHTML = `<div class="message-content">${content}</div>`;
+      messageDiv.innerHTML = `<div class="message-content">${markdownToHtml(content)}</div>`;
       messageDiv.dataset.role = 'context';
     } else if (role === 'user') {
       messageDiv.className = 'chat-message user-message';
-      messageDiv.innerHTML = `<div class="message-content">${content}</div>`;
+      messageDiv.innerHTML = `<div class="message-content">${markdownToHtml(content)}</div>`;
       messageDiv.dataset.role = 'user';
       messageDiv.dataset.timestamp = new Date().toISOString();
     } else if (role === 'assistant') {
@@ -2407,17 +2577,20 @@ function addMessageToChat(role: string, content: string, timing?: number): void 
       // Check if content contains only a loading indicator
       const isLoading = content.includes('class="loading"') && !content.replace(/<div class="loading">.*?<\/div>/g, '').trim();
       
+      // Apply markdown processing for assistant messages (but not for loading indicators)
+      const processedContent = isLoading ? content : markdownToHtml(content);
+      
       if (timing && !isLoading) {
         messageDiv.innerHTML = `
           <div class="timing-info">
             <span>Response generated in</span>
             <span class="time-value">${timing.toFixed(2)}s</span>
           </div>
-          <div class="message-content">${content}</div>
+          <div class="message-content">${processedContent}</div>
         `;
         messageDiv.dataset.genTime = timing.toFixed(2);
       } else {
-        messageDiv.innerHTML = `<div class="message-content">${content}</div>`;
+        messageDiv.innerHTML = `<div class="message-content">${processedContent}</div>`;
       }
     }
     

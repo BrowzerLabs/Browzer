@@ -9,6 +9,20 @@ import os
 import re
 from typing import Dict, List, Optional
 from pathlib import Path
+import numpy as np
+
+class NumpyJSONEncoder(json.JSONEncoder):
+    """Custom JSON encoder that handles NumPy data types"""
+    def default(self, obj):
+        if isinstance(obj, np.integer):
+            return int(obj)
+        elif isinstance(obj, np.floating):
+            return float(obj)
+        elif isinstance(obj, np.ndarray):
+            return obj.tolist()
+        elif hasattr(obj, 'item'):  # Handle numpy scalars
+            return obj.item()
+        return super().default(obj)
 
 # Import our custom modules
 from workflow_analyzer import WorkflowAnalyzer, WorkflowAnalysis
@@ -196,7 +210,7 @@ def main():
     
     if analyze_only:
         result = router.analyze_query_capabilities(query)
-        print(json.dumps(result, indent=2))
+        print(json.dumps(result, indent=2, cls=NumpyJSONEncoder))
     else:
         test_data = {
             'query': query,
@@ -207,7 +221,7 @@ def main():
         }
         
         result = router.route_request(query, test_data)
-        print(json.dumps(result, indent=2))
+        print(json.dumps(result, indent=2, cls=NumpyJSONEncoder))
 
 if __name__ == "__main__":
     main() 

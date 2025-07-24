@@ -16,6 +16,13 @@
     <div class="browser-container">
         <!-- Chrome-like Tab Bar -->
         <div class="tab-bar">
+            <!-- Sidebar Collapse/Expand Button -->
+            <button id="sidebarCollapseBtn" class="sidebar-collapse-btn" title="Toggle sidebar">
+                <svg width="20" height="16" viewBox="0 0 20 16" fill="currentColor">
+                    <path d="M13.354 1.646a.5.5 0 0 1 0 .708L7.707 8l5.647 5.646a.5.5 0 0 1-.708.708l-6-6a.5.5 0 0 1 0-.708l6-6a.5.5 0 0 1 .708 0z"/>
+                    <path d="M7.354 1.646a.5.5 0 0 1 0 .708L1.707 8l5.647 5.646a.5.5 0 0 1-.708.708l-6-6a.5.5 0 0 1 0-.708l6-6a.5.5 0 0 1 .708 0z"/>
+                </svg>
+            </button>
             <div class="tabs-container" id="tabsContainer">
                 <!-- Tabs will be added here dynamically -->
             </div>
@@ -172,6 +179,18 @@
                             <input type="password" id="chutesApiKey" placeholder="ch-...">
                             <button class="save-api-key" data-provider="chutes">Save</button>
                         </div>
+                    </div>
+                </div>
+                
+                <!-- Interface Settings -->
+                <div class="interface-section">
+                    <h4>Interface Settings</h4>
+                    <div class="interface-controls">
+                        <label class="setting-item">
+                            <span>Sidebar Tabs</span>
+                            <input type="checkbox" id="sidebarEnabled">
+                            <span class="setting-description">Show tabs in a vertical sidebar instead of horizontal tab bar</span>
+                        </label>
                     </div>
                 </div>
 
