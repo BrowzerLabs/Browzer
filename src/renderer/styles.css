@@ -250,11 +250,6 @@ html, body {
     position: relative;
 }
 
-.url-container:focus-within {
-    border-color: #1a73e8;
-    box-shadow: 0 1px 6px rgba(26,115,232,0.3);
-}
-
 .url-bar {
     flex: 1;
     border: none;
@@ -263,6 +258,10 @@ html, body {
     color: #202124;
     background: transparent;
     padding: 0;
+}
+
+.url-bar:focus-visible {
+    outline: none;
 }
 
 .url-bar::placeholder {
@@ -1143,6 +1142,7 @@ html, body {
 .memory-section,
 .cache-section,
 .interface-section,
+.adblock-section,
 .homepage-section,
 .extensions-management {
     margin-bottom: 32px;
@@ -1154,6 +1154,7 @@ html, body {
 .memory-section:last-child,
 .cache-section:last-child,
 .interface-section:last-child,
+.adblock-section:last-child,
 .homepage-section:last-child,
 .extensions-management:last-child {
     border-bottom: none;
@@ -1165,6 +1166,7 @@ html, body {
 .memory-section h4,
 .cache-section h4,
 .interface-section h4,
+.adblock-section h4,
 .homepage-section h4,
 .extensions-management h4 {
     font-size: 16px;
@@ -1474,6 +1476,182 @@ select:focus-visible {
     line-height: 1.4;
 }
 
+/* ============ AD BLOCKER ============ */
+.adblock-controls {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.adblock-stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: 12px;
+    padding: 16px;
+    background: #f8f9fa;
+    border-radius: 8px;
+    border: 1px solid #e8eaed;
+}
+
+.stat-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    padding: 8px;
+    background: white;
+    border-radius: 6px;
+    border: 1px solid #e8eaed;
+}
+
+.stat-label {
+    font-size: 11px;
+    color: #5f6368;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 4px;
+    font-weight: 500;
+}
+
+.stat-item span:last-child {
+    font-size: 16px;
+    font-weight: 600;
+    color: #1a73e8;
+}
+
+.domain-management {
+    background: #f8f9fa;
+    padding: 16px;
+    border-radius: 8px;
+    border: 1px solid #e8eaed;
+}
+
+.domain-management h5 {
+    margin: 0 0 12px 0;
+    font-size: 14px;
+    font-weight: 500;
+    color: #202124;
+}
+
+.domain-management h6 {
+    margin: 16px 0 8px 0;
+    font-size: 12px;
+    font-weight: 500;
+    color: #5f6368;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.domain-input-group {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 16px;
+}
+
+.domain-input-group input {
+    flex: 1;
+    padding: 8px 12px;
+    border: 1px solid #dadce0;
+    border-radius: 4px;
+    font-size: 13px;
+    transition: border-color 0.15s ease;
+}
+
+.domain-input-group input:focus {
+    outline: none;
+    border-color: #1a73e8;
+    box-shadow: 0 0 0 2px rgba(26, 115, 232, 0.1);
+}
+
+.domain-input-group button {
+    padding: 8px 16px;
+    border: none;
+    border-radius: 4px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.btn-secondary {
+    background: #6c757d;
+    color: white;
+}
+
+.btn-secondary:hover {
+    background: #5a6268;
+}
+
+.btn-primary {
+    background: #1a73e8;
+    color: white;
+}
+
+.btn-primary:hover {
+    background: #1557b0;
+}
+
+.domain-lists {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+}
+
+.domain-list {
+    max-height: 150px;
+    overflow-y: auto;
+    background: white;
+    border: 1px solid #dadce0;
+    border-radius: 4px;
+    padding: 8px;
+}
+
+.domain-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 6px 8px;
+    margin-bottom: 4px;
+    background: #f8f9fa;
+    border-radius: 3px;
+    font-size: 12px;
+}
+
+.domain-item:last-child {
+    margin-bottom: 0;
+}
+
+.domain-name {
+    flex: 1;
+    color: #202124;
+    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+}
+
+.remove-domain {
+    background: #ea4335;
+    color: white;
+    border: none;
+    border-radius: 2px;
+    padding: 2px 6px;
+    font-size: 10px;
+    cursor: pointer;
+    transition: background 0.2s ease;
+}
+
+.remove-domain:hover {
+    background: #d33b2c;
+}
+
+.domain-list:empty::after {
+    content: 'No domains added';
+    color: #5f6368;
+    font-style: italic;
+    font-size: 11px;
+    display: block;
+    text-align: center;
+    padding: 16px;
+}
+
 /* ============ SIDEBAR LAYOUT ============ */
 
 .sidebar-enabled {
@@ -1630,7 +1808,7 @@ select:focus-visible {
     top: 0;
     display: none; /* Only show when sidebar is enabled */
     width: 100%;
-    height: 32px;
+    height: 41px; /* Match URL bar total height including border (36px + 2px border) */
     margin: 8px 0;
     border-radius: 6px;
     background: #e8f0fe;
@@ -1717,7 +1895,7 @@ select:focus-visible {
 
 .sidebar-collapsed .sidebar-collapse-btn {
     margin: 5px 5px 8px 5px; /* Add bottom margin for separation from tabs */
-    height: 35px;
+    height: 41px; /* Match URL bar total height including border (36px + 2px border) */
     display: flex; /* Ensure it stays visible when collapsed */
     background: #1a73e8; /* Change to blue like the old expand button */
     color: white;

@@ -11,7 +11,7 @@ import { TextProcessing } from './utils/textProcessing';
 const { ipcRenderer, shell } = require('electron');
 const path = require('path');
 // Development feature flag - set to false to disable DoAgent entirely
-const DOAGENT_ENABLED = false;
+const DOAGENT_ENABLED = true;
 
 // Type definitions
 interface TabInfo {
@@ -299,6 +299,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
   console.log('[Init] Setting up text selection message listener...');
   setupTextSelectionListener();
+  
+  console.log('[Init] Setting up ad blocker...');
+  setupAdBlocker();
   
   console.log('Browser initialized successfully');
   // DISABLED: Auto-summarize feature commented out
@@ -1005,6 +1008,77 @@ function createNewTab(url: string = NEW_TAB_URL): string | null {
   }
 }
 
+// Get ad blocker CSS rules and inject them into webviews
+function injectAdBlockCSS(webview: any): void {
+  if (!webview) return;
+  
+  // Check if webview is valid and ready
+  if (!webview.id || !webview.src || webview.src === 'about:blank') {
+    console.log('[AdBlock] Skipping CSS injection - webview not ready');
+    return;
+  }
+  
+  try {
+    // Request CSS rules from main process
+    ipcRenderer.invoke('get-adblock-css').then((cssRules: string) => {
+      if (!cssRules || !cssRules.trim()) {
+        console.log('[AdBlock] No CSS rules to inject');
+        return;
+      }
+      
+      // Check if webview is still valid before injection
+      if (!webview || !webview.executeJavaScript) {
+        console.log('[AdBlock] Webview no longer valid, skipping injection');
+        return;
+      }
+      
+      const script = `
+        (function() {
+          try {
+            // Check if document is ready
+            if (!document || !document.head) {
+              console.log('[AdBlock] Document not ready, skipping CSS injection');
+              return;
+            }
+            
+            // Remove existing ad block styles
+            const existingStyle = document.getElementById('browzer-adblock-css');
+            if (existingStyle) {
+              existingStyle.remove();
+            }
+            
+            // Inject new ad block styles
+            const style = document.createElement('style');
+            style.id = 'browzer-adblock-css';
+            style.type = 'text/css';
+            style.innerHTML = \`${cssRules.replace(/`/g, '\\`').replace(/\$/g, '\\$')}\`;
+            document.head.appendChild(style);
+            
+            console.log('[AdBlock] CSS rules injected successfully');
+          } catch (injectionError) {
+            console.warn('[AdBlock] CSS injection failed:', injectionError.message);
+          }
+        })();
+      `;
+      
+      // Execute with error handling
+      webview.executeJavaScript(script).catch((error: any) => {
+        // Don't log errors for destroyed webviews or navigation
+        if (!error.message.includes('Object has been destroyed') && 
+            !error.message.includes('navigation') &&
+            !error.message.includes('Script failed to execute')) {
+          console.warn('[AdBlock] Script execution failed:', error.message);
+        }
+      });
+      
+    }).catch((error: any) => {
+      console.error('[AdBlock] Error getting CSS rules:', error);
+    });
+  } catch (error) {
+    console.error('[AdBlock] Error in CSS injection setup:', error);
+  }
+}
+
 function configureWebview(webview: any, url: string): void {
   const needsSpecialSettings = url && isProblematicSite(url);
   const isLocalSettingsPage = url && url.startsWith('file://') && url.includes('settings-');
@@ -1324,11 +1398,18 @@ function setupWebviewEvents(webview: any): void {
     }
   });
 
-  // Inject text selection handler for "Add to Chat" functionality
+  // Inject text selection handler and ad block CSS
   webview.addEventListener('did-finish-load', () => {
     console.log('[Text Selection] Injecting enhanced selection handler for webview:', webview.id);
     try {
       injectEnhancedSelectionHandler(webview);
+      // Inject ad block CSS after page loads with validation
+      setTimeout(() => {
+        // Double-check webview is still valid before injection
+        if (webview && !webview.isDestroyed && webview.executeJavaScript) {
+          injectAdBlockCSS(webview);
+        }
+      }, 500);
     } catch (error) {
       console.error('[Text Selection] Failed to inject handler:', error);
     }
@@ -3622,6 +3703,12 @@ function setupTextSelectionListener(): void {
 function injectEnhancedSelectionHandler(webview: any): void {
   if (!webview) return;
   
+  // Check if webview is valid and ready
+  if (!webview.id || !webview.src || webview.src === 'about:blank' || webview.isDestroyed) {
+    console.log('[Selection Handler] Skipping injection - webview not ready');
+    return;
+  }
+  
   try {
     console.log('[Selection Handler] Injecting enhanced selection handler for webview:', webview.id);
     
@@ -3818,12 +3905,23 @@ function injectEnhancedSelectionHandler(webview: any): void {
       })();
     `;
     
+    // Check one more time before execution
+    if (!webview || webview.isDestroyed || !webview.executeJavaScript) {
+      console.log('[Selection Handler] Webview no longer valid, skipping injection');
+      return;
+    }
+    
     webview.executeJavaScript(injectionScript, false)
       .then(() => {
         console.log('[Selection Handler] ✓ Enhanced selection handler injection successful for webview:', webview.id);
       })
       .catch((error: any) => {
-        console.error('[Selection Handler] Failed to inject enhanced selection handler:', error);
+        // Don't log errors for destroyed webviews or common navigation errors
+        if (!error.message.includes('Object has been destroyed') && 
+            !error.message.includes('navigation') &&
+            !error.message.includes('Script failed to execute')) {
+          console.error('[Selection Handler] Failed to inject enhanced selection handler:', error);
+        }
       });
       
   } catch (error) {
@@ -4516,6 +4614,159 @@ function extractTopicSimple(itemContent: any): string {
   } catch (error) {
     console.error('Error extracting topic:', error);
     return '';
+  }
+}
+
+// ========================= AD BLOCKER SETUP =========================
+
+function setupAdBlocker(): void {
+  console.log('[AdBlocker] Setting up ad blocker controls...');
+  
+  // Get UI elements
+  const adBlockEnabledCheckbox = document.getElementById('adBlockEnabled') as HTMLInputElement;
+  const domainInput = document.getElementById('domainInput') as HTMLInputElement;
+  const blockDomainBtn = document.getElementById('blockDomainBtn') as HTMLButtonElement;
+  const allowDomainBtn = document.getElementById('allowDomainBtn') as HTMLButtonElement;
+  const blockedDomainsCount = document.getElementById('blockedDomainsCount') as HTMLSpanElement;
+  const cssRulesCount = document.getElementById('cssRulesCount') as HTMLSpanElement;
+  const filterRulesCount = document.getElementById('filterRulesCount') as HTMLSpanElement;
+  const blockedDomainsList = document.getElementById('blockedDomainsList') as HTMLDivElement;
+  const allowedDomainsList = document.getElementById('allowedDomainsList') as HTMLDivElement;
+  
+  if (!adBlockEnabledCheckbox || !domainInput || !blockDomainBtn || !allowDomainBtn) {
+    console.error('[AdBlocker] Required UI elements not found');
+    return;
+  }
+  
+  // Load initial state
+  loadAdBlockerStatus();
+  
+  // Set up event listeners
+  adBlockEnabledCheckbox.addEventListener('change', async () => {
+    try {
+      const enabled = adBlockEnabledCheckbox.checked;
+      const result = await ipcRenderer.invoke('toggle-adblock', enabled);
+      
+      if (result.success) {
+        console.log(`[AdBlocker] Ad blocking ${enabled ? 'enabled' : 'disabled'}`);
+        showToast(`Ad blocking ${enabled ? 'enabled' : 'disabled'}`, 'success');
+        
+        // Re-inject CSS into all webviews
+        const webviews = document.querySelectorAll('webview');
+        webviews.forEach((webview: any) => {
+          setTimeout(() => {
+            // Validate webview before injection
+            if (webview && !webview.isDestroyed && webview.executeJavaScript && webview.src && webview.src !== 'about:blank') {
+              injectAdBlockCSS(webview);
+            }
+          }, 100);
+        });
+      } else {
+        console.error('[AdBlocker] Failed to toggle ad blocker:', result.error);
+        showToast('Failed to toggle ad blocker', 'error');
+        // Revert checkbox state
+        adBlockEnabledCheckbox.checked = !enabled;
+      }
+    } catch (error) {
+      console.error('[AdBlocker] Error toggling ad blocker:', error);
+      showToast('Error toggling ad blocker', 'error');
+    }
+  });
+  
+  blockDomainBtn.addEventListener('click', async () => {
+    const domain = domainInput.value.trim();
+    if (!domain) {
+      showToast('Please enter a domain', 'error');
+      return;
+    }
+    
+    try {
+      const result = await ipcRenderer.invoke('add-blocked-domain', domain);
+      if (result.success) {
+        console.log(`[AdBlocker] Added blocked domain: ${domain}`);
+        showToast(`Blocked domain: ${domain}`, 'success');
+        domainInput.value = '';
+        loadAdBlockerStatus();
+      } else {
+        console.error('[AdBlocker] Failed to add blocked domain:', result.error);
+        showToast('Failed to add blocked domain', 'error');
+      }
+    } catch (error) {
+      console.error('[AdBlocker] Error adding blocked domain:', error);
+      showToast('Error adding blocked domain', 'error');
+    }
+  });
+  
+  allowDomainBtn.addEventListener('click', async () => {
+    const domain = domainInput.value.trim();
+    if (!domain) {
+      showToast('Please enter a domain', 'error');
+      return;
+    }
+    
+    try {
+      const result = await ipcRenderer.invoke('add-allowed-domain', domain);
+      if (result.success) {
+        console.log(`[AdBlocker] Added allowed domain: ${domain}`);
+        showToast(`Allowed domain: ${domain}`, 'success');
+        domainInput.value = '';
+        loadAdBlockerStatus();
+      } else {
+        console.error('[AdBlocker] Failed to add allowed domain:', result.error);
+        showToast('Failed to add allowed domain', 'error');
+      }
+    } catch (error) {
+      console.error('[AdBlocker] Error adding allowed domain:', error);
+      showToast('Error adding allowed domain', 'error');
+    }
+  });
+  
+  // Allow adding domains by pressing Enter
+  domainInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      if (e.shiftKey) {
+        allowDomainBtn.click();
+      } else {
+        blockDomainBtn.click();
+      }
+    }
+  });
+  
+  console.log('[AdBlocker] Ad blocker controls set up successfully');
+}
+
+async function loadAdBlockerStatus(): Promise<void> {
+  try {
+    const status = await ipcRenderer.invoke('get-adblock-status');
+    
+    // Update checkbox
+    const adBlockEnabledCheckbox = document.getElementById('adBlockEnabled') as HTMLInputElement;
+    if (adBlockEnabledCheckbox) {
+      adBlockEnabledCheckbox.checked = status.enabled;
+    }
+    
+    // Update stats
+    const blockedDomainsCount = document.getElementById('blockedDomainsCount') as HTMLSpanElement;
+    const cssRulesCount = document.getElementById('cssRulesCount') as HTMLSpanElement;
+    const filterRulesCount = document.getElementById('filterRulesCount') as HTMLSpanElement;
+    
+    if (blockedDomainsCount) blockedDomainsCount.textContent = status.stats.blockedDomains.toString();
+    if (cssRulesCount) cssRulesCount.textContent = status.stats.cssRules.toString();
+    if (filterRulesCount) filterRulesCount.textContent = status.stats.filterRules.toString();
+    
+    console.log('[AdBlocker] Status loaded:', status);
+  } catch (error) {
+    console.error('[AdBlocker] Error loading status:', error);
+    
+    // Set default values
+    const blockedDomainsCount = document.getElementById('blockedDomainsCount') as HTMLSpanElement;
+    const cssRulesCount = document.getElementById('cssRulesCount') as HTMLSpanElement;
+    const filterRulesCount = document.getElementById('filterRulesCount') as HTMLSpanElement;
+    
+    if (blockedDomainsCount) blockedDomainsCount.textContent = 'Error';
+    if (cssRulesCount) cssRulesCount.textContent = 'Error';
+    if (filterRulesCount) filterRulesCount.textContent = 'Error';
   }
 }
 

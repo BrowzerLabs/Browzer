@@ -194,6 +194,53 @@
                     </div>
                 </div>
 
+                <!-- Ad Blocker Settings -->
+                <div class="adblock-section">
+                    <h4>Ad Blocker</h4>
+                    <div class="adblock-controls">
+                        <label class="setting-item">
+                            <span>Enable Ad Blocking</span>
+                            <input type="checkbox" id="adBlockEnabled" checked>
+                            <span class="setting-description">Block ads, trackers, and unwanted content</span>
+                        </label>
+                        
+                        <div class="adblock-stats">
+                            <div class="stat-item">
+                                <span class="stat-label">Blocked Domains:</span>
+                                <span id="blockedDomainsCount">Loading...</span>
+                            </div>
+                            <div class="stat-item">
+                                <span class="stat-label">CSS Rules:</span>
+                                <span id="cssRulesCount">Loading...</span>
+                            </div>
+                            <div class="stat-item">
+                                <span class="stat-label">Filter Rules:</span>
+                                <span id="filterRulesCount">Loading...</span>
+                            </div>
+                        </div>
+                        
+                        <div class="domain-management">
+                            <h5>Domain Management</h5>
+                            <div class="domain-input-group">
+                                <input type="text" id="domainInput" placeholder="Enter domain (e.g., example.com)">
+                                <button id="blockDomainBtn" class="btn-secondary">Block</button>
+                                <button id="allowDomainBtn" class="btn-primary">Allow</button>
+                            </div>
+                            
+                            <div class="domain-lists">
+                                <div class="blocked-domains">
+                                    <h6>Blocked Domains</h6>
+                                    <div id="blockedDomainsList" class="domain-list"></div>
+                                </div>
+                                <div class="allowed-domains">
+                                    <h6>Allowed Domains</h6>
+                                    <div id="allowedDomainsList" class="domain-list"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Memory Management Section -->
                 <div class="memory-section">
                     <h4>AI Memory Management</h4>

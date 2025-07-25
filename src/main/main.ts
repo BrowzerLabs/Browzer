@@ -65,6 +65,79 @@ class BrowzerApp {
   }
 
   private setupIpcHandlers(): void {
+    // Ad Blocker handlers
+    ipcMain.handle('get-adblock-css', async () => {
+      try {
+        return this.appManager.getAdBlocker().getCSSRules();
+      } catch (error) {
+        console.error('[Main] Error getting ad block CSS:', error);
+        return '';
+      }
+    });
+
+    ipcMain.handle('toggle-adblock', async (event, enabled: boolean) => {
+      try {
+        this.appManager.getAdBlocker().setEnabled(enabled);
+        return { success: true };
+      } catch (error) {
+        console.error('[Main] Error toggling ad blocker:', error);
+        return { success: false, error: (error as Error).message };
+      }
+    });
+
+    ipcMain.handle('get-adblock-status', async () => {
+      try {
+        const adBlocker = this.appManager.getAdBlocker();
+        return {
+          enabled: adBlocker.isEnabled(),
+          stats: adBlocker.getStats()
+        };
+      } catch (error) {
+        console.error('[Main] Error getting ad blocker status:', error);
+        return { enabled: false, stats: { blockedDomains: 0, cssRules: 0, filterRules: 0 } };
+      }
+    });
+
+    ipcMain.handle('add-blocked-domain', async (event, domain: string) => {
+      try {
+        this.appManager.getAdBlocker().addBlockedDomain(domain);
+        return { success: true };
+      } catch (error) {
+        console.error('[Main] Error adding blocked domain:', error);
+        return { success: false, error: (error as Error).message };
+      }
+    });
+
+    ipcMain.handle('add-allowed-domain', async (event, domain: string) => {
+      try {
+        this.appManager.getAdBlocker().addAllowedDomain(domain);
+        return { success: true };
+      } catch (error) {
+        console.error('[Main] Error adding allowed domain:', error);
+        return { success: false, error: (error as Error).message };
+      }
+    });
+
+    ipcMain.handle('remove-blocked-domain', async (event, domain: string) => {
+      try {
+        this.appManager.getAdBlocker().removeBlockedDomain(domain);
+        return { success: true };
+      } catch (error) {
+        console.error('[Main] Error removing blocked domain:', error);
+        return { success: false, error: (error as Error).message };
+      }
+    });
+
+    ipcMain.handle('remove-allowed-domain', async (event, domain: string) => {
+      try {
+        this.appManager.getAdBlocker().removeAllowedDomain(domain);
+        return { success: true };
+      } catch (error) {
+        console.error('[Main] Error removing allowed domain:', error);
+        return { success: false, error: (error as Error).message };
+      }
+    });
+
     // LLM API call handler
     ipcMain.handle('call-llm', async (event, request: LLMRequest) => {
       try {
