@@ -12,6 +12,20 @@ import subprocess
 from typing import Dict, List, Optional, Any, Callable
 from dataclasses import dataclass
 from pathlib import Path
+import numpy as np
+
+class NumpyJSONEncoder(json.JSONEncoder):
+    """Custom JSON encoder that handles NumPy data types"""
+    def default(self, obj):
+        if isinstance(obj, np.integer):
+            return int(obj)
+        elif isinstance(obj, np.floating):
+            return float(obj)
+        elif isinstance(obj, np.ndarray):
+            return obj.tolist()
+        elif hasattr(obj, 'item'):  # Handle numpy scalars
+            return obj.item()
+        return super().default(obj)
 
 @dataclass
 class WorkflowStep:
@@ -322,7 +336,7 @@ class WorkflowExecutor:
                 },
                 'workflow_context': input_data.get('workflow_context'),
                 'parameters': input_data.get('parameters', {})
-            })
+            }, cls=NumpyJSONEncoder)
             
             # Debug logging
             api_keys = input_data.get('browserApiKeys', {})
@@ -403,7 +417,7 @@ class WorkflowExecutor:
             self.progress_callback(event)
         else:
             # Print to stderr for IPC pickup by main process
-            print(f"WORKFLOW_PROGRESS: {json.dumps(event)}", file=sys.stderr, flush=True)
+            print(f"WORKFLOW_PROGRESS: {json.dumps(event, cls=NumpyJSONEncoder)}", file=sys.stderr, flush=True)
 
 def main():
     """Test the workflow executor"""

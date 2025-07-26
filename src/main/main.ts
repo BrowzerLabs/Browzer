@@ -65,6 +65,79 @@ class BrowzerApp {
   }
 
   private setupIpcHandlers(): void {
+    // Ad Blocker handlers
+    ipcMain.handle('get-adblock-css', async () => {
+      try {
+        return this.appManager.getAdBlocker().getCSSRules();
+      } catch (error) {
+        console.error('[Main] Error getting ad block CSS:', error);
+        return '';
+      }
+    });
+
+    ipcMain.handle('toggle-adblock', async (event, enabled: boolean) => {
+      try {
+        this.appManager.getAdBlocker().setEnabled(enabled);
+        return { success: true };
+      } catch (error) {
+        console.error('[Main] Error toggling ad blocker:', error);
+        return { success: false, error: (error as Error).message };
+      }
+    });
+
+    ipcMain.handle('get-adblock-status', async () => {
+      try {
+        const adBlocker = this.appManager.getAdBlocker();
+        return {
+          enabled: adBlocker.isEnabled(),
+          stats: adBlocker.getStats()
+        };
+      } catch (error) {
+        console.error('[Main] Error getting ad blocker status:', error);
+        return { enabled: false, stats: { blockedDomains: 0, cssRules: 0, filterRules: 0 } };
+      }
+    });
+
+    ipcMain.handle('add-blocked-domain', async (event, domain: string) => {
+      try {
+        this.appManager.getAdBlocker().addBlockedDomain(domain);
+        return { success: true };
+      } catch (error) {
+        console.error('[Main] Error adding blocked domain:', error);
+        return { success: false, error: (error as Error).message };
+      }
+    });
+
+    ipcMain.handle('add-allowed-domain', async (event, domain: string) => {
+      try {
+        this.appManager.getAdBlocker().addAllowedDomain(domain);
+        return { success: true };
+      } catch (error) {
+        console.error('[Main] Error adding allowed domain:', error);
+        return { success: false, error: (error as Error).message };
+      }
+    });
+
+    ipcMain.handle('remove-blocked-domain', async (event, domain: string) => {
+      try {
+        this.appManager.getAdBlocker().removeBlockedDomain(domain);
+        return { success: true };
+      } catch (error) {
+        console.error('[Main] Error removing blocked domain:', error);
+        return { success: false, error: (error as Error).message };
+      }
+    });
+
+    ipcMain.handle('remove-allowed-domain', async (event, domain: string) => {
+      try {
+        this.appManager.getAdBlocker().removeAllowedDomain(domain);
+        return { success: true };
+      } catch (error) {
+        console.error('[Main] Error removing allowed domain:', error);
+        return { success: false, error: (error as Error).message };
+      }
+    });
+
     // LLM API call handler
     ipcMain.handle('call-llm', async (event, request: LLMRequest) => {
       try {
@@ -112,6 +185,64 @@ app.whenReady().then(async () => {
   } catch (error) {
     console.error('Failed to initialize application:', error);
     app.quit();
+  }
+});
+
+// Handle app quit events (including force quit from dock)
+app.on('before-quit', async (event) => {
+  const windows = BrowserWindow.getAllWindows();
+  if (windows.length > 0) {
+    // Prevent quit to allow save to complete
+    event.preventDefault();
+    
+    try {
+      // Request renderer to save session with timeout
+      const mainWindow = windows[0];
+      
+      // Give renderer 2 seconds to save, then force quit
+      const saveTimeout = setTimeout(() => {
+        app.exit(0);
+      }, 2000);
+      
+      // Try to communicate with renderer
+      try {
+        await mainWindow.webContents.executeJavaScript(`
+          (function() {
+            try {
+              // Try multiple ways to access the function
+              let saveFn = null;
+              if (typeof autoSaveTabs === 'function') {
+                saveFn = autoSaveTabs;
+              } else if (typeof window.autoSaveTabs === 'function') {
+                saveFn = window.autoSaveTabs;
+              } else {
+                return { success: false, error: 'autoSaveTabs function not available' };
+              }
+              
+              saveFn();
+              return { success: true, message: 'Save completed' };
+              
+            } catch (error) {
+              return { success: false, error: error.message || error.toString() };
+            }
+          })();
+        `);
+      } catch (jsError) {
+        // Ignore JavaScript execution errors - app will still quit
+      }
+      
+      // Clear timeout and quit after short delay
+      clearTimeout(saveTimeout);
+      setTimeout(() => {
+        app.exit(0);
+      }, 500);
+      
+    } catch (error) {
+      // Force quit after 1 second if save fails
+      setTimeout(() => {
+        app.exit(0);
+      }, 1000);
+    }
   }
 });
 

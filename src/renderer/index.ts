@@ -8,10 +8,26 @@ import { MemoryService } from './services/MemoryService';
 import { TextProcessing } from './utils/textProcessing';
 
 // Import Electron APIs
-const { ipcRenderer, shell } = require('electron');
-const path = require('path');
+// Use electronAPI from preload script instead of direct electron access
+// const { ipcRenderer, shell } = require('electron'); // Removed for context isolation
+
+// Create compatibility layer for IPC methods
+const ipcRenderer = {
+  invoke: (channel: string, ...args: any[]) => window.electronAPI.ipcInvoke(channel, ...args),
+  send: (channel: string, ...args: any[]) => window.electronAPI.ipcSend(channel, ...args),
+  on: (channel: string, callback: (...args: any[]) => void) => window.electronAPI.ipcOn(channel, callback),
+  off: (channel: string, callback: (...args: any[]) => void) => window.electronAPI.ipcOff(channel, callback),
+  removeAllListeners: (channel: string) => window.electronAPI.removeAllListeners(channel)
+};
+
+const shell = { 
+  openExternal: (url: string) => window.electronAPI.openExternal(url) 
+};
+
+// Path utilities from preload
+const path = window.electronAPI.path;
 // Development feature flag - set to false to disable DoAgent entirely
-const DOAGENT_ENABLED = false;
+const DOAGENT_ENABLED = true;
 
 // Type definitions
 interface TabInfo {
@@ -200,39 +216,102 @@ function isProblematicSite(url: string): boolean {
   }
 }
 
+// Function to apply or remove sidebar layout
+function applySidebarLayout(enabled: boolean): void {
+  const browserContainer = document.querySelector('.browser-container');
+  if (browserContainer) {
+    if (enabled) {
+      browserContainer.classList.add('sidebar-enabled');
+      console.log('[Sidebar] Sidebar layout enabled');
+    } else {
+      browserContainer.classList.remove('sidebar-enabled');
+      console.log('[Sidebar] Sidebar layout disabled');
+    }
+  }
+}
+
+// Function to clear any stuck loading states - AGGRESSIVE CLEANUP
+function clearStuckLoadingStates(): void {
+  const loadingTabs = document.querySelectorAll('.tab.loading');
+  
+  if (loadingTabs.length > 0) {
+    console.log(`[Loading Cleanup] Found ${loadingTabs.length} tabs in loading state - clearing ALL`);
+    
+    // FORCE CLEAR all loading states - be aggressive to fix the stuck issue
+    loadingTabs.forEach(tab => {
+      tab.classList.remove('loading');
+      console.log(`[Loading Cleanup] Force cleared loading state for tab: ${tab.id}`);
+    });
+  }
+}
+
+// Function to setup collapse/expand buttons
+function setupCollapseExpandButtons(): void {
+  const browserContainer = document.querySelector('.browser-container');
+  
+  // Sidebar collapse/expand - single button handles both
+  const sidebarCollapseBtn = document.getElementById('sidebarCollapseBtn');
+  
+  if (sidebarCollapseBtn && browserContainer) {
+    // Load saved sidebar collapsed state
+    const sidebarCollapsed = localStorage.getItem('sidebarCollapsed') === 'true';
+    if (sidebarCollapsed) {
+      browserContainer.classList.add('sidebar-collapsed');
+    }
+    
+    sidebarCollapseBtn.addEventListener('click', () => {
+      const isCurrentlyCollapsed = browserContainer.classList.contains('sidebar-collapsed');
+      
+      if (isCurrentlyCollapsed) {
+        // Currently collapsed, so expand
+        browserContainer.classList.remove('sidebar-collapsed');
+        localStorage.setItem('sidebarCollapsed', 'false');
+        console.log('[Sidebar] Expanded');
+      } else {
+        // Currently expanded, so collapse
+        browserContainer.classList.add('sidebar-collapsed');
+        localStorage.setItem('sidebarCollapsed', 'true');
+        console.log('[Sidebar] Collapsed');
+      }
+    });
+  }
+  
+    // Assistant collapse/expand functionality removed per user request
+  // Clear any persisting assistant collapsed state
+  localStorage.removeItem('assistantCollapsed');
+  if (browserContainer) {
+    browserContainer.classList.remove('assistant-collapsed');
+  }
+}
+
 // Initialize the application when DOM is ready
 document.addEventListener('DOMContentLoaded', () => {
   console.log('DOM fully loaded, initializing browser...');
   
-  console.log('[Init] Calling initializeUI...');
   initializeUI();
-  console.log('[Init] Calling setupEventListeners...');
   setupEventListeners();
-  console.log('[Init] Calling setupWorkflowEventListeners...');
   setupWorkflowEventListeners();
-  console.log('[Init] Calling setupExtensionsPanel...');
   setupExtensionsPanel();
-  console.log('[Init] Calling setupAgentControls...');
   setupAgentControls();
-  console.log('[Init] Calling restoreTabs...');
-  restoreTabs();
-  console.log('[Init] Calling setupGlobalErrorHandler...');
   setupGlobalErrorHandler();
-  console.log('[Init] Initializing DevTools...');
   devToolsManager.addDevToolsButton();
   devToolsManager.enableDevToolsForAllWebviews();
   
-  console.log('[Init] Initializing MemoryService...');
   memoryService = new MemoryService();
   
   // Expose memory service to window for debugging
   (window as any).memoryService = memoryService;
-  console.log('[Init] MemoryService exposed to window.memoryService for debugging');
 
-  console.log('[Init] Setting up text selection message listener...');
   setupTextSelectionListener();
+  setupAdBlocker();
+  initializeTabSearch();
+  initializeAutoSessionManagement();
+  initializeTabPreview();
   
-  console.log('Browser initialized successfully');
+  // Restore tabs after initialization is complete
+  setTimeout(() => {
+    enhancedRestoreTabs();
+  }, 1000);
   // DISABLED: Auto-summarize feature commented out
   // console.log('[Init] Final autoSummarizeEnabled state:', autoSummarizeEnabled);
 });
@@ -272,10 +351,9 @@ function initializeUI(): void {
     }
   }
   
-  // If no tabs were restored, create a new one
-  if (tabs.length === 0) {
-    createNewTab();
-  }
+  // NOTE: Tab creation is now handled by the restoration process
+  // The restoration timeout will either restore saved tabs or create a fallback tab
+  // DO NOT create tabs here - this interferes with restoration!
   
   // Sync API keys with backend
   syncApiKeysWithBackend().catch(error => {
@@ -506,8 +584,14 @@ function setupEventListeners(): void {
   if (backBtn) {
     backBtn.addEventListener('click', () => {
       const webview = getActiveWebview();
-      if (webview && webview.canGoBack()) {
-        webview.goBack();
+      if (webview && isWebviewReady(webview)) {
+        try {
+          if (webview.canGoBack()) {
+            webview.goBack();
+          }
+        } catch (error) {
+          console.log('⚠️ Error navigating back, webview not ready:', error);
+        }
       }
     });
   }
@@ -515,8 +599,14 @@ function setupEventListeners(): void {
   if (forwardBtn) {
     forwardBtn.addEventListener('click', () => {
       const webview = getActiveWebview();
-      if (webview && webview.canGoForward()) {
-        webview.goForward();
+      if (webview && isWebviewReady(webview)) {
+        try {
+          if (webview.canGoForward()) {
+            webview.goForward();
+          }
+        } catch (error) {
+          console.log('⚠️ Error navigating forward, webview not ready:', error);
+        }
       }
     });
   }
@@ -648,22 +738,38 @@ function setupEventListeners(): void {
   
   ipcRenderer.on('menu-reload', () => {
     const webview = getActiveWebview();
-    if (webview) {
-      webview.reload();
+    if (webview && isWebviewReady(webview)) {
+      try {
+        webview.reload();
+      } catch (error) {
+        console.log('⚠️ Error reloading, webview not ready:', error);
+      }
     }
   });
   
   ipcRenderer.on('menu-go-back', () => {
     const webview = getActiveWebview();
-    if (webview && webview.canGoBack()) {
-      webview.goBack();
+    if (webview && isWebviewReady(webview)) {
+      try {
+        if (webview.canGoBack()) {
+          webview.goBack();
+        }
+      } catch (error) {
+        console.log('⚠️ Error going back, webview not ready:', error);
+      }
     }
   });
   
   ipcRenderer.on('menu-go-forward', () => {
     const webview = getActiveWebview();
-    if (webview && webview.canGoForward()) {
-      webview.goForward();
+    if (webview && isWebviewReady(webview)) {
+      try {
+        if (webview.canGoForward()) {
+          webview.goForward();
+        }
+      } catch (error) {
+        console.log('⚠️ Error going forward, webview not ready:', error);
+      }
     }
   });
 
@@ -715,12 +821,19 @@ function navigateToUrl(): void {
 
 function updateNavigationButtons(): void {
   const webview = getActiveWebview();
-  if (webview) {
-    if (backBtn) {
-      backBtn.disabled = !webview.canGoBack();
-    }
-    if (forwardBtn) {
-      forwardBtn.disabled = !webview.canGoForward();
+  if (webview && isWebviewReady(webview)) {
+    try {
+      if (backBtn) {
+        backBtn.disabled = !webview.canGoBack();
+      }
+      if (forwardBtn) {
+        forwardBtn.disabled = !webview.canGoForward();
+      }
+    } catch (error) {
+      console.log('⚠️ Webview not ready for navigation buttons, using defaults');
+      // Fallback to disabled state if webview methods fail
+      if (backBtn) backBtn.disabled = true;
+      if (forwardBtn) forwardBtn.disabled = true;
     }
   } else {
     if (backBtn) {
@@ -729,6 +842,19 @@ function updateNavigationButtons(): void {
     if (forwardBtn) {
       forwardBtn.disabled = true;
     }
+  }
+}
+
+function isWebviewReady(webview: any): boolean {
+  try {
+    // Check if webview is properly attached to DOM and ready
+    return webview && 
+           webview.nodeType === Node.ELEMENT_NODE &&
+           webview.parentNode &&
+           typeof webview.canGoBack === 'function' &&
+           webview.getWebContentsId !== undefined;
+  } catch (error) {
+    return false;
   }
 }
 
@@ -834,40 +960,11 @@ function restoreTabs(): void {
 }
 
 function saveTabs(): void {
-  try {
-    if (!tabs || tabs.length === 0) {
-      console.log('No tabs to save');
-      return;
-    }
-    
-    const tabsToSave = tabs.map(tab => {
-      try {
-        const webview = document.getElementById(tab.webviewId);
-        const titleElem = document.querySelector(`#${tab.id} .tab-title`);
-        return {
-          url: webview && (webview as any).src ? (webview as any).src : 'about:blank',
-          title: titleElem ? titleElem.textContent : 'New Tab'
-        };
-      } catch (err) {
-        console.error('Error saving individual tab:', err);
-        return {
-          url: 'about:blank',
-          title: 'New Tab'
-        };
-      }
-    });
-    
-    localStorage.setItem(SAVED_TABS_KEY, JSON.stringify(tabsToSave));
-    console.log(`Saved ${tabsToSave.length} tabs to localStorage`);
-  } catch (err) {
-    console.error('Error saving tabs:', err);
-  }
+  // Delegate to the enhanced auto-save function
+  autoSaveTabs();
 }
 
 function createNewTab(url: string = NEW_TAB_URL): string | null {
-  console.log('🚨 [NEW TAB DEBUG] createNewTab called with URL:', url);
-  console.log('🚨 [NEW TAB DEBUG] Call stack:', new Error().stack);
-  
   if (!tabsContainer || !webviewsContainer) {
     console.error('Cannot create tab: containers not found');
     return null;
@@ -875,8 +972,6 @@ function createNewTab(url: string = NEW_TAB_URL): string | null {
   
   const tabId = 'tab-' + Date.now();
   const webviewId = 'webview-' + tabId;
-  
-  console.log('🚨 [NEW TAB DEBUG] Creating tab with ID:', tabId);
   
   try {
     // Create tab element
@@ -929,11 +1024,149 @@ function createNewTab(url: string = NEW_TAB_URL): string | null {
     // Save tab state
     saveTabs();
     
-    console.log('🚨 [NEW TAB DEBUG] Tab created successfully:', tabId);
+      console.log('🚨 [NEW TAB DEBUG] Tab created successfully:', tabId);
+  return tabId;
+} catch (error) {
+  console.error('Error creating tab:', error);
+  return null;
+}
+}
+
+function createNewTabWithoutSelection(url: string = NEW_TAB_URL): string | null {
+  if (!tabsContainer || !webviewsContainer) {
+    console.error('Cannot create tab: containers not found');
+    return null;
+  }
+  
+  const tabId = 'tab-' + Date.now();
+  const webviewId = 'webview-' + tabId;
+  
+  try {
+    // Create tab element
+    const tab = document.createElement('div');
+    tab.className = 'tab';
+    tab.id = tabId;
+    tab.dataset.webviewId = webviewId;
+    
+    tab.innerHTML = `
+      <div class="tab-favicon"></div>
+      <span class="tab-title">New Tab</span>
+      <button class="tab-close">×</button>
+    `;
+    
+    tabsContainer.appendChild(tab);
+    console.log('Tab element created (no selection):', tabId);
+    
+    // Create webview
+    const webview = document.createElement('webview') as any;
+    webview.id = webviewId;
+    webview.className = 'webview';
+
+    // Configure webview
+    configureWebview(webview, url);
+    
+    webviewsContainer.appendChild(webview);
+    console.log('Webview element created (no selection):', webviewId);
+    
+    // Add to tabs array
+    const newTab = {
+      id: tabId,
+      url: url,
+      title: 'New Tab',
+      isActive: false, // Don't set as active
+      webviewId: webviewId,
+      history: [],
+      currentHistoryIndex: -1,
+      isProblematicSite: isProblematicSite(url)
+    };
+    
+    tabs.push(newTab);
+    
+    // Setup event listeners
+    setupTabEventListeners(tab, tabId);
+    setupWebviewEvents(webview);
+    
+    // DON'T select this tab immediately - that's the key difference
+    
+    // Save tab state
+    saveTabs();
+    
+    console.log('🚨 [NEW TAB DEBUG] Tab created successfully (no selection):', tabId);
     return tabId;
   } catch (error) {
-    console.error('Error creating tab:', error);
+    console.error('Error creating tab without selection:', error);
     return null;
+  }
+}
+
+// Get ad blocker CSS rules and inject them into webviews
+function injectAdBlockCSS(webview: any): void {
+  if (!webview) return;
+  
+  // Check if webview is valid and ready
+  if (!webview.id || !webview.src || webview.src === 'about:blank') {
+    console.log('[AdBlock] Skipping CSS injection - webview not ready');
+    return;
+  }
+  
+  try {
+    // Request CSS rules from main process
+    ipcRenderer.invoke('get-adblock-css').then((cssRules: string) => {
+      if (!cssRules || !cssRules.trim()) {
+        console.log('[AdBlock] No CSS rules to inject');
+        return;
+      }
+      
+      // Check if webview is still valid before injection
+      if (!webview || !webview.executeJavaScript) {
+        console.log('[AdBlock] Webview no longer valid, skipping injection');
+        return;
+      }
+      
+      const script = `
+        (function() {
+          try {
+            // Check if document is ready
+            if (!document || !document.head) {
+              console.log('[AdBlock] Document not ready, skipping CSS injection');
+              return;
+            }
+            
+            // Remove existing ad block styles
+            const existingStyle = document.getElementById('browzer-adblock-css');
+            if (existingStyle) {
+              existingStyle.remove();
+            }
+            
+            // Inject new ad block styles
+            const style = document.createElement('style');
+            style.id = 'browzer-adblock-css';
+            style.type = 'text/css';
+            style.innerHTML = \`${cssRules.replace(/`/g, '\\`').replace(/\$/g, '\\$')}\`;
+            document.head.appendChild(style);
+            
+            console.log('[AdBlock] CSS rules injected successfully');
+          } catch (injectionError) {
+            console.warn('[AdBlock] CSS injection failed:', injectionError.message);
+          }
+        })();
+      `;
+      
+      // Execute with error handling
+      webview.executeJavaScript(script).catch((error: any) => {
+        // Don't log errors for destroyed webviews or navigation
+        if (!error.message.includes('Object has been destroyed') && 
+            !error.message.includes('navigation') &&
+            !error.message.includes('Script failed to execute')) {
+          console.warn('[AdBlock] Script execution failed:', error.message);
+        }
+      });
+      
+    }).catch((error: any) => {
+      console.error('[AdBlock] Error getting CSS rules:', error);
+    });
+  } catch (error) {
+    console.error('[AdBlock] Error in CSS injection setup:', error);
   }
 }
 
@@ -1029,6 +1262,9 @@ function setupTabEventListeners(tab: HTMLElement, tabId: string): void {
       closeTab(tabId);
     });
   }
+
+  // Setup tab preview events
+  setupTabPreviewEvents(tab, tabId);
 }
 
 function setupWebviewEvents(webview: any): void {
@@ -1061,6 +1297,7 @@ function setupWebviewEvents(webview: any): void {
       }
     }
     
+    // Update URL bar, title, and navigation buttons
     if (urlBar) {
       urlBar.value = webview.src;
     }
@@ -1068,12 +1305,56 @@ function setupWebviewEvents(webview: any): void {
     updateTabTitle(webview, webview.getTitle());
     updateNavigationButtons();
     
-    // Track page visit in history
+    // Track page visit in history - THIS IS THE KEY FIX!
     const url = webview.src;
-    const title = webview.getTitle();
+    const webviewTitle = webview.getTitle();
+    
+    // Debug logging for successful page loads
+    console.log('🔍 [HISTORY TRACK] did-finish-load event:', {
+      webviewId: webview.id,
+      url: url,
+      webviewTitle: webviewTitle,
+      isAboutBlank: url === 'about:blank'
+    });
+    
     if (url && url !== 'about:blank' && !url.startsWith('file://')) {
-      trackPageVisit(url, title);
+      console.log('✅ [HISTORY TRACK] Tracking page visit with webview title:', { url, title: webviewTitle });
+      trackPageVisit(url, webviewTitle);
+    } else {
+      console.log('❌ [HISTORY TRACK] Skipping page visit - invalid URL or about:blank');
     }
+    
+    // Update favicon after loading completes
+    setTimeout(() => {
+      if (webview && webview.src) {
+        updateTabFavicon(webview.id, webview.src);
+      }
+    }, 500);
+  });
+
+  // Also handle loading failures
+  webview.addEventListener('did-fail-load', () => {
+    const webviewId = webview.id;
+    if (webviewId) {
+      const tabId = getTabIdFromWebview(webviewId);
+      if (tabId) {
+        const tab = document.getElementById(tabId);
+        if (tab) {
+          tab.classList.remove('loading');
+          console.log(`[Tab Loading] Failed loading for tab: ${tabId}`);
+        }
+      }
+    }
+    
+    // Update URL bar on failed loads (but don't track in history)
+    if (urlBar) {
+      urlBar.value = webview.src;
+    }
+    
+    updateTabTitle(webview, webview.getTitle());
+    updateNavigationButtons();
+    
+    console.log('❌ [HISTORY TRACK] Page failed to load, not tracking in history:', webview.src);
     
     // DISABLED: Auto-summarize feature commented out
     /*
@@ -1163,6 +1444,8 @@ function setupWebviewEvents(webview: any): void {
     if (urlBar && getTabIdFromWebview(webview.id) === activeTabId) {
       urlBar.value = e.url;
     }
+    // Auto-save tabs when navigation completes
+    autoSaveTabs();
   });
 
   webview.addEventListener('did-navigate-in-page', (e: any) => {
@@ -1171,6 +1454,8 @@ function setupWebviewEvents(webview: any): void {
     if (urlBar && getTabIdFromWebview(webview.id) === activeTabId) {
       urlBar.value = e.url;
     }
+    // Auto-save tabs when in-page navigation completes
+    autoSaveTabs();
   });
 
   webview.addEventListener('did-fail-load', (e: any) => {
@@ -1234,11 +1519,18 @@ function setupWebviewEvents(webview: any): void {
     }
   });
 
-  // Inject text selection handler for "Add to Chat" functionality
+  // Inject text selection handler and ad block CSS
   webview.addEventListener('did-finish-load', () => {
     console.log('[Text Selection] Injecting enhanced selection handler for webview:', webview.id);
     try {
       injectEnhancedSelectionHandler(webview);
+      // Inject ad block CSS after page loads with validation
+      setTimeout(() => {
+        // Double-check webview is still valid before injection
+        if (webview && !webview.isDestroyed && webview.executeJavaScript) {
+          injectAdBlockCSS(webview);
+        }
+      }, 500);
     } catch (error) {
       console.error('[Text Selection] Failed to inject handler:', error);
     }
@@ -1329,6 +1621,9 @@ function selectTab(tabId: string): void {
     
     updateNavigationButtons();
     
+    // Auto-save when tab selection changes
+    autoSaveTabs();
+    
     console.log('Tab selection complete:', tabId);
   } catch (error) {
     console.error('Error in selectTab:', error);
@@ -1410,7 +1705,12 @@ function getTabIdFromWebview(webviewId: string): string | null {
 }
 
 function trackPageVisit(url: string, title: string): void {
-  if (!url || url === 'about:blank') return;
+  console.log('📝 [TRACK PAGE] Called with:', { url, title });
+  
+  if (!url || url === 'about:blank') {
+    console.log('❌ [TRACK PAGE] Rejected - empty URL or about:blank');
+    return;
+  }
   
   // Skip internal pages and invalid URLs
   if (url.startsWith('file://') || 
@@ -1420,9 +1720,11 @@ function trackPageVisit(url: string, title: string): void {
       !title ||
       title.length === 0 ||
       title === 'New Tab') {
-    console.log('🔍 [HISTORY DEBUG] Skipping page visit:', { url, title });
+    console.log('❌ [TRACK PAGE] Rejected - internal/invalid page:', { url, title });
     return;
   }
+  
+  console.log('✅ [TRACK PAGE] Processing valid page visit');
   
   try {
     let history = JSON.parse(localStorage.getItem(HISTORY_STORAGE_KEY) || '[]');
@@ -1567,6 +1869,36 @@ function setupExtensionsPanel(): void {
       input.click();
     });
   }
+
+  // Sidebar setting
+  const sidebarEnabledCheckbox = document.getElementById('sidebarEnabled') as HTMLInputElement;
+  if (sidebarEnabledCheckbox) {
+    // Load saved sidebar preference
+    const savedSidebarEnabled = localStorage.getItem('sidebarEnabled') === 'true';
+    sidebarEnabledCheckbox.checked = savedSidebarEnabled;
+    
+    // Apply sidebar layout if enabled
+    applySidebarLayout(savedSidebarEnabled);
+    
+    // Handle sidebar toggle
+    sidebarEnabledCheckbox.addEventListener('change', () => {
+      const isEnabled = sidebarEnabledCheckbox.checked;
+      localStorage.setItem('sidebarEnabled', isEnabled.toString());
+      applySidebarLayout(isEnabled);
+      showToast(isEnabled ? 'Sidebar enabled' : 'Sidebar disabled', 'success');
+    });
+  }
+
+  // Collapse/Expand functionality
+  setupCollapseExpandButtons();
+
+  // Clear any stuck loading states IMMEDIATELY
+  clearStuckLoadingStates();
+  
+  // Set up periodic cleanup every 5 seconds to prevent stuck states
+  setInterval(() => {
+    clearStuckLoadingStates();
+  }, 5000);
 
   // Homepage setting
   const homepageInput = document.getElementById('homepageInput') as HTMLInputElement;
@@ -1845,7 +2177,7 @@ function showHistoryPage(): void {
     console.log('Active webview found:', !!webview);
     
     if (webview) {
-      const historyURL = `file://${path.join(process.cwd(), 'src/renderer/history.html')}`;
+      const historyURL = `file://${window.electronAPI.path.join(window.electronAPI.cwd(), 'src/renderer/history.html')}`;
       console.log('Loading history URL:', historyURL);
       
       const historyLoadHandler = () => {
@@ -1887,7 +2219,7 @@ function showHistoryPage(): void {
       
     } else {
       console.log('No active webview, creating new tab...');
-      const historyURL = `file://${path.join(process.cwd(), 'src/renderer/history.html')}`;
+      const historyURL = `file://${window.electronAPI.path.join(window.electronAPI.cwd(), 'src/renderer/history.html')}`;
       const newTabId = createNewTab(historyURL);
       console.log('New history tab created:', newTabId);
     }
@@ -2351,6 +2683,56 @@ async function extractPageContent(webview: any): Promise<any> {
   }
 }
 
+// Simple markdown to HTML converter
+function markdownToHtml(text: string): string {
+  let html = text;
+  
+  // Escape HTML entities in content first, but preserve already-escaped entities
+  html = html.replace(/&(?!amp;|lt;|gt;|quot;|#39;|#x27;)/g, '&amp;');
+  
+  // Headers (must come before other processing)
+  html = html.replace(/^### (.*$)/gm, '<h3>$1</h3>');
+  html = html.replace(/^## (.*$)/gm, '<h2>$1</h2>');
+  html = html.replace(/^# (.*$)/gm, '<h1>$1</h1>');
+  
+  // Bold text
+  html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+  
+  // Italic text
+  html = html.replace(/\*(.*?)\*/g, '<em>$1</em>');
+  
+  // Code blocks (triple backticks)
+  html = html.replace(/```([\s\S]*?)```/g, '<pre><code>$1</code></pre>');
+  
+  // Inline code (single backticks)
+  html = html.replace(/`([^`]*)`/g, '<code>$1</code>');
+  
+  // Lists - simple approach
+  // Convert unordered list items
+  html = html.replace(/^\* (.*$)/gm, '<li>$1</li>');
+  html = html.replace(/^\- (.*$)/gm, '<li>$1</li>');
+  
+  // Convert ordered list items  
+  html = html.replace(/^\d+\. (.*$)/gm, '<li>$1</li>');
+  
+  // Wrap consecutive <li> elements in appropriate list tags
+  html = html.replace(/(<li>.*<\/li>)/gms, function(match) {
+    return '<ul>' + match + '</ul>';
+  });
+  
+  // Convert line breaks to <br> but preserve existing HTML structure
+  // Don't add <br> before closing tags, opening tags, or after certain elements
+  html = html.replace(/\n(?!<\/|<h|<ul|<ol|<li|<pre|<blockquote|<strong|<em)/g, '<br>');
+  
+  // Links [text](url)
+  html = html.replace(/\[([^\]]*)\]\(([^\)]*)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
+  
+  // Blockquotes
+  html = html.replace(/^> (.*$)/gm, '<blockquote>$1</blockquote>');
+  
+  return html;
+}
+
 function addMessageToChat(role: string, content: string, timing?: number): void {
   try {
     let chatContainer = document.getElementById('chatContainer');
@@ -2392,11 +2774,11 @@ function addMessageToChat(role: string, content: string, timing?: number): void 
     if (role === 'context') {
       // Special handling for context messages
       messageDiv.className = 'chat-message context-message';
-      messageDiv.innerHTML = `<div class="message-content">${content}</div>`;
+      messageDiv.innerHTML = `<div class="message-content">${markdownToHtml(content)}</div>`;
       messageDiv.dataset.role = 'context';
     } else if (role === 'user') {
       messageDiv.className = 'chat-message user-message';
-      messageDiv.innerHTML = `<div class="message-content">${content}</div>`;
+      messageDiv.innerHTML = `<div class="message-content">${markdownToHtml(content)}</div>`;
       messageDiv.dataset.role = 'user';
       messageDiv.dataset.timestamp = new Date().toISOString();
     } else if (role === 'assistant') {
@@ -2407,17 +2789,20 @@ function addMessageToChat(role: string, content: string, timing?: number): void 
       // Check if content contains only a loading indicator
       const isLoading = content.includes('class="loading"') && !content.replace(/<div class="loading">.*?<\/div>/g, '').trim();
       
+      // Apply markdown processing for assistant messages (but not for loading indicators)
+      const processedContent = isLoading ? content : markdownToHtml(content);
+      
       if (timing && !isLoading) {
         messageDiv.innerHTML = `
           <div class="timing-info">
             <span>Response generated in</span>
             <span class="time-value">${timing.toFixed(2)}s</span>
           </div>
-          <div class="message-content">${content}</div>
+          <div class="message-content">${processedContent}</div>
         `;
         messageDiv.dataset.genTime = timing.toFixed(2);
       } else {
-        messageDiv.innerHTML = `<div class="message-content">${content}</div>`;
+        messageDiv.innerHTML = `<div class="message-content">${processedContent}</div>`;
       }
     }
     
@@ -3449,6 +3834,12 @@ function setupTextSelectionListener(): void {
 function injectEnhancedSelectionHandler(webview: any): void {
   if (!webview) return;
   
+  // Check if webview is valid and ready
+  if (!webview.id || !webview.src || webview.src === 'about:blank' || webview.isDestroyed) {
+    console.log('[Selection Handler] Skipping injection - webview not ready');
+    return;
+  }
+  
   try {
     console.log('[Selection Handler] Injecting enhanced selection handler for webview:', webview.id);
     
@@ -3530,12 +3921,17 @@ function injectEnhancedSelectionHandler(webview: any): void {
               
                              // Method 1: Try IPC (for Electron webviews with node integration)
                try {
+                 // Check if we're in a webview context with node integration
                  if (typeof require !== 'undefined') {
-                   const { ipcRenderer } = require('electron');
-                   if (ipcRenderer && ipcRenderer.sendToHost) {
-                     ipcRenderer.sendToHost('add-to-chat', selectedText);
-                     messageSent = true;
-                     console.log('Message sent via IPC sendToHost');
+                   try {
+                     const { ipcRenderer } = require('electron');
+                     if (ipcRenderer && typeof ipcRenderer.sendToHost === 'function') {
+                       ipcRenderer.sendToHost('add-to-chat', selectedText);
+                       messageSent = true;
+                       console.log('Message sent via IPC sendToHost');
+                     }
+                   } catch (electronErr) {
+                     console.log('Electron require failed in webview:', electronErr.message);
                    }
                  }
                } catch (err) {
@@ -3645,12 +4041,23 @@ function injectEnhancedSelectionHandler(webview: any): void {
       })();
     `;
     
+    // Check one more time before execution
+    if (!webview || webview.isDestroyed || !webview.executeJavaScript) {
+      console.log('[Selection Handler] Webview no longer valid, skipping injection');
+      return;
+    }
+    
     webview.executeJavaScript(injectionScript, false)
       .then(() => {
         console.log('[Selection Handler] ✓ Enhanced selection handler injection successful for webview:', webview.id);
       })
       .catch((error: any) => {
-        console.error('[Selection Handler] Failed to inject enhanced selection handler:', error);
+        // Don't log errors for destroyed webviews or common navigation errors
+        if (!error.message.includes('Object has been destroyed') && 
+            !error.message.includes('navigation') &&
+            !error.message.includes('Script failed to execute')) {
+          console.error('[Selection Handler] Failed to inject enhanced selection handler:', error);
+        }
       });
       
   } catch (error) {
@@ -4346,8 +4753,910 @@ function extractTopicSimple(itemContent: any): string {
   }
 }
 
+// ========================= AD BLOCKER SETUP =========================
+
+function setupAdBlocker(): void {
+  console.log('[AdBlocker] Setting up ad blocker controls...');
+  
+  // Get UI elements
+  const adBlockEnabledCheckbox = document.getElementById('adBlockEnabled') as HTMLInputElement;
+  const domainInput = document.getElementById('domainInput') as HTMLInputElement;
+  const blockDomainBtn = document.getElementById('blockDomainBtn') as HTMLButtonElement;
+  const allowDomainBtn = document.getElementById('allowDomainBtn') as HTMLButtonElement;
+  const blockedDomainsCount = document.getElementById('blockedDomainsCount') as HTMLSpanElement;
+  const cssRulesCount = document.getElementById('cssRulesCount') as HTMLSpanElement;
+  const filterRulesCount = document.getElementById('filterRulesCount') as HTMLSpanElement;
+  const blockedDomainsList = document.getElementById('blockedDomainsList') as HTMLDivElement;
+  const allowedDomainsList = document.getElementById('allowedDomainsList') as HTMLDivElement;
+  
+  if (!adBlockEnabledCheckbox || !domainInput || !blockDomainBtn || !allowDomainBtn) {
+    console.error('[AdBlocker] Required UI elements not found');
+    return;
+  }
+  
+  // Load initial state
+  loadAdBlockerStatus();
+  
+  // Set up event listeners
+  adBlockEnabledCheckbox.addEventListener('change', async () => {
+    try {
+      const enabled = adBlockEnabledCheckbox.checked;
+      const result = await ipcRenderer.invoke('toggle-adblock', enabled);
+      
+      if (result.success) {
+        console.log(`[AdBlocker] Ad blocking ${enabled ? 'enabled' : 'disabled'}`);
+        showToast(`Ad blocking ${enabled ? 'enabled' : 'disabled'}`, 'success');
+        
+        // Re-inject CSS into all webviews
+        const webviews = document.querySelectorAll('webview');
+        webviews.forEach((webview: any) => {
+          setTimeout(() => {
+            // Validate webview before injection
+            if (webview && !webview.isDestroyed && webview.executeJavaScript && webview.src && webview.src !== 'about:blank') {
+              injectAdBlockCSS(webview);
+            }
+          }, 100);
+        });
+      } else {
+        console.error('[AdBlocker] Failed to toggle ad blocker:', result.error);
+        showToast('Failed to toggle ad blocker', 'error');
+        // Revert checkbox state
+        adBlockEnabledCheckbox.checked = !enabled;
+      }
+    } catch (error) {
+      console.error('[AdBlocker] Error toggling ad blocker:', error);
+      showToast('Error toggling ad blocker', 'error');
+    }
+  });
+  
+  blockDomainBtn.addEventListener('click', async () => {
+    const domain = domainInput.value.trim();
+    if (!domain) {
+      showToast('Please enter a domain', 'error');
+      return;
+    }
+    
+    try {
+      const result = await ipcRenderer.invoke('add-blocked-domain', domain);
+      if (result.success) {
+        console.log(`[AdBlocker] Added blocked domain: ${domain}`);
+        showToast(`Blocked domain: ${domain}`, 'success');
+        domainInput.value = '';
+        loadAdBlockerStatus();
+      } else {
+        console.error('[AdBlocker] Failed to add blocked domain:', result.error);
+        showToast('Failed to add blocked domain', 'error');
+      }
+    } catch (error) {
+      console.error('[AdBlocker] Error adding blocked domain:', error);
+      showToast('Error adding blocked domain', 'error');
+    }
+  });
+  
+  allowDomainBtn.addEventListener('click', async () => {
+    const domain = domainInput.value.trim();
+    if (!domain) {
+      showToast('Please enter a domain', 'error');
+      return;
+    }
+    
+    try {
+      const result = await ipcRenderer.invoke('add-allowed-domain', domain);
+      if (result.success) {
+        console.log(`[AdBlocker] Added allowed domain: ${domain}`);
+        showToast(`Allowed domain: ${domain}`, 'success');
+        domainInput.value = '';
+        loadAdBlockerStatus();
+      } else {
+        console.error('[AdBlocker] Failed to add allowed domain:', result.error);
+        showToast('Failed to add allowed domain', 'error');
+      }
+    } catch (error) {
+      console.error('[AdBlocker] Error adding allowed domain:', error);
+      showToast('Error adding allowed domain', 'error');
+    }
+  });
+  
+  // Allow adding domains by pressing Enter
+  domainInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      if (e.shiftKey) {
+        allowDomainBtn.click();
+      } else {
+        blockDomainBtn.click();
+      }
+    }
+  });
+  
+  console.log('[AdBlocker] Ad blocker controls set up successfully');
+}
+
+async function loadAdBlockerStatus(): Promise<void> {
+  try {
+    const status = await ipcRenderer.invoke('get-adblock-status');
+    
+    // Update checkbox
+    const adBlockEnabledCheckbox = document.getElementById('adBlockEnabled') as HTMLInputElement;
+    if (adBlockEnabledCheckbox) {
+      adBlockEnabledCheckbox.checked = status.enabled;
+    }
+    
+    // Update stats
+    const blockedDomainsCount = document.getElementById('blockedDomainsCount') as HTMLSpanElement;
+    const cssRulesCount = document.getElementById('cssRulesCount') as HTMLSpanElement;
+    const filterRulesCount = document.getElementById('filterRulesCount') as HTMLSpanElement;
+    
+    if (blockedDomainsCount) blockedDomainsCount.textContent = status.stats.blockedDomains.toString();
+    if (cssRulesCount) cssRulesCount.textContent = status.stats.cssRules.toString();
+    if (filterRulesCount) filterRulesCount.textContent = status.stats.filterRules.toString();
+    
+    console.log('[AdBlocker] Status loaded:', status);
+  } catch (error) {
+    console.error('[AdBlocker] Error loading status:', error);
+    
+    // Set default values
+    const blockedDomainsCount = document.getElementById('blockedDomainsCount') as HTMLSpanElement;
+    const cssRulesCount = document.getElementById('cssRulesCount') as HTMLSpanElement;
+    const filterRulesCount = document.getElementById('filterRulesCount') as HTMLSpanElement;
+    
+    if (blockedDomainsCount) blockedDomainsCount.textContent = 'Error';
+    if (cssRulesCount) cssRulesCount.textContent = 'Error';
+    if (filterRulesCount) filterRulesCount.textContent = 'Error';
+  }
+}
+
 function getModelProvider(): string {
   const modelSelector = document.getElementById('modelSelector') as HTMLSelectElement;
   if (!modelSelector) return 'unknown';
   return modelSelector.value || 'unknown';
 }
+
+// ============ TAB SEARCH FUNCTIONALITY ============
+
+let tabSearchModal: HTMLElement | null = null;
+let tabSearchInput: HTMLInputElement | null = null;
+let tabSearchResults: HTMLElement | null = null;
+let tabSearchClose: HTMLButtonElement | null = null;
+let selectedSearchResultIndex = -1;
+let searchResults: TabInfo[] = [];
+
+function initializeTabSearch(): void {
+  tabSearchModal = document.getElementById('tabSearchModal');
+  tabSearchInput = document.getElementById('tabSearchInput') as HTMLInputElement;
+  tabSearchResults = document.getElementById('tabSearchResults');
+  tabSearchClose = document.getElementById('tabSearchClose') as HTMLButtonElement;
+
+  if (!tabSearchModal || !tabSearchInput || !tabSearchResults || !tabSearchClose) {
+    console.error('Tab search elements not found');
+    return;
+  }
+
+  // Close button event
+  tabSearchClose.addEventListener('click', hideTabSearch);
+
+  // Overlay click to close
+  const overlay = tabSearchModal.querySelector('.tab-search-overlay');
+  if (overlay) {
+    overlay.addEventListener('click', hideTabSearch);
+  }
+
+  // Search input events
+  tabSearchInput.addEventListener('input', handleTabSearchInput);
+  tabSearchInput.addEventListener('keydown', handleTabSearchKeydown);
+
+  // Global keyboard shortcut: Ctrl+Shift+A (or Cmd+Shift+A on Mac)
+  document.addEventListener('keydown', (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'A') {
+      e.preventDefault();
+      showTabSearch();
+    }
+    
+    // Escape to close
+    if (e.key === 'Escape' && !tabSearchModal?.classList.contains('hidden')) {
+      hideTabSearch();
+    }
+  });
+}
+
+function showTabSearch(): void {
+  if (!tabSearchModal || !tabSearchInput) return;
+  
+  tabSearchModal.classList.remove('hidden');
+  tabSearchInput.focus();
+  tabSearchInput.value = '';
+  selectedSearchResultIndex = -1;
+  
+  // Show all tabs initially
+  displayTabSearchResults(tabs);
+}
+
+function hideTabSearch(): void {
+  if (!tabSearchModal) return;
+  
+  tabSearchModal.classList.add('hidden');
+  selectedSearchResultIndex = -1;
+  searchResults = [];
+}
+
+function handleTabSearchInput(event: Event): void {
+  const input = event.target as HTMLInputElement;
+  const query = input.value.trim().toLowerCase();
+  
+  if (query === '') {
+    displayTabSearchResults(tabs);
+    return;
+  }
+  
+  // Fuzzy search through tabs
+  const filteredTabs = tabs.filter(tab => {
+    const titleMatch = tab.title.toLowerCase().includes(query);
+    const urlMatch = tab.url.toLowerCase().includes(query);
+    
+    // Simple fuzzy matching - check if all query characters appear in order
+    const fuzzyTitleMatch = fuzzyMatch(tab.title.toLowerCase(), query);
+    const fuzzyUrlMatch = fuzzyMatch(tab.url.toLowerCase(), query);
+    
+    return titleMatch || urlMatch || fuzzyTitleMatch || fuzzyUrlMatch;
+  });
+  
+  // Sort by relevance (exact matches first, then fuzzy matches)
+  filteredTabs.sort((a, b) => {
+    const aExactTitle = a.title.toLowerCase().includes(query);
+    const bExactTitle = b.title.toLowerCase().includes(query);
+    const aExactUrl = a.url.toLowerCase().includes(query);
+    const bExactUrl = b.url.toLowerCase().includes(query);
+    
+    if (aExactTitle && !bExactTitle) return -1;
+    if (!aExactTitle && bExactTitle) return 1;
+    if (aExactUrl && !bExactUrl) return -1;
+    if (!aExactUrl && bExactUrl) return 1;
+    
+    return 0;
+  });
+  
+  displayTabSearchResults(filteredTabs, query);
+}
+
+function fuzzyMatch(text: string, query: string): boolean {
+  let textIndex = 0;
+  let queryIndex = 0;
+  
+  while (textIndex < text.length && queryIndex < query.length) {
+    if (text[textIndex] === query[queryIndex]) {
+      queryIndex++;
+    }
+    textIndex++;
+  }
+  
+  return queryIndex === query.length;
+}
+
+function highlightMatch(text: string, query: string): string {
+  if (!query) return text;
+  
+  const regex = new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+  return text.replace(regex, '<mark>$1</mark>');
+}
+
+function displayTabSearchResults(tabList: TabInfo[], query: string = ''): void {
+  if (!tabSearchResults) return;
+  
+  searchResults = tabList;
+  selectedSearchResultIndex = -1;
+  
+  if (tabList.length === 0) {
+    tabSearchResults.innerHTML = '<div class="tab-search-no-results">No tabs found</div>';
+    return;
+  }
+  
+  const resultsHTML = tabList.map((tab, index) => {
+    const tabElement = document.getElementById(tab.id);
+    const faviconElement = tabElement?.querySelector('.tab-favicon') as HTMLElement;
+    const faviconStyle = faviconElement?.style.backgroundImage || '';
+    
+    const highlightedTitle = highlightMatch(tab.title, query);
+    const highlightedUrl = highlightMatch(tab.url, query);
+    
+    return `
+      <div class="tab-search-result" data-tab-id="${tab.id}" data-index="${index}">
+        <div class="tab-search-result-favicon" style="${faviconStyle ? `background-image: ${faviconStyle}; background-size: contain; background-repeat: no-repeat; background-position: center;` : ''}"></div>
+        <div class="tab-search-result-content">
+          <div class="tab-search-result-title">${highlightedTitle}</div>
+          <div class="tab-search-result-url">${highlightedUrl}</div>
+        </div>
+      </div>
+    `;
+  }).join('');
+  
+  tabSearchResults.innerHTML = resultsHTML;
+  
+  // Add click event listeners
+  const resultElements = tabSearchResults.querySelectorAll('.tab-search-result');
+  resultElements.forEach((element, index) => {
+    element.addEventListener('click', () => {
+      const tabId = element.getAttribute('data-tab-id');
+      if (tabId) {
+        selectTab(tabId);
+        hideTabSearch();
+      }
+    });
+    
+    element.addEventListener('mouseenter', () => {
+      setSelectedSearchResult(index);
+    });
+  });
+}
+
+function handleTabSearchKeydown(event: KeyboardEvent): void {
+  if (searchResults.length === 0) return;
+  
+  switch (event.key) {
+    case 'ArrowDown':
+      event.preventDefault();
+      setSelectedSearchResult(Math.min(selectedSearchResultIndex + 1, searchResults.length - 1));
+      break;
+      
+    case 'ArrowUp':
+      event.preventDefault();
+      setSelectedSearchResult(Math.max(selectedSearchResultIndex - 1, -1));
+      break;
+      
+    case 'Enter':
+      event.preventDefault();
+      if (selectedSearchResultIndex >= 0 && selectedSearchResultIndex < searchResults.length) {
+        const selectedTab = searchResults[selectedSearchResultIndex];
+        selectTab(selectedTab.id);
+        hideTabSearch();
+      }
+      break;
+  }
+}
+
+function setSelectedSearchResult(index: number): void {
+  if (!tabSearchResults) return;
+  
+  // Remove previous selection
+  const previousSelected = tabSearchResults.querySelector('.tab-search-result.selected');
+  if (previousSelected) {
+    previousSelected.classList.remove('selected');
+  }
+  
+  selectedSearchResultIndex = index;
+  
+  if (index >= 0 && index < searchResults.length) {
+    const newSelected = tabSearchResults.children[index];
+    if (newSelected) {
+      newSelected.classList.add('selected');
+      
+      // Scroll into view if needed
+      newSelected.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    }
+  }
+}
+
+// ============ ENHANCED AUTOMATIC SESSION MANAGEMENT ============
+
+// Enhanced automatic session management - tabs are automatically saved and restored
+
+function initializeAutoSessionManagement(): void {
+  // Set up automatic saving on various events
+  setupAutoSaveEvents();
+  
+  // Set up periodic saving (every 30 seconds) as backup
+  setInterval(() => {
+    if (tabs.length > 0) {
+      autoSaveTabs();
+    }
+  }, 30000);
+  
+  // Initial save after page load
+  setTimeout(() => {
+    if (tabs.length > 0) {
+      autoSaveTabs();
+    }
+  }, 2000);
+}
+
+function setupAutoSaveEvents(): void {
+  // Save when browser window is about to close
+  window.addEventListener('beforeunload', (e) => {
+    autoSaveTabs();
+    
+    // Force synchronous save as backup
+    try {
+      if (tabs && tabs.length > 0) {
+        const sessionData = {
+          tabs: tabs.map(tab => ({
+            url: tab.url,
+            title: tab.title,
+            isActive: tab.isActive,
+            webviewId: tab.webviewId
+          })),
+          timestamp: Date.now(),
+          activeTabId: activeTabId
+        };
+        localStorage.setItem(SAVED_TABS_KEY, JSON.stringify(sessionData));
+      }
+    } catch (err) {
+      console.error('Error in beforeunload save:', err);
+    }
+  });
+
+  // Save when window loses focus (user switches to another app)
+  window.addEventListener('blur', () => {
+    if (tabs.length > 0) {
+      autoSaveTabs();
+    }
+  });
+
+  // Save when visibility changes (tab becomes hidden)
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden && tabs.length > 0) {
+      autoSaveTabs();
+    }
+  });
+
+  // Try to detect Electron context and add app-level events
+  if (typeof process !== 'undefined' && process.versions && process.versions.electron) {
+    // Add more Electron-specific save triggers if needed in the future
+    window.addEventListener('focus', () => {
+      // Could add focus-based save logic here if needed
+    });
+  }
+}
+
+function autoSaveTabs(): void {
+  try {
+    if (!tabs || tabs.length === 0) {
+      // Check if there's already a valid session - don't overwrite it with empty data
+      const existing = localStorage.getItem(SAVED_TABS_KEY);
+      if (existing) {
+        try {
+          const parsed = JSON.parse(existing);
+          if (parsed.tabs && parsed.tabs.length > 0) {
+            return; // Skip empty save to protect existing session
+          }
+        } catch (e) {
+          // Ignore parsing errors and continue
+        }
+      }
+      return;
+    }
+
+    const tabsToSave = tabs.map((tab, index) => {
+      try {
+        const webview = document.getElementById(tab.webviewId) as any;
+        const titleElem = document.querySelector(`#${tab.id} .tab-title`);
+        
+        return {
+          url: webview && webview.src ? webview.src : tab.url,
+          title: titleElem ? titleElem.textContent || 'New Tab' : tab.title,
+          isActive: tab.isActive,
+          webviewId: tab.webviewId
+        };
+      } catch (err) {
+        return {
+          url: tab.url || 'about:blank',
+          title: tab.title || 'New Tab',
+          isActive: tab.isActive,
+          webviewId: tab.webviewId
+        };
+      }
+    });
+
+    // Save the session with timestamp
+    const sessionData = {
+      tabs: tabsToSave,
+      timestamp: Date.now(),
+      activeTabId: activeTabId
+    };
+
+    localStorage.setItem(SAVED_TABS_KEY, JSON.stringify(sessionData));
+    
+  } catch (err) {
+    console.error('❌ Error in autoSaveTabs:', err);
+    if (err instanceof Error) {
+      console.error('❌ Stack trace:', err.stack);
+    }
+  }
+}
+
+function enhancedRestoreTabs(): void {
+  if (!tabsContainer || !webviewsContainer) {
+    setTimeout(() => {
+      createNewTab();
+    }, 100);
+    return;
+  }
+
+  try {
+    const savedSessionJSON = localStorage.getItem(SAVED_TABS_KEY);
+    
+    if (savedSessionJSON) {
+      let savedSession = null;
+      try {
+        savedSession = JSON.parse(savedSessionJSON);
+      } catch (parseErr) {
+        localStorage.removeItem(SAVED_TABS_KEY);
+        createNewTab();
+        return;
+      }
+      
+      if (savedSession && savedSession.tabs && savedSession.tabs.length > 0) {
+        // Clear current state
+        tabs = [];
+        tabsContainer.innerHTML = '';
+        webviewsContainer.innerHTML = '';
+        
+        let restoredCount = 0;
+        let activeTabToRestore = null;
+        const restoredTabIds: string[] = [];
+        
+        // Create tabs without selecting them immediately
+        for (let i = 0; i < savedSession.tabs.length; i++) {
+          const tabData = savedSession.tabs[i];
+          try {
+            if (tabData.url && tabData.url !== 'about:blank') {
+              const newTabId = createNewTabWithoutSelection(tabData.url);
+              
+              if (newTabId) {
+                restoredCount++;
+                restoredTabIds.push(newTabId);
+                
+                // Update the tab title if it was saved
+                if (tabData.title && tabData.title !== 'New Tab') {
+                  setTimeout(() => {
+                    const titleElement = document.querySelector(`#${newTabId} .tab-title`);
+                    if (titleElement) {
+                      titleElement.textContent = tabData.title;
+                    }
+                  }, 100);
+                }
+                
+                // Remember which tab was active
+                if (tabData.isActive || tabData.webviewId === savedSession.activeTabId) {
+                  activeTabToRestore = newTabId;
+                }
+              }
+            }
+          } catch (tabErr) {
+            // Ignore individual tab restoration errors
+          }
+        }
+        
+        // Wait for all webviews to be ready, then select the active tab
+        if (restoredCount > 0) {
+          setTimeout(() => {
+            if (activeTabToRestore && restoredTabIds.includes(activeTabToRestore)) {
+              selectTab(activeTabToRestore);
+            } else if (restoredTabIds.length > 0) {
+              selectTab(restoredTabIds[0]);
+            }
+            
+            // Show notification after tab selection
+            setTimeout(() => {
+              showToast(`Restored ${restoredCount} tabs from previous session`, 'success');
+            }, 500);
+            
+          }, 800); // Give webviews more time to initialize
+          
+          return;
+        }
+      }
+    }
+  } catch (err) {
+    console.error('Error in tab restoration:', err);
+  }
+  
+  // Create fallback tab if no tabs were restored
+  createNewTab();
+}
+
+// ============ TAB PREVIEW FUNCTIONALITY ============
+
+let tabPreview: HTMLElement | null = null;
+let tabPreviewCanvas: HTMLCanvasElement | null = null;
+let tabPreviewTitle: HTMLElement | null = null;
+let tabPreviewUrl: HTMLElement | null = null;
+let tabPreviewLoading: HTMLElement | null = null;
+
+let previewTimeout: NodeJS.Timeout | null = null;
+let hidePreviewTimeout: NodeJS.Timeout | null = null;
+let previewCache = new Map<string, { dataUrl: string, timestamp: number }>();
+
+const PREVIEW_DELAY = 0; // ms delay before showing preview
+const PREVIEW_CACHE_DURATION = 30000; // 30 seconds cache duration
+const PREVIEW_WIDTH = 320;
+const PREVIEW_HEIGHT = 180;
+
+function initializeTabPreview(): void {
+  tabPreview = document.getElementById('tabPreview');
+  tabPreviewCanvas = document.getElementById('tabPreviewCanvas') as HTMLCanvasElement;
+  tabPreviewTitle = tabPreview?.querySelector('.tab-preview-title') as HTMLElement;
+  tabPreviewUrl = tabPreview?.querySelector('.tab-preview-url') as HTMLElement;
+  tabPreviewLoading = tabPreview?.querySelector('.tab-preview-loading') as HTMLElement;
+
+  if (!tabPreview || !tabPreviewCanvas || !tabPreviewTitle || !tabPreviewUrl || !tabPreviewLoading) {
+    console.error('Tab preview elements not found');
+    return;
+  }
+
+  // Set canvas dimensions
+  tabPreviewCanvas.width = PREVIEW_WIDTH;
+  tabPreviewCanvas.height = PREVIEW_HEIGHT;
+
+  console.log('Tab preview initialized');
+}
+
+function setupTabPreviewEvents(tabElement: HTMLElement, tabId: string): void {
+  if (!tabElement) return;
+
+  // Mouse enter event
+  tabElement.addEventListener('mouseenter', (e) => {
+    // Clear any existing hide timeout
+    if (hidePreviewTimeout) {
+      clearTimeout(hidePreviewTimeout);
+      hidePreviewTimeout = null;
+    }
+
+    // Set timeout to show preview after delay
+    previewTimeout = setTimeout(() => {
+      showTabPreview(tabId, e.target as HTMLElement);
+    }, PREVIEW_DELAY);
+  });
+
+  // Mouse leave event
+  tabElement.addEventListener('mouseleave', () => {
+    // Clear show timeout
+    if (previewTimeout) {
+      clearTimeout(previewTimeout);
+      previewTimeout = null;
+    }
+
+    // Set timeout to hide preview
+    hidePreviewTimeout = setTimeout(() => {
+      hideTabPreview();
+    }, 100); // Small delay to prevent flickering
+  });
+}
+
+async function showTabPreview(tabId: string, tabElement: HTMLElement): Promise<void> {
+  if (!tabPreview || !tabPreviewCanvas || !tabPreviewTitle || !tabPreviewUrl || !tabPreviewLoading) return;
+
+  const tab = tabs.find(t => t.id === tabId);
+  if (!tab) return;
+
+  const webview = document.getElementById(tab.webviewId) as any;
+  if (!webview) return;
+
+  // Position the preview tooltip
+  positionTabPreview(tabElement);
+
+  // Update preview info
+  tabPreviewTitle.textContent = tab.title || 'New Tab';
+  tabPreviewUrl.textContent = tab.url || 'about:blank';
+
+  // Show preview with loading state
+  tabPreview.classList.remove('hidden');
+  tabPreviewLoading.classList.remove('hidden');
+
+  try {
+    // Check cache first
+    const cacheKey = tab.webviewId;
+    const cached = previewCache.get(cacheKey);
+    const now = Date.now();
+
+    if (cached && (now - cached.timestamp < PREVIEW_CACHE_DURATION)) {
+      // Use cached screenshot
+      await drawImageToCanvas(cached.dataUrl);
+      tabPreviewLoading.classList.add('hidden');
+      return;
+    }
+
+    // Capture new screenshot
+    if (webview && webview.capturePage) {
+      // For newer Electron versions
+      const nativeImage = await webview.capturePage();
+      const dataUrl = nativeImage.toDataURL();
+      
+      // Cache the screenshot
+      previewCache.set(cacheKey, { dataUrl, timestamp: now });
+      
+      await drawImageToCanvas(dataUrl);
+      tabPreviewLoading.classList.add('hidden');
+    } else {
+      // Fallback: try to use executeJavaScript to get a screenshot
+      await captureWebviewScreenshot(webview, cacheKey);
+      tabPreviewLoading.classList.add('hidden');
+    }
+
+  } catch (error) {
+    console.error('Error capturing tab preview:', error);
+    
+    // Show fallback content
+    drawFallbackPreview(tab);
+    tabPreviewLoading.classList.add('hidden');
+  }
+}
+
+function positionTabPreview(tabElement: HTMLElement): void {
+  if (!tabPreview) return;
+
+  const tabRect = tabElement.getBoundingClientRect();
+  const previewRect = { width: 320, height: 240 }; // Approximate size
+  const viewportWidth = window.innerWidth;
+  const viewportHeight = window.innerHeight;
+  const margin = 12;
+
+  let left = tabRect.left + (tabRect.width / 2) - (previewRect.width / 2);
+  let top = tabRect.bottom + margin;
+  let position = 'top'; // Arrow position
+
+  // Reset position classes
+  tabPreview.classList.remove('position-bottom', 'position-left', 'position-right');
+
+  // Horizontal positioning
+  if (left < margin) {
+    left = margin;
+  } else if (left + previewRect.width > viewportWidth - margin) {
+    left = viewportWidth - previewRect.width - margin;
+  }
+
+  // Vertical positioning
+  if (top + previewRect.height > viewportHeight - margin) {
+    // Show above the tab instead
+    top = tabRect.top - previewRect.height - margin;
+    position = 'bottom';
+    tabPreview.classList.add('position-bottom');
+  }
+
+  // Apply positioning
+  tabPreview.style.left = `${left}px`;
+  tabPreview.style.top = `${top}px`;
+}
+
+async function drawImageToCanvas(dataUrl: string): Promise<void> {
+  if (!tabPreviewCanvas) return;
+
+  const canvas = tabPreviewCanvas; // Store reference to avoid null checks in closure
+
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        reject(new Error('Cannot get canvas context'));
+        return;
+      }
+
+      // Clear canvas
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // Calculate aspect ratio and draw
+      const aspectRatio = img.width / img.height;
+      const canvasAspectRatio = canvas.width / canvas.height;
+
+      let drawWidth, drawHeight, drawX, drawY;
+
+      if (aspectRatio > canvasAspectRatio) {
+        // Image is wider than canvas
+        drawWidth = canvas.width;
+        drawHeight = drawWidth / aspectRatio;
+        drawX = 0;
+        drawY = (canvas.height - drawHeight) / 2;
+      } else {
+        // Image is taller than canvas
+        drawHeight = canvas.height;
+        drawWidth = drawHeight * aspectRatio;
+        drawX = (canvas.width - drawWidth) / 2;
+        drawY = 0;
+      }
+
+      ctx.drawImage(img, drawX, drawY, drawWidth, drawHeight);
+      resolve();
+    };
+
+    img.onerror = () => {
+      reject(new Error('Failed to load image'));
+    };
+
+    img.src = dataUrl;
+  });
+}
+
+async function captureWebviewScreenshot(webview: any, cacheKey: string): Promise<void> {
+  // Fallback method for older Electron versions or when capturePage is not available
+  try {
+    const script = `
+      (function() {
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+        
+        // This is a simplified fallback - in practice, capturing a full webpage
+        // as an image from JavaScript is complex and has limitations
+        return canvas.toDataURL('image/png');
+      })();
+    `;
+
+    const dataUrl = await webview.executeJavaScript(script);
+    if (dataUrl) {
+      previewCache.set(cacheKey, { dataUrl, timestamp: Date.now() });
+      await drawImageToCanvas(dataUrl);
+    } else {
+      throw new Error('No data URL returned');
+    }
+  } catch (error) {
+    console.error('Fallback screenshot capture failed:', error);
+    throw error;
+  }
+}
+
+function drawFallbackPreview(tab: TabInfo): void {
+  if (!tabPreviewCanvas) return;
+
+  const ctx = tabPreviewCanvas.getContext('2d');
+  if (!ctx) return;
+
+  const canvasWidth = tabPreviewCanvas.width;
+  const canvasHeight = tabPreviewCanvas.height;
+
+  // Clear canvas
+  ctx.clearRect(0, 0, canvasWidth, canvasHeight);
+
+  // Draw gradient background
+  const gradient = ctx.createLinearGradient(0, 0, 0, canvasHeight);
+  gradient.addColorStop(0, '#f8f9fa');
+  gradient.addColorStop(1, '#e8eaed');
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, canvasWidth, canvasHeight);
+
+  // Draw page icon or placeholder
+  ctx.fillStyle = '#5f6368';
+  ctx.font = '48px system-ui';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('🌐', canvasWidth / 2, canvasHeight / 2 - 10);
+
+  // Draw URL text
+  ctx.font = '12px system-ui';
+  ctx.fillStyle = '#202124';
+  ctx.fillText(
+    tab.url.length > 40 ? tab.url.substring(0, 37) + '...' : tab.url,
+    canvasWidth / 2,
+    canvasHeight / 2 + 30
+  );
+}
+
+function hideTabPreview(): void {
+  if (!tabPreview) return;
+
+  tabPreview.classList.add('hidden');
+
+  // Clear timeouts
+  if (previewTimeout) {
+    clearTimeout(previewTimeout);
+    previewTimeout = null;
+  }
+  if (hidePreviewTimeout) {
+    clearTimeout(hidePreviewTimeout);
+    hidePreviewTimeout = null;
+  }
+}
+
+// Clean up old cache entries periodically
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, value] of previewCache.entries()) {
+    if (now - value.timestamp > PREVIEW_CACHE_DURATION) {
+      previewCache.delete(key);
+    }
+  }
+}, PREVIEW_CACHE_DURATION);
+
+
+
+// Fixed: History tracking now happens automatically in did-finish-load event
+

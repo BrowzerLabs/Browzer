@@ -1,13 +1,21 @@
 import { app, session } from 'electron';
 import * as path from 'path';
+import { AdBlocker } from './AdBlocker';
 
 export class AppManager {
+  private adBlocker!: AdBlocker;
   async initialize(): Promise<void> {
     // Set app properties
     this.configureApp();
     
+    // Initialize ad blocker
+    this.adBlocker = new AdBlocker();
+    
     // Configure session
     this.configureSession();
+    
+    // Initialize ad blocker after session is configured
+    this.adBlocker.initialize();
   }
 
   private configureApp(): void {
@@ -113,8 +121,13 @@ export class AppManager {
 
     // Set preload scripts if needed
     const preloadPath = path.join(__dirname, '../preload/preload.js');
+    console.log('Setting preload path:', preloadPath);
     session.defaultSession.setPreloads([preloadPath]);
     authSession.setPreloads([preloadPath]);
     compatSession.setPreloads([preloadPath]);
+  }
+
+  public getAdBlocker(): AdBlocker {
+    return this.adBlocker;
   }
 } 

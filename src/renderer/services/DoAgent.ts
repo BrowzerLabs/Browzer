@@ -7,7 +7,7 @@ export interface DoTask {
   error?: string;
 }
 // Development feature flag - set to false to disable DoAgent entirely
-const DOAGENT_ENABLED = false;
+const DOAGENT_ENABLED = true;
 
 export interface DoStep {
   id: string;

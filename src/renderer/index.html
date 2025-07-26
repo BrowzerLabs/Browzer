@@ -16,6 +16,13 @@
     <div class="browser-container">
         <!-- Chrome-like Tab Bar -->
         <div class="tab-bar">
+            <!-- Sidebar Collapse/Expand Button -->
+            <button id="sidebarCollapseBtn" class="sidebar-collapse-btn" title="Toggle sidebar">
+                <svg width="20" height="16" viewBox="0 0 20 16" fill="currentColor">
+                    <path d="M13.354 1.646a.5.5 0 0 1 0 .708L7.707 8l5.647 5.646a.5.5 0 0 1-.708.708l-6-6a.5.5 0 0 1 0-.708l6-6a.5.5 0 0 1 .708 0z"/>
+                    <path d="M7.354 1.646a.5.5 0 0 1 0 .708L1.707 8l5.647 5.646a.5.5 0 0 1-.708.708l-6-6a.5.5 0 0 1 0-.708l6-6a.5.5 0 0 1 .708 0z"/>
+                </svg>
+            </button>
             <div class="tabs-container" id="tabsContainer">
                 <!-- Tabs will be added here dynamically -->
             </div>
@@ -174,6 +181,65 @@
                         </div>
                     </div>
                 </div>
+                
+                <!-- Interface Settings -->
+                <div class="interface-section">
+                    <h4>Interface Settings</h4>
+                    <div class="interface-controls">
+                        <label class="setting-item">
+                            <span>Sidebar Tabs</span>
+                            <input type="checkbox" id="sidebarEnabled">
+                            <span class="setting-description">Show tabs in a vertical sidebar instead of horizontal tab bar</span>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Ad Blocker Settings -->
+                <div class="adblock-section">
+                    <h4>Ad Blocker</h4>
+                    <div class="adblock-controls">
+                        <label class="setting-item">
+                            <span>Enable Ad Blocking</span>
+                            <input type="checkbox" id="adBlockEnabled" checked>
+                            <span class="setting-description">Block ads, trackers, and unwanted content</span>
+                        </label>
+                        
+                        <div class="adblock-stats">
+                            <div class="stat-item">
+                                <span class="stat-label">Blocked Domains:</span>
+                                <span id="blockedDomainsCount">Loading...</span>
+                            </div>
+                            <div class="stat-item">
+                                <span class="stat-label">CSS Rules:</span>
+                                <span id="cssRulesCount">Loading...</span>
+                            </div>
+                            <div class="stat-item">
+                                <span class="stat-label">Filter Rules:</span>
+                                <span id="filterRulesCount">Loading...</span>
+                            </div>
+                        </div>
+                        
+                        <div class="domain-management">
+                            <h5>Domain Management</h5>
+                            <div class="domain-input-group">
+                                <input type="text" id="domainInput" placeholder="Enter domain (e.g., example.com)">
+                                <button id="blockDomainBtn" class="btn-secondary">Block</button>
+                                <button id="allowDomainBtn" class="btn-primary">Allow</button>
+                            </div>
+                            
+                            <div class="domain-lists">
+                                <div class="blocked-domains">
+                                    <h6>Blocked Domains</h6>
+                                    <div id="blockedDomainsList" class="domain-list"></div>
+                                </div>
+                                <div class="allowed-domains">
+                                    <h6>Allowed Domains</h6>
+                                    <div id="allowedDomainsList" class="domain-list"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
 
                 <!-- Memory Management Section -->
                 <div class="memory-section">
@@ -271,6 +337,34 @@
                     </div>
                 </div>
             </div>
+        </div>
+    </div>
+
+    <!-- Tab Search Modal -->
+    <div id="tabSearchModal" class="tab-search-modal hidden">
+        <div class="tab-search-overlay"></div>
+        <div class="tab-search-container">
+            <div class="tab-search-header">
+                <input type="text" id="tabSearchInput" placeholder="Search tabs..." autocomplete="off">
+                <button id="tabSearchClose" class="tab-search-close">×</button>
+            </div>
+            <div class="tab-search-results" id="tabSearchResults">
+                <!-- Search results will appear here -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Tab Preview Tooltip -->
+    <div id="tabPreview" class="tab-preview hidden">
+        <div class="tab-preview-thumbnail">
+            <canvas id="tabPreviewCanvas"></canvas>
+            <div class="tab-preview-loading">
+                <div class="loading-spinner"></div>
+            </div>
+        </div>
+        <div class="tab-preview-info">
+            <div class="tab-preview-title"></div>
+            <div class="tab-preview-url"></div>
         </div>
     </div>
 
