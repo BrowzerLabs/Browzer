@@ -340,6 +340,34 @@
         </div>
     </div>
 
+    <!-- Tab Search Modal -->
+    <div id="tabSearchModal" class="tab-search-modal hidden">
+        <div class="tab-search-overlay"></div>
+        <div class="tab-search-container">
+            <div class="tab-search-header">
+                <input type="text" id="tabSearchInput" placeholder="Search tabs..." autocomplete="off">
+                <button id="tabSearchClose" class="tab-search-close">×</button>
+            </div>
+            <div class="tab-search-results" id="tabSearchResults">
+                <!-- Search results will appear here -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Tab Preview Tooltip -->
+    <div id="tabPreview" class="tab-preview hidden">
+        <div class="tab-preview-thumbnail">
+            <canvas id="tabPreviewCanvas"></canvas>
+            <div class="tab-preview-loading">
+                <div class="loading-spinner"></div>
+            </div>
+        </div>
+        <div class="tab-preview-info">
+            <div class="tab-preview-title"></div>
+            <div class="tab-preview-url"></div>
+        </div>
+    </div>
+
     <!-- Toast container -->
     <div id="toast" class="toast"></div>
 
