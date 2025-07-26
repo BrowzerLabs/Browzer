@@ -121,6 +121,7 @@ export class AppManager {
 
     // Set preload scripts if needed
     const preloadPath = path.join(__dirname, '../preload/preload.js');
+    console.log('Setting preload path:', preloadPath);
     session.defaultSession.setPreloads([preloadPath]);
     authSession.setPreloads([preloadPath]);
     compatSession.setPreloads([preloadPath]);

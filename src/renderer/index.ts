@@ -8,8 +8,24 @@ import { MemoryService } from './services/MemoryService';
 import { TextProcessing } from './utils/textProcessing';
 
 // Import Electron APIs
-const { ipcRenderer, shell } = require('electron');
-const path = require('path');
+// Use electronAPI from preload script instead of direct electron access
+// const { ipcRenderer, shell } = require('electron'); // Removed for context isolation
+
+// Create compatibility layer for IPC methods
+const ipcRenderer = {
+  invoke: (channel: string, ...args: any[]) => window.electronAPI.ipcInvoke(channel, ...args),
+  send: (channel: string, ...args: any[]) => window.electronAPI.ipcSend(channel, ...args),
+  on: (channel: string, callback: (...args: any[]) => void) => window.electronAPI.ipcOn(channel, callback),
+  off: (channel: string, callback: (...args: any[]) => void) => window.electronAPI.ipcOff(channel, callback),
+  removeAllListeners: (channel: string) => window.electronAPI.removeAllListeners(channel)
+};
+
+const shell = { 
+  openExternal: (url: string) => window.electronAPI.openExternal(url) 
+};
+
+// Path utilities from preload
+const path = window.electronAPI.path;
 // Development feature flag - set to false to disable DoAgent entirely
 const DOAGENT_ENABLED = true;
 
@@ -272,38 +288,30 @@ function setupCollapseExpandButtons(): void {
 document.addEventListener('DOMContentLoaded', () => {
   console.log('DOM fully loaded, initializing browser...');
   
-  console.log('[Init] Calling initializeUI...');
   initializeUI();
-  console.log('[Init] Calling setupEventListeners...');
   setupEventListeners();
-  console.log('[Init] Calling setupWorkflowEventListeners...');
   setupWorkflowEventListeners();
-  console.log('[Init] Calling setupExtensionsPanel...');
   setupExtensionsPanel();
-  console.log('[Init] Calling setupAgentControls...');
   setupAgentControls();
-  console.log('[Init] Calling restoreTabs...');
-  restoreTabs();
-  console.log('[Init] Calling setupGlobalErrorHandler...');
   setupGlobalErrorHandler();
-  console.log('[Init] Initializing DevTools...');
   devToolsManager.addDevToolsButton();
   devToolsManager.enableDevToolsForAllWebviews();
   
-  console.log('[Init] Initializing MemoryService...');
   memoryService = new MemoryService();
   
   // Expose memory service to window for debugging
   (window as any).memoryService = memoryService;
-  console.log('[Init] MemoryService exposed to window.memoryService for debugging');
 
-  console.log('[Init] Setting up text selection message listener...');
   setupTextSelectionListener();
-  
-  console.log('[Init] Setting up ad blocker...');
   setupAdBlocker();
+  initializeTabSearch();
+  initializeAutoSessionManagement();
+  initializeTabPreview();
   
-  console.log('Browser initialized successfully');
+  // Restore tabs after initialization is complete
+  setTimeout(() => {
+    enhancedRestoreTabs();
+  }, 1000);
   // DISABLED: Auto-summarize feature commented out
   // console.log('[Init] Final autoSummarizeEnabled state:', autoSummarizeEnabled);
 });
@@ -343,10 +351,9 @@ function initializeUI(): void {
     }
   }
   
-  // If no tabs were restored, create a new one
-  if (tabs.length === 0) {
-    createNewTab();
-  }
+  // NOTE: Tab creation is now handled by the restoration process
+  // The restoration timeout will either restore saved tabs or create a fallback tab
+  // DO NOT create tabs here - this interferes with restoration!
   
   // Sync API keys with backend
   syncApiKeysWithBackend().catch(error => {
@@ -577,8 +584,14 @@ function setupEventListeners(): void {
   if (backBtn) {
     backBtn.addEventListener('click', () => {
       const webview = getActiveWebview();
-      if (webview && webview.canGoBack()) {
-        webview.goBack();
+      if (webview && isWebviewReady(webview)) {
+        try {
+          if (webview.canGoBack()) {
+            webview.goBack();
+          }
+        } catch (error) {
+          console.log('⚠️ Error navigating back, webview not ready:', error);
+        }
       }
     });
   }
@@ -586,8 +599,14 @@ function setupEventListeners(): void {
   if (forwardBtn) {
     forwardBtn.addEventListener('click', () => {
       const webview = getActiveWebview();
-      if (webview && webview.canGoForward()) {
-        webview.goForward();
+      if (webview && isWebviewReady(webview)) {
+        try {
+          if (webview.canGoForward()) {
+            webview.goForward();
+          }
+        } catch (error) {
+          console.log('⚠️ Error navigating forward, webview not ready:', error);
+        }
       }
     });
   }
@@ -719,22 +738,38 @@ function setupEventListeners(): void {
   
   ipcRenderer.on('menu-reload', () => {
     const webview = getActiveWebview();
-    if (webview) {
-      webview.reload();
+    if (webview && isWebviewReady(webview)) {
+      try {
+        webview.reload();
+      } catch (error) {
+        console.log('⚠️ Error reloading, webview not ready:', error);
+      }
     }
   });
   
   ipcRenderer.on('menu-go-back', () => {
     const webview = getActiveWebview();
-    if (webview && webview.canGoBack()) {
-      webview.goBack();
+    if (webview && isWebviewReady(webview)) {
+      try {
+        if (webview.canGoBack()) {
+          webview.goBack();
+        }
+      } catch (error) {
+        console.log('⚠️ Error going back, webview not ready:', error);
+      }
     }
   });
   
   ipcRenderer.on('menu-go-forward', () => {
     const webview = getActiveWebview();
-    if (webview && webview.canGoForward()) {
-      webview.goForward();
+    if (webview && isWebviewReady(webview)) {
+      try {
+        if (webview.canGoForward()) {
+          webview.goForward();
+        }
+      } catch (error) {
+        console.log('⚠️ Error going forward, webview not ready:', error);
+      }
     }
   });
 
@@ -786,12 +821,19 @@ function navigateToUrl(): void {
 
 function updateNavigationButtons(): void {
   const webview = getActiveWebview();
-  if (webview) {
-    if (backBtn) {
-      backBtn.disabled = !webview.canGoBack();
-    }
-    if (forwardBtn) {
-      forwardBtn.disabled = !webview.canGoForward();
+  if (webview && isWebviewReady(webview)) {
+    try {
+      if (backBtn) {
+        backBtn.disabled = !webview.canGoBack();
+      }
+      if (forwardBtn) {
+        forwardBtn.disabled = !webview.canGoForward();
+      }
+    } catch (error) {
+      console.log('⚠️ Webview not ready for navigation buttons, using defaults');
+      // Fallback to disabled state if webview methods fail
+      if (backBtn) backBtn.disabled = true;
+      if (forwardBtn) forwardBtn.disabled = true;
     }
   } else {
     if (backBtn) {
@@ -800,6 +842,19 @@ function updateNavigationButtons(): void {
     if (forwardBtn) {
       forwardBtn.disabled = true;
     }
+  }
+}
+
+function isWebviewReady(webview: any): boolean {
+  try {
+    // Check if webview is properly attached to DOM and ready
+    return webview && 
+           webview.nodeType === Node.ELEMENT_NODE &&
+           webview.parentNode &&
+           typeof webview.canGoBack === 'function' &&
+           webview.getWebContentsId !== undefined;
+  } catch (error) {
+    return false;
   }
 }
 
@@ -905,40 +960,11 @@ function restoreTabs(): void {
 }
 
 function saveTabs(): void {
-  try {
-    if (!tabs || tabs.length === 0) {
-      console.log('No tabs to save');
-      return;
-    }
-    
-    const tabsToSave = tabs.map(tab => {
-      try {
-        const webview = document.getElementById(tab.webviewId);
-        const titleElem = document.querySelector(`#${tab.id} .tab-title`);
-        return {
-          url: webview && (webview as any).src ? (webview as any).src : 'about:blank',
-          title: titleElem ? titleElem.textContent : 'New Tab'
-        };
-      } catch (err) {
-        console.error('Error saving individual tab:', err);
-        return {
-          url: 'about:blank',
-          title: 'New Tab'
-        };
-      }
-    });
-    
-    localStorage.setItem(SAVED_TABS_KEY, JSON.stringify(tabsToSave));
-    console.log(`Saved ${tabsToSave.length} tabs to localStorage`);
-  } catch (err) {
-    console.error('Error saving tabs:', err);
-  }
+  // Delegate to the enhanced auto-save function
+  autoSaveTabs();
 }
 
 function createNewTab(url: string = NEW_TAB_URL): string | null {
-  console.log('🚨 [NEW TAB DEBUG] createNewTab called with URL:', url);
-  console.log('🚨 [NEW TAB DEBUG] Call stack:', new Error().stack);
-  
   if (!tabsContainer || !webviewsContainer) {
     console.error('Cannot create tab: containers not found');
     return null;
@@ -946,8 +972,6 @@ function createNewTab(url: string = NEW_TAB_URL): string | null {
   
   const tabId = 'tab-' + Date.now();
   const webviewId = 'webview-' + tabId;
-  
-  console.log('🚨 [NEW TAB DEBUG] Creating tab with ID:', tabId);
   
   try {
     // Create tab element
@@ -1000,10 +1024,77 @@ function createNewTab(url: string = NEW_TAB_URL): string | null {
     // Save tab state
     saveTabs();
     
-    console.log('🚨 [NEW TAB DEBUG] Tab created successfully:', tabId);
+      console.log('🚨 [NEW TAB DEBUG] Tab created successfully:', tabId);
+  return tabId;
+} catch (error) {
+  console.error('Error creating tab:', error);
+  return null;
+}
+}
+
+function createNewTabWithoutSelection(url: string = NEW_TAB_URL): string | null {
+  if (!tabsContainer || !webviewsContainer) {
+    console.error('Cannot create tab: containers not found');
+    return null;
+  }
+  
+  const tabId = 'tab-' + Date.now();
+  const webviewId = 'webview-' + tabId;
+  
+  try {
+    // Create tab element
+    const tab = document.createElement('div');
+    tab.className = 'tab';
+    tab.id = tabId;
+    tab.dataset.webviewId = webviewId;
+    
+    tab.innerHTML = `
+      <div class="tab-favicon"></div>
+      <span class="tab-title">New Tab</span>
+      <button class="tab-close">×</button>
+    `;
+    
+    tabsContainer.appendChild(tab);
+    console.log('Tab element created (no selection):', tabId);
+    
+    // Create webview
+    const webview = document.createElement('webview') as any;
+    webview.id = webviewId;
+    webview.className = 'webview';
+
+    // Configure webview
+    configureWebview(webview, url);
+    
+    webviewsContainer.appendChild(webview);
+    console.log('Webview element created (no selection):', webviewId);
+    
+    // Add to tabs array
+    const newTab = {
+      id: tabId,
+      url: url,
+      title: 'New Tab',
+      isActive: false, // Don't set as active
+      webviewId: webviewId,
+      history: [],
+      currentHistoryIndex: -1,
+      isProblematicSite: isProblematicSite(url)
+    };
+    
+    tabs.push(newTab);
+    
+    // Setup event listeners
+    setupTabEventListeners(tab, tabId);
+    setupWebviewEvents(webview);
+    
+    // DON'T select this tab immediately - that's the key difference
+    
+    // Save tab state
+    saveTabs();
+    
+    console.log('🚨 [NEW TAB DEBUG] Tab created successfully (no selection):', tabId);
     return tabId;
   } catch (error) {
-    console.error('Error creating tab:', error);
+    console.error('Error creating tab without selection:', error);
     return null;
   }
 }
@@ -1171,6 +1262,9 @@ function setupTabEventListeners(tab: HTMLElement, tabId: string): void {
       closeTab(tabId);
     });
   }
+
+  // Setup tab preview events
+  setupTabPreviewEvents(tab, tabId);
 }
 
 function setupWebviewEvents(webview: any): void {
@@ -1203,6 +1297,33 @@ function setupWebviewEvents(webview: any): void {
       }
     }
     
+    // Update URL bar, title, and navigation buttons
+    if (urlBar) {
+      urlBar.value = webview.src;
+    }
+    
+    updateTabTitle(webview, webview.getTitle());
+    updateNavigationButtons();
+    
+    // Track page visit in history - THIS IS THE KEY FIX!
+    const url = webview.src;
+    const webviewTitle = webview.getTitle();
+    
+    // Debug logging for successful page loads
+    console.log('🔍 [HISTORY TRACK] did-finish-load event:', {
+      webviewId: webview.id,
+      url: url,
+      webviewTitle: webviewTitle,
+      isAboutBlank: url === 'about:blank'
+    });
+    
+    if (url && url !== 'about:blank' && !url.startsWith('file://')) {
+      console.log('✅ [HISTORY TRACK] Tracking page visit with webview title:', { url, title: webviewTitle });
+      trackPageVisit(url, webviewTitle);
+    } else {
+      console.log('❌ [HISTORY TRACK] Skipping page visit - invalid URL or about:blank');
+    }
+    
     // Update favicon after loading completes
     setTimeout(() => {
       if (webview && webview.src) {
@@ -1225,6 +1346,7 @@ function setupWebviewEvents(webview: any): void {
       }
     }
     
+    // Update URL bar on failed loads (but don't track in history)
     if (urlBar) {
       urlBar.value = webview.src;
     }
@@ -1232,12 +1354,7 @@ function setupWebviewEvents(webview: any): void {
     updateTabTitle(webview, webview.getTitle());
     updateNavigationButtons();
     
-    // Track page visit in history
-    const url = webview.src;
-    const title = webview.getTitle();
-    if (url && url !== 'about:blank' && !url.startsWith('file://')) {
-      trackPageVisit(url, title);
-    }
+    console.log('❌ [HISTORY TRACK] Page failed to load, not tracking in history:', webview.src);
     
     // DISABLED: Auto-summarize feature commented out
     /*
@@ -1327,6 +1444,8 @@ function setupWebviewEvents(webview: any): void {
     if (urlBar && getTabIdFromWebview(webview.id) === activeTabId) {
       urlBar.value = e.url;
     }
+    // Auto-save tabs when navigation completes
+    autoSaveTabs();
   });
 
   webview.addEventListener('did-navigate-in-page', (e: any) => {
@@ -1335,6 +1454,8 @@ function setupWebviewEvents(webview: any): void {
     if (urlBar && getTabIdFromWebview(webview.id) === activeTabId) {
       urlBar.value = e.url;
     }
+    // Auto-save tabs when in-page navigation completes
+    autoSaveTabs();
   });
 
   webview.addEventListener('did-fail-load', (e: any) => {
@@ -1500,6 +1621,9 @@ function selectTab(tabId: string): void {
     
     updateNavigationButtons();
     
+    // Auto-save when tab selection changes
+    autoSaveTabs();
+    
     console.log('Tab selection complete:', tabId);
   } catch (error) {
     console.error('Error in selectTab:', error);
@@ -1581,7 +1705,12 @@ function getTabIdFromWebview(webviewId: string): string | null {
 }
 
 function trackPageVisit(url: string, title: string): void {
-  if (!url || url === 'about:blank') return;
+  console.log('📝 [TRACK PAGE] Called with:', { url, title });
+  
+  if (!url || url === 'about:blank') {
+    console.log('❌ [TRACK PAGE] Rejected - empty URL or about:blank');
+    return;
+  }
   
   // Skip internal pages and invalid URLs
   if (url.startsWith('file://') || 
@@ -1591,9 +1720,11 @@ function trackPageVisit(url: string, title: string): void {
       !title ||
       title.length === 0 ||
       title === 'New Tab') {
-    console.log('🔍 [HISTORY DEBUG] Skipping page visit:', { url, title });
+    console.log('❌ [TRACK PAGE] Rejected - internal/invalid page:', { url, title });
     return;
   }
+  
+  console.log('✅ [TRACK PAGE] Processing valid page visit');
   
   try {
     let history = JSON.parse(localStorage.getItem(HISTORY_STORAGE_KEY) || '[]');
@@ -2046,7 +2177,7 @@ function showHistoryPage(): void {
     console.log('Active webview found:', !!webview);
     
     if (webview) {
-      const historyURL = `file://${path.join(process.cwd(), 'src/renderer/history.html')}`;
+      const historyURL = `file://${window.electronAPI.path.join(window.electronAPI.cwd(), 'src/renderer/history.html')}`;
       console.log('Loading history URL:', historyURL);
       
       const historyLoadHandler = () => {
@@ -2088,7 +2219,7 @@ function showHistoryPage(): void {
       
     } else {
       console.log('No active webview, creating new tab...');
-      const historyURL = `file://${path.join(process.cwd(), 'src/renderer/history.html')}`;
+      const historyURL = `file://${window.electronAPI.path.join(window.electronAPI.cwd(), 'src/renderer/history.html')}`;
       const newTabId = createNewTab(historyURL);
       console.log('New history tab created:', newTabId);
     }
@@ -3790,12 +3921,17 @@ function injectEnhancedSelectionHandler(webview: any): void {
               
                              // Method 1: Try IPC (for Electron webviews with node integration)
                try {
+                 // Check if we're in a webview context with node integration
                  if (typeof require !== 'undefined') {
-                   const { ipcRenderer } = require('electron');
-                   if (ipcRenderer && ipcRenderer.sendToHost) {
-                     ipcRenderer.sendToHost('add-to-chat', selectedText);
-                     messageSent = true;
-                     console.log('Message sent via IPC sendToHost');
+                   try {
+                     const { ipcRenderer } = require('electron');
+                     if (ipcRenderer && typeof ipcRenderer.sendToHost === 'function') {
+                       ipcRenderer.sendToHost('add-to-chat', selectedText);
+                       messageSent = true;
+                       console.log('Message sent via IPC sendToHost');
+                     }
+                   } catch (electronErr) {
+                     console.log('Electron require failed in webview:', electronErr.message);
                    }
                  }
                } catch (err) {
@@ -4775,3 +4911,752 @@ function getModelProvider(): string {
   if (!modelSelector) return 'unknown';
   return modelSelector.value || 'unknown';
 }
+
+// ============ TAB SEARCH FUNCTIONALITY ============
+
+let tabSearchModal: HTMLElement | null = null;
+let tabSearchInput: HTMLInputElement | null = null;
+let tabSearchResults: HTMLElement | null = null;
+let tabSearchClose: HTMLButtonElement | null = null;
+let selectedSearchResultIndex = -1;
+let searchResults: TabInfo[] = [];
+
+function initializeTabSearch(): void {
+  tabSearchModal = document.getElementById('tabSearchModal');
+  tabSearchInput = document.getElementById('tabSearchInput') as HTMLInputElement;
+  tabSearchResults = document.getElementById('tabSearchResults');
+  tabSearchClose = document.getElementById('tabSearchClose') as HTMLButtonElement;
+
+  if (!tabSearchModal || !tabSearchInput || !tabSearchResults || !tabSearchClose) {
+    console.error('Tab search elements not found');
+    return;
+  }
+
+  // Close button event
+  tabSearchClose.addEventListener('click', hideTabSearch);
+
+  // Overlay click to close
+  const overlay = tabSearchModal.querySelector('.tab-search-overlay');
+  if (overlay) {
+    overlay.addEventListener('click', hideTabSearch);
+  }
+
+  // Search input events
+  tabSearchInput.addEventListener('input', handleTabSearchInput);
+  tabSearchInput.addEventListener('keydown', handleTabSearchKeydown);
+
+  // Global keyboard shortcut: Ctrl+Shift+A (or Cmd+Shift+A on Mac)
+  document.addEventListener('keydown', (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'A') {
+      e.preventDefault();
+      showTabSearch();
+    }
+    
+    // Escape to close
+    if (e.key === 'Escape' && !tabSearchModal?.classList.contains('hidden')) {
+      hideTabSearch();
+    }
+  });
+}
+
+function showTabSearch(): void {
+  if (!tabSearchModal || !tabSearchInput) return;
+  
+  tabSearchModal.classList.remove('hidden');
+  tabSearchInput.focus();
+  tabSearchInput.value = '';
+  selectedSearchResultIndex = -1;
+  
+  // Show all tabs initially
+  displayTabSearchResults(tabs);
+}
+
+function hideTabSearch(): void {
+  if (!tabSearchModal) return;
+  
+  tabSearchModal.classList.add('hidden');
+  selectedSearchResultIndex = -1;
+  searchResults = [];
+}
+
+function handleTabSearchInput(event: Event): void {
+  const input = event.target as HTMLInputElement;
+  const query = input.value.trim().toLowerCase();
+  
+  if (query === '') {
+    displayTabSearchResults(tabs);
+    return;
+  }
+  
+  // Fuzzy search through tabs
+  const filteredTabs = tabs.filter(tab => {
+    const titleMatch = tab.title.toLowerCase().includes(query);
+    const urlMatch = tab.url.toLowerCase().includes(query);
+    
+    // Simple fuzzy matching - check if all query characters appear in order
+    const fuzzyTitleMatch = fuzzyMatch(tab.title.toLowerCase(), query);
+    const fuzzyUrlMatch = fuzzyMatch(tab.url.toLowerCase(), query);
+    
+    return titleMatch || urlMatch || fuzzyTitleMatch || fuzzyUrlMatch;
+  });
+  
+  // Sort by relevance (exact matches first, then fuzzy matches)
+  filteredTabs.sort((a, b) => {
+    const aExactTitle = a.title.toLowerCase().includes(query);
+    const bExactTitle = b.title.toLowerCase().includes(query);
+    const aExactUrl = a.url.toLowerCase().includes(query);
+    const bExactUrl = b.url.toLowerCase().includes(query);
+    
+    if (aExactTitle && !bExactTitle) return -1;
+    if (!aExactTitle && bExactTitle) return 1;
+    if (aExactUrl && !bExactUrl) return -1;
+    if (!aExactUrl && bExactUrl) return 1;
+    
+    return 0;
+  });
+  
+  displayTabSearchResults(filteredTabs, query);
+}
+
+function fuzzyMatch(text: string, query: string): boolean {
+  let textIndex = 0;
+  let queryIndex = 0;
+  
+  while (textIndex < text.length && queryIndex < query.length) {
+    if (text[textIndex] === query[queryIndex]) {
+      queryIndex++;
+    }
+    textIndex++;
+  }
+  
+  return queryIndex === query.length;
+}
+
+function highlightMatch(text: string, query: string): string {
+  if (!query) return text;
+  
+  const regex = new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+  return text.replace(regex, '<mark>$1</mark>');
+}
+
+function displayTabSearchResults(tabList: TabInfo[], query: string = ''): void {
+  if (!tabSearchResults) return;
+  
+  searchResults = tabList;
+  selectedSearchResultIndex = -1;
+  
+  if (tabList.length === 0) {
+    tabSearchResults.innerHTML = '<div class="tab-search-no-results">No tabs found</div>';
+    return;
+  }
+  
+  const resultsHTML = tabList.map((tab, index) => {
+    const tabElement = document.getElementById(tab.id);
+    const faviconElement = tabElement?.querySelector('.tab-favicon') as HTMLElement;
+    const faviconStyle = faviconElement?.style.backgroundImage || '';
+    
+    const highlightedTitle = highlightMatch(tab.title, query);
+    const highlightedUrl = highlightMatch(tab.url, query);
+    
+    return `
+      <div class="tab-search-result" data-tab-id="${tab.id}" data-index="${index}">
+        <div class="tab-search-result-favicon" style="${faviconStyle ? `background-image: ${faviconStyle}; background-size: contain; background-repeat: no-repeat; background-position: center;` : ''}"></div>
+        <div class="tab-search-result-content">
+          <div class="tab-search-result-title">${highlightedTitle}</div>
+          <div class="tab-search-result-url">${highlightedUrl}</div>
+        </div>
+      </div>
+    `;
+  }).join('');
+  
+  tabSearchResults.innerHTML = resultsHTML;
+  
+  // Add click event listeners
+  const resultElements = tabSearchResults.querySelectorAll('.tab-search-result');
+  resultElements.forEach((element, index) => {
+    element.addEventListener('click', () => {
+      const tabId = element.getAttribute('data-tab-id');
+      if (tabId) {
+        selectTab(tabId);
+        hideTabSearch();
+      }
+    });
+    
+    element.addEventListener('mouseenter', () => {
+      setSelectedSearchResult(index);
+    });
+  });
+}
+
+function handleTabSearchKeydown(event: KeyboardEvent): void {
+  if (searchResults.length === 0) return;
+  
+  switch (event.key) {
+    case 'ArrowDown':
+      event.preventDefault();
+      setSelectedSearchResult(Math.min(selectedSearchResultIndex + 1, searchResults.length - 1));
+      break;
+      
+    case 'ArrowUp':
+      event.preventDefault();
+      setSelectedSearchResult(Math.max(selectedSearchResultIndex - 1, -1));
+      break;
+      
+    case 'Enter':
+      event.preventDefault();
+      if (selectedSearchResultIndex >= 0 && selectedSearchResultIndex < searchResults.length) {
+        const selectedTab = searchResults[selectedSearchResultIndex];
+        selectTab(selectedTab.id);
+        hideTabSearch();
+      }
+      break;
+  }
+}
+
+function setSelectedSearchResult(index: number): void {
+  if (!tabSearchResults) return;
+  
+  // Remove previous selection
+  const previousSelected = tabSearchResults.querySelector('.tab-search-result.selected');
+  if (previousSelected) {
+    previousSelected.classList.remove('selected');
+  }
+  
+  selectedSearchResultIndex = index;
+  
+  if (index >= 0 && index < searchResults.length) {
+    const newSelected = tabSearchResults.children[index];
+    if (newSelected) {
+      newSelected.classList.add('selected');
+      
+      // Scroll into view if needed
+      newSelected.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    }
+  }
+}
+
+// ============ ENHANCED AUTOMATIC SESSION MANAGEMENT ============
+
+// Enhanced automatic session management - tabs are automatically saved and restored
+
+function initializeAutoSessionManagement(): void {
+  // Set up automatic saving on various events
+  setupAutoSaveEvents();
+  
+  // Set up periodic saving (every 30 seconds) as backup
+  setInterval(() => {
+    if (tabs.length > 0) {
+      autoSaveTabs();
+    }
+  }, 30000);
+  
+  // Initial save after page load
+  setTimeout(() => {
+    if (tabs.length > 0) {
+      autoSaveTabs();
+    }
+  }, 2000);
+}
+
+function setupAutoSaveEvents(): void {
+  // Save when browser window is about to close
+  window.addEventListener('beforeunload', (e) => {
+    autoSaveTabs();
+    
+    // Force synchronous save as backup
+    try {
+      if (tabs && tabs.length > 0) {
+        const sessionData = {
+          tabs: tabs.map(tab => ({
+            url: tab.url,
+            title: tab.title,
+            isActive: tab.isActive,
+            webviewId: tab.webviewId
+          })),
+          timestamp: Date.now(),
+          activeTabId: activeTabId
+        };
+        localStorage.setItem(SAVED_TABS_KEY, JSON.stringify(sessionData));
+      }
+    } catch (err) {
+      console.error('Error in beforeunload save:', err);
+    }
+  });
+
+  // Save when window loses focus (user switches to another app)
+  window.addEventListener('blur', () => {
+    if (tabs.length > 0) {
+      autoSaveTabs();
+    }
+  });
+
+  // Save when visibility changes (tab becomes hidden)
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden && tabs.length > 0) {
+      autoSaveTabs();
+    }
+  });
+
+  // Try to detect Electron context and add app-level events
+  if (typeof process !== 'undefined' && process.versions && process.versions.electron) {
+    // Add more Electron-specific save triggers if needed in the future
+    window.addEventListener('focus', () => {
+      // Could add focus-based save logic here if needed
+    });
+  }
+}
+
+function autoSaveTabs(): void {
+  try {
+    if (!tabs || tabs.length === 0) {
+      // Check if there's already a valid session - don't overwrite it with empty data
+      const existing = localStorage.getItem(SAVED_TABS_KEY);
+      if (existing) {
+        try {
+          const parsed = JSON.parse(existing);
+          if (parsed.tabs && parsed.tabs.length > 0) {
+            return; // Skip empty save to protect existing session
+          }
+        } catch (e) {
+          // Ignore parsing errors and continue
+        }
+      }
+      return;
+    }
+
+    const tabsToSave = tabs.map((tab, index) => {
+      try {
+        const webview = document.getElementById(tab.webviewId) as any;
+        const titleElem = document.querySelector(`#${tab.id} .tab-title`);
+        
+        return {
+          url: webview && webview.src ? webview.src : tab.url,
+          title: titleElem ? titleElem.textContent || 'New Tab' : tab.title,
+          isActive: tab.isActive,
+          webviewId: tab.webviewId
+        };
+      } catch (err) {
+        return {
+          url: tab.url || 'about:blank',
+          title: tab.title || 'New Tab',
+          isActive: tab.isActive,
+          webviewId: tab.webviewId
+        };
+      }
+    });
+
+    // Save the session with timestamp
+    const sessionData = {
+      tabs: tabsToSave,
+      timestamp: Date.now(),
+      activeTabId: activeTabId
+    };
+
+    localStorage.setItem(SAVED_TABS_KEY, JSON.stringify(sessionData));
+    
+  } catch (err) {
+    console.error('❌ Error in autoSaveTabs:', err);
+    if (err instanceof Error) {
+      console.error('❌ Stack trace:', err.stack);
+    }
+  }
+}
+
+function enhancedRestoreTabs(): void {
+  if (!tabsContainer || !webviewsContainer) {
+    setTimeout(() => {
+      createNewTab();
+    }, 100);
+    return;
+  }
+
+  try {
+    const savedSessionJSON = localStorage.getItem(SAVED_TABS_KEY);
+    
+    if (savedSessionJSON) {
+      let savedSession = null;
+      try {
+        savedSession = JSON.parse(savedSessionJSON);
+      } catch (parseErr) {
+        localStorage.removeItem(SAVED_TABS_KEY);
+        createNewTab();
+        return;
+      }
+      
+      if (savedSession && savedSession.tabs && savedSession.tabs.length > 0) {
+        // Clear current state
+        tabs = [];
+        tabsContainer.innerHTML = '';
+        webviewsContainer.innerHTML = '';
+        
+        let restoredCount = 0;
+        let activeTabToRestore = null;
+        const restoredTabIds: string[] = [];
+        
+        // Create tabs without selecting them immediately
+        for (let i = 0; i < savedSession.tabs.length; i++) {
+          const tabData = savedSession.tabs[i];
+          try {
+            if (tabData.url && tabData.url !== 'about:blank') {
+              const newTabId = createNewTabWithoutSelection(tabData.url);
+              
+              if (newTabId) {
+                restoredCount++;
+                restoredTabIds.push(newTabId);
+                
+                // Update the tab title if it was saved
+                if (tabData.title && tabData.title !== 'New Tab') {
+                  setTimeout(() => {
+                    const titleElement = document.querySelector(`#${newTabId} .tab-title`);
+                    if (titleElement) {
+                      titleElement.textContent = tabData.title;
+                    }
+                  }, 100);
+                }
+                
+                // Remember which tab was active
+                if (tabData.isActive || tabData.webviewId === savedSession.activeTabId) {
+                  activeTabToRestore = newTabId;
+                }
+              }
+            }
+          } catch (tabErr) {
+            // Ignore individual tab restoration errors
+          }
+        }
+        
+        // Wait for all webviews to be ready, then select the active tab
+        if (restoredCount > 0) {
+          setTimeout(() => {
+            if (activeTabToRestore && restoredTabIds.includes(activeTabToRestore)) {
+              selectTab(activeTabToRestore);
+            } else if (restoredTabIds.length > 0) {
+              selectTab(restoredTabIds[0]);
+            }
+            
+            // Show notification after tab selection
+            setTimeout(() => {
+              showToast(`Restored ${restoredCount} tabs from previous session`, 'success');
+            }, 500);
+            
+          }, 800); // Give webviews more time to initialize
+          
+          return;
+        }
+      }
+    }
+  } catch (err) {
+    console.error('Error in tab restoration:', err);
+  }
+  
+  // Create fallback tab if no tabs were restored
+  createNewTab();
+}
+
+// ============ TAB PREVIEW FUNCTIONALITY ============
+
+let tabPreview: HTMLElement | null = null;
+let tabPreviewCanvas: HTMLCanvasElement | null = null;
+let tabPreviewTitle: HTMLElement | null = null;
+let tabPreviewUrl: HTMLElement | null = null;
+let tabPreviewLoading: HTMLElement | null = null;
+
+let previewTimeout: NodeJS.Timeout | null = null;
+let hidePreviewTimeout: NodeJS.Timeout | null = null;
+let previewCache = new Map<string, { dataUrl: string, timestamp: number }>();
+
+const PREVIEW_DELAY = 0; // ms delay before showing preview
+const PREVIEW_CACHE_DURATION = 30000; // 30 seconds cache duration
+const PREVIEW_WIDTH = 320;
+const PREVIEW_HEIGHT = 180;
+
+function initializeTabPreview(): void {
+  tabPreview = document.getElementById('tabPreview');
+  tabPreviewCanvas = document.getElementById('tabPreviewCanvas') as HTMLCanvasElement;
+  tabPreviewTitle = tabPreview?.querySelector('.tab-preview-title') as HTMLElement;
+  tabPreviewUrl = tabPreview?.querySelector('.tab-preview-url') as HTMLElement;
+  tabPreviewLoading = tabPreview?.querySelector('.tab-preview-loading') as HTMLElement;
+
+  if (!tabPreview || !tabPreviewCanvas || !tabPreviewTitle || !tabPreviewUrl || !tabPreviewLoading) {
+    console.error('Tab preview elements not found');
+    return;
+  }
+
+  // Set canvas dimensions
+  tabPreviewCanvas.width = PREVIEW_WIDTH;
+  tabPreviewCanvas.height = PREVIEW_HEIGHT;
+
+  console.log('Tab preview initialized');
+}
+
+function setupTabPreviewEvents(tabElement: HTMLElement, tabId: string): void {
+  if (!tabElement) return;
+
+  // Mouse enter event
+  tabElement.addEventListener('mouseenter', (e) => {
+    // Clear any existing hide timeout
+    if (hidePreviewTimeout) {
+      clearTimeout(hidePreviewTimeout);
+      hidePreviewTimeout = null;
+    }
+
+    // Set timeout to show preview after delay
+    previewTimeout = setTimeout(() => {
+      showTabPreview(tabId, e.target as HTMLElement);
+    }, PREVIEW_DELAY);
+  });
+
+  // Mouse leave event
+  tabElement.addEventListener('mouseleave', () => {
+    // Clear show timeout
+    if (previewTimeout) {
+      clearTimeout(previewTimeout);
+      previewTimeout = null;
+    }
+
+    // Set timeout to hide preview
+    hidePreviewTimeout = setTimeout(() => {
+      hideTabPreview();
+    }, 100); // Small delay to prevent flickering
+  });
+}
+
+async function showTabPreview(tabId: string, tabElement: HTMLElement): Promise<void> {
+  if (!tabPreview || !tabPreviewCanvas || !tabPreviewTitle || !tabPreviewUrl || !tabPreviewLoading) return;
+
+  const tab = tabs.find(t => t.id === tabId);
+  if (!tab) return;
+
+  const webview = document.getElementById(tab.webviewId) as any;
+  if (!webview) return;
+
+  // Position the preview tooltip
+  positionTabPreview(tabElement);
+
+  // Update preview info
+  tabPreviewTitle.textContent = tab.title || 'New Tab';
+  tabPreviewUrl.textContent = tab.url || 'about:blank';
+
+  // Show preview with loading state
+  tabPreview.classList.remove('hidden');
+  tabPreviewLoading.classList.remove('hidden');
+
+  try {
+    // Check cache first
+    const cacheKey = tab.webviewId;
+    const cached = previewCache.get(cacheKey);
+    const now = Date.now();
+
+    if (cached && (now - cached.timestamp < PREVIEW_CACHE_DURATION)) {
+      // Use cached screenshot
+      await drawImageToCanvas(cached.dataUrl);
+      tabPreviewLoading.classList.add('hidden');
+      return;
+    }
+
+    // Capture new screenshot
+    if (webview && webview.capturePage) {
+      // For newer Electron versions
+      const nativeImage = await webview.capturePage();
+      const dataUrl = nativeImage.toDataURL();
+      
+      // Cache the screenshot
+      previewCache.set(cacheKey, { dataUrl, timestamp: now });
+      
+      await drawImageToCanvas(dataUrl);
+      tabPreviewLoading.classList.add('hidden');
+    } else {
+      // Fallback: try to use executeJavaScript to get a screenshot
+      await captureWebviewScreenshot(webview, cacheKey);
+      tabPreviewLoading.classList.add('hidden');
+    }
+
+  } catch (error) {
+    console.error('Error capturing tab preview:', error);
+    
+    // Show fallback content
+    drawFallbackPreview(tab);
+    tabPreviewLoading.classList.add('hidden');
+  }
+}
+
+function positionTabPreview(tabElement: HTMLElement): void {
+  if (!tabPreview) return;
+
+  const tabRect = tabElement.getBoundingClientRect();
+  const previewRect = { width: 320, height: 240 }; // Approximate size
+  const viewportWidth = window.innerWidth;
+  const viewportHeight = window.innerHeight;
+  const margin = 12;
+
+  let left = tabRect.left + (tabRect.width / 2) - (previewRect.width / 2);
+  let top = tabRect.bottom + margin;
+  let position = 'top'; // Arrow position
+
+  // Reset position classes
+  tabPreview.classList.remove('position-bottom', 'position-left', 'position-right');
+
+  // Horizontal positioning
+  if (left < margin) {
+    left = margin;
+  } else if (left + previewRect.width > viewportWidth - margin) {
+    left = viewportWidth - previewRect.width - margin;
+  }
+
+  // Vertical positioning
+  if (top + previewRect.height > viewportHeight - margin) {
+    // Show above the tab instead
+    top = tabRect.top - previewRect.height - margin;
+    position = 'bottom';
+    tabPreview.classList.add('position-bottom');
+  }
+
+  // Apply positioning
+  tabPreview.style.left = `${left}px`;
+  tabPreview.style.top = `${top}px`;
+}
+
+async function drawImageToCanvas(dataUrl: string): Promise<void> {
+  if (!tabPreviewCanvas) return;
+
+  const canvas = tabPreviewCanvas; // Store reference to avoid null checks in closure
+
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        reject(new Error('Cannot get canvas context'));
+        return;
+      }
+
+      // Clear canvas
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // Calculate aspect ratio and draw
+      const aspectRatio = img.width / img.height;
+      const canvasAspectRatio = canvas.width / canvas.height;
+
+      let drawWidth, drawHeight, drawX, drawY;
+
+      if (aspectRatio > canvasAspectRatio) {
+        // Image is wider than canvas
+        drawWidth = canvas.width;
+        drawHeight = drawWidth / aspectRatio;
+        drawX = 0;
+        drawY = (canvas.height - drawHeight) / 2;
+      } else {
+        // Image is taller than canvas
+        drawHeight = canvas.height;
+        drawWidth = drawHeight * aspectRatio;
+        drawX = (canvas.width - drawWidth) / 2;
+        drawY = 0;
+      }
+
+      ctx.drawImage(img, drawX, drawY, drawWidth, drawHeight);
+      resolve();
+    };
+
+    img.onerror = () => {
+      reject(new Error('Failed to load image'));
+    };
+
+    img.src = dataUrl;
+  });
+}
+
+async function captureWebviewScreenshot(webview: any, cacheKey: string): Promise<void> {
+  // Fallback method for older Electron versions or when capturePage is not available
+  try {
+    const script = `
+      (function() {
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+        
+        // This is a simplified fallback - in practice, capturing a full webpage
+        // as an image from JavaScript is complex and has limitations
+        return canvas.toDataURL('image/png');
+      })();
+    `;
+
+    const dataUrl = await webview.executeJavaScript(script);
+    if (dataUrl) {
+      previewCache.set(cacheKey, { dataUrl, timestamp: Date.now() });
+      await drawImageToCanvas(dataUrl);
+    } else {
+      throw new Error('No data URL returned');
+    }
+  } catch (error) {
+    console.error('Fallback screenshot capture failed:', error);
+    throw error;
+  }
+}
+
+function drawFallbackPreview(tab: TabInfo): void {
+  if (!tabPreviewCanvas) return;
+
+  const ctx = tabPreviewCanvas.getContext('2d');
+  if (!ctx) return;
+
+  const canvasWidth = tabPreviewCanvas.width;
+  const canvasHeight = tabPreviewCanvas.height;
+
+  // Clear canvas
+  ctx.clearRect(0, 0, canvasWidth, canvasHeight);
+
+  // Draw gradient background
+  const gradient = ctx.createLinearGradient(0, 0, 0, canvasHeight);
+  gradient.addColorStop(0, '#f8f9fa');
+  gradient.addColorStop(1, '#e8eaed');
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, canvasWidth, canvasHeight);
+
+  // Draw page icon or placeholder
+  ctx.fillStyle = '#5f6368';
+  ctx.font = '48px system-ui';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('🌐', canvasWidth / 2, canvasHeight / 2 - 10);
+
+  // Draw URL text
+  ctx.font = '12px system-ui';
+  ctx.fillStyle = '#202124';
+  ctx.fillText(
+    tab.url.length > 40 ? tab.url.substring(0, 37) + '...' : tab.url,
+    canvasWidth / 2,
+    canvasHeight / 2 + 30
+  );
+}
+
+function hideTabPreview(): void {
+  if (!tabPreview) return;
+
+  tabPreview.classList.add('hidden');
+
+  // Clear timeouts
+  if (previewTimeout) {
+    clearTimeout(previewTimeout);
+    previewTimeout = null;
+  }
+  if (hidePreviewTimeout) {
+    clearTimeout(hidePreviewTimeout);
+    hidePreviewTimeout = null;
+  }
+}
+
+// Clean up old cache entries periodically
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, value] of previewCache.entries()) {
+    if (now - value.timestamp > PREVIEW_CACHE_DURATION) {
+      previewCache.delete(key);
+    }
+  }
+}, PREVIEW_CACHE_DURATION);
+
+
+
+// Fixed: History tracking now happens automatically in did-finish-load event
+

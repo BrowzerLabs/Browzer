@@ -188,6 +188,64 @@ app.whenReady().then(async () => {
   }
 });
 
+// Handle app quit events (including force quit from dock)
+app.on('before-quit', async (event) => {
+  const windows = BrowserWindow.getAllWindows();
+  if (windows.length > 0) {
+    // Prevent quit to allow save to complete
+    event.preventDefault();
+    
+    try {
+      // Request renderer to save session with timeout
+      const mainWindow = windows[0];
+      
+      // Give renderer 2 seconds to save, then force quit
+      const saveTimeout = setTimeout(() => {
+        app.exit(0);
+      }, 2000);
+      
+      // Try to communicate with renderer
+      try {
+        await mainWindow.webContents.executeJavaScript(`
+          (function() {
+            try {
+              // Try multiple ways to access the function
+              let saveFn = null;
+              if (typeof autoSaveTabs === 'function') {
+                saveFn = autoSaveTabs;
+              } else if (typeof window.autoSaveTabs === 'function') {
+                saveFn = window.autoSaveTabs;
+              } else {
+                return { success: false, error: 'autoSaveTabs function not available' };
+              }
+              
+              saveFn();
+              return { success: true, message: 'Save completed' };
+              
+            } catch (error) {
+              return { success: false, error: error.message || error.toString() };
+            }
+          })();
+        `);
+      } catch (jsError) {
+        // Ignore JavaScript execution errors - app will still quit
+      }
+      
+      // Clear timeout and quit after short delay
+      clearTimeout(saveTimeout);
+      setTimeout(() => {
+        app.exit(0);
+      }, 500);
+      
+    } catch (error) {
+      // Force quit after 1 second if save fails
+      setTimeout(() => {
+        app.exit(0);
+      }, 1000);
+    }
+  }
+});
+
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
     app.quit();

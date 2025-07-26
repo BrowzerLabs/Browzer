@@ -12,10 +12,10 @@ export class WindowManager {
       title: 'Browzer',
       webPreferences: {
         nodeIntegration: true,
-        contextIsolation: false,
+        contextIsolation: true, // Enable context isolation for security and contextBridge
         webviewTag: true,
         webSecurity: true,
-        preload: path.join(__dirname, '../../preload/preload.js')
+        preload: path.join(__dirname, '../preload/preload.js') // Fixed path: dist/src/main -> dist/src/preload
       }
     });
 
