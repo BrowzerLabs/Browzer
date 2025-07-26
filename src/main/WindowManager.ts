@@ -1,6 +1,7 @@
-import { BrowserWindow, shell } from 'electron';
+import { BrowserWindow, shell, Menu, app, clipboard } from 'electron';
 import * as path from 'path';
 import * as fs from 'fs';
+import { IPC_CHANNELS } from '../shared/types';
 
 export class WindowManager {
   private mainWindow: BrowserWindow | null = null;
@@ -68,6 +69,9 @@ export class WindowManager {
       }
       return { action: 'allow' };
     });
+
+    // Setup context menu handling for webviews
+    this.setupContextMenuHandling();
   }
 
   private logCrash(message: string): void {
@@ -105,5 +109,130 @@ export class WindowManager {
     });
 
     console.log('DevTools shortcuts registered for main window');
+  }
+
+  private setupContextMenuHandling(): void {
+    if (!this.mainWindow) return;
+
+    // Listen for context menu events from all webContents (including webviews)
+    app.on('web-contents-created', (event, webContents) => {
+      webContents.on('context-menu', (event, params) => {
+        // Create context menu based on what was right-clicked
+        const menuTemplate = [];
+
+        // Navigation items
+        if (params.linkURL) {
+          menuTemplate.push(
+            { 
+              label: 'Open Link', 
+              click: () => {
+                // Navigate current webview to the link
+                webContents.loadURL(params.linkURL);
+              }
+            },
+            { 
+              label: 'Open Link in New Tab', 
+              click: () => {
+                // Send IPC message to create new tab with URL
+                if (this.mainWindow) {
+                  this.mainWindow.webContents.send(IPC_CHANNELS.MENU_NEW_TAB_WITH_URL, params.linkURL);
+                }
+              }
+            },
+            { label: 'Copy Link Address', click: () => this.copyToClipboard(params.linkURL) },
+            { type: 'separator' }
+          );
+        }
+
+        // Edit items (if text is selected or in input field)
+        if (params.isEditable || params.selectionText) {
+          if (params.isEditable) {
+            menuTemplate.push(
+              { label: 'Cut', role: 'cut', enabled: params.editFlags.canCut },
+              { label: 'Copy', role: 'copy', enabled: params.editFlags.canCopy },
+              { label: 'Paste', role: 'paste', enabled: params.editFlags.canPaste },
+              { type: 'separator' }
+            );
+          } else if (params.selectionText) {
+            menuTemplate.push(
+              { label: 'Copy', role: 'copy' },
+              { type: 'separator' }
+            );
+          }
+        }
+
+        // Page items
+        menuTemplate.push(
+          { label: 'Back', click: () => webContents.goBack(), enabled: webContents.canGoBack() },
+          { label: 'Forward', click: () => webContents.goForward(), enabled: webContents.canGoForward() },
+          { label: 'Reload', click: () => webContents.reload() },
+          { type: 'separator' }
+        );
+
+        // Image items
+        if (params.hasImageContents) {
+          menuTemplate.push(
+            { label: 'Copy Image', click: () => webContents.copyImageAt(params.x, params.y) },
+            { label: 'Copy Image Address', click: () => this.copyToClipboard(params.srcURL) },
+            { type: 'separator' }
+          );
+        }
+
+        // Developer items
+        menuTemplate.push(
+          { label: 'Inspect Element', click: () => webContents.inspectElement(params.x, params.y) },
+          { label: 'View Page Source', click: () => this.viewPageSource(webContents) }
+        );
+
+        // Only show menu if there are items
+        if (menuTemplate.length > 0) {
+          const contextMenu = Menu.buildFromTemplate(menuTemplate as any);
+          contextMenu.popup({ window: this.mainWindow! });
+        }
+      });
+    });
+  }
+
+  private copyToClipboard(text: string): void {
+    clipboard.writeText(text);
+  }
+
+  private viewPageSource(webContents: Electron.WebContents): void {
+    webContents.executeJavaScript('document.documentElement.outerHTML').then((html) => {
+      // Create a new window to show the page source
+      const sourceWindow = new BrowserWindow({
+        width: 800,
+        height: 600,
+        title: 'Page Source',
+        webPreferences: {
+          nodeIntegration: false,
+          contextIsolation: true
+        }
+      });
+
+      const htmlContent = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>Page Source</title>
+          <style>
+            body { font-family: monospace; white-space: pre-wrap; padding: 10px; }
+          </style>
+        </head>
+        <body>${this.escapeHtml(html)}</body>
+        </html>
+      `;
+
+      sourceWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(htmlContent)}`);
+    }).catch(console.error);
+  }
+
+  private escapeHtml(unsafe: string): string {
+    return unsafe
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#039;");
   }
 } 

@@ -108,6 +108,7 @@ export class AgentManager {
       let result = '';
       let error = '';
       let workflowStarted = false;
+      let stderrBuffer = ''; // Buffer for incomplete stderr lines
 
       pythonProcess.stdout?.on('data', (data) => {
         const dataStr = data.toString();
@@ -119,42 +120,47 @@ export class AgentManager {
       pythonProcess.stderr?.on('data', (data) => {
         const dataStr = data.toString();
         
-        // Check for workflow progress events
-        if (dataStr.includes('WORKFLOW_PROGRESS:')) {
-          // Split by newlines to handle multiple lines in one chunk
-          const lines = dataStr.split('\n');
-          
-          for (const line of lines) {
-            if (line.includes('WORKFLOW_PROGRESS:')) {
-              try {
-                // Extract just the JSON part after WORKFLOW_PROGRESS:
-                const progressStart = line.indexOf('WORKFLOW_PROGRESS:') + 'WORKFLOW_PROGRESS:'.length;
-                const progressLine = line.substring(progressStart).trim();
+        // Add to buffer and process complete lines only
+        stderrBuffer += dataStr;
+        
+        // Process complete lines (ending with \n)
+        const lines = stderrBuffer.split('\n');
+        
+        // Keep the last line in buffer (might be incomplete)
+        stderrBuffer = lines.pop() || '';
+        
+        // Process complete lines
+        for (const line of lines) {
+          if (line.includes('WORKFLOW_PROGRESS:')) {
+            try {
+              // Extract just the JSON part after WORKFLOW_PROGRESS:
+              const progressStart = line.indexOf('WORKFLOW_PROGRESS:') + 'WORKFLOW_PROGRESS:'.length;
+              const progressLine = line.substring(progressStart).trim();
+              
+              // Only try to parse if we have actual JSON content
+              if (progressLine && progressLine.startsWith('{')) {
+                const progressEvent: WorkflowProgressEvent = JSON.parse(progressLine);
                 
-                // Only try to parse if we have actual JSON content
-                if (progressLine && progressLine.startsWith('{')) {
-                  const progressEvent: WorkflowProgressEvent = JSON.parse(progressLine);
-                  
-                  console.log(`Workflow progress event: ${progressEvent.type}`, progressEvent.data);
-                  this.logWorkflowEvent(`Progress event: ${progressEvent.type} - ${JSON.stringify(progressEvent.data)}`);
-                  
-                  // Send progress event to renderer
-                  this.sendWorkflowProgressToRenderer(progressEvent, sender);
-                  
-                  if (progressEvent.type === 'workflow_start') {
-                    workflowStarted = true;
-                  }
+                console.log(`Workflow progress event: ${progressEvent.type}`, progressEvent.data);
+                this.logWorkflowEvent(`Progress event: ${progressEvent.type} - ${JSON.stringify(progressEvent.data)}`);
+                
+                // Send progress event to renderer
+                this.sendWorkflowProgressToRenderer(progressEvent, sender);
+                
+                if (progressEvent.type === 'workflow_start') {
+                  workflowStarted = true;
                 }
-              } catch (e) {
-                console.error('Failed to parse workflow progress event:', e);
-                this.logWorkflowEvent(`Failed to parse progress event: ${e} - Line was: ${line}`);
               }
+            } catch (e) {
+              console.error('Failed to parse workflow progress event:', e);
+              this.logWorkflowEvent(`Failed to parse progress event: ${e} - Line was: ${line}`);
             }
+          } else if (line.trim()) {
+            // Only log non-empty lines as stderr
+            error += line + '\n';
+            console.error(`Workflow stderr: ${line}`);
+            this.logWorkflowEvent(`Workflow stderr: ${line}`);
           }
-        } else {
-          error += dataStr;
-          console.error(`Workflow stderr: ${dataStr}`);
-          this.logWorkflowEvent(`Workflow stderr: ${dataStr}`);
         }
       });
 
@@ -175,6 +181,32 @@ export class AgentManager {
 
       pythonProcess.on('close', (code) => {
         clearTimeout(timeout);
+        
+        // Process any remaining data in stderr buffer
+        if (stderrBuffer.trim()) {
+          if (stderrBuffer.includes('WORKFLOW_PROGRESS:')) {
+            try {
+              const progressStart = stderrBuffer.indexOf('WORKFLOW_PROGRESS:') + 'WORKFLOW_PROGRESS:'.length;
+              const progressLine = stderrBuffer.substring(progressStart).trim();
+              
+              if (progressLine && progressLine.startsWith('{')) {
+                const progressEvent: WorkflowProgressEvent = JSON.parse(progressLine);
+                
+                console.log(`Final workflow progress event: ${progressEvent.type}`, progressEvent.data);
+                this.logWorkflowEvent(`Final progress event: ${progressEvent.type} - ${JSON.stringify(progressEvent.data)}`);
+                
+                this.sendWorkflowProgressToRenderer(progressEvent, sender);
+              }
+            } catch (e) {
+              console.error('Failed to parse final workflow progress event:', e);
+              this.logWorkflowEvent(`Failed to parse final progress event: ${e} - Buffer was: ${stderrBuffer}`);
+            }
+          } else {
+            error += stderrBuffer + '\n';
+            console.error(`Final workflow stderr: ${stderrBuffer}`);
+            this.logWorkflowEvent(`Final workflow stderr: ${stderrBuffer}`);
+          }
+        }
         
         console.log(`Workflow process exited with code ${code}`);
         this.logWorkflowEvent(`Workflow process exited with code ${code}`);
@@ -242,25 +274,22 @@ export class AgentManager {
     }
 
     try {
-      switch (progressEvent.type) {
-        case 'workflow_start':
-          sender.send('workflow-start', progressEvent.data);
-          break;
-        case 'step_start':
-          sender.send('workflow-step-start', progressEvent.data);
-          break;
-        case 'step_complete':
-          sender.send('workflow-step-complete', progressEvent.data);
-          break;
-        case 'workflow_complete':
-          sender.send('workflow-complete', progressEvent.data);
-          break;
-        case 'workflow_error':
-          sender.send('workflow-error', progressEvent.data);
-          break;
-        default:
-          sender.send('workflow-progress', progressEvent);
-          break;
+      // Send all progress events through workflow-progress channel for context isolation compatibility
+      // The renderer will handle different types based on progressEvent.type
+      if (progressEvent.type === 'workflow_complete') {
+        // Send completion events through dedicated channel
+        sender.send('workflow-complete', progressEvent.data);
+      } else if (progressEvent.type === 'workflow_error') {
+        // Send error events through dedicated channel  
+        sender.send('workflow-error', progressEvent.data);
+      } else {
+        // Send all other progress events (workflow_start, step_start, step_complete) through progress channel
+        // Include the type in the data so renderer can differentiate
+        const progressData = {
+          ...progressEvent.data,
+          type: progressEvent.type
+        };
+        sender.send('workflow-progress', progressData);
       }
     } catch (error) {
       console.error('Failed to send workflow progress to renderer:', error);

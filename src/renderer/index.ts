@@ -366,87 +366,87 @@ function initializeUI(): void {
 function setupWorkflowEventListeners(): void {
   console.log('Setting up workflow event listeners...');
   
-  // IMPORTANT: Remove any existing listeners first to prevent duplicates
-  ipcRenderer.removeAllListeners('workflow-start');
-  ipcRenderer.removeAllListeners('workflow-step-start');
-  ipcRenderer.removeAllListeners('workflow-step-complete');
-  ipcRenderer.removeAllListeners('workflow-complete');
-  ipcRenderer.removeAllListeners('workflow-error');
-  ipcRenderer.removeAllListeners('workflow-progress');
+  if (!window.electronAPI) {
+    console.error('electronAPI not available, cannot setup workflow listeners');
+    return;
+  }
   
-  console.log('🚨 [DUPLICATE FIX] Cleared all existing workflow event listeners');
+  console.log('🚨 [CONTEXT ISOLATION] Using secure electronAPI for workflow listeners');
 
-  // Set up IPC event listeners for workflow progress
-  ipcRenderer.on('workflow-start', (event: any, data: any) => {
-    console.log('[WorkflowProgress] workflow-start event received:', data);
+  // Set up workflow progress listeners using secure electronAPI
+  window.electronAPI.onWorkflowProgress((data: any) => {
+    console.log('[WorkflowProgress] workflow-progress event received:', data);
     
-    // Convert snake_case to camelCase for compatibility, including step fields
-    const workflowData = {
-      workflowId: data.workflow_id || `workflow-${Date.now()}`,
-      type: data.type || 'workflow',
-      steps: (data.steps || []).map((step: any) => ({
-        extensionId: step.extension_id,
-        extensionName: step.extension_name
-      }))
-    };
-    
-    console.log('[WorkflowProgress] Creating new workflow progress in chat:', workflowData);
-    
-    // Create workflow progress as a chat message instead of using fixed container
-    addWorkflowProgressToChat(workflowData);
-  });
-
-  ipcRenderer.on('workflow-step-start', (event: any, data: any) => {
-    console.log('📡 [IPC DEBUG] workflow-step-start event received:', data);
-    
-    // Find the workflow progress message in chat
-    const workflowMessage = findWorkflowProgressInChat(data.workflow_id);
-    if (workflowMessage && (workflowMessage as any).progressIndicator) {
-      console.log('[WorkflowProgress] Updating progress for step start:', {
-        workflowId: data.workflow_id,
-        currentStep: data.current_step,
-        stepStatus: 'running'
-      });
+    // Handle different types of workflow progress events
+    if (data.type === 'workflow_start') {
+      console.log('[WorkflowProgress] workflow-start event received:', data);
       
-      // Convert snake_case to camelCase
-      (workflowMessage as any).progressIndicator.updateProgress({
-        workflowId: data.workflow_id,
-        currentStep: data.current_step,
-        stepStatus: 'running'
-      });
-    } else {
-      console.warn('[WorkflowProgress] Workflow progress message not found for step-start:', data.workflow_id);
+      // Convert snake_case to camelCase for compatibility, including step fields
+      const workflowData = {
+        workflowId: data.workflow_id || `workflow-${Date.now()}`,
+        type: data.type || 'workflow',
+        steps: (data.steps || []).map((step: any) => ({
+          extensionId: step.extension_id,
+          extensionName: step.extension_name
+        }))
+      };
+      
+      console.log('[WorkflowProgress] Creating new workflow progress in chat:', workflowData);
+      
+      // Create workflow progress as a chat message instead of using fixed container
+      addWorkflowProgressToChat(workflowData);
+      
+    } else if (data.type === 'step_start') {
+      console.log('📡 [IPC DEBUG] step_start event received:', data);
+      
+      // Find the workflow progress message in chat
+      const workflowMessage = findWorkflowProgressInChat(data.workflow_id);
+      if (workflowMessage && (workflowMessage as any).progressIndicator) {
+        console.log('[WorkflowProgress] Updating progress for step start:', {
+          workflowId: data.workflow_id,
+          currentStep: data.current_step,
+          stepStatus: 'running'
+        });
+        
+        // Convert snake_case to camelCase
+        (workflowMessage as any).progressIndicator.updateProgress({
+          workflowId: data.workflow_id,
+          currentStep: data.current_step,
+          stepStatus: 'running'
+        });
+      } else {
+        console.warn('[WorkflowProgress] Workflow progress message not found for step-start:', data.workflow_id);
+      }
+      
+    } else if (data.type === 'step_complete') {
+      console.log('📡 [IPC DEBUG] step_complete event received:', data);
+      
+      // Find the workflow progress message in chat
+      const workflowMessage = findWorkflowProgressInChat(data.workflow_id);
+      if (workflowMessage && (workflowMessage as any).progressIndicator) {
+        console.log('[WorkflowProgress] Calling updateProgress with:', {
+          workflowId: data.workflow_id,
+          currentStep: data.current_step,
+          stepStatus: data.step_status,
+          stepResult: data.step_result,
+          stepError: data.step_error
+        });
+        
+        // Convert snake_case to camelCase  
+        (workflowMessage as any).progressIndicator.updateProgress({
+          workflowId: data.workflow_id,
+          currentStep: data.current_step,
+          stepStatus: data.step_status,
+          stepResult: data.step_result,
+          stepError: data.step_error
+        });
+      } else {
+        console.warn('[WorkflowProgress] Workflow progress message not found for step-complete:', data.workflow_id);
+      }
     }
   });
 
-  ipcRenderer.on('workflow-step-complete', (event: any, data: any) => {
-    console.log('📡 [IPC DEBUG] workflow-step-complete event received:', data);
-    
-    // Find the workflow progress message in chat
-    const workflowMessage = findWorkflowProgressInChat(data.workflow_id);
-    if (workflowMessage && (workflowMessage as any).progressIndicator) {
-      console.log('[WorkflowProgress] Calling updateProgress with:', {
-        workflowId: data.workflow_id,
-        currentStep: data.current_step,
-        stepStatus: data.step_status,
-        stepResult: data.step_result,
-        stepError: data.step_error
-      });
-      
-      // Convert snake_case to camelCase  
-      (workflowMessage as any).progressIndicator.updateProgress({
-        workflowId: data.workflow_id,
-        currentStep: data.current_step,
-        stepStatus: data.step_status,
-        stepResult: data.step_result,
-        stepError: data.step_error
-      });
-    } else {
-      console.warn('[WorkflowProgress] Workflow progress message not found for step-complete:', data.workflow_id);
-    }
-  });
-
-  ipcRenderer.on('workflow-complete', (event: any, data: any) => {
+  window.electronAPI.onWorkflowComplete((data: any) => {
     console.log('📡 [IPC DEBUG] workflow-complete event received:', data);
     console.log('📡 [IPC DEBUG] workflow-complete data keys:', Object.keys(data));
     console.log('📡 [IPC DEBUG] workflow-complete data.result keys:', data.result ? Object.keys(data.result) : 'no result');
@@ -537,7 +537,7 @@ function setupWorkflowEventListeners(): void {
     }
   });
 
-  ipcRenderer.on('workflow-error', (event: any, data: any) => {
+  window.electronAPI.onWorkflowError((data: any) => {
     console.log('📡 [IPC DEBUG] workflow-error event received:', data);
     
     // Clear execution flag
@@ -557,11 +557,6 @@ function setupWorkflowEventListeners(): void {
       // Show error message directly in chat if we can't find the progress indicator
       addMessageToChat('assistant', `Workflow error: ${data.error}`);
     }
-  });
-
-  ipcRenderer.on('workflow-progress', (event: any, data: any) => {
-    console.log('📡 [IPC DEBUG] workflow-progress event received:', data);
-    // Handle any other progress events
   });
 
   console.log('Workflow progress system initialized');
@@ -724,6 +719,10 @@ function setupEventListeners(): void {
   // Menu action listeners
   ipcRenderer.on('menu-new-tab', () => {
     createNewTab();
+  });
+
+  ipcRenderer.on('menu-new-tab-with-url', (event, url) => {
+    createNewTab(url);
   });
   
   ipcRenderer.on('menu-close-tab', () => {

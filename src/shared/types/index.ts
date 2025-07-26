@@ -129,6 +129,7 @@ export const IPC_CHANNELS = {
   
   // Menu actions
   MENU_NEW_TAB: 'menu-new-tab',
+  MENU_NEW_TAB_WITH_URL: 'menu-new-tab-with-url',
   MENU_CLOSE_TAB: 'menu-close-tab',
   MENU_RELOAD: 'menu-reload',
   MENU_BACK: 'menu-back',
