@@ -458,83 +458,119 @@ export class DoAgent {
 
         click: async (selector: string, options?: any) => {
           const escapedSelector = selector.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-          const script = `
-            (async () => {
+          
+          // First, let's check if element exists and get info
+          const checkScript = `
+            (() => {
               try {
                 const element = document.querySelector('${escapedSelector}');
-                if (!element) throw new Error('Element not found: ${selector}');
+                if (!element) return { success: false, error: 'Element not found: ${selector}' };
                 
-                // Get element info before clicking
                 const rect = element.getBoundingClientRect();
                 const isVisible = rect.width > 0 && rect.height > 0;
                 const computedStyle = getComputedStyle(element);
                 const isDisplayed = computedStyle.display !== 'none';
-                const isInteractable = computedStyle.pointerEvents !== 'none';
                 
-                if (!isVisible || !isDisplayed) {
-                  throw new Error('Element is not visible or displayed');
+                return { 
+                  success: true, 
+                  visible: isVisible,
+                  displayed: isDisplayed,
+                  rect: { x: rect.x, y: rect.y, width: rect.width, height: rect.height },
+                  tag: element.tagName,
+                  id: element.id,
+                  classes: element.className
+                };
+              } catch (error) {
+                return { success: false, error: error.message };
+              }
+            })()
+          `;
+          
+          const elementInfo = await this.webview.executeJavaScript(checkScript);
+          if (!elementInfo.success) {
+            throw new Error(elementInfo.error);
+          }
+          
+          if (!elementInfo.visible || !elementInfo.displayed) {
+            throw new Error(`Element is not visible or displayed: ${selector}`);
+          }
+          
+          console.log('[DoAgent] Element found and visible, proceeding with click:', elementInfo);
+          
+          // Now perform the click with a simpler synchronous script
+          const clickScript = `
+            (() => {
+              try {
+                const element = document.querySelector('${escapedSelector}');
+                if (!element) return { success: false, error: 'Element not found during click' };
+                
+                // Scroll into view first
+                element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                
+                // Focus if it's an interactive element
+                if (element.focus) {
+                  element.focus();
                 }
                 
-                // Scroll into view
-                element.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                await new Promise(resolve => setTimeout(resolve, 200));
-                
-                // Try multiple click approaches for better reliability
+                // Get center coordinates for mouse events
+                const rect = element.getBoundingClientRect();
                 const centerX = rect.left + rect.width / 2;
                 const centerY = rect.top + rect.height / 2;
                 
-                // 1. Focus first (important for input elements)
-                if (element.focus) {
-                  element.focus();
-                  await new Promise(resolve => setTimeout(resolve, 100));
-                }
+                // Dispatch mouse events
+                const mouseDown = new MouseEvent('mousedown', {
+                  view: window,
+                  bubbles: true,
+                  cancelable: true,
+                  clientX: centerX,
+                  clientY: centerY,
+                  button: 0
+                });
+                element.dispatchEvent(mouseDown);
                 
-                // 2. Dispatch mouse events manually
-                const mouseEvents = ['mousedown', 'mouseup', 'click'];
-                for (const eventType of mouseEvents) {
-                  const event = new MouseEvent(eventType, {
-                    view: window,
-                    bubbles: true,
-                    cancelable: true,
-                    clientX: centerX,
-                    clientY: centerY,
-                    button: 0
-                  });
-                  element.dispatchEvent(event);
-                  await new Promise(resolve => setTimeout(resolve, 50));
-                }
+                const mouseUp = new MouseEvent('mouseup', {
+                  view: window,
+                  bubbles: true,
+                  cancelable: true,
+                  clientX: centerX,
+                  clientY: centerY,
+                  button: 0
+                });
+                element.dispatchEvent(mouseUp);
                 
-                // 3. Also try the native click method
+                const clickEvent = new MouseEvent('click', {
+                  view: window,
+                  bubbles: true,
+                  cancelable: true,
+                  clientX: centerX,
+                  clientY: centerY,
+                  button: 0
+                });
+                element.dispatchEvent(clickEvent);
+                
+                // Also call native click
                 element.click();
                 
-                // 4. For input elements, also trigger focus and input events
+                // For form elements, trigger additional events
                 if (element.tagName === 'INPUT' || element.tagName === 'TEXTAREA') {
                   element.dispatchEvent(new Event('focus', { bubbles: true }));
                   element.dispatchEvent(new Event('input', { bubbles: true }));
                 }
                 
-                return { 
-                  success: true, 
-                  elementInfo: {
-                    tag: element.tagName,
-                    classes: element.className,
-                    id: element.id,
-                    visible: isVisible,
-                    displayed: isDisplayed,
-                    interactable: isInteractable,
-                    rect: { x: rect.x, y: rect.y, width: rect.width, height: rect.height }
-                  }
-                };
+                return { success: true, message: 'Click executed successfully' };
               } catch (error) {
                 return { success: false, error: error.message };
               }
-            })();
+            })()
           `;
-          const result = await this.webview.executeJavaScript(script);
-          if (result && !result.success) {
-            throw new Error(result.error);
+          
+          const clickResult = await this.webview.executeJavaScript(clickScript);
+          if (!clickResult.success) {
+            throw new Error(clickResult.error);
           }
-          return result;
+          
+          console.log('[DoAgent] Click executed successfully');
+          return clickResult;
         },
 
         fill: async (selector: string, value: string) => {
@@ -1491,25 +1527,28 @@ export class DoAgent {
       
       console.log('[DoAgent] Asking LLM for next action...');
       
-      // Log the prompt
-      const { ipcRenderer } = require('electron');
-      await ipcRenderer.invoke('log-llm-request', {
-        provider: provider,
-        instruction: instruction,
-        prompt: prompt,
-        promptLength: prompt.length,
-        context: {
-          currentUrl: pageState.url,
-          stepNumber: this.stepCount,
-          previousActions: previousSteps.slice(-3).map(step => step.action)
-        }
-      });
+      // Log the prompt using window.electronAPI (context isolation compatible)
+      try {
+        await window.electronAPI.ipcInvoke('log-llm-request', {
+          provider: provider,
+          instruction: instruction,
+          prompt: prompt,
+          promptLength: prompt.length,
+          context: {
+            currentUrl: pageState.url,
+            stepNumber: this.stepCount,
+            previousActions: previousSteps.slice(-3).map(step => step.action)
+          }
+        });
+      } catch (error) {
+        console.warn('[DoAgent] Failed to log LLM request:', error);
+      }
       
       const startTime = Date.now();
       
       // Call LLM via IPC to main process with system prompt
       console.log('[DoAgent] Making IPC call to main process...');
-      const response = await ipcRenderer.invoke('call-llm', {
+      const response = await window.electronAPI.ipcInvoke('call-llm', {
         provider: provider as 'anthropic' | 'openai',
         apiKey: apiKey,
         systemPrompt: SYSTEM_PROMPT,
@@ -1520,22 +1559,26 @@ export class DoAgent {
       
       const executionTime = Date.now() - startTime;
 
-      // Log the response
-      await ipcRenderer.invoke('log-llm-response', {
-        provider: provider,
-        instruction: instruction,
-        promptLength: prompt.length,
-        response: response.response || '',
-        responseLength: (response.response || '').length,
-        success: response.success,
-        error: response.error,
-        executionTime: executionTime,
-        context: {
-          currentUrl: pageState.url,
-          stepNumber: this.stepCount,
-          previousActions: previousSteps.slice(-3).map(step => step.action)
-        }
-      });
+      // Log the response using window.electronAPI
+      try {
+        await window.electronAPI.ipcInvoke('log-llm-response', {
+          provider: provider,
+          instruction: instruction,
+          promptLength: prompt.length,
+          response: response.response || '',
+          responseLength: (response.response || '').length,
+          success: response.success,
+          error: response.error,
+          executionTime: executionTime,
+          context: {
+            currentUrl: pageState.url,
+            stepNumber: this.stepCount,
+            previousActions: previousSteps.slice(-3).map(step => step.action)
+          }
+        });
+      } catch (error) {
+        console.warn('[DoAgent] Failed to log LLM response:', error);
+      }
 
       if (!response.success) {
         throw new Error(response.error || 'LLM call failed');
@@ -1547,23 +1590,26 @@ export class DoAgent {
     } catch (error) {
       console.error('[DoAgent] Failed to get action from LLM:', error);
       
-      // Log the error
-      const { ipcRenderer } = require('electron');
-      await ipcRenderer.invoke('log-llm-response', {
-        provider: this.getSelectedProvider(),
-        instruction: instruction,
-        promptLength: 0,
-        response: '',
-        responseLength: 0,
-        success: false,
-        error: (error as Error).message,
-        executionTime: 0,
-        context: {
-          currentUrl: pageState.url,
-          stepNumber: this.stepCount,
-          previousActions: previousSteps.slice(-3).map(step => step.action)
-        }
-      });
+      // Log the error using window.electronAPI
+      try {
+        await window.electronAPI.ipcInvoke('log-llm-response', {
+          provider: this.getSelectedProvider(),
+          instruction: instruction,
+          promptLength: 0,
+          response: '',
+          responseLength: 0,
+          success: false,
+          error: (error as Error).message,
+          executionTime: 0,
+          context: {
+            currentUrl: pageState.url,
+            stepNumber: this.stepCount,
+            previousActions: previousSteps.slice(-3).map(step => step.action)
+          }
+        });
+      } catch (logError) {
+        console.warn('[DoAgent] Failed to log LLM error:', logError);
+      }
       
       // Fallback to a simple action
       return {
@@ -1799,15 +1845,383 @@ What is the NEXT SINGLE ACTION? Respond with JSON only.`;
     return result;
   }
 
+  private parseSelector(selector: string): any {
+    const result: any = {
+      element: '',
+      id: '',
+      classes: [] as string[],
+      dataTestId: '',
+      text: '',
+      attributes: {} as Record<string, string>
+    };
+
+    // Extract element type
+    const elementMatch = selector.match(/^([a-zA-Z]+)/);
+    if (elementMatch) {
+      result.element = elementMatch[1];
+    }
+
+    // Extract ID
+    const idMatch = selector.match(/\[id[*^$~|]?=['"]([^'"]+)['"]\]|#([a-zA-Z][\w-]*)/);
+    if (idMatch) {
+      result.id = idMatch[1] || idMatch[2];
+    }
+
+    // Extract data-testid
+    const testIdMatch = selector.match(/\[data-testid[*^$~|]?=['"]([^'"]+)['"]\]/);
+    if (testIdMatch) {
+      result.dataTestId = testIdMatch[1];
+    }
+
+    // Extract classes
+    const classMatches = selector.match(/\.([a-zA-Z][\w-]*)/g);
+    if (classMatches) {
+      result.classes = classMatches.map(cls => cls.substring(1));
+    }
+
+    // Extract text from :has-text() or similar
+    const textMatch = selector.match(/:has-text\(['"]([^'"]+)['"]\)|:contains\(['"]([^'"]+)['"]\)/);
+    if (textMatch) {
+      result.text = textMatch[1] || textMatch[2];
+    }
+
+    // Extract attributes with values
+    const attrWithValueMatches = selector.matchAll(/\[([a-zA-Z-]+)([*^$~|]?)=['"]([^'"]+)['"]\]/g);
+    for (const match of attrWithValueMatches) {
+      if (match[1] !== 'id' && match[1] !== 'data-testid') {
+        result.attributes[match[1]] = match[3];
+      }
+    }
+
+    // Extract attributes without values (like [aria-controls], [disabled], etc.)
+    const attrWithoutValueMatches = selector.matchAll(/\[([a-zA-Z-]+)\]/g);
+    for (const match of attrWithoutValueMatches) {
+      if (match[1] !== 'id' && match[1] !== 'data-testid' && !result.attributes[match[1]]) {
+        result.attributes[match[1]] = ''; // Empty string indicates presence check
+      }
+    }
+
+    return result;
+  }
+
   private async click(selector: string, options?: any): Promise<void> {
     if (!this.playwrightPage) {
       throw new Error('Playwright page not initialized');
     }
     
-    console.log('[DoAgent] Clicking on:', selector);
+    console.log('[DoAgent] Attempting to click on:', selector);
     
-    // Wait for element to be available and visible
-    await this.playwrightPage.waitForSelector(selector, { timeout: 5000 });
+    try {
+      // First, try to wait for the exact selector with a shorter timeout
+      await this.playwrightPage.waitForSelector(selector, { timeout: 2000 });
+      console.log('[DoAgent] Exact selector found:', selector);
+    } catch (timeoutError) {
+      console.warn('[DoAgent] Exact selector not found, trying intelligent element discovery:', selector);
+      
+      // Parse the original selector to understand what we're looking for
+      const originalSelector = selector;
+      const cleanedSelector = this.parseSelector(selector);
+      
+      const smartDiscoveryScript = `
+        (() => {
+          const originalSelector = '${originalSelector}';
+          const targetInfo = ${JSON.stringify(cleanedSelector)};
+          
+          // Multiple search strategies
+          const strategies = [];
+          
+                     // Strategy 1: Exact match attempts with variations
+           if (targetInfo.id) {
+             strategies.push({ type: 'id', selector: '#' + targetInfo.id, reason: 'exact ID match' });
+             strategies.push({ type: 'id-partial', selector: '[id*="' + targetInfo.id + '"]', reason: 'partial ID match' });
+           }
+           
+           if (targetInfo.dataTestId) {
+             strategies.push({ type: 'data-testid', selector: '[data-testid="' + targetInfo.dataTestId + '"]', reason: 'exact data-testid' });
+             strategies.push({ type: 'data-testid-partial', selector: '[data-testid*="' + targetInfo.dataTestId + '"]', reason: 'partial data-testid' });
+           }
+           
+           if (targetInfo.classes && targetInfo.classes.length > 0) {
+             strategies.push({ type: 'class', selector: '.' + targetInfo.classes.join('.'), reason: 'exact classes' });
+             targetInfo.classes.forEach(cls => {
+               strategies.push({ type: 'class-single', selector: '.' + cls, reason: 'single class: ' + cls });
+             });
+           }
+           
+           // Handle attributes (with and without values)
+           Object.keys(targetInfo.attributes || {}).forEach(attrName => {
+             const attrValue = targetInfo.attributes[attrName];
+             if (attrValue === '') {
+               // Attribute without value (presence check)
+               strategies.push({ type: 'attr-presence', selector: '[' + attrName + ']', reason: 'attribute presence: ' + attrName });
+             } else {
+               // Attribute with value
+               strategies.push({ type: 'attr-exact', selector: '[' + attrName + '="' + attrValue + '"]', reason: 'exact attribute: ' + attrName });
+               strategies.push({ type: 'attr-partial', selector: '[' + attrName + '*="' + attrValue + '"]', reason: 'partial attribute: ' + attrName });
+             }
+           });
+          
+          // Strategy 2: Function-based discovery
+          const functionMap = {
+            'textarea': ['textarea', '[contenteditable]', '[role="textbox"]', 'input[type="text"]'],
+            'tweetTextarea': ['textarea', '[contenteditable]', '[data-testid*="tweet"]', '[placeholder*="tweet"]', '[placeholder*="post"]'],
+            'button': ['button', '[role="button"]', 'a[href]', '[onclick]', '.btn', '.button'],
+            'accordion': ['[id*="accordion"]', '[class*="accordion"]', '[aria-expanded]', 'summary', 'details'],
+            'department': ['[id*="department"]', '[class*="department"]', '[data-department]'],
+            'dropdown': ['select', '[role="combobox"]', '[aria-haspopup]', '.dropdown', '[class*="dropdown"]'],
+            'input': ['input', 'textarea', '[contenteditable]', '[role="textbox"]'],
+            'clickable': ['button', 'a', '[onclick]', '[role="button"]', '[tabindex="0"]']
+          };
+          
+          // Determine likely function from selector
+          const probableFunctions = [];
+          if (targetInfo.element === 'textarea' || targetInfo.dataTestId?.includes('textarea')) probableFunctions.push('textarea', 'tweetTextarea');
+          if (targetInfo.element === 'button' || targetInfo.text?.toLowerCase().includes('click')) probableFunctions.push('button');
+          if (targetInfo.id?.includes('accordion') || targetInfo.text?.toLowerCase().includes('expand')) probableFunctions.push('accordion');
+          if (targetInfo.id?.includes('department') || targetInfo.text?.toLowerCase().includes('department')) probableFunctions.push('department');
+          if (originalSelector.includes('dropdown') || targetInfo.text?.toLowerCase().includes('dropdown')) probableFunctions.push('dropdown');
+          
+          probableFunctions.forEach(func => {
+            if (functionMap[func]) {
+              functionMap[func].forEach(sel => {
+                strategies.push({ type: 'function', selector: sel, reason: 'function-based: ' + func });
+              });
+            }
+          });
+          
+          // Strategy 3: Text content matching
+          if (targetInfo.text) {
+            const searchText = targetInfo.text.toLowerCase();
+            strategies.push({ type: 'text-exact', selector: \`*:contains("\${targetInfo.text}")\`, reason: 'exact text match' });
+            // Add variations without :contains() since it's not standard CSS
+            ['button', 'a', 'div', 'span', 'input', 'textarea'].forEach(tag => {
+              strategies.push({ type: 'text-tag', selector: tag, reason: 'text in ' + tag, textSearch: targetInfo.text });
+            });
+          }
+          
+          // Strategy 4: Semantic discovery
+          if (targetInfo.dataTestId?.includes('tweet') || originalSelector.includes('tweet')) {
+            strategies.push(
+              { type: 'semantic', selector: '[contenteditable="true"]', reason: 'Twitter-like compose area' },
+              { type: 'semantic', selector: '[role="textbox"]', reason: 'textbox role' },
+              { type: 'semantic', selector: 'textarea', reason: 'standard textarea' },
+              { type: 'semantic', selector: '[placeholder*="What"]', reason: 'compose placeholder' }
+            );
+          }
+          
+          // Execute strategies and find elements
+          const results = [];
+          strategies.forEach((strategy, index) => {
+            try {
+              let elements = [];
+              
+              if (strategy.textSearch) {
+                // Special handling for text-based searches
+                const allElements = document.querySelectorAll(strategy.selector);
+                elements = Array.from(allElements).filter(el => 
+                  el.textContent?.toLowerCase().includes(strategy.textSearch.toLowerCase())
+                );
+              } else if (strategy.selector.includes(':contains(')) {
+                // Skip :contains() selectors as they're not standard CSS
+                return;
+              } else {
+                elements = Array.from(document.querySelectorAll(strategy.selector));
+              }
+              
+              elements.forEach(el => {
+                const rect = el.getBoundingClientRect();
+                const isVisible = rect.width > 0 && rect.height > 0 && 
+                                 window.getComputedStyle(el).visibility !== 'hidden' &&
+                                 window.getComputedStyle(el).display !== 'none';
+                
+                if (isVisible || strategy.type === 'semantic') {
+                  let bestSelector = strategy.selector;
+                  if (el.id) bestSelector = '#' + el.id;
+                  else if (el.getAttribute('data-testid')) bestSelector = '[data-testid="' + el.getAttribute('data-testid') + '"]';
+                  else if (el.className && el.className.split) {
+                    const classes = el.className.split(' ').filter(c => c.length > 0);
+                    if (classes.length > 0) bestSelector = '.' + classes[0];
+                  }
+                  
+                  results.push({
+                    element: el.tagName.toLowerCase(),
+                    selector: bestSelector,
+                    strategy: strategy.type,
+                    reason: strategy.reason,
+                    id: el.id || '',
+                    classes: el.className || '',
+                    text: el.textContent?.trim().substring(0, 100) || '',
+                    dataTestId: el.getAttribute('data-testid') || '',
+                    visible: isVisible,
+                    clickable: el.tagName === 'BUTTON' || el.tagName === 'A' || el.onclick || el.getAttribute('role') === 'button',
+                    interactive: el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.contentEditable === 'true',
+                    score: this.calculateElementScore(el, targetInfo, strategy)
+                  });
+                }
+              });
+            } catch (e) {
+              // Strategy failed, continue with next
+            }
+          });
+          
+          // Score and sort results
+          results.sort((a, b) => b.score - a.score);
+          
+          return {
+            originalSelector,
+            targetInfo,
+            totalStrategies: strategies.length,
+            totalResults: results.length,
+            bestMatches: results.slice(0, 10) // Top 10 matches
+          };
+          
+          function calculateElementScore(el, target, strategy) {
+            let score = 0;
+            
+                         // Base scores by strategy type
+             const strategyScores = {
+               'id': 100, 'data-testid': 90, 'attr-exact': 85, 'attr-presence': 80,
+               'class': 70, 'function': 60, 'semantic': 50, 'text-exact': 80, 
+               'text-tag': 40, 'attr-partial': 45, 'id-partial': 75, 'data-testid-partial': 70,
+               'class-single': 60
+             };
+             score += strategyScores[strategy.type] || 30;
+            
+            // Bonus for visibility
+            if (el.getBoundingClientRect().width > 0) score += 20;
+            
+            // Bonus for interactivity match
+            if (target.element === 'textarea' || target.dataTestId?.includes('textarea')) {
+              if (el.tagName === 'TEXTAREA' || el.contentEditable === 'true') score += 50;
+            }
+            if (target.element === 'button') {
+              if (el.tagName === 'BUTTON' || el.getAttribute('role') === 'button') score += 50;
+            }
+            
+            // Text similarity bonus
+            if (target.text && el.textContent) {
+              const similarity = this.calculateTextSimilarity(target.text.toLowerCase(), el.textContent.toLowerCase());
+              score += similarity * 30;
+            }
+            
+            return score;
+          }
+          
+          function calculateTextSimilarity(text1, text2) {
+            const words1 = text1.split(/\\s+/);
+            const words2 = text2.split(/\\s+/);
+            const commonWords = words1.filter(word => words2.some(w => w.includes(word) || word.includes(w)));
+            return commonWords.length / Math.max(words1.length, words2.length, 1);
+          }
+        })()
+      `;
+      
+             let discoveryResult: any;
+       try {
+         discoveryResult = await this.playwrightPage.evaluate(smartDiscoveryScript);
+       } catch (scriptError) {
+         console.warn('[DoAgent] Smart discovery script failed, using basic element search:', scriptError);
+         
+         // Fallback to basic element detection if script fails
+         discoveryResult = {
+           originalSelector: originalSelector,
+           targetInfo: cleanedSelector,
+           totalStrategies: 0,
+           totalResults: 0,
+           bestMatches: []
+         };
+         
+         // Try basic element search as fallback
+         const basicElement = cleanedSelector.element || 'button';
+         try {
+           const basicCount = await this.playwrightPage.locator(basicElement).count();
+           if (basicCount > 0) {
+             discoveryResult.bestMatches = [{
+               selector: basicElement,
+               reason: 'basic element fallback after script failure',
+               score: 40,
+               strategy: 'basic-fallback'
+             }];
+             discoveryResult.totalResults = 1;
+           }
+         } catch (basicError) {
+           console.warn('[DoAgent] Even basic element search failed:', basicError);
+         }
+       }
+       console.log('[DoAgent] Smart discovery results:', {
+         originalSelector: discoveryResult.originalSelector,
+         targetInfo: discoveryResult.targetInfo,
+         totalStrategies: discoveryResult.totalStrategies,
+         totalResults: discoveryResult.totalResults,
+         topMatches: discoveryResult.bestMatches?.slice(0, 3)
+       });
+       console.log('[DoAgent] All discovery details:', discoveryResult);
+      
+             // Try the best matches in order
+       if (discoveryResult.bestMatches && discoveryResult.bestMatches.length > 0) {
+         for (const match of discoveryResult.bestMatches) {
+           try {
+             console.log(`[DoAgent] Trying match: ${match.selector} (${match.reason}, score: ${match.score})`);
+             await this.playwrightPage.waitForSelector(match.selector, { timeout: 1000 });
+             selector = match.selector;
+             console.log(`[DoAgent] SUCCESS! Using selector: ${match.selector}`);
+             break;
+           } catch (matchError) {
+             console.log(`[DoAgent] Match failed: ${match.selector}`);
+             continue;
+           }
+         }
+         
+         // If no matches worked, try simple fallback strategies
+         if (selector === originalSelector) {
+           console.log('[DoAgent] All smart strategies failed, trying simple fallbacks...');
+           const simpleFallbacks = [
+             cleanedSelector.element || 'div', // Just the element type
+             'button', // Common clickable elements
+             'a',
+             '[role="button"]',
+             '[onclick]',
+             'input',
+             'textarea'
+           ].filter(Boolean);
+           
+           for (const fallback of simpleFallbacks) {
+             try {
+               console.log(`[DoAgent] Trying simple fallback: ${fallback}`);
+                               const elements = await this.playwrightPage.locator(fallback).count();
+               if (elements > 0) {
+                 await this.playwrightPage.waitForSelector(fallback, { timeout: 500 });
+                 selector = fallback;
+                 console.log(`[DoAgent] Simple fallback SUCCESS: ${fallback}`);
+                 break;
+               }
+             } catch (fallbackError) {
+               console.log(`[DoAgent] Simple fallback failed: ${fallback}`);
+               continue;
+             }
+           }
+         }
+         
+         // If still no matches worked, throw comprehensive error
+         if (selector === originalSelector) {
+           const matchDetails = discoveryResult.bestMatches.slice(0, 5).map((m: any) => 
+             `  ${m.selector} (${m.reason}, score: ${m.score})`
+           ).join('\n');
+           throw new Error(`Cannot find element: ${originalSelector}\n\nTried ${discoveryResult.totalResults} alternatives:\n${matchDetails}\n\nPage may have changed or element may not exist.`);
+         }
+       } else {
+         // If discovery system completely failed, try basic element-type fallback
+         console.log('[DoAgent] Discovery system found no elements, trying basic fallback...');
+         const basicElement = cleanedSelector.element || 'button';
+         try {
+           await this.playwrightPage.waitForSelector(basicElement, { timeout: 2000 });
+           selector = basicElement;
+           console.log(`[DoAgent] Basic fallback SUCCESS: ${basicElement}`);
+         } catch (basicError) {
+           throw new Error(`Cannot find element: ${originalSelector}. No similar elements found after trying ${discoveryResult.totalStrategies} search strategies. Even basic fallback failed.`);
+         }
+       }
+    }
     
     // Use Playwright's click method with options
     const clickOptions: any = {};
@@ -1815,12 +2229,36 @@ What is the NEXT SINGLE ACTION? Respond with JSON only.`;
     if (options?.clickCount) clickOptions.clickCount = options.clickCount;
     if (options?.delay) clickOptions.delay = options.delay;
     
-    await this.playwrightPage.click(selector, clickOptions);
+    try {
+      await this.playwrightPage.click(selector, clickOptions);
+      console.log('[DoAgent] Click operation completed successfully on:', selector);
+    } catch (clickError) {
+      // If click fails, try using our JavaScript-based click as fallback
+      console.warn('[DoAgent] Playwright click failed, trying JavaScript click:', clickError);
+      
+      const jsClickScript = `
+        (() => {
+          const element = document.querySelector('${selector}');
+          if (!element) return { success: false, error: 'Element not found for JS click' };
+          
+          // Scroll into view and click
+          element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          element.click();
+          
+          return { success: true };
+        })()
+      `;
+      
+      const jsResult = await this.playwrightPage.evaluate(jsClickScript);
+      if (!jsResult.success) {
+        throw new Error(`Both Playwright and JavaScript click failed: ${jsResult.error}`);
+      }
+      
+      console.log('[DoAgent] JavaScript click succeeded as fallback');
+    }
     
     // Small wait after click for any animations/transitions
-    await this.playwrightPage.waitForTimeout(200);
-    
-    console.log('[DoAgent] Click operation completed successfully');
+    await this.playwrightPage.waitForTimeout(500);
   }
 
   private async wait(ms: number): Promise<void> {
