@@ -245,6 +245,32 @@ function clearStuckLoadingStates(): void {
   }
 }
 
+// Function to initialize sidebar layout from saved settings
+function initializeSidebar(): void {
+  console.log('[Sidebar] Initializing sidebar from saved settings...');
+  
+  // Debug localStorage value
+  const rawValue = localStorage.getItem('sidebarEnabled');
+  console.log('[Sidebar] Raw localStorage value:', rawValue);
+  
+  // Load saved sidebar preference and apply layout
+  const savedSidebarEnabled = rawValue === 'true';
+  console.log('[Sidebar] Saved sidebar enabled:', savedSidebarEnabled);
+  
+  // Debug current browser container classes
+  const browserContainer = document.querySelector('.browser-container');
+  console.log('[Sidebar] Browser container classes before applying:', browserContainer?.className);
+  
+  // Apply sidebar layout if enabled
+  applySidebarLayout(savedSidebarEnabled);
+  
+  // Debug classes after applying
+  console.log('[Sidebar] Browser container classes after applying:', browserContainer?.className);
+  
+  // Setup collapse/expand functionality
+  setupCollapseExpandButtons();
+}
+
 // Function to setup collapse/expand buttons
 function setupCollapseExpandButtons(): void {
   const browserContainer = document.querySelector('.browser-container');
@@ -291,7 +317,8 @@ document.addEventListener('DOMContentLoaded', () => {
   initializeUI();
   setupEventListeners();
   setupWorkflowEventListeners();
-  setupExtensionsPanel();
+  // setupExtensionsPanel(); // Deprecated - settings now open in new tab
+  initializeSidebar(); // Initialize sidebar layout from saved settings
   setupAgentControls();
   setupGlobalErrorHandler();
   devToolsManager.addDevToolsButton();
@@ -636,9 +663,8 @@ function setupEventListeners(): void {
   // Settings button (renamed from Extensions)
   if (extensionsBtn) {
     extensionsBtn.addEventListener('click', () => {
-      if (extensionsPanel) {
-        extensionsPanel.classList.toggle('hidden');
-      }
+      // Open settings in a new tab
+      createNewTab('file://browzer-settings');
     });
   }
 
@@ -646,18 +672,12 @@ function setupEventListeners(): void {
   const newExtensionsBtn = document.getElementById('newExtensionsBtn') as HTMLButtonElement;
   if (newExtensionsBtn) {
     newExtensionsBtn.addEventListener('click', () => {
-      // For now, just open the extensions section of the panel
-      if (extensionsPanel) {
-        extensionsPanel.classList.remove('hidden');
-        // Scroll to extensions section
-        const extensionsSection = document.querySelector('.extensions-management');
-        if (extensionsSection) {
-          extensionsSection.scrollIntoView({ behavior: 'smooth' });
-        }
-      }
+      // Open settings in a new tab
+      createNewTab('file://browzer-settings');
     });
   }
 
+  // Close extensions panel (deprecated - settings now open in new tab)
   if (closeExtensionsBtn) {
     closeExtensionsBtn.addEventListener('click', () => {
       if (extensionsPanel) {
@@ -772,7 +792,73 @@ function setupEventListeners(): void {
     }
   });
 
+  // Settings menu listeners
+  ipcRenderer.on('menu-settings-api-keys', () => {
+    openSettingsToSection('ai-keys');
+  });
 
+  ipcRenderer.on('menu-settings-interface', () => {
+    openSettingsToSection('interface');
+  });
+
+  ipcRenderer.on('menu-settings-ai-memory', () => {
+    openSettingsToSection('ai-memory');
+  });
+
+  ipcRenderer.on('menu-settings-privacy', () => {
+    openSettingsToSection('privacy');
+  });
+
+  ipcRenderer.on('menu-settings-cache', () => {
+    openSettingsToSection('cache');
+  });
+
+  ipcRenderer.on('menu-settings-general', () => {
+    openSettingsToSection('general');
+  });
+
+
+}
+
+// Function to open settings page and navigate to a specific section
+function openSettingsToSection(sectionId: string): void {
+  console.log('[Settings Menu] Opening settings to section:', sectionId);
+  
+  // Create the settings URL with anchor
+  const settingsUrl = `file://browzer-settings#${sectionId}`;
+  console.log('[Settings Menu] Settings URL with anchor:', settingsUrl);
+  
+  // Check if there's already a settings tab open with any URL starting with file://browzer-settings
+  const existingSettingsTab = tabs.find(tab => tab.url.startsWith('file://browzer-settings'));
+  
+  if (existingSettingsTab) {
+    console.log('[Settings Menu] Found existing settings tab, updating URL to:', settingsUrl);
+    
+    // Update the existing tab's URL to include the new anchor
+    existingSettingsTab.url = settingsUrl;
+    
+    // Switch to the existing tab
+    selectTab(existingSettingsTab.id);
+    
+    // Update the webview src to navigate to the anchored URL
+    const webview = document.getElementById(existingSettingsTab.id) as any;
+    if (webview) {
+      const currentSrc = webview.getAttribute('src');
+      const newSrc = currentSrc.split('#')[0] + '#' + sectionId;
+      console.log('[Settings Menu] Updating webview src from', currentSrc, 'to', newSrc);
+      webview.setAttribute('src', newSrc);
+    }
+    
+    return;
+  }
+  
+  // Create a new tab with the anchored settings URL
+  console.log('[Settings Menu] Creating new settings tab with URL:', settingsUrl);
+  const tabId = createNewTab(settingsUrl);
+  
+  if (tabId) {
+    console.log('[Settings Menu] Successfully created settings tab:', tabId);
+  }
 }
 
 function setupGlobalErrorHandler(): void {
@@ -979,9 +1065,10 @@ function createNewTab(url: string = NEW_TAB_URL): string | null {
     tab.id = tabId;
     tab.dataset.webviewId = webviewId;
     
+    const initialTitle = url.startsWith('file://browzer-settings') ? '⚙️ Browzer Settings' : 'New Tab';
     tab.innerHTML = `
       <div class="tab-favicon"></div>
-      <span class="tab-title">New Tab</span>
+      <span class="tab-title">${initialTitle}</span>
       <button class="tab-close">×</button>
     `;
     
@@ -1003,7 +1090,7 @@ function createNewTab(url: string = NEW_TAB_URL): string | null {
     const newTab = {
       id: tabId,
       url: url,
-      title: 'New Tab',
+      title: initialTitle,
       isActive: false,
       webviewId: webviewId,
       history: [],
@@ -1241,8 +1328,310 @@ function configureWebview(webview: any, url: string): void {
   // Set the URL
   if (url === NEW_TAB_URL) {
     webview.setAttribute('src', homepageUrl);
+  } else if (url.startsWith('file://browzer-settings')) {
+    // Load the settings page (with or without anchor)
+    const settingsPath = `file://${window.electronAPI.path.join(window.electronAPI.cwd(), 'src/renderer/settings.html')}`;
+    
+    // If there's an anchor in the URL, append it to the settings path
+    const anchorIndex = url.indexOf('#');
+    const finalUrl = anchorIndex !== -1 ? settingsPath + url.substring(anchorIndex) : settingsPath;
+    
+    console.log('[Settings] Loading settings page with URL:', finalUrl);
+    webview.setAttribute('src', finalUrl);
+    
+    // Set up settings page communication after it loads
+    webview.addEventListener('dom-ready', () => {
+      setupSettingsPageCommunication(webview);
+    });
   } else {
     webview.setAttribute('src', url);
+  }
+}
+
+function setupSettingsPageCommunication(webview: any): void {
+  console.log('Setting up settings page communication');
+  
+  // Send initial settings data after page loads
+  setTimeout(async () => {
+    await injectSettingsDataAndHandlers(webview);
+  }, 1000);
+}
+
+async function injectSettingsDataAndHandlers(webview: any): Promise<void> {
+  if (!isWebviewReady(webview)) {
+    console.log('Webview not ready, retrying in 500ms');
+    setTimeout(() => injectSettingsDataAndHandlers(webview), 500);
+    return;
+  }
+
+  try {
+    console.log('Injecting settings data and handlers');
+    
+    // Get current settings data
+    let adBlockStats = { blockedDomains: 0, cssRules: 0, filterRules: 0 };
+    try {
+      const adBlockStatus = await ipcRenderer.invoke('get-adblock-status');
+      if (adBlockStatus && adBlockStatus.stats) {
+        adBlockStats = {
+          blockedDomains: adBlockStatus.stats.blockedDomains || 0,
+          cssRules: adBlockStatus.stats.cssRules || 0,
+          filterRules: adBlockStatus.stats.filterRules || 0
+        };
+      }
+    } catch (error) {
+      console.warn('Could not load ad blocker stats:', error);
+    }
+
+    const settingsData = {
+      apiKeys: {
+        openai: localStorage.getItem('openai_api_key') || '',
+        anthropic: localStorage.getItem('anthropic_api_key') || '',
+        perplexity: localStorage.getItem('perplexity_api_key') || '',
+        chutes: localStorage.getItem('chutes_api_key') || ''
+      },
+      sidebarEnabled: localStorage.getItem('sidebarEnabled') === 'true',
+      adBlockEnabled: localStorage.getItem('adBlockEnabled') !== 'false',
+      homepage: localStorage.getItem('homepage') || 'https://www.google.com',
+      maxCacheSize: localStorage.getItem('maxCacheSize') || '50',
+      autoCleanupEnabled: localStorage.getItem('autoCleanupEnabled') !== 'false',
+      memoryCount: JSON.parse(localStorage.getItem(MEMORY_KEY) || '[]').length,
+      adBlockStats,
+      cacheStats: { totalSize: '0 MB', itemCount: 0 }
+    };
+
+    // Inject the settings data and setup handlers
+    const injectionScript = `
+      (function() {
+        console.log('Settings injection script running');
+        
+        // Store settings data globally
+        window.browserSettings = ${JSON.stringify(settingsData)};
+        window.settingsActions = [];
+        
+        // Create communication function
+        window.sendToBrowser = function(action, data) {
+          console.log('Queuing action:', action, data);
+          window.settingsActions.push({ action, data });
+        };
+        
+        // Update UI with current settings
+        function updateUIWithBrowserSettings(data) {
+          console.log('Updating UI with settings:', data);
+          
+          // Load API keys
+          const providers = ['openai', 'anthropic', 'perplexity', 'chutes'];
+          providers.forEach(provider => {
+            const input = document.getElementById(provider + 'ApiKey');
+            if (input && data.apiKeys && data.apiKeys[provider]) {
+              input.value = data.apiKeys[provider];
+              console.log('Set API key for', provider);
+            }
+          });
+
+          // Load sidebar setting
+          const sidebarToggle = document.getElementById('sidebarToggle');
+          const sidebarCheckbox = document.getElementById('sidebarEnabled');
+          if (sidebarCheckbox && sidebarToggle) {
+            sidebarCheckbox.checked = data.sidebarEnabled || false;
+            sidebarToggle.classList.toggle('active', data.sidebarEnabled || false);
+            console.log('Set sidebar enabled:', data.sidebarEnabled);
+          }
+
+          // Load ad block setting
+          const adBlockToggle = document.getElementById('adBlockToggle');
+          const adBlockCheckbox = document.getElementById('adBlockEnabled');
+          if (adBlockCheckbox && adBlockToggle) {
+            adBlockCheckbox.checked = data.adBlockEnabled !== false;
+            adBlockToggle.classList.toggle('active', data.adBlockEnabled !== false);
+            console.log('Set adblock enabled:', data.adBlockEnabled);
+          }
+
+          // Load cache settings
+          const maxCacheSizeInput = document.getElementById('maxCacheSize');
+          if (maxCacheSizeInput) {
+            maxCacheSizeInput.value = data.maxCacheSize || '50';
+          }
+
+          const autoCleanupToggle = document.getElementById('autoCleanupToggle');
+          const autoCleanupCheckbox = document.getElementById('autoCleanupEnabled');
+          if (autoCleanupCheckbox && autoCleanupToggle) {
+            autoCleanupCheckbox.checked = data.autoCleanupEnabled !== false;
+            autoCleanupToggle.classList.toggle('active', data.autoCleanupEnabled !== false);
+          }
+
+          // Load homepage setting
+          const homepageInput = document.getElementById('homepageInput');
+          if (homepageInput) {
+            homepageInput.value = data.homepage || 'https://www.google.com';
+          }
+
+          // Update stats
+          const memoryCount = document.getElementById('memoryCount');
+          if (memoryCount) {
+            memoryCount.textContent = data.memoryCount || 0;
+            console.log('Set memory count:', data.memoryCount);
+          }
+
+          const blockedDomainsCount = document.getElementById('blockedDomainsCount');
+          const cssRulesCount = document.getElementById('cssRulesCount');
+          const filterRulesCount = document.getElementById('filterRulesCount');
+          
+          if (blockedDomainsCount) blockedDomainsCount.textContent = data.adBlockStats.blockedDomains || 0;
+          if (cssRulesCount) cssRulesCount.textContent = data.adBlockStats.cssRules || 0;
+          if (filterRulesCount) filterRulesCount.textContent = data.adBlockStats.filterRules || 0;
+
+          const totalCacheSize = document.getElementById('totalCacheSize');
+          const cacheItemCount = document.getElementById('cacheItemCount');
+          if (totalCacheSize) totalCacheSize.textContent = data.cacheStats.totalSize || '0 MB';
+          if (cacheItemCount) cacheItemCount.textContent = data.cacheStats.itemCount || 0;
+          
+          console.log('UI update complete');
+        }
+        
+        // Override the existing functions to use our communication
+        window.sendToMainRenderer = window.sendToBrowser;
+        
+        // Update UI immediately
+        if (window.browserSettings) {
+          updateUIWithBrowserSettings(window.browserSettings);
+        }
+        
+        console.log('Settings injection complete');
+      })();
+    `;
+
+    await webview.executeJavaScript(injectionScript);
+    console.log('Settings injection completed successfully');
+
+    // Set up listener for settings actions from the webview
+    setupSettingsActionListener(webview);
+
+  } catch (error) {
+    console.error('Error injecting settings:', error);
+  }
+}
+
+function setupSettingsActionListener(webview: any): void {
+  // We'll use a polling mechanism to check for settings actions
+  const checkForActions = async () => {
+    try {
+      const result = await webview.executeJavaScript(`
+        (function() {
+          if (window.settingsActions && window.settingsActions.length > 0) {
+            const actions = window.settingsActions.slice();
+            window.settingsActions = [];
+            return actions;
+          }
+          return [];
+        })();
+      `);
+      
+      if (result && result.length > 0) {
+        for (const { action, data } of result) {
+          await handleSettingsRequest(webview, action, data);
+        }
+      }
+    } catch (error) {
+      // Ignore errors, webview might not be ready
+    }
+  };
+
+  // Poll every 500ms for settings actions
+  const intervalId = setInterval(checkForActions, 500);
+
+  // Clean up interval when webview is destroyed
+  webview.addEventListener('destroyed', () => {
+    clearInterval(intervalId);
+  });
+}
+
+async function handleSettingsRequest(webview: any, action: string, data: any): Promise<void> {
+  switch (action) {
+    case 'save-api-key':
+      const { provider, apiKey } = data;
+      localStorage.setItem(`${provider}_api_key`, apiKey);
+      showToast(`${provider.charAt(0).toUpperCase() + provider.slice(1)} API key saved!`, 'success');
+      break;
+      
+    case 'toggle-sidebar':
+      localStorage.setItem('sidebarEnabled', data.enabled.toString());
+      applySidebarLayout(data.enabled);
+      showToast(`Sidebar ${data.enabled ? 'enabled' : 'disabled'}`, 'success');
+      break;
+      
+    case 'toggle-adblock':
+      localStorage.setItem('adBlockEnabled', data.enabled.toString());
+      showToast(`Ad blocking ${data.enabled ? 'enabled' : 'disabled'}`, 'success');
+      break;
+      
+    case 'save-homepage':
+      localStorage.setItem('homepage', data.homepage);
+      showToast('Homepage saved!', 'success');
+      break;
+      
+    case 'save-cache-settings':
+      localStorage.setItem('maxCacheSize', data.maxCacheSize);
+      localStorage.setItem('autoCleanupEnabled', data.autoCleanupEnabled.toString());
+      showToast('Cache settings saved!', 'success');
+      break;
+      
+        case 'clear-memory':
+      localStorage.removeItem(MEMORY_KEY);
+      showToast('Memory cleared successfully.', 'success');
+      await refreshSettingsPage(webview);
+      break;
+      
+    case 'export-memory':
+      exportMemory();
+      break;
+      
+    case 'import-memory':
+      if (data.memories && Array.isArray(data.memories)) {
+        localStorage.setItem(MEMORY_KEY, JSON.stringify(data.memories));
+        showToast('Memory imported successfully.', 'success');
+        await refreshSettingsPage(webview);
+      } else {
+        showToast('Invalid memory file format.', 'error');
+      }
+      break;
+      
+    case 'add-blocked-domain':
+      // Add blocked domain logic
+      showToast(`Domain ${data.domain} blocked`, 'success');
+      break;
+      
+    case 'add-allowed-domain':
+      // Add allowed domain logic  
+      showToast(`Domain ${data.domain} allowed`, 'success');
+      break;
+  }
+}
+
+async function refreshSettingsPage(webview: any): Promise<void> {
+  // Re-inject updated settings data
+  await injectSettingsDataAndHandlers(webview);
+}
+
+
+
+function exportMemory(): void {
+  try {
+    const memory = localStorage.getItem(MEMORY_KEY) || '[]';
+    const blob = new Blob([memory], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `browzer-memory-${new Date().toISOString().split('T')[0]}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    
+    URL.revokeObjectURL(url);
+    showToast('Memory exported successfully.', 'success');
+  } catch (e) {
+    console.error('Error exporting memory:', e);
+    showToast('Error exporting memory: ' + (e as Error).message, 'error');
   }
 }
 
@@ -1673,7 +2062,14 @@ function updateTabTitle(webview: any, title: string): void {
     if (tabId) {
       const tabTitle = document.querySelector(`#${tabId} .tab-title`);
       if (tabTitle) {
-        const pageTitle = title || webview.getTitle() || 'New Tab';
+        let pageTitle = title || webview.getTitle() || 'New Tab';
+        
+        // Special handling for settings page
+        const tab = tabs.find(t => t.id === tabId);
+        if (tab && tab.url.startsWith('file://browzer-settings')) {
+          pageTitle = '⚙️ Browzer Settings';
+        }
+        
         tabTitle.textContent = pageTitle;
         saveTabs();
       }
@@ -1872,14 +2268,11 @@ function setupExtensionsPanel(): void {
   // Sidebar setting
   const sidebarEnabledCheckbox = document.getElementById('sidebarEnabled') as HTMLInputElement;
   if (sidebarEnabledCheckbox) {
-    // Load saved sidebar preference
+    // Load saved sidebar preference for UI display
     const savedSidebarEnabled = localStorage.getItem('sidebarEnabled') === 'true';
     sidebarEnabledCheckbox.checked = savedSidebarEnabled;
     
-    // Apply sidebar layout if enabled
-    applySidebarLayout(savedSidebarEnabled);
-    
-    // Handle sidebar toggle
+    // Handle sidebar toggle (layout is already applied on startup)
     sidebarEnabledCheckbox.addEventListener('change', () => {
       const isEnabled = sidebarEnabledCheckbox.checked;
       localStorage.setItem('sidebarEnabled', isEnabled.toString());
@@ -1887,9 +2280,6 @@ function setupExtensionsPanel(): void {
       showToast(isEnabled ? 'Sidebar enabled' : 'Sidebar disabled', 'success');
     });
   }
-
-  // Collapse/Expand functionality
-  setupCollapseExpandButtons();
 
   // Clear any stuck loading states IMMEDIATELY
   clearStuckLoadingStates();

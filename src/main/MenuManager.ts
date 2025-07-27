@@ -140,6 +140,50 @@ export class MenuManager {
           ] : [])
         ]
       },
+      // Settings menu
+      {
+        label: 'Settings',
+        submenu: [
+          {
+            label: 'API Keys',
+            accelerator: 'CmdOrCtrl+,',
+            click: () => {
+              this.sendMenuAction(IPC_CHANNELS.MENU_SETTINGS_API_KEYS);
+            }
+          },
+          {
+            label: 'Interface',
+            click: () => {
+              this.sendMenuAction(IPC_CHANNELS.MENU_SETTINGS_INTERFACE);
+            }
+          },
+          {
+            label: 'AI Memory',
+            click: () => {
+              this.sendMenuAction(IPC_CHANNELS.MENU_SETTINGS_AI_MEMORY);
+            }
+          },
+          {
+            label: 'Privacy & Security',
+            click: () => {
+              this.sendMenuAction(IPC_CHANNELS.MENU_SETTINGS_PRIVACY);
+            }
+          },
+          {
+            label: 'Cache & Storage',
+            click: () => {
+              this.sendMenuAction(IPC_CHANNELS.MENU_SETTINGS_CACHE);
+            }
+          },
+          { type: 'separator' },
+          {
+            label: 'General',
+            click: () => {
+              this.sendMenuAction(IPC_CHANNELS.MENU_SETTINGS_GENERAL);
+            }
+          }
+        ]
+      },
       // Help menu
       {
         label: 'Help',

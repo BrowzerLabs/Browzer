@@ -1,0 +1,601 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Browzer Settings</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="chrome-settings-container">
+        <!-- Sidebar Navigation -->
+        <aside class="settings-sidebar">
+            <div class="settings-sidebar-header">
+                <h1 class="settings-sidebar-title">
+                    <span class="settings-icon">⚙️</span>
+                    Settings
+                </h1>
+                <p class="settings-sidebar-subtitle">Customize your Browzer experience</p>
+            </div>
+            
+            <nav class="settings-nav">
+                <div class="settings-nav-item">
+                    <a href="#ai-keys" class="settings-nav-link active" data-section="ai-keys">
+                        <span class="settings-nav-icon">🔑</span>
+                        AI Integration
+                    </a>
+                </div>
+                <div class="settings-nav-item">
+                    <a href="#interface" class="settings-nav-link" data-section="interface">
+                        <span class="settings-nav-icon">🎨</span>
+                        Interface
+                    </a>
+                </div>
+                <div class="settings-nav-item">
+                    <a href="#privacy" class="settings-nav-link" data-section="privacy">
+                        <span class="settings-nav-icon">🛡️</span>
+                        Privacy & Security
+                    </a>
+                </div>
+                <div class="settings-nav-item">
+                    <a href="#ai-memory" class="settings-nav-link" data-section="ai-memory">
+                        <span class="settings-nav-icon">🧠</span>
+                        AI Memory
+                    </a>
+                </div>
+                <div class="settings-nav-item">
+                    <a href="#cache" class="settings-nav-link" data-section="cache">
+                        <span class="settings-nav-icon">💾</span>
+                        Cache & Storage
+                    </a>
+                </div>
+                <div class="settings-nav-item">
+                    <a href="#general" class="settings-nav-link" data-section="general">
+                        <span class="settings-nav-icon">🔧</span>
+                        General
+                    </a>
+                </div>
+            </nav>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="settings-main">
+            <!-- AI Integration Section -->
+            <section id="ai-keys" class="settings-section">
+                <div class="settings-main-header">
+                    <h1 class="settings-main-title">AI Integration</h1>
+                    <p class="settings-main-subtitle">Configure your AI providers and API keys for enhanced browsing assistance</p>
+                </div>
+
+                <div class="settings-card">
+                    <div class="settings-card-header">
+                        <h3 class="settings-card-title">
+                            <span class="settings-icon">🔑</span>
+                            API Keys
+                        </h3>
+                        <p class="settings-card-description">Add your API keys to enable AI-powered features</p>
+                    </div>
+                    <div class="settings-card-content">
+                        <div class="chrome-form-group">
+                            <label class="chrome-form-label" for="openaiApiKey">OpenAI API Key</label>
+                            <input type="password" id="openaiApiKey" class="chrome-form-input" placeholder="sk-...">
+                            <p class="chrome-form-description">Used for GPT models and chat assistance</p>
+                        </div>
+                        
+                        <div class="chrome-form-group">
+                            <label class="chrome-form-label" for="anthropicApiKey">Anthropic API Key</label>
+                            <input type="password" id="anthropicApiKey" class="chrome-form-input" placeholder="sk-ant-...">
+                            <p class="chrome-form-description">Used for Claude models</p>
+                        </div>
+                        
+                        <div class="chrome-form-group">
+                            <label class="chrome-form-label" for="perplexityApiKey">Perplexity API Key</label>
+                            <input type="password" id="perplexityApiKey" class="chrome-form-input" placeholder="pplx-...">
+                            <p class="chrome-form-description">Used for web search and research</p>
+                        </div>
+                        
+                        <div class="chrome-form-group">
+                            <label class="chrome-form-label" for="chutesApiKey">Chutes API Key</label>
+                            <input type="password" id="chutesApiKey" class="chrome-form-input" placeholder="ch-...">
+                            <p class="chrome-form-description">Used for specialized AI services</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Interface Section -->
+            <section id="interface" class="settings-section hidden">
+                <div class="settings-main-header">
+                    <h1 class="settings-main-title">Interface</h1>
+                    <p class="settings-main-subtitle">Customize the look and feel of your browser</p>
+                </div>
+
+                <div class="settings-card">
+                    <div class="settings-card-header">
+                        <h3 class="settings-card-title">
+                            <span class="settings-icon">🎨</span>
+                            Layout Options
+                        </h3>
+                        <p class="settings-card-description">Choose how you want your tabs and interface to be organized</p>
+                    </div>
+                    <div class="settings-card-content">
+                        <div class="chrome-toggle-row">
+                            <div class="chrome-toggle-content">
+                                <div class="chrome-toggle-title">Sidebar Tab Layout</div>
+                                <div class="chrome-toggle-description">Display tabs vertically in a sidebar instead of horizontally</div>
+                            </div>
+                            <div class="chrome-toggle-switch" id="sidebarToggle">
+                                <input type="checkbox" id="sidebarEnabled" class="chrome-toggle-input">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="settings-card">
+                    <div class="settings-card-header">
+                        <h3 class="settings-card-title">
+                            <span class="settings-icon">🏠</span>
+                            Homepage
+                        </h3>
+                        <p class="settings-card-description">Set your default homepage</p>
+                    </div>
+                    <div class="settings-card-content">
+                        <div class="chrome-form-group">
+                            <label class="chrome-form-label" for="homepageInput">Homepage URL</label>
+                            <input type="url" id="homepageInput" class="chrome-form-input" placeholder="https://www.google.com">
+                            <p class="chrome-form-description">This page will open when you create a new tab</p>
+                        </div>
+                        <div class="chrome-button-group">
+                            <button class="chrome-btn chrome-btn-primary" id="saveHomepageBtn">Save Homepage</button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Privacy & Security Section -->
+            <section id="privacy" class="settings-section hidden">
+                <div class="settings-main-header">
+                    <h1 class="settings-main-title">Privacy & Security</h1>
+                    <p class="settings-main-subtitle">Control your privacy settings and ad blocking preferences</p>
+                </div>
+
+                <div class="settings-card">
+                    <div class="settings-card-header">
+                        <h3 class="settings-card-title">
+                            <span class="settings-icon">🛡️</span>
+                            Ad Blocker
+                        </h3>
+                        <p class="settings-card-description">Block unwanted ads and trackers for a cleaner browsing experience</p>
+                    </div>
+                    <div class="settings-card-content">
+                        <div class="chrome-toggle-row">
+                            <div class="chrome-toggle-content">
+                                <div class="chrome-toggle-title">Enable Ad Blocker</div>
+                                <div class="chrome-toggle-description">Block ads, trackers, and malicious content</div>
+                            </div>
+                            <div class="chrome-toggle-switch" id="adBlockToggle">
+                                <input type="checkbox" id="adBlockEnabled" class="chrome-toggle-input" checked>
+                            </div>
+                        </div>
+
+                        <div class="chrome-stats-grid">
+                            <div class="chrome-stat-card">
+                                <span class="chrome-stat-value" id="blockedDomainsCount">0</span>
+                                <p class="chrome-stat-label">Blocked Domains</p>
+                            </div>
+                            <div class="chrome-stat-card">
+                                <span class="chrome-stat-value" id="cssRulesCount">0</span>
+                                <p class="chrome-stat-label">CSS Rules</p>
+                            </div>
+                            <div class="chrome-stat-card">
+                                <span class="chrome-stat-value" id="filterRulesCount">0</span>
+                                <p class="chrome-stat-label">Filter Rules</p>
+                            </div>
+                        </div>
+
+                        <div class="chrome-domain-management">
+                            <div class="chrome-domain-section">
+                                <h4 class="chrome-domain-section-title">Blocked Domains</h4>
+                                <div class="chrome-domain-input-group">
+                                    <input type="text" id="blockedDomainInput" class="chrome-domain-input" placeholder="example.com">
+                                    <button class="chrome-btn chrome-btn-secondary" id="addBlockedDomainBtn">Block</button>
+                                </div>
+                                <div class="chrome-domain-list" id="blockedDomainsList"></div>
+                            </div>
+                            
+                            <div class="chrome-domain-section">
+                                <h4 class="chrome-domain-section-title">Allowed Domains</h4>
+                                <div class="chrome-domain-input-group">
+                                    <input type="text" id="allowedDomainInput" class="chrome-domain-input" placeholder="trusted-site.com">
+                                    <button class="chrome-btn chrome-btn-secondary" id="addAllowedDomainBtn">Allow</button>
+                                </div>
+                                <div class="chrome-domain-list" id="allowedDomainsList"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- AI Memory Section -->
+            <section id="ai-memory" class="settings-section hidden">
+                <div class="settings-main-header">
+                    <h1 class="settings-main-title">AI Memory</h1>
+                    <p class="settings-main-subtitle">Manage your AI assistant's memory and conversation history</p>
+                </div>
+
+                <div class="settings-card">
+                    <div class="settings-card-header">
+                        <h3 class="settings-card-title">
+                            <span class="settings-icon">🧠</span>
+                            Memory Management
+                        </h3>
+                        <p class="settings-card-description">Control how your AI assistant remembers past interactions</p>
+                    </div>
+                    <div class="settings-card-content">
+                        <div class="chrome-stats-grid">
+                            <div class="chrome-stat-card">
+                                <span class="chrome-stat-value" id="memoryCount">0</span>
+                                <p class="chrome-stat-label">Stored Memories</p>
+                            </div>
+                        </div>
+
+                        <div class="chrome-button-group">
+                            <button class="chrome-btn chrome-btn-secondary" id="exportMemoryBtn">Export Memory</button>
+                            <input type="file" id="importMemoryInput" accept=".json" style="display: none;">
+                            <button class="chrome-btn chrome-btn-secondary" id="importMemoryBtn">Import Memory</button>
+                            <button class="chrome-btn chrome-btn-danger" id="clearMemoryBtn">Clear All Memory</button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Cache & Storage Section -->
+            <section id="cache" class="settings-section hidden">
+                <div class="settings-main-header">
+                    <h1 class="settings-main-title">Cache & Storage</h1>
+                    <p class="settings-main-subtitle">Configure how Browzer stores and manages cached content</p>
+                </div>
+
+                <div class="settings-card">
+                    <div class="settings-card-header">
+                        <h3 class="settings-card-title">
+                            <span class="settings-icon">💾</span>
+                            Cache Settings
+                        </h3>
+                        <p class="settings-card-description">Manage browser cache size and cleanup options</p>
+                    </div>
+                    <div class="settings-card-content">
+                        <div class="chrome-form-group">
+                            <label class="chrome-form-label" for="maxCacheSize">Maximum Cache Size (MB)</label>
+                            <input type="number" id="maxCacheSize" class="chrome-form-input" value="50" min="10" max="1000">
+                            <p class="chrome-form-description">Maximum amount of disk space to use for caching</p>
+                        </div>
+
+                        <div class="chrome-toggle-row">
+                            <div class="chrome-toggle-content">
+                                <div class="chrome-toggle-title">Auto Cleanup</div>
+                                <div class="chrome-toggle-description">Automatically clean up old cache files when limit is reached</div>
+                            </div>
+                            <div class="chrome-toggle-switch" id="autoCleanupToggle">
+                                <input type="checkbox" id="autoCleanupEnabled" class="chrome-toggle-input" checked>
+                            </div>
+                        </div>
+
+                        <div class="chrome-stats-grid">
+                            <div class="chrome-stat-card">
+                                <span class="chrome-stat-value" id="totalCacheSize">0 MB</span>
+                                <p class="chrome-stat-label">Current Size</p>
+                            </div>
+                            <div class="chrome-stat-card">
+                                <span class="chrome-stat-value" id="cacheItemCount">0</span>
+                                <p class="chrome-stat-label">Cached Items</p>
+                            </div>
+                        </div>
+
+                        <div class="chrome-button-group">
+                            <button class="chrome-btn chrome-btn-primary" id="saveCacheSettingsBtn">Save Settings</button>
+                            <button class="chrome-btn chrome-btn-danger" id="clearCacheBtn">Clear Cache</button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- General Section -->
+            <section id="general" class="settings-section hidden">
+                <div class="settings-main-header">
+                    <h1 class="settings-main-title">General</h1>
+                    <p class="settings-main-subtitle">General browser settings and preferences</p>
+                </div>
+
+                <div class="settings-card">
+                    <div class="settings-card-header">
+                        <h3 class="settings-card-title">
+                            <span class="settings-icon">ℹ️</span>
+                            About Browzer
+                        </h3>
+                        <p class="settings-card-description">Version information and updates</p>
+                    </div>
+                    <div class="settings-card-content">
+                        <p>Browzer - AI-Powered Browser</p>
+                        <p>Version 1.0.0</p>
+                        <p>Built with Electron and modern web technologies</p>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Toast notifications will be dynamically added here -->
+
+    <script>
+        // Toast notification function
+        function showToast(message, type = 'info') {
+            const toast = document.createElement('div');
+            toast.className = `settings-toast ${type}`;
+            toast.textContent = message;
+            document.body.appendChild(toast);
+            
+            setTimeout(() => toast.classList.add('show'), 100);
+            setTimeout(() => {
+                toast.classList.remove('show');
+                setTimeout(() => document.body.removeChild(toast), 300);
+            }, 3000);
+        }
+        
+        // Communication functions will be injected by the main renderer
+        window.sendToMainRenderer = window.sendToBrowser || function(action, data) {
+            console.warn('Settings communication not ready yet');
+        };
+
+        // Navigation functionality
+        function showSection(sectionId) {
+            console.log('Showing section:', sectionId);
+            
+            // Hide all sections
+            document.querySelectorAll('.settings-section').forEach(section => {
+                section.classList.add('hidden');
+            });
+            
+            // Remove active class from all nav links
+            document.querySelectorAll('.settings-nav-link').forEach(link => {
+                link.classList.remove('active');
+            });
+            
+            // Show selected section
+            const targetSection = document.getElementById(sectionId);
+            if (targetSection) {
+                targetSection.classList.remove('hidden');
+                console.log('Successfully showed section:', sectionId);
+            } else {
+                console.warn('Section not found:', sectionId);
+            }
+            
+            // Add active class to clicked nav link
+            const activeLink = document.querySelector(`[data-section="${sectionId}"]`);
+            if (activeLink) {
+                activeLink.classList.add('active');
+                console.log('Set active nav link for section:', sectionId);
+            }
+            
+            // Update the URL hash without reloading the page
+            if (window.location.hash !== '#' + sectionId) {
+                window.history.replaceState(null, null, '#' + sectionId);
+                console.log('Updated URL hash to:', '#' + sectionId);
+            }
+        }
+
+        // Toggle switch functionality
+        function initializeToggleSwitches() {
+            const toggleSwitches = document.querySelectorAll('.chrome-toggle-switch');
+            
+            toggleSwitches.forEach(toggle => {
+                const checkbox = toggle.querySelector('.chrome-toggle-input');
+                
+                // Set initial state
+                if (checkbox && checkbox.checked) {
+                    toggle.classList.add('active');
+                }
+                
+                // Add click handler
+                toggle.addEventListener('click', () => {
+                    if (checkbox) {
+                        checkbox.checked = !checkbox.checked;
+                        toggle.classList.toggle('active', checkbox.checked);
+                        
+                        // Trigger change event for specific settings
+                        if (checkbox.id === 'sidebarEnabled') {
+                            window.sendToMainRenderer('toggle-sidebar', { enabled: checkbox.checked });
+                        } else if (checkbox.id === 'adBlockEnabled') {
+                            window.sendToMainRenderer('toggle-adblock', { enabled: checkbox.checked });
+                        } else if (checkbox.id === 'autoCleanupEnabled') {
+                            window.sendToMainRenderer('save-cache-settings', { 
+                                maxCacheSize: document.getElementById('maxCacheSize').value,
+                                autoCleanupEnabled: checkbox.checked 
+                            });
+                        }
+                    }
+                });
+            });
+        }
+
+        // Load settings on page load
+        document.addEventListener('DOMContentLoaded', () => {
+            setupEventListeners();
+            initializeToggleSwitches();
+            
+            // Check for anchor in URL and navigate to that section
+            const hash = window.location.hash.substring(1); // Remove the #
+            if (hash) {
+                console.log('Settings page loaded with anchor:', hash);
+                showSection(hash);
+            } else {
+                console.log('Settings page loaded, waiting for data injection...');
+            }
+        });
+
+        // Listen for hash changes (browser back/forward)
+        window.addEventListener('hashchange', () => {
+            const hash = window.location.hash.substring(1);
+            if (hash) {
+                console.log('Hash changed to:', hash);
+                showSection(hash);
+            }
+        });
+
+        function setupEventListeners() {
+            // Navigation links
+            document.querySelectorAll('.settings-nav-link').forEach(link => {
+                link.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    const sectionId = link.getAttribute('data-section');
+                    showSection(sectionId);
+                });
+            });
+
+            // API Key inputs - auto-save on blur
+            const apiKeyInputs = ['openai', 'anthropic', 'perplexity', 'chutes'];
+            apiKeyInputs.forEach(provider => {
+                const input = document.getElementById(`${provider}ApiKey`);
+                if (input) {
+                    input.addEventListener('blur', () => {
+                        const apiKey = input.value.trim();
+                        if (apiKey) {
+                            window.sendToMainRenderer('save-api-key', { provider, apiKey });
+                        }
+                    });
+                }
+            });
+
+            // Memory management buttons
+            const clearMemoryBtn = document.getElementById('clearMemoryBtn');
+            if (clearMemoryBtn) {
+                clearMemoryBtn.addEventListener('click', () => {
+                    if (confirm('Are you sure you want to clear all AI memory? This cannot be undone.')) {
+                        window.sendToMainRenderer('clear-memory');
+                    }
+                });
+            }
+
+            // Homepage settings
+            const saveHomepageBtn = document.getElementById('saveHomepageBtn');
+            if (saveHomepageBtn) {
+                saveHomepageBtn.addEventListener('click', () => {
+                    const homepageInput = document.getElementById('homepageInput');
+                    const homepage = homepageInput?.value.trim();
+                    if (homepage) {
+                        window.sendToMainRenderer('save-homepage', { homepage });
+                    }
+                });
+            }
+
+            // Cache settings
+            const saveCacheSettingsBtn = document.getElementById('saveCacheSettingsBtn');
+            if (saveCacheSettingsBtn) {
+                saveCacheSettingsBtn.addEventListener('click', () => {
+                    const maxCacheSizeInput = document.getElementById('maxCacheSize');
+                    const autoCleanupCheckbox = document.getElementById('autoCleanupEnabled');
+                    const maxCacheSize = maxCacheSizeInput?.value;
+                    const autoCleanupEnabled = autoCleanupCheckbox?.checked;
+                    if (maxCacheSize) {
+                        window.sendToMainRenderer('save-cache-settings', { maxCacheSize, autoCleanupEnabled });
+                    }
+                });
+            }
+
+            // Domain management
+            const addBlockedDomainBtn = document.getElementById('addBlockedDomainBtn');
+            if (addBlockedDomainBtn) {
+                addBlockedDomainBtn.addEventListener('click', () => {
+                    const input = document.getElementById('blockedDomainInput');
+                    const domain = input?.value.trim();
+                    if (domain) {
+                        window.sendToMainRenderer('add-blocked-domain', { domain });
+                        input.value = '';
+                    }
+                });
+            }
+
+            const addAllowedDomainBtn = document.getElementById('addAllowedDomainBtn');
+            if (addAllowedDomainBtn) {
+                addAllowedDomainBtn.addEventListener('click', () => {
+                    const input = document.getElementById('allowedDomainInput');
+                    const domain = input?.value.trim();
+                    if (domain) {
+                        window.sendToMainRenderer('add-allowed-domain', { domain });
+                        input.value = '';
+                    }
+                });
+            }
+
+            // Export/Import memory
+            const exportMemoryBtn = document.getElementById('exportMemoryBtn');
+            if (exportMemoryBtn) {
+                exportMemoryBtn.addEventListener('click', () => {
+                    window.sendToMainRenderer('export-memory');
+                });
+            }
+
+            const importMemoryBtn = document.getElementById('importMemoryBtn');
+            const importMemoryInput = document.getElementById('importMemoryInput');
+            if (importMemoryBtn && importMemoryInput) {
+                importMemoryBtn.addEventListener('click', () => {
+                    importMemoryInput.click();
+                });
+
+                importMemoryInput.addEventListener('change', (e) => {
+                    const file = e.target.files[0];
+                    if (file) {
+                        const reader = new FileReader();
+                        reader.onload = (e) => {
+                            try {
+                                const memories = JSON.parse(e.target.result);
+                                window.sendToMainRenderer('import-memory', { memories });
+                                showToast('Memory imported successfully', 'success');
+                            } catch (error) {
+                                showToast('Error importing memory file', 'error');
+                            }
+                        };
+                        reader.readAsText(file);
+                    }
+                });
+            }
+        }
+
+        // Stats update functions
+        function updateMemoryCount(count) {
+            const memoryCountElement = document.getElementById('memoryCount');
+            if (memoryCountElement) {
+                memoryCountElement.textContent = count || 0;
+            }
+        }
+
+        function updateCacheStats(stats) {
+            const totalCacheSizeElement = document.getElementById('totalCacheSize');
+            const cacheItemCountElement = document.getElementById('cacheItemCount');
+            
+            if (totalCacheSizeElement) {
+                totalCacheSizeElement.textContent = stats.totalSize || '0 MB';
+            }
+            if (cacheItemCountElement) {
+                cacheItemCountElement.textContent = stats.itemCount || 0;
+            }
+        }
+
+        function updateAdBlockStats(stats) {
+            const blockedDomainsCountElement = document.getElementById('blockedDomainsCount');
+            const cssRulesCountElement = document.getElementById('cssRulesCount');
+            const filterRulesCountElement = document.getElementById('filterRulesCount');
+            
+            if (blockedDomainsCountElement) {
+                blockedDomainsCountElement.textContent = stats.blockedDomains || 0;
+            }
+            if (cssRulesCountElement) {
+                cssRulesCountElement.textContent = stats.cssRules || 0;
+            }
+            if (filterRulesCountElement) {
+                filterRulesCountElement.textContent = stats.filterRules || 0;
+            }
+        }
+    </script>
+</body>
+</html> 

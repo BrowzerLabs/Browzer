@@ -137,9 +137,9 @@ export const IPC_CHANNELS = {
   
   // Settings menu actions
   MENU_SETTINGS_API_KEYS: 'menu-settings-api-keys',
+  MENU_SETTINGS_INTERFACE: 'menu-settings-interface',
   MENU_SETTINGS_AI_MEMORY: 'menu-settings-ai-memory',
+  MENU_SETTINGS_PRIVACY: 'menu-settings-privacy',
   MENU_SETTINGS_CACHE: 'menu-settings-cache',
-  MENU_SETTINGS_EXTENSIONS: 'menu-settings-extensions',
-  MENU_SETTINGS_GENERAL: 'menu-settings-general',
-  MENU_SETTINGS_ADVANCED: 'menu-settings-advanced'
+  MENU_SETTINGS_GENERAL: 'menu-settings-general'
 } as const; 
