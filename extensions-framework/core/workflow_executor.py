@@ -182,7 +182,8 @@ class WorkflowExecutor:
                 'selectedProvider': data.get('selectedProvider', 'anthropic'),
                 'selectedModel': data.get('selectedModel', 'claude-3-7-sonnet-latest'),
                 'isQuestion': data.get('isQuestion', False),
-                'conversationHistory': data.get('conversationHistory', [])
+                'conversationHistory': data.get('conversationHistory', []),
+                'pageContent': data.get('pageContent')  # Preserve page content for all workflow steps
             }
             
             # Merge step result with preserved workflow data

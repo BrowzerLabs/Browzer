@@ -252,7 +252,8 @@ class OptimizedWorkflowExecutor:
                 'selectedProvider': data.get('selectedProvider', 'anthropic'),
                 'selectedModel': data.get('selectedModel', 'claude-3-7-sonnet-latest'),
                 'isQuestion': data.get('isQuestion', False),
-                'conversationHistory': data.get('conversationHistory', [])
+                'conversationHistory': data.get('conversationHistory', []),
+                'pageContent': data.get('pageContent')  # Preserve page content for all workflow steps
             }
             
             current_data = {**preserved_data, **step_result.data}

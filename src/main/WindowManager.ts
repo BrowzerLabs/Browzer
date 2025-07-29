@@ -43,12 +43,6 @@ export class WindowManager {
   private setupWindowEventHandlers(): void {
     if (!this.mainWindow) return;
 
-    // Handle renderer process crashes
-    this.mainWindow.webContents.on('crashed', (event, killed) => {
-      console.error('Renderer process crashed:', killed ? 'killed' : 'crashed');
-      this.logCrash(`Renderer process ${killed ? 'killed' : 'crashed'}`);
-    });
-
     // Handle renderer process gone
     this.mainWindow.webContents.on('render-process-gone', (event, details) => {
       console.error('Renderer process gone:', details.reason);
