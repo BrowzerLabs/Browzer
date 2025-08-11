@@ -192,14 +192,14 @@ export class MenuManager {
             label: 'About Browzer',
             click: () => {
               // Could show an about dialog
-              console.log('About Browzer');
+              // console.log('About Browzer');
             }
           },
           {
             label: 'Learn More',
             click: () => {
               // Could open documentation
-              console.log('Learn More clicked');
+              // console.log('Learn More clicked');
             }
           }
         ]

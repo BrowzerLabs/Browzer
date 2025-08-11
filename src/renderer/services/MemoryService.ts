@@ -16,7 +16,7 @@ export class MemoryService {
       const memoriesData = localStorage.getItem(this.MEMORY_STORAGE_KEY);
       if (memoriesData) {
         this.memories = JSON.parse(memoriesData);
-        console.log(`Loaded ${this.memories.length} memories`);
+        // console.log(`Loaded ${this.memories.length} memories`);
       }
     } catch (error) {
       console.error('Error loading memories:', error);
@@ -63,7 +63,7 @@ export class MemoryService {
       }
 
       this.saveMemories();
-      console.log('Stored memory:', { url, question: question.substring(0, 50), topic });
+      // console.log('Stored memory:', { url, question: question.substring(0, 50), topic });
     } catch (error) {
       console.error('Error storing memory:', error);
     }
@@ -202,7 +202,7 @@ export class MemoryService {
       if (index !== -1) {
         this.memories.splice(index, 1);
         this.saveMemories();
-        console.log('Deleted memory:', memoryId);
+        // console.log('Deleted memory:', memoryId);
         return true;
       }
       return false;
@@ -216,7 +216,7 @@ export class MemoryService {
     try {
       this.memories = [];
       this.saveMemories();
-      console.log('All memories cleared');
+      // console.log('All memories cleared');
     } catch (error) {
       console.error('Error clearing memories:', error);
     }
@@ -232,7 +232,7 @@ export class MemoryService {
       const deletedCount = originalLength - this.memories.length;
       if (deletedCount > 0) {
         this.saveMemories();
-        console.log(`Cleared ${deletedCount} memories older than ${days} days`);
+        // console.log(`Cleared ${deletedCount} memories older than ${days} days`);
       }
       
       return deletedCount;
@@ -317,7 +317,7 @@ export class MemoryService {
         }
         
         this.saveMemories();
-        console.log(`Imported memories, total count: ${this.memories.length}`);
+        // console.log(`Imported memories, total count: ${this.memories.length}`);
         return true;
       }
       

@@ -295,7 +295,7 @@ export class BrowserImportService {
       } as any;
       
       fs.writeFileSync(importedDataPath, JSON.stringify(existingData, null, 2));
-      console.log(`Saved ${browser} data to ${importedDataPath}`);
+      // console.log(`Saved ${browser} data to ${importedDataPath}`);
     } catch (error) {
       console.error('Failed to save browser data:', error);
     }

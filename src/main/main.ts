@@ -22,7 +22,7 @@ function logStartup(message: string) {
   const logMessage = `[${timestamp}] ${message}\n`;
   
   // Log to console
-  console.log(message);
+  // console.log(message);
   
   // Log to file for debugging packaged apps
   try {
@@ -211,9 +211,9 @@ class BrowzerApp {
     // LLM API call handler
     ipcMain.handle('call-llm', async (event, request: LLMRequest) => {
       try {
-        console.log('[Main] Handling LLM call for provider:', request.provider);
+        // console.log('[Main] Handling LLM call for provider:', request.provider);
         const response = await this.llmService.callLLM(request);
-        console.log('[Main] LLM call completed, success:', response.success);
+        // console.log('[Main] LLM call completed, success:', response.success);
         return response;
       } catch (error) {
         console.error('[Main] LLM call failed:', error);
@@ -260,7 +260,7 @@ class BrowzerApp {
     // Onboarding handlers - delegate to WindowManager
     ipcMain.handle('onboarding-completed', async (event, data) => {
       try {
-        // console.log('🎉 Onboarding completed from renderer:', data);
+        // // console.log('🎉 Onboarding completed from renderer:', data);
         // Call WindowManager method
         await this.windowManager.handleOnboardingComplete(data);
         return { success: true };
@@ -272,7 +272,7 @@ class BrowzerApp {
 
     ipcMain.handle('close-onboarding', async (event) => {
       try {
-        // console.log('🚪 IPC close-onboarding received');
+        // // console.log('🚪 IPC close-onboarding received');
         // Call WindowManager method
         await this.windowManager.handleCloseOnboarding();
         return { success: true };
@@ -284,7 +284,7 @@ class BrowzerApp {
 
     ipcMain.handle('save-api-key', async (event, data: { provider: string; key: string }) => {
       try {
-        // console.log(`🔑 Saving API key for ${data.provider}`);
+        // // console.log(`🔑 Saving API key for ${data.provider}`);
         
         // Save to user data directory
         const userDataPath = app.getPath('userData');
@@ -314,7 +314,7 @@ class BrowzerApp {
 
     ipcMain.handle('open-settings', async (event) => {
       try {
-        console.log('⚙️ Opening settings from onboarding');
+        // console.log('⚙️ Opening settings from onboarding');
         // This will be handled by the main window once it's created
         return { success: true };
       } catch (error: any) {
@@ -475,7 +475,7 @@ class BrowzerApp {
     // Browser Import Service handlers
     ipcMain.handle('import-browser-data', async (event, data: { browser: string }) => {
       try {
-        console.log(`[Main] Importing browser data from: ${data.browser}`);
+        // console.log(`[Main] Importing browser data from: ${data.browser}`);
         return await this.browserImportService.importBrowserData(data.browser);
       } catch (error: any) {
         console.error('Error importing browser data:', error);
@@ -502,7 +502,7 @@ class BrowzerApp {
       }
     });
 
-    console.log('[Main] IPC handlers set up for LLM service, onboarding, email, user services, and browser import');
+    // console.log('[Main] IPC handlers set up for LLM service, onboarding, email, user services, and browser import');
   }
 }
 

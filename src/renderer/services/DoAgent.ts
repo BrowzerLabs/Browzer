@@ -276,7 +276,7 @@ export class DoAgent {
       };
 
       this.currentTask = task;
-      console.log('[DoAgent] Starting LLM-powered task execution:', instruction);
+      // console.log('[DoAgent] Starting LLM-powered task execution:', instruction);
 
       // Start the iterative execution loop
       let isTaskComplete = false;
@@ -284,24 +284,24 @@ export class DoAgent {
 
       while (!isTaskComplete && this.stepCount < this.maxSteps) {
         this.stepCount++;
-        console.log(`[DoAgent] Starting step ${this.stepCount} of ${this.maxSteps}`);
+        // console.log(`[DoAgent] Starting step ${this.stepCount} of ${this.maxSteps}`);
         
         // Analyze current page state
-        console.log(`[DoAgent] Analyzing page state...`);
+        // console.log(`[DoAgent] Analyzing page state...`);
         const pageState = await this.analyzePageState();
-        console.log(`[DoAgent] Page state analyzed: ${pageState.url}`);
+        // console.log(`[DoAgent] Page state analyzed: ${pageState.url}`);
         
         // Ask LLM for next action
-        console.log(`[DoAgent] Requesting next action from LLM...`);
-        console.log(`[DoAgent] Current webview state:`, {
-          src: this.webview?.src,
-          isLoading: this.webview?.isLoading(),
-          canGoBack: this.webview?.canGoBack(),
-          canGoForward: this.webview?.canGoForward()
-        });
+        // console.log(`[DoAgent] Requesting next action from LLM...`);
+        // console.log(`[DoAgent] Current webview state:`, {
+        //   src: this.webview?.src,
+        //   isLoading: this.webview?.isLoading(),
+        //   canGoBack: this.webview?.canGoBack(),
+        //   canGoForward: this.webview?.canGoForward()
+        // });
         
         const nextAction = await this.getNextActionFromLLM(instruction, pageState, task.steps);
-        console.log(`[DoAgent] LLM suggested action: ${nextAction.action} - ${nextAction.description}`);
+        // console.log(`[DoAgent] LLM suggested action: ${nextAction.action} - ${nextAction.description}`);
         
         if (nextAction.action === 'complete') {
           isTaskComplete = true;
@@ -329,10 +329,10 @@ export class DoAgent {
         }
 
         try {
-          console.log(`[DoAgent] Executing step ${this.stepCount}: ${step.action} - ${step.description}`);
+          // console.log(`[DoAgent] Executing step ${this.stepCount}: ${step.action} - ${step.description}`);
           await this.executeStep(step);
           step.status = 'completed';
-          console.log(`[DoAgent] Step ${this.stepCount} completed successfully`);
+          // console.log(`[DoAgent] Step ${this.stepCount} completed successfully`);
         } catch (error) {
           step.status = 'failed';
           step.error = (error as Error).message;
@@ -347,12 +347,12 @@ export class DoAgent {
           }
         }
 
-        console.log(`[DoAgent] About to continue to next step. Current step count: ${this.stepCount}/${this.maxSteps}`);
+        // console.log(`[DoAgent] About to continue to next step. Current step count: ${this.stepCount}/${this.maxSteps}`);
         
         // Add a small delay between steps
         await this.wait(1000);
         
-        console.log(`[DoAgent] Continuing execution loop...`);
+        // console.log(`[DoAgent] Continuing execution loop...`);
       }
 
       if (this.stepCount >= this.maxSteps) {
@@ -495,7 +495,7 @@ export class DoAgent {
             throw new Error(`Element is not visible or displayed: ${selector}`);
           }
           
-          console.log('[DoAgent] Element found and visible, proceeding with click:', elementInfo);
+          // console.log('[DoAgent] Element found and visible, proceeding with click:', elementInfo);
           
           // Now perform the click with a simpler synchronous script
           const clickScript = `
@@ -569,30 +569,30 @@ export class DoAgent {
             throw new Error(clickResult.error);
           }
           
-          console.log('[DoAgent] Click executed successfully');
+          // console.log('[DoAgent] Click executed successfully');
           return clickResult;
         },
 
         fill: async (selector: string, value: string) => {
-          console.log(`[DoAgent] Fill called with selector: "${selector}", value: "${value}"`);
-          console.log(`[DoAgent] Current URL before fill:`, this.webview.src);
+          // console.log(`[DoAgent] Fill called with selector: "${selector}", value: "${value}"`);
+          // console.log(`[DoAgent] Current URL before fill:`, this.webview.src);
           const escapedSelector = selector.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
           const escapedValue = value.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
           const script = `
             (async () => {
               try {
-                console.log('[DoAgent-WebView] Starting fill operation for selector: ${escapedSelector}');
+                // console.log('[DoAgent-WebView] Starting fill operation for selector: ${escapedSelector}');
                 const element = document.querySelector('${escapedSelector}');
                 if (!element) throw new Error('Element not found: ${selector}');
                 
-                console.log('[DoAgent-WebView] Element found:', {
-                  tagName: element.tagName,
-                  type: element.type,
-                  name: element.name,
-                  id: element.id,
-                  placeholder: element.placeholder,
-                  ariaLabel: element.getAttribute('aria-label')
-                });
+                // console.log('[DoAgent-WebView] Element found:', {
+                //   tagName: element.tagName,
+                //   type: element.type,
+                //   name: element.name,
+                //   id: element.id,
+                //   placeholder: element.placeholder,
+                //   ariaLabel: element.getAttribute('aria-label')
+                // });
                 
                 element.focus();
                 element.value = '';
@@ -600,7 +600,7 @@ export class DoAgent {
                 element.dispatchEvent(new Event('input', { bubbles: true }));
                 element.dispatchEvent(new Event('change', { bubbles: true }));
                 
-                console.log('[DoAgent-WebView] Value set to:', element.value);
+                // console.log('[DoAgent-WebView] Value set to:', element.value);
                 
                 // Simple auto-Enter for Google search box only
                 const isGoogleSearchBox = element.id === 'APjFqb' || element.name === 'q';
@@ -642,8 +642,8 @@ export class DoAgent {
             })();
           `;
           const result = await this.webview.executeJavaScript(script);
-          console.log('[DoAgent] Fill result:', result);
-          console.log(`[DoAgent] Current URL after fill:`, this.webview.src);
+          // console.log('[DoAgent] Fill result:', result);
+          // console.log(`[DoAgent] Current URL after fill:`, this.webview.src);
           
           if (result && !result.success) {
             throw new Error(result.error);
@@ -651,9 +651,9 @@ export class DoAgent {
           
           // If auto-Enter was triggered, wait a moment to see if navigation happens
           if (result && result.isSearchInput) {
-            console.log('[DoAgent] Auto-Enter was triggered, waiting to see if navigation occurs...');
+            // console.log('[DoAgent] Auto-Enter was triggered, waiting to see if navigation occurs...');
             await new Promise(resolve => setTimeout(resolve, 2000));
-            console.log(`[DoAgent] URL after auto-Enter wait:`, this.webview.src);
+            // console.log(`[DoAgent] URL after auto-Enter wait:`, this.webview.src);
           }
           
           return result;
@@ -760,7 +760,7 @@ export class DoAgent {
 
         screenshot: async (options?: any) => {
           // Simple screenshot placeholder - would need proper implementation
-          console.log('[DoAgent] Screenshot requested but not implemented');
+          // console.log('[DoAgent] Screenshot requested but not implemented');
           return Buffer.from('screenshot-placeholder');
         },
 
@@ -823,7 +823,7 @@ export class DoAgent {
                   
                   // If voice button overlaps with input, we need to be more careful
                   if (Math.abs(voiceRect.x - inputRect.x) < 50) {
-                    console.log('Voice button detected near input, being careful with click positioning');
+                    // console.log('Voice button detected near input, being careful with click positioning');
                   }
                 }
                 
@@ -1197,7 +1197,7 @@ export class DoAgent {
         }
       };
 
-      console.log('[DoAgent] Playwright-like wrapper initialized successfully');
+      // console.log('[DoAgent] Playwright-like wrapper initialized successfully');
     } catch (error) {
       console.error('[DoAgent] Failed to initialize Playwright wrapper:', error);
       throw new Error(`Playwright wrapper initialization failed: ${(error as Error).message}`);
@@ -1449,11 +1449,11 @@ export class DoAgent {
 
     try {
       const result = await this.webview.executeJavaScript(script);
-      console.log('[DoAgent] Page state analyzed:', {
-        url: result.url,
-        title: result.title,
-        elementCount: result.interactiveElements.length
-      });
+      // console.log('[DoAgent] Page state analyzed:', {
+      //   url: result.url,
+      //   title: result.title,
+      //   elementCount: result.interactiveElements.length
+      // });
       return result;
     } catch (error) {
       console.error('[DoAgent] Failed to analyze page state:', error);
@@ -1529,7 +1529,7 @@ export class DoAgent {
 
       const prompt = this.buildPrompt(instruction, pageState, previousSteps);
       
-      console.log('[DoAgent] Asking LLM for next action...');
+      // console.log('[DoAgent] Asking LLM for next action...');
       
       // Log the prompt using window.electronAPI (context isolation compatible)
       try {
@@ -1551,7 +1551,7 @@ export class DoAgent {
       const startTime = Date.now();
       
       // Call LLM via IPC to main process with system prompt
-      console.log('[DoAgent] Making IPC call to main process...');
+      // console.log('[DoAgent] Making IPC call to main process...');
       const response = await window.electronAPI.ipcInvoke('call-llm', {
         provider: provider as 'anthropic' | 'openai',
         apiKey: apiKey,
@@ -1559,7 +1559,7 @@ export class DoAgent {
         prompt: prompt,
         maxTokens: 1000
       });
-      console.log('[DoAgent] IPC call completed, response success:', response?.success);
+      // console.log('[DoAgent] IPC call completed, response success:', response?.success);
       
       const executionTime = Date.now() - startTime;
 
@@ -1588,7 +1588,7 @@ export class DoAgent {
         throw new Error(response.error || 'LLM call failed');
       }
 
-      console.log('[DoAgent] LLM response received:', response.response);
+      // console.log('[DoAgent] LLM response received:', response.response);
       return this.parseActionFromResponse(response.response);
 
     } catch (error) {
@@ -1722,7 +1722,7 @@ What is the NEXT SINGLE ACTION? Respond with JSON only.`;
   }
 
   private async executeStep(step: DoStep): Promise<void> {
-    console.log('[DoAgent] Executing step:', step.description);
+    // console.log('[DoAgent] Executing step:', step.description);
 
     try {
       // Add pre-action wait if specified
@@ -1736,17 +1736,17 @@ What is the NEXT SINGLE ACTION? Respond with JSON only.`;
           break;
         case 'type':
           const typeResult = await this.type(step.selector!, step.value!, step.options);
-          console.log('[DoAgent] Type result:', typeResult);
+          // console.log('[DoAgent] Type result:', typeResult);
           
           // Check if auto-Enter was triggered and wait for navigation
           if (typeResult && typeResult.isSearchInput) {
-            console.log('[DoAgent] Auto-Enter detected, waiting for navigation to complete...');
-            console.log('[DoAgent] Current URL before wait:', this.webview?.src);
+            // console.log('[DoAgent] Auto-Enter detected, waiting for navigation to complete...');
+            // console.log('[DoAgent] Current URL before wait:', this.webview?.src);
             await this.wait(3000); // Wait 3 seconds for Google search results to load
-            console.log('[DoAgent] Navigation wait completed after auto-Enter');
-            console.log('[DoAgent] Current URL after wait:', this.webview?.src);
+            // console.log('[DoAgent] Navigation wait completed after auto-Enter');
+            // console.log('[DoAgent] Current URL after wait:', this.webview?.src);
           } else {
-            console.log('[DoAgent] No auto-Enter detected, type result was:', typeResult);
+            // console.log('[DoAgent] No auto-Enter detected, type result was:', typeResult);
           }
           break;
         case 'click':
@@ -1812,7 +1812,7 @@ What is the NEXT SINGLE ACTION? Respond with JSON only.`;
         await this.wait(1000); // Default 1 second wait after action
       }
 
-      console.log('[DoAgent] Step completed:', step.description);
+      // console.log('[DoAgent] Step completed:', step.description);
 
     } catch (error) {
       console.error('[DoAgent] Step failed:', step.description, error);
@@ -1825,7 +1825,7 @@ What is the NEXT SINGLE ACTION? Respond with JSON only.`;
       throw new Error('Playwright page not initialized');
     }
     
-    console.log('[DoAgent] Navigating to:', url);
+    // console.log('[DoAgent] Navigating to:', url);
     await this.playwrightPage.goto(url);
     
     // Wait a bit for the page to settle
@@ -1837,7 +1837,7 @@ What is the NEXT SINGLE ACTION? Respond with JSON only.`;
       throw new Error('Playwright page not initialized');
     }
     
-    console.log('[DoAgent] Typing into:', selector);
+    // console.log('[DoAgent] Typing into:', selector);
     
     // Wait for element to be available
     await this.playwrightPage.waitForSelector(selector, { timeout: 5000 });
@@ -1845,7 +1845,7 @@ What is the NEXT SINGLE ACTION? Respond with JSON only.`;
     // Use Playwright's fill method for more reliable input
     const result = await this.playwrightPage.fill(selector, value);
     
-    console.log('[DoAgent] Type operation completed successfully');
+    // console.log('[DoAgent] Type operation completed successfully');
     return result;
   }
 
@@ -1859,7 +1859,7 @@ What is the NEXT SINGLE ACTION? Respond with JSON only.`;
     // Fix [.class] pattern to .class
     cleaned = cleaned.replace(/\[\.([a-zA-Z][\w-]*)\]/g, '.$1');
     
-    console.log(`[DoAgent] Cleaned selector: "${selector}" -> "${cleaned}"`);
+    // console.log(`[DoAgent] Cleaned selector: "${selector}" -> "${cleaned}"`);
     return cleaned;
   }
 
@@ -1932,7 +1932,7 @@ What is the NEXT SINGLE ACTION? Respond with JSON only.`;
       throw new Error('Playwright page not initialized');
     }
     
-    console.log('[DoAgent] Attempting to click on:', selector);
+    // console.log('[DoAgent] Attempting to click on:', selector);
     
     // Clean the selector first
     const cleanedSelectorString = this.cleanSelector(selector);
@@ -1941,7 +1941,7 @@ What is the NEXT SINGLE ACTION? Respond with JSON only.`;
     try {
       // First, try to wait for the cleaned selector with a shorter timeout
       await this.playwrightPage.waitForSelector(cleanedSelectorString, { timeout: 2000 });
-      console.log('[DoAgent] Cleaned selector found:', cleanedSelectorString);
+      // console.log('[DoAgent] Cleaned selector found:', cleanedSelectorString);
     } catch (timeoutError) {
       console.warn('[DoAgent] Cleaned selector not found, trying intelligent element discovery:', cleanedSelectorString);
       
@@ -2175,33 +2175,33 @@ What is the NEXT SINGLE ACTION? Respond with JSON only.`;
            console.warn('[DoAgent] Even basic element search failed:', basicError);
          }
        }
-       console.log('[DoAgent] Smart discovery results:', {
-         originalSelector: discoveryResult.originalSelector,
-         targetInfo: discoveryResult.targetInfo,
-         totalStrategies: discoveryResult.totalStrategies,
-         totalResults: discoveryResult.totalResults,
-         topMatches: discoveryResult.bestMatches?.slice(0, 3)
-       });
-       console.log('[DoAgent] All discovery details:', discoveryResult);
+       // console.log('[DoAgent] Smart discovery results:', {
+       //   originalSelector: discoveryResult.originalSelector,
+       //   targetInfo: discoveryResult.targetInfo,
+       //   totalStrategies: discoveryResult.totalStrategies,
+       //   totalResults: discoveryResult.totalResults,
+       //   topMatches: discoveryResult.bestMatches?.slice(0, 3)
+       // });
+       // console.log('[DoAgent] All discovery details:', discoveryResult);
       
              // Try the best matches in order
        if (discoveryResult.bestMatches && discoveryResult.bestMatches.length > 0) {
          for (const match of discoveryResult.bestMatches) {
            try {
-             console.log(`[DoAgent] Trying match: ${match.selector} (${match.reason}, score: ${match.score})`);
-                           await this.playwrightPage.waitForSelector(match.selector, { timeout: 1000 });
+             // console.log(`[DoAgent] Trying match: ${match.selector} (${match.reason}, score: ${match.score})`);
+              await this.playwrightPage.waitForSelector(match.selector, { timeout: 1000 });
               actualSelector = match.selector;
-             console.log(`[DoAgent] SUCCESS! Using selector: ${match.selector}`);
+             // console.log(`[DoAgent] SUCCESS! Using selector: ${match.selector}`);
              break;
            } catch (matchError) {
-             console.log(`[DoAgent] Match failed: ${match.selector}`);
+             // console.log(`[DoAgent] Match failed: ${match.selector}`);
              continue;
            }
          }
          
          // If no matches worked, try simple fallback strategies
          if (selector === originalSelector) {
-           console.log('[DoAgent] All smart strategies failed, trying simple fallbacks...');
+           // console.log('[DoAgent] All smart strategies failed, trying simple fallbacks...');
            const simpleFallbacks = [
              cleanedSelector.element || 'div', // Just the element type
              'button', // Common clickable elements
@@ -2214,16 +2214,16 @@ What is the NEXT SINGLE ACTION? Respond with JSON only.`;
            
            for (const fallback of simpleFallbacks) {
              try {
-               console.log(`[DoAgent] Trying simple fallback: ${fallback}`);
+               // console.log(`[DoAgent] Trying simple fallback: ${fallback}`);
                                const elements = await this.playwrightPage.locator(fallback).count();
                if (elements > 0) {
                                  await this.playwrightPage.waitForSelector(fallback, { timeout: 500 });
                 actualSelector = fallback;
-                 console.log(`[DoAgent] Simple fallback SUCCESS: ${fallback}`);
+                 // console.log(`[DoAgent] Simple fallback SUCCESS: ${fallback}`);
                  break;
                }
              } catch (fallbackError) {
-               console.log(`[DoAgent] Simple fallback failed: ${fallback}`);
+               // console.log(`[DoAgent] Simple fallback failed: ${fallback}`);
                continue;
              }
            }
@@ -2238,12 +2238,12 @@ What is the NEXT SINGLE ACTION? Respond with JSON only.`;
          }
        } else {
          // If discovery system completely failed, try basic element-type fallback
-         console.log('[DoAgent] Discovery system found no elements, trying basic fallback...');
+         // console.log('[DoAgent] Discovery system found no elements, trying basic fallback...');
          const basicElement = cleanedSelector.element || 'button';
          try {
                      await this.playwrightPage.waitForSelector(basicElement, { timeout: 2000 });
           actualSelector = basicElement;
-           console.log(`[DoAgent] Basic fallback SUCCESS: ${basicElement}`);
+           // console.log(`[DoAgent] Basic fallback SUCCESS: ${basicElement}`);
          } catch (basicError) {
            throw new Error(`Cannot find element: ${originalSelector}. No similar elements found after trying ${discoveryResult.totalStrategies} search strategies. Even basic fallback failed.`);
          }
@@ -2258,7 +2258,7 @@ What is the NEXT SINGLE ACTION? Respond with JSON only.`;
     
     try {
     await this.playwrightPage.click(actualSelector, clickOptions);
-      console.log('[DoAgent] Click operation completed successfully on:', actualSelector);
+      // console.log('[DoAgent] Click operation completed successfully on:', actualSelector);
     } catch (clickError) {
       // If click fails, try using our JavaScript-based click as fallback
       console.warn('[DoAgent] Playwright click failed, trying JavaScript click:', clickError);
@@ -2281,7 +2281,7 @@ What is the NEXT SINGLE ACTION? Respond with JSON only.`;
         throw new Error(`Both Playwright and JavaScript click failed: ${jsResult.error}`);
       }
       
-      console.log('[DoAgent] JavaScript click succeeded as fallback');
+      // console.log('[DoAgent] JavaScript click succeeded as fallback');
     }
     
     // Small wait after click for any animations/transitions
@@ -2302,7 +2302,7 @@ What is the NEXT SINGLE ACTION? Respond with JSON only.`;
     }
     
     if (targetSelector) {
-      console.log('[DoAgent] Scrolling to element:', targetSelector);
+      // console.log('[DoAgent] Scrolling to element:', targetSelector);
       
       // Wait for element and scroll it into view
       await this.playwrightPage.waitForSelector(targetSelector, { timeout: 5000 });
@@ -2313,7 +2313,7 @@ What is the NEXT SINGLE ACTION? Respond with JSON only.`;
         }
       }, targetSelector);
     } else {
-      console.log('[DoAgent] Scrolling page:', direction || 'down');
+      // console.log('[DoAgent] Scrolling page:', direction || 'down');
       
       // Scroll the page
       await this.playwrightPage.evaluate((dir: string) => {
@@ -2421,7 +2421,7 @@ What is the NEXT SINGLE ACTION? Respond with JSON only.`;
         }
        });
       
-      console.log('[DoAgent] Extract operation completed successfully');
+      // console.log('[DoAgent] Extract operation completed successfully');
       
       // Store the extracted data in the current task
       if (this.currentTask) {
@@ -2450,11 +2450,11 @@ What is the NEXT SINGLE ACTION? Respond with JSON only.`;
     }
     
     try {
-      console.log(`[DoAgent] Starting Telegram workflow: Send "${messageText}" to "${userName}"`);
+      // console.log(`[DoAgent] Starting Telegram workflow: Send "${messageText}" to "${userName}"`);
       
       // Step 1: Search for the user
       const searchResult = await this.playwrightPage.telegramSearch(userName, preferPrivateChat);
-      console.log('[DoAgent] Search result:', searchResult);
+      // console.log('[DoAgent] Search result:', searchResult);
       
       if (!searchResult.success) {
         throw new Error(`Failed to search for user: ${searchResult.error}`);
@@ -2465,7 +2465,7 @@ What is the NEXT SINGLE ACTION? Respond with JSON only.`;
       
       // Step 3: Send the message
       const messageResult = await this.playwrightPage.telegramSendMessage(messageText);
-      console.log('[DoAgent] Message result:', messageResult);
+      // console.log('[DoAgent] Message result:', messageResult);
       
       if (!messageResult.success) {
         throw new Error(`Failed to send message: ${messageResult.error}`);
@@ -2591,7 +2591,7 @@ What is the NEXT SINGLE ACTION? Respond with JSON only.`;
         };
       });
       
-      console.log('[DoAgent] Telegram Messaging Debug:', messagingInfo);
+      // console.log('[DoAgent] Telegram Messaging Debug:', messagingInfo);
       return messagingInfo;
     } catch (error) {
       console.error('[DoAgent] Telegram messaging debug failed:', error);
@@ -2691,7 +2691,7 @@ What is the NEXT SINGLE ACTION? Respond with JSON only.`;
         };
       });
       
-      console.log('[DoAgent] Telegram Sidebar Debug:', telegramInfo);
+      // console.log('[DoAgent] Telegram Sidebar Debug:', telegramInfo);
       return telegramInfo;
     } catch (error) {
       console.error('[DoAgent] Telegram debug failed:', error);
@@ -2710,7 +2710,7 @@ What is the NEXT SINGLE ACTION? Respond with JSON only.`;
     
     try {
       const debugInfo = await this.playwrightPage.getDebugInfo();
-      console.log('[DoAgent] Page Debug Info:', debugInfo);
+      // console.log('[DoAgent] Page Debug Info:', debugInfo);
       
       // Also check if page is fully loaded
       const isLoaded = await this.playwrightPage.evaluate(() => {
@@ -2754,7 +2754,7 @@ What is the NEXT SINGLE ACTION? Respond with JSON only.`;
       throw new Error('Playwright page not initialized');
     }
     
-    console.log('[DoAgent] Selecting option:', optionText, 'from:', selector);
+    // console.log('[DoAgent] Selecting option:', optionText, 'from:', selector);
     
     // Wait for element to be available
     await this.playwrightPage.waitForSelector(selector, { timeout: 5000 });
@@ -2764,7 +2764,7 @@ What is the NEXT SINGLE ACTION? Respond with JSON only.`;
       await this.playwrightPage.selectOption(selector, optionText);
     } catch (error) {
       // If that fails, try clicking the dropdown and then the option
-      console.log('[DoAgent] Native select failed, trying custom dropdown');
+      // console.log('[DoAgent] Native select failed, trying custom dropdown');
       
       // Click the dropdown to open it
       await this.playwrightPage.click(selector);
@@ -2799,7 +2799,7 @@ What is the NEXT SINGLE ACTION? Respond with JSON only.`;
     }
     
     await this.playwrightPage.waitForTimeout(500); // Wait for selection to process
-    console.log('[DoAgent] Select dropdown completed successfully');
+    // console.log('[DoAgent] Select dropdown completed successfully');
   }
 
   private async waitForElement(selector: string, timeout: number = 5000): Promise<void> {
@@ -2807,20 +2807,20 @@ What is the NEXT SINGLE ACTION? Respond with JSON only.`;
       throw new Error('Playwright page not initialized');
     }
     
-    console.log('[DoAgent] Waiting for element:', selector);
+    // console.log('[DoAgent] Waiting for element:', selector);
     await this.playwrightPage.waitForSelector(selector, { timeout });
-    console.log('[DoAgent] Element found:', selector);
+    // console.log('[DoAgent] Element found:', selector);
   }
 
   private async waitForDynamicContent(timeout: number = 10000): Promise<void> {
-    console.log('[DoAgent] Waiting for dynamic content to load...');
+    // console.log('[DoAgent] Waiting for dynamic content to load...');
     const startTime = Date.now();
     
     while (Date.now() - startTime < timeout) {
       const script = `
         (function() {
           const currentUrl = window.location.href;
-          console.log('[DoAgent-WebView] Checking dynamic content for URL:', currentUrl);
+          // console.log('[DoAgent-WebView] Checking dynamic content for URL:', currentUrl);
           
           // Check for Google Search Results (flight searches)
           if (currentUrl.includes('google.com/search') && currentUrl.includes('flight')) {
@@ -2828,11 +2828,11 @@ What is the NEXT SINGLE ACTION? Respond with JSON only.`;
             const flightLinks = document.querySelectorAll('a[href*="google.com/travel/flights"], a[href*="flights"]');
             const loadingIndicators = document.querySelectorAll('[aria-label*="loading"], [role="progressbar"], .loading');
             
-            console.log('[DoAgent-WebView] Google flight search results:', {
-              searchResults: searchResults.length,
-              flightLinks: flightLinks.length,
-              isLoading: loadingIndicators.length > 0
-            });
+            // console.log('[DoAgent-WebView] Google flight search results:', {
+            //   searchResults: searchResults.length,
+            //   flightLinks: flightLinks.length,
+            //   isLoading: loadingIndicators.length > 0
+            // });
             
             return {
               hasContent: searchResults.length > 0,
@@ -2847,10 +2847,10 @@ What is the NEXT SINGLE ACTION? Respond with JSON only.`;
             const flightResults = document.querySelectorAll('[data-testid*="flight"], [role="listitem"], .gws-flights-results__result-item');
             const loadingIndicators = document.querySelectorAll('[aria-label*="loading"], [role="progressbar"], .loading');
             
-            console.log('[DoAgent-WebView] Google Flights page content:', {
-              flightResults: flightResults.length,
-              isLoading: loadingIndicators.length > 0
-            });
+            // console.log('[DoAgent-WebView] Google Flights page content:', {
+            //   flightResults: flightResults.length,
+            //   isLoading: loadingIndicators.length > 0
+            // });
             
             return {
               hasContent: flightResults.length > 0,
@@ -2864,10 +2864,10 @@ What is the NEXT SINGLE ACTION? Respond with JSON only.`;
           const contentElements = document.querySelectorAll('[data-testid], [role="main"], main, article, .content, .results');
           const loadingElements = document.querySelectorAll('[aria-label*="loading"], [role="progressbar"], .loading, .spinner');
           
-          console.log('[DoAgent-WebView] Generic content check:', {
-            contentElements: contentElements.length,
-            isLoading: loadingElements.length > 0
-          });
+          // console.log('[DoAgent-WebView] Generic content check:', {
+          //   contentElements: contentElements.length,
+          //   isLoading: loadingElements.length > 0
+          // });
           
           return {
             hasContent: contentElements.length > 0,
@@ -2879,17 +2879,17 @@ What is the NEXT SINGLE ACTION? Respond with JSON only.`;
       `;
       
       const result = await this.webview.executeJavaScript(script);
-      console.log('[DoAgent] Dynamic content check result:', result);
+      // console.log('[DoAgent] Dynamic content check result:', result);
       
       if (result && result.hasContent && !result.isLoading) {
-        console.log(`[DoAgent] Dynamic content loaded for ${result.pageType}: ${result.contentCount} elements`);
+        // console.log(`[DoAgent] Dynamic content loaded for ${result.pageType}: ${result.contentCount} elements`);
         return;
       }
       
       await this.wait(500);
     }
     
-    console.log('[DoAgent] Timeout waiting for dynamic content, proceeding anyway');
+    // console.log('[DoAgent] Timeout waiting for dynamic content, proceeding anyway');
   }
 
   private async clearInput(selector: string): Promise<void> {
@@ -2897,7 +2897,7 @@ What is the NEXT SINGLE ACTION? Respond with JSON only.`;
       throw new Error('Playwright page not initialized');
     }
     
-    console.log('[DoAgent] Clearing input:', selector);
+    // console.log('[DoAgent] Clearing input:', selector);
     
     // Wait for element to be available
     await this.playwrightPage.waitForSelector(selector, { timeout: 5000 });
@@ -2905,7 +2905,7 @@ What is the NEXT SINGLE ACTION? Respond with JSON only.`;
     // Clear the input using Playwright's fill with empty string
     await this.playwrightPage.fill(selector, '');
     
-    console.log('[DoAgent] Clear input completed successfully');
+    // console.log('[DoAgent] Clear input completed successfully');
   }
 
   private async focusElement(selector: string): Promise<void> {
@@ -2913,7 +2913,7 @@ What is the NEXT SINGLE ACTION? Respond with JSON only.`;
       throw new Error('Playwright page not initialized');
     }
     
-    console.log('[DoAgent] Focusing element:', selector);
+    // console.log('[DoAgent] Focusing element:', selector);
     
     // Wait for element and focus it
     await this.playwrightPage.waitForSelector(selector, { timeout: 5000 });
@@ -2924,7 +2924,7 @@ What is the NEXT SINGLE ACTION? Respond with JSON only.`;
       }
     }, selector);
     
-    console.log('[DoAgent] Focus element completed successfully');
+    // console.log('[DoAgent] Focus element completed successfully');
   }
 
   private async blurElement(selector: string): Promise<void> {
@@ -3016,7 +3016,7 @@ What is the NEXT SINGLE ACTION? Respond with JSON only.`;
       throw new Error('Playwright page not initialized');
     }
     
-    console.log('[DoAgent] Pressing key:', key, 'on element:', selector);
+    // console.log('[DoAgent] Pressing key:', key, 'on element:', selector);
     
     // If selector is 'body', use page-level keyboard
     if (selector === 'body') {
@@ -3075,7 +3075,7 @@ What is the NEXT SINGLE ACTION? Respond with JSON only.`;
       }
     }
     
-    console.log('[DoAgent] Keypress completed successfully');
+    // console.log('[DoAgent] Keypress completed successfully');
   }
 
   private async checkElement(selector: string, checked: boolean): Promise<void> {
@@ -3202,7 +3202,7 @@ What is the NEXT SINGLE ACTION? Respond with JSON only.`;
   private async takeScreenshot(): Promise<string> {
     try {
       // This would need to be implemented based on Electron's screenshot capabilities
-      console.log('[DoAgent] Screenshot functionality not yet implemented');
+      // console.log('[DoAgent] Screenshot functionality not yet implemented');
       return 'screenshot_placeholder';
     } catch (error) {
       console.error('[DoAgent] Screenshot failed:', error);

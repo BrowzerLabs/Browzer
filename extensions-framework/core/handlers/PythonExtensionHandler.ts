@@ -291,7 +291,7 @@ export class PythonExtensionHandler {
       '/usr/local/bin/python3'
     ];
 
-    console.log('[PythonExtensionHandler] Python bundle path:', pythonBundlePath);
+    // console.log('[PythonExtensionHandler] Python bundle path:', pythonBundlePath);
     
     // For now, return the bundled Python path
     return candidates[0];

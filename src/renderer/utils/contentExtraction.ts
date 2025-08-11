@@ -51,7 +51,7 @@ export class ContentExtraction {
     
     // Check for problematic sites
     if (URLUtils.isProblematicSite(currentUrl)) {
-      console.log('Using safer content extraction for problematic site:', currentUrl);
+      // console.log('Using safer content extraction for problematic site:', currentUrl);
       return {
         title: webview.getTitle?.() || '',
         description: '',
@@ -64,10 +64,10 @@ export class ContentExtraction {
       try {
         // Check if webview is still loading
         if (webview.isLoading && typeof webview.isLoading === 'function' && webview.isLoading()) {
-          console.log('Waiting for webview to finish loading before extracting content');
+          // console.log('Waiting for webview to finish loading before extracting content');
           
           const loadListener = () => {
-            console.log('Page finished loading, extracting content after short delay');
+            // console.log('Page finished loading, extracting content after short delay');
             setTimeout(() => {
               this.extractPageContent(webview, opts)
                 .then(resolve)
@@ -108,9 +108,9 @@ export class ContentExtraction {
           timeoutPromise
         ])
         .then((pageInfo: ExtractedContent) => {
-          console.log('Extracted page content, length:', pageInfo?.content?.length || 0);
+          // console.log('Extracted page content, length:', pageInfo?.content?.length || 0);
           if (pageInfo?.htmlContent) {
-            console.log('HTML content extracted, length:', pageInfo.htmlContent.length);
+            // console.log('HTML content extracted, length:', pageInfo.htmlContent.length);
           }
           resolve(pageInfo || { title: '', content: '', url: '' });
         })
@@ -252,7 +252,7 @@ export class ContentExtraction {
         })();
       `);
 
-      console.log(`Extracted ${result.length} links from page`);
+      // console.log(`Extracted ${result.length} links from page`);
       return result || [];
     } catch (error) {
       console.error('Error extracting links:', error);

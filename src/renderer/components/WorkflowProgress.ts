@@ -53,7 +53,7 @@ export class WorkflowProgressIndicator {
     type: 'single_extension' | 'workflow';
     steps: Array<{ extensionId: string; extensionName: string; }>;
   }): void {
-    console.log('[WorkflowProgress] Starting workflow:', workflowData);
+    // console.log('[WorkflowProgress] Starting workflow:', workflowData);
 
     this.progressData = {
       workflowId: workflowData.workflowId,
@@ -86,7 +86,7 @@ export class WorkflowProgressIndicator {
       return;
     }
 
-    console.log('[WorkflowProgress] Updating progress:', data);
+    // console.log('[WorkflowProgress] Updating progress:', data);
 
     // Update current step status
     if (data.currentStep < this.progressData.steps.length) {
@@ -120,7 +120,7 @@ export class WorkflowProgressIndicator {
       return;
     }
 
-    console.log('[WorkflowProgress] Workflow completed:', data);
+    // console.log('[WorkflowProgress] Workflow completed:', data);
 
     this.progressData.status = 'completed';
     this.progressData.endTime = Date.now();

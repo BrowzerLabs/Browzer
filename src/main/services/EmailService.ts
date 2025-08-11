@@ -150,7 +150,7 @@ export class EmailService {
         return { success: true, message: 'Verification code sent successfully' };
       } else {
         // Fallback: Log OTP for development
-        console.log(`🔐 OTP for ${email}: ${otp} (expires in 10 minutes)`);
+        // console.log(`🔐 OTP for ${email}: ${otp} (expires in 10 minutes)`);
         return { success: true, message: 'Verification code sent (check console in development)' };
       }
 

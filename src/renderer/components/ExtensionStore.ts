@@ -241,7 +241,7 @@ export class ExtensionStore {
       const response = await fetch(`${this.apiBaseUrl}/extensions?featured=true`);
       const data = await response.json();
       
-      console.log('Featured extensions data:', data); // Debug log
+      // console.log('Featured extensions data:', data); // Debug log
       
       const featuredTab = this.container.querySelector('#featured-tab');
       if (featuredTab) {
@@ -258,7 +258,7 @@ export class ExtensionStore {
       const response = await fetch(`${this.apiBaseUrl}/extensions`);
       const data = await response.json();
       
-      console.log('All extensions data:', data); // Debug log
+      // console.log('All extensions data:', data); // Debug log
       
       const extensionsGrid = this.container.querySelector('.extensions-grid');
       if (extensionsGrid) {
@@ -518,7 +518,7 @@ export class ExtensionStore {
       }
       
       const downloadInfo = await response.json();
-      console.log('Download info:', downloadInfo);
+      // console.log('Download info:', downloadInfo);
       
       // Step 2: Download file
       this.updateProgress(30, 'Downloading extension files...');
@@ -639,7 +639,7 @@ export class ExtensionStore {
 
   showExtensionDetails(extensionId: string): void {
     // Implementation for showing extension details modal
-    console.log('Show details for extension:', extensionId);
+    // console.log('Show details for extension:', extensionId);
   }
 
   private toggleUploadForm(): void {

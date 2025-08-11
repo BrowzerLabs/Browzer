@@ -31,7 +31,7 @@ export class AppManager {
           copyright: 'Copyright © 2025 Browzer'
         });
       } catch (error) {
-        console.log('Could not set macOS-specific app properties:', error);
+        // console.log('Could not set macOS-specific app properties:', error);
       }
     }
   }
@@ -45,7 +45,7 @@ export class AppManager {
     // Configure permissions for OAuth flows
     session.defaultSession.setPermissionRequestHandler((webContents, permission, callback) => {
       const url = webContents.getURL();
-      console.log(`Permission request: ${permission} for ${url}`);
+      // console.log(`Permission request: ${permission} for ${url}`);
       
       // Allow permissions for OAuth providers
       const isOAuthProvider = url.includes('accounts.google.com') || 
@@ -71,7 +71,7 @@ export class AppManager {
       // but still maintain security for other sites
       if (hostname.includes('accounts.google.com') || 
           hostname.includes('login.microsoftonline.com')) {
-        console.log(`Certificate verification for OAuth provider: ${hostname}`);
+        // console.log(`Certificate verification for OAuth provider: ${hostname}`);
       }
       
       // Use default behavior (0 = accept, anything else = reject)
@@ -121,7 +121,7 @@ export class AppManager {
 
     // Set preload scripts if needed
     const preloadPath = path.join(__dirname, '../preload/preload.js');
-    console.log('Setting preload path:', preloadPath);
+    // console.log('Setting preload path:', preloadPath);
     session.defaultSession.setPreloads([preloadPath]);
     authSession.setPreloads([preloadPath]);
     compatSession.setPreloads([preloadPath]);

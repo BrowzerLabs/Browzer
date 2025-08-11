@@ -254,7 +254,7 @@ export class TextProcessing {
     if (!webview) return;
 
     try {
-      console.log('Injecting text selection handler for webview:', webview.id);
+      // console.log('Injecting text selection handler for webview:', webview.id);
 
       const injectionScript = `
         (function() {
@@ -321,20 +321,20 @@ export class TextProcessing {
             }
           });
           
-          console.log('✓ Text selection handler installed');
+          // console.log('✓ Text selection handler installed');
         })();
       `;
 
              webview.executeJavaScript(injectionScript, false)
          .then(() => {
-           console.log('✓ Selection handler injection successful');
+           // console.log('✓ Selection handler injection successful');
          })
          .catch((err: Error) => {
-           console.log('Selection handler injection failed:', err.message);
+           // console.log('Selection handler injection failed:', err.message);
          });
 
      } catch (err) {
-       console.log('Error setting up selection handler:', err instanceof Error ? err.message : String(err));
+       // console.log('Error setting up selection handler:', err instanceof Error ? err.message : String(err));
      }
   }
 

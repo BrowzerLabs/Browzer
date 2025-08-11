@@ -169,7 +169,7 @@ export class CacheService {
       this.saveMetadata();
       this.stats.writes++;
       
-      console.log(`Cache SET: ${type}:${identifier} (${this.formatSize(cacheItem.size)})`);
+      // console.log(`Cache SET: ${type}:${identifier} (${this.formatSize(cacheItem.size)})`);
       return true;
       
     } catch (error) {
@@ -208,7 +208,7 @@ export class CacheService {
       
       this.stats.hits++;
       
-      console.log(`Cache HIT: ${type}:${identifier}`);
+      // console.log(`Cache HIT: ${type}:${identifier}`);
       return this.decompress(item.data, item.originalType);
       
     } catch (error) {
@@ -225,7 +225,7 @@ export class CacheService {
       delete this.metadata[key];
       this.saveMetadata();
       
-      console.log(`Cache DELETE: ${type}:${identifier}`);
+      // console.log(`Cache DELETE: ${type}:${identifier}`);
       return true;
     } catch (error) {
       console.error('Error deleting cache item:', error);
@@ -269,7 +269,7 @@ export class CacheService {
       });
       
       this.saveMetadata();
-      console.log(`Cache cleared ${cleared} items of type: ${type}`);
+      // console.log(`Cache cleared ${cleared} items of type: ${type}`);
       return cleared;
     } catch (error) {
       console.error('Error clearing cache by type:', error);
@@ -292,7 +292,7 @@ export class CacheService {
       
       this.stats = { hits: 0, misses: 0, writes: 0, evictions: 0 };
       
-      console.log(`Cache cleared all ${cleared} items`);
+      // console.log(`Cache cleared all ${cleared} items`);
       return cleared;
     } catch (error) {
       console.error('Error clearing all cache:', error);
@@ -333,11 +333,11 @@ export class CacheService {
         delete this.metadata[key];
         this.stats.evictions++;
         
-        console.log(`Cache EVICT: ${key} (${this.formatSize(metadata.size)})`);
+        // console.log(`Cache EVICT: ${key} (${this.formatSize(metadata.size)})`);
       }
       
       this.saveMetadata();
-      console.log(`Cache evicted ${freedItems} items, freed ${this.formatSize(freedSize)}`);
+      // console.log(`Cache evicted ${freedItems} items, freed ${this.formatSize(freedSize)}`);
       
     } catch (error) {
       console.error('Error during cache eviction:', error);
@@ -364,7 +364,7 @@ export class CacheService {
       
       if (cleaned > 0) {
         this.saveMetadata();
-        console.log(`Cache cleanup: removed ${cleaned} expired items, freed ${this.formatSize(freedSize)}`);
+        // console.log(`Cache cleanup: removed ${cleaned} expired items, freed ${this.formatSize(freedSize)}`);
       }
       
       return { cleaned, freedSize };

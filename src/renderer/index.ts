@@ -75,7 +75,7 @@ function isQueryRecentlyProcessed(query: string, windowMs: number = 3000): boole
   const lastProcessedTime = globalQueryTracker.get(normalizedQuery) || 0;
   
   if (currentTime - lastProcessedTime < windowMs) {
-    console.log('🚨 [GLOBAL DUPLICATE FIX] Query recently processed, skipping:', normalizedQuery.substring(0, 50));
+    // console.log('🚨 [GLOBAL DUPLICATE FIX] Query recently processed, skipping:', normalizedQuery.substring(0, 50));
     return true;
   }
   
@@ -127,7 +127,7 @@ function logExecutionFlow(functionName: string, details: any = {}): void {
   };
   executionFlow.push(entry);
   
-  console.log(`🔄 [FLOW] ${functionName}:`, details);
+  // console.log(`🔄 [FLOW] ${functionName}:`, details);
   
   // Keep only last 50 entries to avoid memory issues
   if (executionFlow.length > 50) {
@@ -149,18 +149,18 @@ function trackDisplayAgentResultsCall(data: any): void {
   };
   displayAgentResultsCalls.push(callInfo);
   
-  console.log(`🔍 [DUPLICATE DEBUG] displayAgentResults called #${displayAgentResultsCallCount}`);
-  console.log(`🔍 [DUPLICATE DEBUG] Call timestamp: ${new Date(callInfo.timestamp).toISOString()}`);
-  console.log(`🔍 [DUPLICATE DEBUG] Data summary:`, {
-    hasData: !!data,
-    hasConsolidatedSummary: !!(data && data.consolidated_summary),
-    hasSummaries: !!(data && data.summaries),
-    dataKeys: data ? Object.keys(data) : 'null',
-    dataType: typeof data,
-    dataStringified: data ? JSON.stringify(data).substring(0, 200) + '...' : 'null'
-  });
-  console.log(`🔍 [DUPLICATE DEBUG] Stack trace:`);
-  console.log(callInfo.stackTrace);
+  // console.log(`🔍 [DUPLICATE DEBUG] displayAgentResults called #${displayAgentResultsCallCount}`);
+  // console.log(`🔍 [DUPLICATE DEBUG] Call timestamp: ${new Date(callInfo.timestamp).toISOString()}`);
+  // console.log(`🔍 [DUPLICATE DEBUG] Data summary:`, {
+  //   hasData: !!data,
+  //   hasConsolidatedSummary: !!(data && data.consolidated_summary),
+  //   hasSummaries: !!(data && data.summaries),
+  //   dataKeys: data ? Object.keys(data) : 'null',
+  //   dataType: typeof data,
+  //   dataStringified: data ? JSON.stringify(data).substring(0, 200) + '...' : 'null'
+  // });
+  // console.log(`🔍 [DUPLICATE DEBUG] Stack trace:`);
+  // console.log(callInfo.stackTrace);
   
   // Check for recent duplicate calls
   const recentCalls = displayAgentResultsCalls.filter(call => 
@@ -222,10 +222,10 @@ function applySidebarLayout(enabled: boolean): void {
   if (browserContainer) {
     if (enabled) {
       browserContainer.classList.add('sidebar-enabled');
-      console.log('[Sidebar] Sidebar layout enabled');
+      // console.log('[Sidebar] Sidebar layout enabled');
     } else {
       browserContainer.classList.remove('sidebar-enabled');
-      console.log('[Sidebar] Sidebar layout disabled');
+      // console.log('[Sidebar] Sidebar layout disabled');
     }
   }
 }
@@ -235,37 +235,37 @@ function clearStuckLoadingStates(): void {
   const loadingTabs = document.querySelectorAll('.tab.loading');
   
   if (loadingTabs.length > 0) {
-    console.log(`[Loading Cleanup] Found ${loadingTabs.length} tabs in loading state - clearing ALL`);
+    // console.log(`[Loading Cleanup] Found ${loadingTabs.length} tabs in loading state - clearing ALL`);
     
     // FORCE CLEAR all loading states - be aggressive to fix the stuck issue
     loadingTabs.forEach(tab => {
       tab.classList.remove('loading');
-      console.log(`[Loading Cleanup] Force cleared loading state for tab: ${tab.id}`);
+      // console.log(`[Loading Cleanup] Force cleared loading state for tab: ${tab.id}`);
     });
   }
 }
 
 // Function to initialize sidebar layout from saved settings
 function initializeSidebar(): void {
-  console.log('[Sidebar] Initializing sidebar from saved settings...');
+  // console.log('[Sidebar] Initializing sidebar from saved settings...');
   
   // Debug localStorage value
   const rawValue = localStorage.getItem('sidebarEnabled');
-  console.log('[Sidebar] Raw localStorage value:', rawValue);
+  // console.log('[Sidebar] Raw localStorage value:', rawValue);
   
   // Load saved sidebar preference and apply layout
   const savedSidebarEnabled = rawValue === 'true';
-  console.log('[Sidebar] Saved sidebar enabled:', savedSidebarEnabled);
+  // console.log('[Sidebar] Saved sidebar enabled:', savedSidebarEnabled);
   
   // Debug current browser container classes
   const browserContainer = document.querySelector('.browser-container');
-  console.log('[Sidebar] Browser container classes before applying:', browserContainer?.className);
+  // console.log('[Sidebar] Browser container classes before applying:', browserContainer?.className);
   
   // Apply sidebar layout if enabled
   applySidebarLayout(savedSidebarEnabled);
   
   // Debug classes after applying
-  console.log('[Sidebar] Browser container classes after applying:', browserContainer?.className);
+  // console.log('[Sidebar] Browser container classes after applying:', browserContainer?.className);
   
   // Setup collapse/expand functionality
   setupCollapseExpandButtons();
@@ -292,12 +292,12 @@ function setupCollapseExpandButtons(): void {
         // Currently collapsed, so expand
         browserContainer.classList.remove('sidebar-collapsed');
         localStorage.setItem('sidebarCollapsed', 'false');
-        console.log('[Sidebar] Expanded');
+        // console.log('[Sidebar] Expanded');
       } else {
         // Currently expanded, so collapse
         browserContainer.classList.add('sidebar-collapsed');
         localStorage.setItem('sidebarCollapsed', 'true');
-        console.log('[Sidebar] Collapsed');
+        // console.log('[Sidebar] Collapsed');
       }
     });
   }
@@ -312,7 +312,7 @@ function setupCollapseExpandButtons(): void {
 
 // Initialize the application when DOM is ready
 document.addEventListener('DOMContentLoaded', () => {
-  console.log('DOM fully loaded, initializing browser...');
+  // console.log('DOM fully loaded, initializing browser...');
   
   initializeUI();
   setupEventListeners();
@@ -340,11 +340,11 @@ document.addEventListener('DOMContentLoaded', () => {
     enhancedRestoreTabs();
   }, 1000);
   // DISABLED: Auto-summarize feature commented out
-  // console.log('[Init] Final autoSummarizeEnabled state:', autoSummarizeEnabled);
+  // // console.log('[Init] Final autoSummarizeEnabled state:', autoSummarizeEnabled);
 });
 
 function initializeUI(): void {
-  console.log('Initializing UI...');
+  // console.log('Initializing UI...');
   
   // Get UI elements
   urlBar = document.getElementById('urlBar') as HTMLInputElement;
@@ -387,26 +387,26 @@ function initializeUI(): void {
     console.error('Failed to sync API keys during initialization:', error);
   });
   
-  console.log('UI initialization complete');
+  // console.log('UI initialization complete');
 }
 
 function setupWorkflowEventListeners(): void {
-  console.log('Setting up workflow event listeners...');
+  // console.log('Setting up workflow event listeners...');
   
   if (!window.electronAPI) {
     console.error('electronAPI not available, cannot setup workflow listeners');
     return;
   }
   
-  console.log('🚨 [CONTEXT ISOLATION] Using secure electronAPI for workflow listeners');
+  // console.log('🚨 [CONTEXT ISOLATION] Using secure electronAPI for workflow listeners');
 
   // Set up workflow progress listeners using secure electronAPI
   window.electronAPI.onWorkflowProgress((data: any) => {
-    console.log('[WorkflowProgress] workflow-progress event received:', data);
+    // console.log('[WorkflowProgress] workflow-progress event received:', data);
     
     // Handle different types of workflow progress events
     if (data.type === 'workflow_start') {
-      console.log('[WorkflowProgress] workflow-start event received:', data);
+      // console.log('[WorkflowProgress] workflow-start event received:', data);
       
       // Convert snake_case to camelCase for compatibility, including step fields
       const workflowData = {
@@ -418,22 +418,22 @@ function setupWorkflowEventListeners(): void {
         }))
       };
       
-      console.log('[WorkflowProgress] Creating new workflow progress in chat:', workflowData);
+      // console.log('[WorkflowProgress] Creating new workflow progress in chat:', workflowData);
       
       // Create workflow progress as a chat message instead of using fixed container
       addWorkflowProgressToChat(workflowData);
       
     } else if (data.type === 'step_start') {
-      console.log('📡 [IPC DEBUG] step_start event received:', data);
+      // console.log('📡 [IPC DEBUG] step_start event received:', data);
       
       // Find the workflow progress message in chat
       const workflowMessage = findWorkflowProgressInChat(data.workflow_id);
       if (workflowMessage && (workflowMessage as any).progressIndicator) {
-        console.log('[WorkflowProgress] Updating progress for step start:', {
-          workflowId: data.workflow_id,
-          currentStep: data.current_step,
-          stepStatus: 'running'
-        });
+        // console.log('[WorkflowProgress] Updating progress for step start:', {
+        //   workflowId: data.workflow_id,
+        //   currentStep: data.current_step,
+        //   stepStatus: 'running'
+        // });
         
         // Convert snake_case to camelCase
         (workflowMessage as any).progressIndicator.updateProgress({
@@ -446,18 +446,18 @@ function setupWorkflowEventListeners(): void {
       }
       
     } else if (data.type === 'step_complete') {
-      console.log('📡 [IPC DEBUG] step_complete event received:', data);
+      // console.log('📡 [IPC DEBUG] step_complete event received:', data);
       
       // Find the workflow progress message in chat
       const workflowMessage = findWorkflowProgressInChat(data.workflow_id);
       if (workflowMessage && (workflowMessage as any).progressIndicator) {
-        console.log('[WorkflowProgress] Calling updateProgress with:', {
-          workflowId: data.workflow_id,
-          currentStep: data.current_step,
-          stepStatus: data.step_status,
-          stepResult: data.step_result,
-          stepError: data.step_error
-        });
+        // console.log('[WorkflowProgress] Calling updateProgress with:', {
+        //   workflowId: data.workflow_id,
+        //   currentStep: data.current_step,
+        //   stepStatus: data.step_status,
+        //   stepResult: data.step_result,
+        //   stepError: data.step_error
+        // });
         
         // Convert snake_case to camelCase  
         (workflowMessage as any).progressIndicator.updateProgress({
@@ -474,10 +474,10 @@ function setupWorkflowEventListeners(): void {
   });
 
   window.electronAPI.onWorkflowComplete((data: any) => {
-    console.log('📡 [IPC DEBUG] workflow-complete event received:', data);
-    console.log('📡 [IPC DEBUG] workflow-complete data keys:', Object.keys(data));
-    console.log('📡 [IPC DEBUG] workflow-complete data.result keys:', data.result ? Object.keys(data.result) : 'no result');
-    console.log('📡 [IPC DEBUG] workflow-complete has consolidated_summary:', !!(data.result && data.result.consolidated_summary));
+    // console.log('📡 [IPC DEBUG] workflow-complete event received:', data);
+    // console.log('📡 [IPC DEBUG] workflow-complete data keys:', Object.keys(data));
+    // console.log('📡 [IPC DEBUG] workflow-complete data.result keys:', data.result ? Object.keys(data.result) : 'no result');
+    // console.log('📡 [IPC DEBUG] workflow-complete has consolidated_summary:', !!(data.result && data.result.consolidated_summary));
     
     // Add workflow-level deduplication to prevent duplicate processing
     const workflowId = data.workflow_id;
@@ -486,7 +486,7 @@ function setupWorkflowEventListeners(): void {
     const lastCompleteTime = parseInt(localStorage.getItem(workflowCompleteKey) || '0');
     
     if (currentTime - lastCompleteTime < 2000) {
-      console.log('🚨 [DUPLICATE FIX] Same workflow completed recently, skipping duplicate processing:', workflowId);
+      // console.log('🚨 [DUPLICATE FIX] Same workflow completed recently, skipping duplicate processing:', workflowId);
       return;
     }
     
@@ -497,7 +497,7 @@ function setupWorkflowEventListeners(): void {
     
     // Clear execution flag
     isWorkflowExecuting = false;
-    console.log('[WorkflowProgress] Clearing execution flag on workflow completion');
+    // console.log('[WorkflowProgress] Clearing execution flag on workflow completion');
     
     // Find the workflow progress message in chat
     const workflowMessage = findWorkflowProgressInChat(data.workflow_id);
@@ -513,17 +513,17 @@ function setupWorkflowEventListeners(): void {
     
     // Display results if available
     if (data.result) {
-      console.log('🎯 [WORKFLOW-COMPLETE] About to call displayAgentResults from workflow-complete event');
+      // console.log('🎯 [WORKFLOW-COMPLETE] About to call displayAgentResults from workflow-complete event');
       
       // For workflow results, extract the inner data to normalize the structure
       let resultData = data.result;
       if (data.result.type === 'workflow' && data.result.data) {
-        console.log('🎯 [WORKFLOW-COMPLETE] Extracting inner data from workflow result');
+        // console.log('🎯 [WORKFLOW-COMPLETE] Extracting inner data from workflow result');
         resultData = data.result.data;
       }
       
       displayAgentResults(resultData);
-      console.log('🎯 [WORKFLOW-COMPLETE] displayAgentResults called successfully');
+      // console.log('🎯 [WORKFLOW-COMPLETE] displayAgentResults called successfully');
       
       // Store memory if available - try multiple content sources
       if (memoryService && resultData) {
@@ -547,7 +547,7 @@ function setupWorkflowEventListeners(): void {
         }
         
         if (summary && summary.trim()) {
-          console.log('[Memory] Storing agent result in memory from workflow-complete');
+          // console.log('[Memory] Storing agent result in memory from workflow-complete');
           
           // Get current page info for memory context
           const webview = getActiveWebview();
@@ -556,7 +556,7 @@ function setupWorkflowEventListeners(): void {
           
           storeInMemory(url, memoryQuery, summary, title);
         } else {
-          console.log('[Memory] No suitable content found for memory storage in workflow-complete');
+          // console.log('[Memory] No suitable content found for memory storage in workflow-complete');
         }
       }
     } else {
@@ -565,11 +565,11 @@ function setupWorkflowEventListeners(): void {
   });
 
   window.electronAPI.onWorkflowError((data: any) => {
-    console.log('📡 [IPC DEBUG] workflow-error event received:', data);
+    // console.log('📡 [IPC DEBUG] workflow-error event received:', data);
     
     // Clear execution flag
     isWorkflowExecuting = false;
-    console.log('[WorkflowProgress] Clearing execution flag on workflow error');
+    // console.log('[WorkflowProgress] Clearing execution flag on workflow error');
     
     // Find the workflow progress message in chat
     const workflowMessage = findWorkflowProgressInChat(data.workflow_id || 'unknown');
@@ -586,12 +586,12 @@ function setupWorkflowEventListeners(): void {
     }
   });
 
-  console.log('Workflow progress system initialized');
+  // console.log('Workflow progress system initialized');
   workflowProgressSetup = true; // Mark as set up to prevent duplicates
 }
 
 function setupEventListeners(): void {
-  console.log('Setting up event listeners...');
+  // console.log('Setting up event listeners...');
 
   // IMPORTANT: Remove any existing listeners first to prevent duplicates
   if (newTabBtn) {
@@ -599,7 +599,7 @@ function setupEventListeners(): void {
     const newNewTabBtn = newTabBtn.cloneNode(true) as HTMLElement;
     newTabBtn.parentNode?.replaceChild(newNewTabBtn, newTabBtn);
     newTabBtn = newNewTabBtn;
-    console.log('🚨 [DUPLICATE FIX] Cleared existing new tab button listeners');
+    // console.log('🚨 [DUPLICATE FIX] Cleared existing new tab button listeners');
   }
 
   // Navigation buttons
@@ -612,7 +612,7 @@ function setupEventListeners(): void {
             webview.goBack();
           }
         } catch (error) {
-          console.log('⚠️ Error navigating back, webview not ready:', error);
+          // console.log('⚠️ Error navigating back, webview not ready:', error);
         }
       }
     });
@@ -627,7 +627,7 @@ function setupEventListeners(): void {
             webview.goForward();
           }
         } catch (error) {
-          console.log('⚠️ Error navigating forward, webview not ready:', error);
+          // console.log('⚠️ Error navigating forward, webview not ready:', error);
         }
       }
     });
@@ -693,12 +693,12 @@ function setupEventListeners(): void {
 
   // New tab button - with debugging
   if (newTabBtn) {
-    console.log('🚨 [NEW TAB DEBUG] Adding event listener to new tab button');
+    // console.log('🚨 [NEW TAB DEBUG] Adding event listener to new tab button');
     newTabBtn.addEventListener('click', (e) => {
-      console.log('🚨 [NEW TAB DEBUG] New tab button clicked!', { timestamp: Date.now(), target: e.target });
+      // console.log('🚨 [NEW TAB DEBUG] New tab button clicked!', { timestamp: Date.now(), target: e.target });
       createNewTab();
     });
-    console.log('🚨 [NEW TAB DEBUG] Event listener added successfully');
+    // console.log('🚨 [NEW TAB DEBUG] Event listener added successfully');
   } else {
     console.error('🚨 [NEW TAB DEBUG] newTabBtn element not found!');
   }
@@ -761,7 +761,7 @@ function setupEventListeners(): void {
       try {
         webview.reload();
       } catch (error) {
-        console.log('⚠️ Error reloading, webview not ready:', error);
+        // console.log('⚠️ Error reloading, webview not ready:', error);
       }
     }
   });
@@ -774,7 +774,7 @@ function setupEventListeners(): void {
           webview.goBack();
         }
       } catch (error) {
-        console.log('⚠️ Error going back, webview not ready:', error);
+        // console.log('⚠️ Error going back, webview not ready:', error);
       }
     }
   });
@@ -787,7 +787,7 @@ function setupEventListeners(): void {
           webview.goForward();
         }
       } catch (error) {
-        console.log('⚠️ Error going forward, webview not ready:', error);
+        // console.log('⚠️ Error going forward, webview not ready:', error);
       }
     }
   });
@@ -822,17 +822,17 @@ function setupEventListeners(): void {
 
 // Function to open settings page and navigate to a specific section
 function openSettingsToSection(sectionId: string): void {
-  console.log('[Settings Menu] Opening settings to section:', sectionId);
+  // console.log('[Settings Menu] Opening settings to section:', sectionId);
   
   // Create the settings URL with anchor
   const settingsUrl = `file://browzer-settings#${sectionId}`;
-  console.log('[Settings Menu] Settings URL with anchor:', settingsUrl);
+  // console.log('[Settings Menu] Settings URL with anchor:', settingsUrl);
   
   // Check if there's already a settings tab open with any URL starting with file://browzer-settings
   const existingSettingsTab = tabs.find(tab => tab.url.startsWith('file://browzer-settings'));
   
   if (existingSettingsTab) {
-    console.log('[Settings Menu] Found existing settings tab, updating URL to:', settingsUrl);
+    // console.log('[Settings Menu] Found existing settings tab, updating URL to:', settingsUrl);
     
     // Update the existing tab's URL to include the new anchor
     existingSettingsTab.url = settingsUrl;
@@ -845,7 +845,7 @@ function openSettingsToSection(sectionId: string): void {
     if (webview) {
       const currentSrc = webview.getAttribute('src');
       const newSrc = currentSrc.split('#')[0] + '#' + sectionId;
-      console.log('[Settings Menu] Updating webview src from', currentSrc, 'to', newSrc);
+      // console.log('[Settings Menu] Updating webview src from', currentSrc, 'to', newSrc);
       webview.setAttribute('src', newSrc);
     }
     
@@ -853,11 +853,11 @@ function openSettingsToSection(sectionId: string): void {
   }
   
   // Create a new tab with the anchored settings URL
-  console.log('[Settings Menu] Creating new settings tab with URL:', settingsUrl);
+  // console.log('[Settings Menu] Creating new settings tab with URL:', settingsUrl);
   const tabId = createNewTab(settingsUrl);
   
   if (tabId) {
-    console.log('[Settings Menu] Successfully created settings tab:', tabId);
+    // console.log('[Settings Menu] Successfully created settings tab:', tabId);
   }
 }
 
@@ -915,7 +915,7 @@ function updateNavigationButtons(): void {
         forwardBtn.disabled = !webview.canGoForward();
       }
     } catch (error) {
-      console.log('⚠️ Webview not ready for navigation buttons, using defaults');
+      // console.log('⚠️ Webview not ready for navigation buttons, using defaults');
       // Fallback to disabled state if webview methods fail
       if (backBtn) backBtn.disabled = true;
       if (forwardBtn) forwardBtn.disabled = true;
@@ -985,7 +985,7 @@ function showToast(message: string, type: string = 'info'): void {
 // ========================= TAB MANAGEMENT =========================
 
 function restoreTabs(): void {
-  console.log('Attempting to restore tabs');
+  // console.log('Attempting to restore tabs');
   
   if (!tabsContainer || !webviewsContainer) {
     console.error('Cannot restore tabs: containers not found');
@@ -1001,7 +1001,7 @@ function restoreTabs(): void {
       let savedTabs = [];
       try {
         savedTabs = JSON.parse(savedTabsJSON);
-        console.log('Restored tabs from localStorage:', savedTabs);
+        // console.log('Restored tabs from localStorage:', savedTabs);
       } catch (parseErr) {
         console.error('Error parsing saved tabs JSON:', parseErr);
         localStorage.removeItem(SAVED_TABS_KEY);
@@ -1014,7 +1014,7 @@ function restoreTabs(): void {
         tabsContainer.innerHTML = '';
         webviewsContainer.innerHTML = '';
         
-        console.log(`Attempting to restore ${savedTabs.length} tabs`);
+        // console.log(`Attempting to restore ${savedTabs.length} tabs`);
         
         let restoredCount = 0;
         
@@ -1029,7 +1029,7 @@ function restoreTabs(): void {
           }
         }
         
-        console.log(`Successfully restored ${restoredCount} out of ${savedTabs.length} tabs`);
+        // console.log(`Successfully restored ${restoredCount} out of ${savedTabs.length} tabs`);
         
         if (restoredCount > 0) {
           return;
@@ -1040,7 +1040,7 @@ function restoreTabs(): void {
     console.error('Error in restoreTabs:', err);
   }
   
-  console.log('Creating default tab as fallback');
+  // console.log('Creating default tab as fallback');
   createNewTab();
 }
 
@@ -1073,7 +1073,7 @@ function createNewTab(url: string = NEW_TAB_URL): string | null {
     `;
     
     tabsContainer.appendChild(tab);
-    console.log('Tab element created:', tabId);
+    // console.log('Tab element created:', tabId);
     
     // Create webview
     const webview = document.createElement('webview') as any;
@@ -1084,7 +1084,7 @@ function createNewTab(url: string = NEW_TAB_URL): string | null {
     configureWebview(webview, url);
     
     webviewsContainer.appendChild(webview);
-    console.log('Webview element created:', webviewId);
+    // console.log('Webview element created:', webviewId);
     
     // Add to tabs array
     const newTab = {
@@ -1110,7 +1110,7 @@ function createNewTab(url: string = NEW_TAB_URL): string | null {
     // Save tab state
     saveTabs();
     
-      console.log('🚨 [NEW TAB DEBUG] Tab created successfully:', tabId);
+      // console.log('🚨 [NEW TAB DEBUG] Tab created successfully:', tabId);
   return tabId;
 } catch (error) {
   console.error('Error creating tab:', error);
@@ -1141,7 +1141,7 @@ function createNewTabWithoutSelection(url: string = NEW_TAB_URL): string | null 
     `;
     
     tabsContainer.appendChild(tab);
-    console.log('Tab element created (no selection):', tabId);
+    // console.log('Tab element created (no selection):', tabId);
     
     // Create webview
     const webview = document.createElement('webview') as any;
@@ -1152,7 +1152,7 @@ function createNewTabWithoutSelection(url: string = NEW_TAB_URL): string | null 
     configureWebview(webview, url);
     
     webviewsContainer.appendChild(webview);
-    console.log('Webview element created (no selection):', webviewId);
+    // console.log('Webview element created (no selection):', webviewId);
     
     // Add to tabs array
     const newTab = {
@@ -1177,7 +1177,7 @@ function createNewTabWithoutSelection(url: string = NEW_TAB_URL): string | null 
     // Save tab state
     saveTabs();
     
-    console.log('🚨 [NEW TAB DEBUG] Tab created successfully (no selection):', tabId);
+    // console.log('🚨 [NEW TAB DEBUG] Tab created successfully (no selection):', tabId);
     return tabId;
   } catch (error) {
     console.error('Error creating tab without selection:', error);
@@ -1191,7 +1191,7 @@ function injectAdBlockCSS(webview: any): void {
   
   // Check if webview is valid and ready
   if (!webview.id || !webview.src || webview.src === 'about:blank') {
-    console.log('[AdBlock] Skipping CSS injection - webview not ready');
+    // console.log('[AdBlock] Skipping CSS injection - webview not ready');
     return;
   }
   
@@ -1199,13 +1199,13 @@ function injectAdBlockCSS(webview: any): void {
     // Request CSS rules from main process
     ipcRenderer.invoke('get-adblock-css').then((cssRules: string) => {
       if (!cssRules || !cssRules.trim()) {
-        console.log('[AdBlock] No CSS rules to inject');
+        // console.log('[AdBlock] No CSS rules to inject');
         return;
       }
       
       // Check if webview is still valid before injection
       if (!webview || !webview.executeJavaScript) {
-        console.log('[AdBlock] Webview no longer valid, skipping injection');
+        // console.log('[AdBlock] Webview no longer valid, skipping injection');
         return;
       }
       
@@ -1214,7 +1214,7 @@ function injectAdBlockCSS(webview: any): void {
           try {
             // Check if document is ready
             if (!document || !document.head) {
-              console.log('[AdBlock] Document not ready, skipping CSS injection');
+              // console.log('[AdBlock] Document not ready, skipping CSS injection');
               return;
             }
             
@@ -1231,7 +1231,7 @@ function injectAdBlockCSS(webview: any): void {
             style.innerHTML = \`${cssRules.replace(/`/g, '\\`').replace(/\$/g, '\\$')}\`;
             document.head.appendChild(style);
             
-            console.log('[AdBlock] CSS rules injected successfully');
+            // console.log('[AdBlock] CSS rules injected successfully');
           } catch (injectionError) {
             console.warn('[AdBlock] CSS injection failed:', injectionError.message);
           }
@@ -1300,7 +1300,6 @@ function configureWebview(webview: any, url: string): void {
   webview.setAttribute('nodeintegrationinsubframes', 'true');
   webview.setAttribute('plugins', 'true');
   webview.setAttribute('disableguestresize', 'false');
-  webview.setAttribute('preload', '');
   
   // Enhanced partition strategy for better authentication support
   if (isLocalSettingsPage) {
@@ -1338,8 +1337,8 @@ function configureWebview(webview: any, url: string): void {
       const anchorIndex = url.indexOf('#');
       const finalUrl = anchorIndex !== -1 ? settingsPath + url.substring(anchorIndex) : settingsPath;
       
-      console.log('[Settings] Resource path:', settingsFilePath);
-      console.log('[Settings] Settings URL:', finalUrl);
+      // console.log('[Settings] Resource path:', settingsFilePath);
+      // console.log('[Settings] Settings URL:', finalUrl);
       webview.setAttribute('src', finalUrl);
     }).catch(error => {
       console.error('[Settings] Failed to get resource path:', error);
@@ -1348,7 +1347,7 @@ function configureWebview(webview: any, url: string): void {
       const settingsPath = `file://${window.electronAPI.path.join(cwd, 'src/renderer/settings.html')}`;
       const anchorIndex = url.indexOf('#');
       const finalUrl = anchorIndex !== -1 ? settingsPath + url.substring(anchorIndex) : settingsPath;
-      console.log('[Settings] Fallback to CWD path:', finalUrl);
+      // console.log('[Settings] Fallback to CWD path:', finalUrl);
       webview.setAttribute('src', finalUrl);
     });
     
@@ -1362,7 +1361,7 @@ function configureWebview(webview: any, url: string): void {
 }
 
 function setupSettingsPageCommunication(webview: any): void {
-  console.log('Setting up settings page communication');
+  // console.log('Setting up settings page communication');
   
   // Send initial settings data after page loads
   setTimeout(async () => {
@@ -1372,13 +1371,13 @@ function setupSettingsPageCommunication(webview: any): void {
 
 async function injectSettingsDataAndHandlers(webview: any): Promise<void> {
   if (!isWebviewReady(webview)) {
-    console.log('Webview not ready, retrying in 500ms');
+    // console.log('Webview not ready, retrying in 500ms');
     setTimeout(() => injectSettingsDataAndHandlers(webview), 500);
     return;
   }
 
   try {
-    console.log('Injecting settings data and handlers');
+    // console.log('Injecting settings data and handlers');
     
     // Get current settings data
     let adBlockStats = { blockedDomains: 0, cssRules: 0, filterRules: 0 };
@@ -1415,7 +1414,7 @@ async function injectSettingsDataAndHandlers(webview: any): Promise<void> {
     // Inject the settings data and setup handlers
     const injectionScript = `
       (function() {
-        console.log('Settings injection script running');
+        // console.log('Settings injection script running');
         
         // Store settings data globally
         window.browserSettings = ${JSON.stringify(settingsData)};
@@ -1423,13 +1422,13 @@ async function injectSettingsDataAndHandlers(webview: any): Promise<void> {
         
         // Create communication function
         window.sendToBrowser = function(action, data) {
-          console.log('Queuing action:', action, data);
+          // console.log('Queuing action:', action, data);
           window.settingsActions.push({ action, data });
         };
         
         // Update UI with current settings
         function updateUIWithBrowserSettings(data) {
-          console.log('Updating UI with settings:', data);
+          // console.log('Updating UI with settings:', data);
           
           // Load API keys
           const providers = ['openai', 'anthropic', 'perplexity', 'chutes'];
@@ -1437,7 +1436,7 @@ async function injectSettingsDataAndHandlers(webview: any): Promise<void> {
             const input = document.getElementById(provider + 'ApiKey');
             if (input && data.apiKeys && data.apiKeys[provider]) {
               input.value = data.apiKeys[provider];
-              console.log('Set API key for', provider);
+              // console.log('Set API key for', provider);
             }
           });
 
@@ -1447,7 +1446,7 @@ async function injectSettingsDataAndHandlers(webview: any): Promise<void> {
           if (sidebarCheckbox && sidebarToggle) {
             sidebarCheckbox.checked = data.sidebarEnabled || false;
             sidebarToggle.classList.toggle('active', data.sidebarEnabled || false);
-            console.log('Set sidebar enabled:', data.sidebarEnabled);
+            // console.log('Set sidebar enabled:', data.sidebarEnabled);
           }
 
           // Load ad block setting
@@ -1456,7 +1455,7 @@ async function injectSettingsDataAndHandlers(webview: any): Promise<void> {
           if (adBlockCheckbox && adBlockToggle) {
             adBlockCheckbox.checked = data.adBlockEnabled !== false;
             adBlockToggle.classList.toggle('active', data.adBlockEnabled !== false);
-            console.log('Set adblock enabled:', data.adBlockEnabled);
+            // console.log('Set adblock enabled:', data.adBlockEnabled);
           }
 
           // Load cache settings
@@ -1482,7 +1481,7 @@ async function injectSettingsDataAndHandlers(webview: any): Promise<void> {
           const memoryCount = document.getElementById('memoryCount');
           if (memoryCount) {
             memoryCount.textContent = data.memoryCount || 0;
-            console.log('Set memory count:', data.memoryCount);
+            // console.log('Set memory count:', data.memoryCount);
           }
 
           const blockedDomainsCount = document.getElementById('blockedDomainsCount');
@@ -1498,7 +1497,7 @@ async function injectSettingsDataAndHandlers(webview: any): Promise<void> {
           if (totalCacheSize) totalCacheSize.textContent = data.cacheStats.totalSize || '0 MB';
           if (cacheItemCount) cacheItemCount.textContent = data.cacheStats.itemCount || 0;
           
-          console.log('UI update complete');
+          // console.log('UI update complete');
         }
         
         // Override the existing functions to use our communication
@@ -1509,12 +1508,12 @@ async function injectSettingsDataAndHandlers(webview: any): Promise<void> {
           updateUIWithBrowserSettings(window.browserSettings);
         }
         
-        console.log('Settings injection complete');
+        // console.log('Settings injection complete');
       })();
     `;
 
     await webview.executeJavaScript(injectionScript);
-    console.log('Settings injection completed successfully');
+    // console.log('Settings injection completed successfully');
 
     // Set up listener for settings actions from the webview
     setupSettingsActionListener(webview);
@@ -1659,7 +1658,7 @@ function setupTabEventListeners(tab: HTMLElement, tabId: string): void {
   if (closeBtn) {
     closeBtn.addEventListener('click', (e) => {
       e.stopPropagation();
-      console.log('Close button clicked for tab:', tabId);
+      // console.log('Close button clicked for tab:', tabId);
       closeTab(tabId);
     });
   }
@@ -1669,7 +1668,7 @@ function setupTabEventListeners(tab: HTMLElement, tabId: string): void {
 }
 
 function setupWebviewEvents(webview: any): void {
-  console.log('Setting up webview events for webview:', webview.id);
+  // console.log('Setting up webview events for webview:', webview.id);
   
   webview.addEventListener('did-start-loading', () => {
     const webviewId = webview.id;
@@ -1679,7 +1678,7 @@ function setupWebviewEvents(webview: any): void {
         const tab = document.getElementById(tabId);
         if (tab) {
           tab.classList.add('loading');
-          console.log(`[Tab Loading] Started loading for tab: ${tabId}`);
+          // console.log(`[Tab Loading] Started loading for tab: ${tabId}`);
         }
       }
     }
@@ -1693,7 +1692,7 @@ function setupWebviewEvents(webview: any): void {
         const tab = document.getElementById(tabId);
         if (tab) {
           tab.classList.remove('loading');
-          console.log(`[Tab Loading] Finished loading for tab: ${tabId}`);
+          // console.log(`[Tab Loading] Finished loading for tab: ${tabId}`);
         }
       }
     }
@@ -1711,18 +1710,18 @@ function setupWebviewEvents(webview: any): void {
     const webviewTitle = webview.getTitle();
     
     // Debug logging for successful page loads
-    console.log('🔍 [HISTORY TRACK] did-finish-load event:', {
-      webviewId: webview.id,
-      url: url,
-      webviewTitle: webviewTitle,
-      isAboutBlank: url === 'about:blank'
-    });
+    // console.log('🔍 [HISTORY TRACK] did-finish-load event:', {
+    //   webviewId: webview.id,
+    //   url: url,
+    //   webviewTitle: webviewTitle,
+    //   isAboutBlank: url === 'about:blank'
+    // });
     
     if (url && url !== 'about:blank' && !url.startsWith('file://')) {
-      console.log('✅ [HISTORY TRACK] Tracking page visit with webview title:', { url, title: webviewTitle });
+      // console.log('✅ [HISTORY TRACK] Tracking page visit with webview title:', { url, title: webviewTitle });
       trackPageVisit(url, webviewTitle);
     } else {
-      console.log('❌ [HISTORY TRACK] Skipping page visit - invalid URL or about:blank');
+      // console.log('❌ [HISTORY TRACK] Skipping page visit - invalid URL or about:blank');
     }
     
     // Update favicon after loading completes
@@ -1742,7 +1741,7 @@ function setupWebviewEvents(webview: any): void {
         const tab = document.getElementById(tabId);
         if (tab) {
           tab.classList.remove('loading');
-          console.log(`[Tab Loading] Failed loading for tab: ${tabId}`);
+          // console.log(`[Tab Loading] Failed loading for tab: ${tabId}`);
         }
       }
     }
@@ -1755,44 +1754,44 @@ function setupWebviewEvents(webview: any): void {
     updateTabTitle(webview, webview.getTitle());
     updateNavigationButtons();
     
-    console.log('❌ [HISTORY TRACK] Page failed to load, not tracking in history:', webview.src);
+    // console.log('❌ [HISTORY TRACK] Page failed to load, not tracking in history:', webview.src);
     
     // DISABLED: Auto-summarize feature commented out
     /*
     // Auto-summarize if enabled
-    console.log('[Auto-summarize Check] autoSummarizeEnabled:', autoSummarizeEnabled);
-    console.log('[Auto-summarize Check] url:', url);
-    console.log('[Auto-summarize Check] url.startsWith("http"):', url && url.startsWith('http'));
+    // console.log('[Auto-summarize Check] autoSummarizeEnabled:', autoSummarizeEnabled);
+    // console.log('[Auto-summarize Check] url:', url);
+    // console.log('[Auto-summarize Check] url.startsWith("http"):', url && url.startsWith('http'));
     
     if (autoSummarizeEnabled && url && url.startsWith('http')) {
       const tabId = getTabIdFromWebview(webview.id);
       const isActiveTab = tabId === activeTabId;
       const isProblematic = isProblematicSite(url);
       
-      console.log('[Auto-summarize Check] tabId:', tabId);
-      console.log('[Auto-summarize Check] activeTabId:', activeTabId);
-      console.log('[Auto-summarize Check] isActiveTab:', isActiveTab);
-      console.log('[Auto-summarize Check] isProblematicSite:', isProblematic);
+      // console.log('[Auto-summarize Check] tabId:', tabId);
+      // console.log('[Auto-summarize Check] activeTabId:', activeTabId);
+      // console.log('[Auto-summarize Check] isActiveTab:', isActiveTab);
+      // console.log('[Auto-summarize Check] isProblematicSite:', isProblematic);
       
       if (isActiveTab && !isProblematic) {
-        console.log('Auto-summarize enabled for active tab, will summarize:', url);
+        // console.log('Auto-summarize enabled for active tab, will summarize:', url);
         setTimeout(() => {
-          console.log('🕒 [TIMEOUT DEBUG] Auto-summarize timeout triggered for URL:', url);
-          console.log('🕒 [TIMEOUT DEBUG] isWorkflowExecuting at timeout:', isWorkflowExecuting);
+          // console.log('🕒 [TIMEOUT DEBUG] Auto-summarize timeout triggered for URL:', url);
+          // console.log('🕒 [TIMEOUT DEBUG] isWorkflowExecuting at timeout:', isWorkflowExecuting);
           logExecutionFlow('timeoutCallback', { url, isWorkflowExecuting });
           // Check execution flag before calling autoSummarizePage to prevent race conditions
           if (!isWorkflowExecuting) {
-            console.log('🕒 [TIMEOUT DEBUG] Calling autoSummarizePage from timeout');
+            // console.log('🕒 [TIMEOUT DEBUG] Calling autoSummarizePage from timeout');
             autoSummarizePage(url, webview);
           } else {
-            console.log('🕒 [TIMEOUT DEBUG] Workflow already executing, skipping auto-summarize from timeout');
+            // console.log('🕒 [TIMEOUT DEBUG] Workflow already executing, skipping auto-summarize from timeout');
           }
         }, 1500);
       } else {
-        console.log('[Auto-summarize] Conditions not met - isActiveTab:', isActiveTab, 'isProblematic:', isProblematic);
+        // console.log('[Auto-summarize] Conditions not met - isActiveTab:', isActiveTab, 'isProblematic:', isProblematic);
       }
     } else {
-      console.log('[Auto-summarize] Not enabled or invalid URL - enabled:', autoSummarizeEnabled, 'valid URL:', !!(url && url.startsWith('http')));
+      // console.log('[Auto-summarize] Not enabled or invalid URL - enabled:', autoSummarizeEnabled, 'valid URL:', !!(url && url.startsWith('http')));
     }
     */
   });
@@ -1808,7 +1807,7 @@ function setupWebviewEvents(webview: any): void {
   });
 
   webview.addEventListener('new-window', (e: any) => {
-    console.log('New window requested:', e.url);
+    // console.log('New window requested:', e.url);
     
     // For OAuth flows, open in the same tab to maintain session
     const isAuthFlow = e.url && (
@@ -1822,17 +1821,17 @@ function setupWebviewEvents(webview: any): void {
     );
     
     if (isAuthFlow) {
-      console.log('OAuth flow detected, navigating in current tab');
+      // console.log('OAuth flow detected, navigating in current tab');
       webview.src = e.url;
     } else {
-      console.log('Opening in new tab');
+      // console.log('Opening in new tab');
       createNewTab(e.url);
     }
   });
 
   // Enhanced event handlers for OAuth and security
   webview.addEventListener('will-navigate', (e: any) => {
-    console.log('Navigation will start to:', e.url);
+    // console.log('Navigation will start to:', e.url);
     // Update URL bar during navigation
     if (urlBar && getTabIdFromWebview(webview.id) === activeTabId) {
       urlBar.value = e.url;
@@ -1840,7 +1839,7 @@ function setupWebviewEvents(webview: any): void {
   });
 
   webview.addEventListener('did-navigate', (e: any) => {
-    console.log('Navigation completed to:', e.url);
+    // console.log('Navigation completed to:', e.url);
     // Final URL update after navigation
     if (urlBar && getTabIdFromWebview(webview.id) === activeTabId) {
       urlBar.value = e.url;
@@ -1850,7 +1849,7 @@ function setupWebviewEvents(webview: any): void {
   });
 
   webview.addEventListener('did-navigate-in-page', (e: any) => {
-    console.log('In-page navigation to:', e.url);
+    // console.log('In-page navigation to:', e.url);
     // Handle hash/history changes (common in OAuth flows)
     if (urlBar && getTabIdFromWebview(webview.id) === activeTabId) {
       urlBar.value = e.url;
@@ -1860,7 +1859,7 @@ function setupWebviewEvents(webview: any): void {
   });
 
   webview.addEventListener('did-fail-load', (e: any) => {
-    console.log('Load failed:', e.errorDescription, 'for URL:', e.validatedURL);
+    // console.log('Load failed:', e.errorDescription, 'for URL:', e.validatedURL);
     // Don't auto-retry for authentication pages as it might interfere with OAuth
     const isAuthPage = e.validatedURL && (
       e.validatedURL.includes('accounts.google.com') ||
@@ -1870,20 +1869,20 @@ function setupWebviewEvents(webview: any): void {
     );
     
     if (!isAuthPage && e.errorCode === -105) { // NAME_NOT_RESOLVED
-      console.log('DNS resolution failed, this is normal for some sites');
+      // console.log('DNS resolution failed, this is normal for some sites');
     }
   });
 
   // Handle certificate errors for OAuth sites
   webview.addEventListener('certificate-error', (e: any) => {
-    console.log('Certificate error for:', e.url);
+    // console.log('Certificate error for:', e.url);
     // For OAuth flows, we might need to be more permissive
     // but still maintain security for the main browsing
   });
 
   // Handle permission requests (important for OAuth flows)
   webview.addEventListener('permission-request', (e: any) => {
-    console.log('Permission requested:', e.permission, 'for:', webview.src);
+    // console.log('Permission requested:', e.permission, 'for:', webview.src);
     
     // Allow certain permissions for OAuth flows
     const allowedPermissions = ['geolocation', 'notifications', 'camera', 'microphone'];
@@ -1906,14 +1905,14 @@ function setupWebviewEvents(webview: any): void {
   
   // Listen for IPC messages from webview (for Add to Chat)
   webview.addEventListener('ipc-message', (event: any) => {
-    console.log('🔍 [IPC DEBUG] Received ipc-message from webview:', webview.id, 'channel:', event.channel, 'args:', event.args);
+    // console.log('🔍 [IPC DEBUG] Received ipc-message from webview:', webview.id, 'channel:', event.channel, 'args:', event.args);
     if (event.channel === 'add-to-chat') {
-      console.log('✅ [Add to Chat] Processing IPC message with text:', event.args[0]?.substring(0, 50) + '...');
+      // console.log('✅ [Add to Chat] Processing IPC message with text:', event.args[0]?.substring(0, 50) + '...');
       if (event.args[0]) {
         // Add selected text to @ context system instead of just chat
         addSelectedTextToContextSystem(event.args[0], webview);
         showToast('✅ Text added to context!', 'success');
-        console.log('✅ [Add to Chat] Text successfully added to context system via IPC');
+        // console.log('✅ [Add to Chat] Text successfully added to context system via IPC');
       } else {
         console.warn('⚠️ [Add to Chat] IPC message received but no text found in args');
       }
@@ -1922,7 +1921,7 @@ function setupWebviewEvents(webview: any): void {
 
   // Inject text selection handler and ad block CSS
   webview.addEventListener('did-finish-load', () => {
-    console.log('[Text Selection] Injecting enhanced selection handler for webview:', webview.id);
+    // console.log('[Text Selection] Injecting enhanced selection handler for webview:', webview.id);
     try {
       injectEnhancedSelectionHandler(webview);
       // Inject ad block CSS after page loads with validation
@@ -1937,15 +1936,15 @@ function setupWebviewEvents(webview: any): void {
     }
   });
 
-  console.log('All webview event listeners set up for:', webview.id);
+  // console.log('All webview event listeners set up for:', webview.id);
 }
 
 function selectTab(tabId: string): void {
-  console.log('Selecting tab:', tabId);
+  // console.log('Selecting tab:', tabId);
   
   try {
     if (!tabs || tabs.length === 0) {
-      console.log('No tabs available, creating a new one');
+      // console.log('No tabs available, creating a new one');
       createNewTab();
       return;
     }
@@ -2025,17 +2024,17 @@ function selectTab(tabId: string): void {
     // Auto-save when tab selection changes
     autoSaveTabs();
     
-    console.log('Tab selection complete:', tabId);
+    // console.log('Tab selection complete:', tabId);
   } catch (error) {
     console.error('Error in selectTab:', error);
   }
 }
 
 function closeTab(tabId: string): void {
-  console.log('closeTab called for tab:', tabId);
+  // console.log('closeTab called for tab:', tabId);
   
   if (tabs.length <= 1) {
-    console.log('Preventing closing the last tab, creating a new one instead');
+    // console.log('Preventing closing the last tab, creating a new one instead');
     createNewTab();
     return;
   }
@@ -2055,7 +2054,7 @@ function closeTab(tabId: string): void {
     if (webview) webview.remove();
     
     tabs.splice(tabIndex, 1);
-    console.log('Tab removed from tabs array, remaining tabs:', tabs.length);
+    // console.log('Tab removed from tabs array, remaining tabs:', tabs.length);
     
     if (activeTabId === tabId) {
       const newTabId = tabs[Math.max(0, tabIndex - 1)].id;
@@ -2063,7 +2062,7 @@ function closeTab(tabId: string): void {
     }
     
     saveTabs();
-    console.log('Tab closed successfully:', tabId);
+    // console.log('Tab closed successfully:', tabId);
   } catch (error) {
     console.error('Error closing tab:', error);
   }
@@ -2113,10 +2112,10 @@ function getTabIdFromWebview(webviewId: string): string | null {
 }
 
 function trackPageVisit(url: string, title: string): void {
-  console.log('📝 [TRACK PAGE] Called with:', { url, title });
+  // console.log('📝 [TRACK PAGE] Called with:', { url, title });
   
   if (!url || url === 'about:blank') {
-    console.log('❌ [TRACK PAGE] Rejected - empty URL or about:blank');
+    // console.log('❌ [TRACK PAGE] Rejected - empty URL or about:blank');
     return;
   }
   
@@ -2128,11 +2127,11 @@ function trackPageVisit(url: string, title: string): void {
       !title ||
       title.length === 0 ||
       title === 'New Tab') {
-    console.log('❌ [TRACK PAGE] Rejected - internal/invalid page:', { url, title });
+    // console.log('❌ [TRACK PAGE] Rejected - internal/invalid page:', { url, title });
     return;
   }
   
-  console.log('✅ [TRACK PAGE] Processing valid page visit');
+  // console.log('✅ [TRACK PAGE] Processing valid page visit');
   
   try {
     let history = JSON.parse(localStorage.getItem(HISTORY_STORAGE_KEY) || '[]');
@@ -2145,10 +2144,10 @@ function trackPageVisit(url: string, title: string): void {
       timestamp: Date.now()
     };
     
-    console.log('🔍 [HISTORY DEBUG] Tracking page visit:', { 
-      title: visit.title, 
-      url: visit.url.substring(0, 50) + (visit.url.length > 50 ? '...' : '') 
-    });
+    // console.log('🔍 [HISTORY DEBUG] Tracking page visit:', { 
+    //   title: visit.title, 
+    //   url: visit.url.substring(0, 50) + (visit.url.length > 50 ? '...' : '') 
+    // });
     
     // Remove any existing entry for this URL to avoid duplicates
     const beforeLength = history.length;
@@ -2156,7 +2155,7 @@ function trackPageVisit(url: string, title: string): void {
     const afterLength = history.length;
     
     if (beforeLength !== afterLength) {
-      console.log('🔍 [HISTORY DEBUG] Removed duplicate entry for URL');
+      // console.log('🔍 [HISTORY DEBUG] Removed duplicate entry for URL');
     }
     
     // Add new visit to the beginning
@@ -2168,7 +2167,7 @@ function trackPageVisit(url: string, title: string): void {
     }
     
     localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(history));
-    console.log('🔍 [HISTORY DEBUG] Total history items after update:', history.length);
+    // console.log('🔍 [HISTORY DEBUG] Total history items after update:', history.length);
   } catch (error) {
     console.error('Error tracking page visit:', error);
   }
@@ -2330,7 +2329,7 @@ function updateMemoryCount(): void {
     if (memoryCountSpan) {
       memoryCountSpan.textContent = memory.length.toString();
     }
-    console.log('[Memory] Updated memory count display:', memory.length);
+    // console.log('[Memory] Updated memory count display:', memory.length);
   } catch (e) {
     console.error('Error updating memory count:', e);
     const memoryCountSpan = document.getElementById('memoryCount');
@@ -2341,15 +2340,15 @@ function updateMemoryCount(): void {
 }
 
 function setupAgentControls(): void {
-  console.log('[setupAgentControls] Starting setup...');
+  // console.log('[setupAgentControls] Starting setup...');
   // Initialize chat UI in the fixed container
   const chatInputContainer = document.querySelector('.chat-input-container');
   if (chatInputContainer) {
-    console.log('[setupAgentControls] Chat input container found');
+    // console.log('[setupAgentControls] Chat input container found');
     // Add chat input area if it doesn't exist
     let chatInputArea = document.querySelector('.chat-input-area');
     if (!chatInputArea) {
-      console.log('[setupAgentControls] Creating chat input area');
+      // console.log('[setupAgentControls] Creating chat input area');
       chatInputArea = document.createElement('div');
       chatInputArea.className = 'chat-input-area';
       chatInputArea.innerHTML = `
@@ -2376,7 +2375,7 @@ function setupAgentControls(): void {
       // Set up chat input handlers
       setupChatInputHandlers();
     } else {
-      console.log('[setupAgentControls] Chat input area already exists, ensuring handlers are set up');
+      // console.log('[setupAgentControls] Chat input area already exists, ensuring handlers are set up');
       // Ensure handlers are set up even if area already exists
       setupChatInputHandlers();
     }
@@ -2385,7 +2384,7 @@ function setupAgentControls(): void {
 
 // Dedicated function to set up chat input event handlers
 function setupChatInputHandlers(): void {
-  console.log('[setupChatInputHandlers] Setting up chat input handlers...');
+  // console.log('[setupChatInputHandlers] Setting up chat input handlers...');
   
   // Wait a bit for DOM to be ready
   setTimeout(() => {
@@ -2394,33 +2393,33 @@ function setupChatInputHandlers(): void {
     
     if (!sendButton || !chatInput) {
       console.error('[setupChatInputHandlers] Chat input elements not found');
-      console.log('[setupChatInputHandlers] Available elements:', {
-        sendButton: !!sendButton,
-        chatInput: !!chatInput,
-        allButtons: document.querySelectorAll('button').length,
-        allInputs: document.querySelectorAll('input').length
-      });
+      // console.log('[setupChatInputHandlers] Available elements:', {
+      //   sendButton: !!sendButton,
+      //   chatInput: !!chatInput,
+      //   allButtons: document.querySelectorAll('button').length,
+      //   allInputs: document.querySelectorAll('input').length
+      // });
       return;
     }
     
-    console.log('[setupChatInputHandlers] Found chat elements, attaching handlers...');
+    // console.log('[setupChatInputHandlers] Found chat elements, attaching handlers...');
     
     // Check if handlers are already set up
     if ((sendButton as any).hasHandlers) {
-      console.log('[setupChatInputHandlers] Handlers already set up, skipping');
+      // console.log('[setupChatInputHandlers] Handlers already set up, skipping');
       return;
     }
     
     const sendMessage = () => {
       const message = chatInput.value.trim();
       if (message) {
-        console.log('[sendMessage] Sending message:', message);
-        console.log('[sendMessage] Selected contexts:', selectedWebpageContexts.length);
+        // console.log('[sendMessage] Sending message:', message);
+        // console.log('[sendMessage] Selected contexts:', selectedWebpageContexts.length);
         
         // Get selected mode
         const selectedMode = document.querySelector('input[name="chatMode"]:checked') as HTMLInputElement;
         const mode = selectedMode ? selectedMode.value : 'ask';
-        console.log('[sendMessage] Selected mode:', mode);
+        // console.log('[sendMessage] Selected mode:', mode);
         
         // Update placeholder based on mode
         const placeholderText = mode === 'do' ? 'Enter a task to perform...' : 'Ask a follow-up question...';
@@ -2432,15 +2431,15 @@ function setupChatInputHandlers(): void {
         // Process the message based on mode
         if (mode === 'do') {
           // Use DoAgent for automation tasks
-          console.log('[sendMessage] Using DoAgent for automation task');
+          // console.log('[sendMessage] Using DoAgent for automation task');
           processDoTask(message);
         } else {
           // Use existing ask mode logic
           if (selectedWebpageContexts.length > 0) {
-            console.log('🚨 [SEND DEBUG] Found contexts, calling processFollowupQuestionWithContexts');
+            // console.log('🚨 [SEND DEBUG] Found contexts, calling processFollowupQuestionWithContexts');
             processFollowupQuestionWithContexts(message, selectedWebpageContexts);
           } else {
-            console.log('🚨 [SEND DEBUG] Calling processFollowupQuestion');
+            // console.log('🚨 [SEND DEBUG] Calling processFollowupQuestion');
             processFollowupQuestion(message);
           }
         }
@@ -2453,7 +2452,7 @@ function setupChatInputHandlers(): void {
     
     // Add click handler to send button
     sendButton.addEventListener('click', (e) => {
-      console.log('[setupChatInputHandlers] Send button clicked');
+      // console.log('[setupChatInputHandlers] Send button clicked');
       e.preventDefault();
       hideMentionDropdown(); // Hide dropdown before sending
       sendMessage();
@@ -2462,7 +2461,7 @@ function setupChatInputHandlers(): void {
     // Enhanced keypress handler for Enter key and @ mentions
     chatInput.addEventListener('keypress', (e) => {
       if (e.key === 'Enter') {
-        console.log('[setupChatInputHandlers] Enter key pressed');
+        // console.log('[setupChatInputHandlers] Enter key pressed');
         e.preventDefault();
         hideMentionDropdown(); // Hide dropdown before sending
         sendMessage();
@@ -2474,23 +2473,23 @@ function setupChatInputHandlers(): void {
       const value = chatInput.value;
       const cursorPosition = chatInput.selectionStart || 0;
       
-      console.log('🚨 [INPUT HANDLER] Input event triggered');
-      console.log('🚨 [INPUT HANDLER] Value:', value);
-      console.log('🚨 [INPUT HANDLER] Cursor position:', cursorPosition);
-      console.log('🚨 [INPUT HANDLER] Character at cursor-1:', value.charAt(cursorPosition - 1));
+      // console.log('🚨 [INPUT HANDLER] Input event triggered');
+      // console.log('🚨 [INPUT HANDLER] Value:', value);
+      // console.log('🚨 [INPUT HANDLER] Cursor position:', cursorPosition);
+      // console.log('🚨 [INPUT HANDLER] Character at cursor-1:', value.charAt(cursorPosition - 1));
       
       // Check if user just typed @
       if (value.charAt(cursorPosition - 1) === '@') {
-        console.log('🔍 [MENTION] @ detected, showing dropdown');
-        console.log('🚨 [INPUT HANDLER] Calling showMentionDropdown');
+        // console.log('🔍 [MENTION] @ detected, showing dropdown');
+        // console.log('🚨 [INPUT HANDLER] Calling showMentionDropdown');
         showMentionDropdown(chatInput);
       } else if (isShowingMentionDropdown) {
-        console.log('🚨 [INPUT HANDLER] Dropdown is showing, checking if should hide');
+        // console.log('🚨 [INPUT HANDLER] Dropdown is showing, checking if should hide');
         // Check if we should hide the dropdown
         const lastAtIndex = value.lastIndexOf('@');
-        console.log('🚨 [INPUT HANDLER] Last @ index:', lastAtIndex, 'cursor position:', cursorPosition);
+        // console.log('🚨 [INPUT HANDLER] Last @ index:', lastAtIndex, 'cursor position:', cursorPosition);
         if (lastAtIndex === -1 || cursorPosition <= lastAtIndex) {
-          console.log('🚨 [INPUT HANDLER] Hiding dropdown');
+          // console.log('🚨 [INPUT HANDLER] Hiding dropdown');
           hideMentionDropdown();
         }
       }
@@ -2554,7 +2553,7 @@ function setupChatInputHandlers(): void {
     modeRadios.forEach(radio => {
       radio.addEventListener('change', (e) => {
         const mode = (e.target as HTMLInputElement).value;
-        console.log('[setupChatInputHandlers] Mode changed to:', mode);
+        // console.log('[setupChatInputHandlers] Mode changed to:', mode);
         
         // Update placeholder based on mode
         const placeholderText = mode === 'do' ? 'Enter a task to perform...' : 'Ask a follow-up question...';
@@ -2565,33 +2564,33 @@ function setupChatInputHandlers(): void {
     // Mark as having handlers
     (sendButton as any).hasHandlers = true;
     
-    console.log('[setupChatInputHandlers] Enhanced chat input handlers with @ mentions set up successfully');
+    // console.log('[setupChatInputHandlers] Enhanced chat input handlers with @ mentions set up successfully');
   }, 100); // Small delay to ensure DOM is ready
 }
 
 // ========================= HISTORY PAGE =========================
 
 function showHistoryPage(): void {
-  console.log('=== SHOW HISTORY PAGE CALLED ===');
+  // console.log('=== SHOW HISTORY PAGE CALLED ===');
   
   try {
     const webview = getActiveWebview();
-    console.log('Active webview found:', !!webview);
+    // console.log('Active webview found:', !!webview);
     
     if (webview) {
       // For packaged apps, use getResourcePath instead of cwd
       window.electronAPI.getResourcePath('src/renderer/history.html').then(historyFilePath => {
         const historyURL = `file://${historyFilePath}`;
-        console.log('[History] Resource path:', historyFilePath);
-        console.log('[History] Loading history URL:', historyURL);
+        // console.log('[History] Resource path:', historyFilePath);
+        // console.log('[History] Loading history URL:', historyURL);
         
         const historyLoadHandler = () => {
-        console.log('History page loaded, injecting data...');
+        // console.log('History page loaded, injecting data...');
         
         try {
           const historyData = localStorage.getItem(HISTORY_STORAGE_KEY) || '[]';
           const parsedHistory = JSON.parse(historyData);
-          console.log('Injecting history data:', parsedHistory.length, 'items');
+          // console.log('Injecting history data:', parsedHistory.length, 'items');
           
           webview.executeJavaScript(`
             if (window.receiveHistoryData) {
@@ -2606,7 +2605,7 @@ function showHistoryPage(): void {
               }, 500);
             }
           `).then(() => {
-            console.log('History data injected successfully');
+            // console.log('History data injected successfully');
           }).catch((err: any) => {
             console.error('Error injecting history data:', err);
           });
@@ -2620,21 +2619,21 @@ function showHistoryPage(): void {
         
         webview.addEventListener('did-finish-load', historyLoadHandler);
         webview.loadURL(historyURL);
-        console.log('History URL loaded successfully');
+        // console.log('History URL loaded successfully');
       }).catch(error => {
         console.error('[History] Failed to get resource path:', error);
         // Fallback to development path
         const cwd = window.electronAPI.cwd();
         const historyURL = `file://${window.electronAPI.path.join(cwd, 'src/renderer/history.html')}`;
-        console.log('[History] Fallback to CWD path:', historyURL);
+        // console.log('[History] Fallback to CWD path:', historyURL);
         
         const historyLoadHandler = () => {
-          console.log('History page loaded, injecting data...');
+          // console.log('History page loaded, injecting data...');
           
           try {
             const historyData = localStorage.getItem(HISTORY_STORAGE_KEY) || '[]';
             const parsedHistory = JSON.parse(historyData);
-            console.log('Injecting history data:', parsedHistory.length, 'items');
+            // console.log('Injecting history data:', parsedHistory.length, 'items');
             
             webview.executeJavaScript(`
               if (window.receiveHistoryData) {
@@ -2649,7 +2648,7 @@ function showHistoryPage(): void {
                 }, 500);
               }
             `).then(() => {
-              console.log('History data injected successfully');
+              // console.log('History data injected successfully');
             }).catch((err: any) => {
               console.error('Error injecting history data:', err);
             });
@@ -2663,26 +2662,26 @@ function showHistoryPage(): void {
         
         webview.addEventListener('did-finish-load', historyLoadHandler);
         webview.loadURL(historyURL);
-        console.log('History URL loaded successfully (fallback)');
+        // console.log('History URL loaded successfully (fallback)');
       });
       
     } else {
-      console.log('No active webview, creating new tab...');
+      // console.log('No active webview, creating new tab...');
       // For packaged apps, use getResourcePath instead of cwd
       window.electronAPI.getResourcePath('src/renderer/history.html').then(historyFilePath => {
         const historyURL = `file://${historyFilePath}`;
-        console.log('[History] Resource path:', historyFilePath);
-        console.log('[History] Creating new history tab with URL:', historyURL);
+        // console.log('[History] Resource path:', historyFilePath);
+        // console.log('[History] Creating new history tab with URL:', historyURL);
         const newTabId = createNewTab(historyURL);
-        console.log('New history tab created:', newTabId);
+        // console.log('New history tab created:', newTabId);
       }).catch(error => {
         console.error('[History] Failed to get resource path:', error);
         // Fallback to development path
         const cwd = window.electronAPI.cwd();
         const historyURL = `file://${window.electronAPI.path.join(cwd, 'src/renderer/history.html')}`;
-        console.log('[History] Fallback to CWD path:', historyURL);
+        // console.log('[History] Fallback to CWD path:', historyURL);
         const newTabId = createNewTab(historyURL);
-        console.log('New history tab created (fallback):', newTabId);
+        // console.log('New history tab created (fallback):', newTabId);
       });
     }
   } catch (error) {
@@ -2718,7 +2717,7 @@ function getBrowserApiKeys(): Record<string, string> {
   const providers = ['anthropic']; // ['openai', 'anthropic', 'perplexity', 'chutes'];
   const apiKeys: Record<string, string> = {};
   
-  console.log('[DEBUG] Reading API keys from localStorage...');
+  // console.log('[DEBUG] Reading API keys from localStorage...');
   
   providers.forEach(provider => {
     const key = localStorage.getItem(`${provider}_api_key`);
@@ -2726,13 +2725,13 @@ function getBrowserApiKeys(): Record<string, string> {
       apiKeys[provider] = key;
       // Log partial key for debugging (mask sensitive parts)
       const maskedKey = key.length > 12 ? key.substring(0, 8) + '...' + key.substring(key.length - 4) : 'short_key';
-      console.log(`[DEBUG] ${provider}: ${maskedKey} (length: ${key.length})`);
+      // console.log(`[DEBUG] ${provider}: ${maskedKey} (length: ${key.length})`);
     } else {
-      console.log(`[DEBUG] ${provider}: NO KEY FOUND`);
+      // console.log(`[DEBUG] ${provider}: NO KEY FOUND`);
     }
   });
   
-  console.log(`[DEBUG] Total API keys found: ${Object.keys(apiKeys).length}`);
+  // console.log(`[DEBUG] Total API keys found: ${Object.keys(apiKeys).length}`);
   return apiKeys;
 }
 
@@ -2742,7 +2741,7 @@ async function syncApiKeysWithBackend(): Promise<void> {
     const apiKeys = getBrowserApiKeys();
     const provider = getSelectedProvider();
     
-    console.log('[DEBUG] Syncing API keys with backend...');
+    // console.log('[DEBUG] Syncing API keys with backend...');
     
     // Update API keys in ExtensionManager
     await ipcRenderer.invoke('update-browser-api-keys', apiKeys);
@@ -2750,7 +2749,7 @@ async function syncApiKeysWithBackend(): Promise<void> {
     // Update selected provider in ExtensionManager
     await ipcRenderer.invoke('update-selected-provider', provider);
     
-    console.log('[DEBUG] Successfully synced API keys and provider with backend');
+    // console.log('[DEBUG] Successfully synced API keys and provider with backend');
   } catch (error) {
     console.error('[DEBUG] Failed to sync API keys with backend:', error);
   }
@@ -2758,22 +2757,22 @@ async function syncApiKeysWithBackend(): Promise<void> {
 
 async function executeAgent(): Promise<void> {
   logExecutionFlow('executeAgent', { isWorkflowExecuting });
-  console.log('🎯 [EXECUTION DEBUG] executeAgent() called');
-  console.log('🎯 [EXECUTION DEBUG] isWorkflowExecuting:', isWorkflowExecuting);
+  // console.log('🎯 [EXECUTION DEBUG] executeAgent() called');
+  // console.log('🎯 [EXECUTION DEBUG] isWorkflowExecuting:', isWorkflowExecuting);
   
   // Prevent manual execution when workflow is already executing (from chat input)
   if (isWorkflowExecuting) {
-    console.log('[executeAgent] Workflow already executing (likely from chat input), skipping Run Agent button execution');
+    // console.log('[executeAgent] Workflow already executing (likely from chat input), skipping Run Agent button execution');
     showToast('Workflow already in progress...', 'info');
     return;
   }
   
   // Set execution flag immediately to prevent race conditions
   isWorkflowExecuting = true;
-  console.log('[executeAgent] Setting execution flag at start to prevent conflicts');
+  // console.log('[executeAgent] Setting execution flag at start to prevent conflicts');
   
   try {
-    console.log("executeAgent function called - running agent");
+    // console.log("executeAgent function called - running agent");
     
     // Sync API keys with backend first
     await syncApiKeysWithBackend();
@@ -2828,7 +2827,7 @@ async function executeAgent(): Promise<void> {
     
     // Global duplicate check - prevent same query from any path
     if (isQueryRecentlyProcessed(query)) {
-      console.log('🚨 [GLOBAL DUPLICATE FIX] Duplicate query detected in executeAgent, aborting');
+      // console.log('🚨 [GLOBAL DUPLICATE FIX] Duplicate query detected in executeAgent, aborting');
       showToast('This query was just processed, skipping duplicate', 'info');
       return;
     }
@@ -2840,7 +2839,7 @@ async function executeAgent(): Promise<void> {
     const lastProcessedTime = parseInt(localStorage.getItem(lastProcessedKey) || '0');
     
     if (currentTime - lastProcessedTime < 5000) {
-      console.log('[executeAgent] Same query processed recently, skipping duplicate execution');
+      // console.log('[executeAgent] Same query processed recently, skipping duplicate execution');
       showToast('This query was just processed, skipping duplicate execution', 'info');
       return;
     }
@@ -2851,7 +2850,7 @@ async function executeAgent(): Promise<void> {
     // Ensure chat input area exists in the fixed container
     const chatInputContainer = document.querySelector('.chat-input-container');
     if (chatInputContainer && !document.querySelector('.chat-input-area')) {
-      console.log('[executeAgent] Chat input area not found, creating one');
+      // console.log('[executeAgent] Chat input area not found, creating one');
       
       const chatInputArea = document.createElement('div');
       chatInputArea.className = 'chat-input-area';
@@ -2885,17 +2884,17 @@ async function executeAgent(): Promise<void> {
     const pageContent = await extractPageContent(webview);
     
     // Debug: Log that HTML content is being passed to agent
-    console.log('🔍 [CONTENT DEBUG] Page content extracted for agent:');
-    console.log('📄 Title:', pageContent.title);
-    console.log('📝 Text content length:', pageContent.content?.length || 0, 'chars');
-    console.log('🌐 HTML content length:', pageContent.html?.length || 0, 'chars');
-    console.log('🔗 HTML includes links:', pageContent.html?.includes('<a ') || false);
+    // console.log('🔍 [CONTENT DEBUG] Page content extracted for agent:');
+    // console.log('📄 Title:', pageContent.title);
+    // console.log('📝 Text content length:', pageContent.content?.length || 0, 'chars');
+    // console.log('🌐 HTML content length:', pageContent.html?.length || 0, 'chars');
+    // console.log('🔗 HTML includes links:', pageContent.html?.includes('<a ') || false);
     
     // Route request to appropriate extension or workflow
-    console.log('Routing extension request for query:', query);
+    // console.log('Routing extension request for query:', query);
     
     const routingResult = await ipcRenderer.invoke('route-extension-request', query);
-    console.log('Agent execution routing result:', routingResult);
+    // console.log('Agent execution routing result:', routingResult);
     
     // Clear loading indicators first  
     const loadingMessages = document.querySelectorAll('.loading');
@@ -2908,11 +2907,11 @@ async function executeAgent(): Promise<void> {
     
     // Check if routing returned a workflow result - execute asynchronously with progress
     if (routingResult.type === 'workflow') {
-      console.log('Agent execution detected workflow - using async execution with progress events');
+      // console.log('Agent execution detected workflow - using async execution with progress events');
       
       // Don't initialize workflow progress indicator here - let the backend workflow-start event handle it
       // This fixes the workflow ID mismatch issue where frontend uses Date.now() but backend uses uuid4()
-      console.log('Workflow detected - progress will be initialized by backend workflow-start event');
+      // console.log('Workflow detected - progress will be initialized by backend workflow-start event');
       
       // Execute workflow asynchronously - progress events will update the UI
       // The workflow-complete event listener will call displayAgentResults when done
@@ -2940,7 +2939,7 @@ async function executeAgent(): Promise<void> {
       } finally {
         // Always clear the execution flag
         isWorkflowExecuting = false;
-        console.log('[executeAgent] Workflow execution finished, clearing execution flag');
+        // console.log('[executeAgent] Workflow execution finished, clearing execution flag');
       }
       
       return; // Don't execute single extension path
@@ -2963,7 +2962,7 @@ async function executeAgent(): Promise<void> {
       }]
     };
     
-    console.log('🚨 [SINGLE EXTENSION DEBUG] Creating progress indicator for single extension:', singleExtensionWorkflowData);
+    // console.log('🚨 [SINGLE EXTENSION DEBUG] Creating progress indicator for single extension:', singleExtensionWorkflowData);
     const progressElement = addWorkflowProgressToChat(singleExtensionWorkflowData);
     
     // Start the progress indicator
@@ -2986,8 +2985,8 @@ async function executeAgent(): Promise<void> {
       conversationHistory: await buildConversationHistoryWithMemories(url, query)
     };
     
-    console.log(`Executing single extension: ${extensionId} (confidence: ${routingResult.confidence}) with action: ${action}`);
-    console.log(`Routing reason: ${routingResult.reason}`);
+    // console.log(`Executing single extension: ${extensionId} (confidence: ${routingResult.confidence}) with action: ${action}`);
+    // console.log(`Routing reason: ${routingResult.reason}`);
     
     const startTime = Date.now();
     
@@ -3003,7 +3002,7 @@ async function executeAgent(): Promise<void> {
       const endTime = Date.now();
       const executionTime = endTime - startTime;
       
-      console.log(`Agent result received:`, result);
+      // console.log(`Agent result received:`, result);
       
       // Complete the progress indicator
       if (progressElement && (progressElement as any).progressIndicator) {
@@ -3023,7 +3022,7 @@ async function executeAgent(): Promise<void> {
       if (result.success === false) {
         addMessageToChat('assistant', `Error: ${result.error}`);
       } else {
-              console.log('Calling displayAgentResults with:', result.data);
+              // console.log('Calling displayAgentResults with:', result.data);
       displayAgentResults(result.data);
       
       // Store memory if available - try multiple content sources
@@ -3048,7 +3047,7 @@ async function executeAgent(): Promise<void> {
         }
         
         if (summary && summary.trim()) {
-          console.log('[Memory] Storing agent result in memory from workflow-complete');
+          // console.log('[Memory] Storing agent result in memory from workflow-complete');
           
           // Get current page info for memory context
           const webview = getActiveWebview();
@@ -3057,7 +3056,7 @@ async function executeAgent(): Promise<void> {
           
           storeInMemory(url, memoryQuery, summary, title);
         } else {
-          console.log('[Memory] No suitable content found for memory storage in workflow-complete');
+          // console.log('[Memory] No suitable content found for memory storage in workflow-complete');
         }
       }
       }
@@ -3090,7 +3089,7 @@ async function executeAgent(): Promise<void> {
   } finally {
     // Always clear the execution flag when function ends
     isWorkflowExecuting = false;
-    console.log('[executeAgent] Clearing execution flag on function completion');
+    // console.log('[executeAgent] Clearing execution flag on function completion');
   }
 }
 
@@ -3205,7 +3204,7 @@ function addMessageToChat(role: string, content: string, timing?: number): void 
     
     // Create chat container if it doesn't exist
     if (!chatContainer) {
-      console.log('[addMessageToChat] Chat container not found, creating one');
+      // console.log('[addMessageToChat] Chat container not found, creating one');
       
       const agentResults = document.getElementById('agentResults');
       if (!agentResults) {
@@ -3225,15 +3224,15 @@ function addMessageToChat(role: string, content: string, timing?: number): void 
       chatContainer.className = 'chat-container';
       agentResults.appendChild(chatContainer);
       
-      console.log('[addMessageToChat] Chat container created successfully');
+      // console.log('[addMessageToChat] Chat container created successfully');
     }
     
     if (!content || content.trim() === '') {
-      console.log('[addMessageToChat] Empty content, skipping');
+      // console.log('[addMessageToChat] Empty content, skipping');
       return;
     }
     
-    console.log(`[addMessageToChat] Adding ${role} message:`, content.substring(0, 100) + '...');
+    // console.log(`[addMessageToChat] Adding ${role} message:`, content.substring(0, 100) + '...');
     
     const messageDiv = document.createElement('div');
     
@@ -3280,7 +3279,7 @@ function addMessageToChat(role: string, content: string, timing?: number): void 
     // Ensure chat input area exists in the fixed container
     const chatInputContainer = document.querySelector('.chat-input-container');
     if (chatInputContainer && !document.querySelector('.chat-input-area')) {
-      console.log('[addMessageToChat] Creating chat input area for follow-up questions');
+      // console.log('[addMessageToChat] Creating chat input area for follow-up questions');
       
       const chatInputArea = document.createElement('div');
       chatInputArea.className = 'chat-input-area';
@@ -3307,7 +3306,7 @@ function addMessageToChat(role: string, content: string, timing?: number): void 
       setupChatInputHandlers();
     }
     
-    console.log(`[addMessageToChat] Message added successfully. Total messages: ${chatContainer.children.length}`);
+    // console.log(`[addMessageToChat] Message added successfully. Total messages: ${chatContainer.children.length}`);
   } catch (error) {
     console.error('[addMessageToChat] Error adding message to chat:', error);
     console.error('[addMessageToChat] Error stack:', error instanceof Error ? error.stack : 'No stack trace');
@@ -3321,12 +3320,12 @@ function displayAgentResults(data: any): void {
   logExecutionFlow('displayAgentResults', { hasData: !!data, hasConsolidatedSummary: !!(data && data.consolidated_summary) });
   
   try {
-    console.log('[displayAgentResults] Called with data:', data);
-    console.log('[displayAgentResults] Data type:', typeof data);
-    console.log('[displayAgentResults] Data keys:', data ? Object.keys(data) : 'null');
+    // console.log('[displayAgentResults] Called with data:', data);
+    // console.log('[displayAgentResults] Data type:', typeof data);
+    // console.log('[displayAgentResults] Data keys:', data ? Object.keys(data) : 'null');
     
     if (!data) {
-      console.log('[displayAgentResults] No data - showing fallback message');
+      // console.log('[displayAgentResults] No data - showing fallback message');
       addMessageToChat('assistant', 'No data received from agent');
       return;
     }
@@ -3338,34 +3337,34 @@ function displayAgentResults(data: any): void {
     const lastDisplayTime = parseInt(localStorage.getItem(lastDisplayKey) || '0');
     
     if (currentTime - lastDisplayTime < 3000) {
-      console.log('[displayAgentResults] Same content displayed recently, skipping duplicate');
+      // console.log('[displayAgentResults] Same content displayed recently, skipping duplicate');
       return;
     }
     
     // Store current display time
     localStorage.setItem(lastDisplayKey, currentTime.toString());
 
-    console.log("[displayAgentResults] Agent result data:", data);
-    console.log('[displayAgentResults] Has consolidated_summary:', !!data.consolidated_summary);
-    console.log('[displayAgentResults] Has summaries:', !!data.summaries);
-    console.log('[displayAgentResults] Summaries length:', data.summaries ? data.summaries.length : 'none');
+    // console.log("[displayAgentResults] Agent result data:", data);
+    // console.log('[displayAgentResults] Has consolidated_summary:', !!data.consolidated_summary);
+    // console.log('[displayAgentResults] Has summaries:', !!data.summaries);
+    // console.log('[displayAgentResults] Summaries length:', data.summaries ? data.summaries.length : 'none');
     
     if (data.consolidated_summary) {
-      console.log('[displayAgentResults] Displaying consolidated summary:', data.consolidated_summary.substring(0, 100) + '...');
+      // console.log('[displayAgentResults] Displaying consolidated summary:', data.consolidated_summary.substring(0, 100) + '...');
       addMessageToChat('assistant', data.consolidated_summary, data.generation_time);
-      console.log('[displayAgentResults] Consolidated summary displayed successfully');
+      // console.log('[displayAgentResults] Consolidated summary displayed successfully');
     } else if (data.summaries && data.summaries.length > 0) {
-      console.log('[displayAgentResults] Displaying individual summaries');
+      // console.log('[displayAgentResults] Displaying individual summaries');
       const summariesText = data.summaries.map((s: any) => `<b>${s.title}</b>\n${s.summary}`).join('\n\n');
       addMessageToChat('assistant', summariesText, data.generation_time);
-      console.log('[displayAgentResults] Individual summaries displayed successfully');
+      // console.log('[displayAgentResults] Individual summaries displayed successfully');
     } else {
-      console.log('[displayAgentResults] No summaries found - showing fallback message');
+      // console.log('[displayAgentResults] No summaries found - showing fallback message');
       addMessageToChat('assistant', 'No relevant information found.', data.generation_time);
-      console.log('[displayAgentResults] Fallback message displayed successfully');
+      // console.log('[displayAgentResults] Fallback message displayed successfully');
     }
     
-    console.log('[displayAgentResults] Function completed successfully');
+    // console.log('[displayAgentResults] Function completed successfully');
   } catch (error) {
     console.error('[displayAgentResults] Error in displayAgentResults:', error);
     console.error('[displayAgentResults] Error stack:', error instanceof Error ? error.stack : 'No stack trace');
@@ -3381,18 +3380,18 @@ function displayAgentResults(data: any): void {
 }
 
 async function processFollowupQuestion(question: string): Promise<void> {
-  console.log('[processFollowupQuestion] Processing question:', question);
+  // console.log('[processFollowupQuestion] Processing question:', question);
   
   // Global duplicate check - prevent same query from any path
   if (isQueryRecentlyProcessed(question)) {
-    console.log('🚨 [GLOBAL DUPLICATE FIX] Duplicate query detected in processFollowupQuestion, aborting');
+    // console.log('🚨 [GLOBAL DUPLICATE FIX] Duplicate query detected in processFollowupQuestion, aborting');
     showToast('This question was just processed, skipping duplicate', 'info');
     return;
   }
   
   // Prevent follow-up execution when workflow is already executing
   if (isWorkflowExecuting) {
-    console.log('[processFollowupQuestion] Workflow already executing, skipping follow-up execution');
+    // console.log('[processFollowupQuestion] Workflow already executing, skipping follow-up execution');
     showToast('Workflow already in progress...', 'info');
     return;
   }
@@ -3404,7 +3403,7 @@ async function processFollowupQuestion(question: string): Promise<void> {
   const lastProcessedTime = parseInt(localStorage.getItem(lastProcessedKey) || '0');
   
   if (currentTime - lastProcessedTime < 5000) {
-    console.log('[processFollowupQuestion] Same question processed recently, skipping duplicate execution');
+    // console.log('[processFollowupQuestion] Same question processed recently, skipping duplicate execution');
     showToast('This question was just processed, skipping duplicate execution', 'info');
     return;
   }
@@ -3414,7 +3413,7 @@ async function processFollowupQuestion(question: string): Promise<void> {
   
   // Set execution flag immediately to prevent race conditions
   isWorkflowExecuting = true;
-  console.log('[processFollowupQuestion] Setting execution flag at start to prevent conflicts');
+  // console.log('[processFollowupQuestion] Setting execution flag at start to prevent conflicts');
   
   // Helper function to clear loading indicators
   const clearLoadingIndicators = () => {
@@ -3457,36 +3456,36 @@ async function processFollowupQuestion(question: string): Promise<void> {
     }
     
     const currentUrl = activeWebview.src || '';
-    console.log('[processFollowupQuestion] Extracting page content from:', currentUrl);
+    // console.log('[processFollowupQuestion] Extracting page content from:', currentUrl);
     const pageContent = await extractPageContent(activeWebview);
     
     // Debug: Log that HTML content is being passed to agent
-    console.log('🔍 [CONTENT DEBUG] Page content extracted for agent:');
-    console.log('📄 Title:', pageContent.title);
-    console.log('📝 Text content length:', pageContent.content?.length || 0, 'chars');
-    console.log('🌐 HTML content length:', pageContent.html?.length || 0, 'chars');
-    console.log('🔗 HTML includes links:', pageContent.html?.includes('<a ') || false);
+    // console.log('🔍 [CONTENT DEBUG] Page content extracted for agent:');
+    // console.log('📄 Title:', pageContent.title);
+    // console.log('📝 Text content length:', pageContent.content?.length || 0, 'chars');
+    // console.log('🌐 HTML content length:', pageContent.html?.length || 0, 'chars');
+    // console.log('🔗 HTML includes links:', pageContent.html?.includes('<a ') || false);
     
     // Route request to appropriate extension for question answering
     const questionRequest = `Answer this question about the page: ${question}`;
     
-    console.log('[processFollowupQuestion] Routing extension request...');
+    // console.log('[processFollowupQuestion] Routing extension request...');
     const routingResult = await ipcRenderer.invoke('route-extension-request', questionRequest);
-    console.log('Follow-up question routing result:', routingResult);
-    console.log('Follow-up question routing result type:', routingResult.type);
-    console.log('Follow-up question workflow_info:', routingResult.workflow_info);
+    // console.log('Follow-up question routing result:', routingResult);
+    // console.log('Follow-up question routing result type:', routingResult.type);
+    // console.log('Follow-up question workflow_info:', routingResult.workflow_info);
     
     // Clear loading indicators first
     clearLoadingIndicators();
     
     // Check if routing returned a workflow result
     if (routingResult.type === 'workflow') {
-      console.log('Follow-up question received workflow result:', routingResult);
-      console.log('workflowProgressIndicator exists:', !!workflowProgressIndicator);
+      // console.log('Follow-up question received workflow result:', routingResult);
+      // console.log('workflowProgressIndicator exists:', !!workflowProgressIndicator);
       
       // Don't initialize workflow progress indicator here - let the backend workflow-start event handle it
       // This fixes the workflow ID mismatch issue where frontend uses Date.now() but backend uses uuid4()
-      console.log('Follow-up workflow detected - progress will be initialized by backend workflow-start event');
+      // console.log('Follow-up workflow detected - progress will be initialized by backend workflow-start event');
       
       // Execute workflow asynchronously with progress events
       try {
@@ -3532,7 +3531,7 @@ async function processFollowupQuestion(question: string): Promise<void> {
       }]
     };
     
-    console.log('🚨 [FOLLOWUP DEBUG] Creating progress indicator for single extension:', singleExtensionWorkflowData);
+    // console.log('🚨 [FOLLOWUP DEBUG] Creating progress indicator for single extension:', singleExtensionWorkflowData);
     const progressElement = addWorkflowProgressToChat(singleExtensionWorkflowData);
     
     // Start the progress indicator
@@ -3555,8 +3554,8 @@ async function processFollowupQuestion(question: string): Promise<void> {
       conversationHistory: await buildConversationHistoryWithMemories(currentUrl, question)
     };
     
-    console.log(`[processFollowupQuestion] Executing extension with question: ${extensionId} (confidence: ${routingResult.confidence}) - ${question}`);
-    console.log(`Follow-up routing reason: ${routingResult.reason}`);
+    // console.log(`[processFollowupQuestion] Executing extension with question: ${extensionId} (confidence: ${routingResult.confidence}) - ${question}`);
+    // console.log(`Follow-up routing reason: ${routingResult.reason}`);
     
     const startTime = Date.now();
     
@@ -3572,7 +3571,7 @@ async function processFollowupQuestion(question: string): Promise<void> {
       const endTime = Date.now();
       const executionTime = endTime - startTime;
       
-      console.log('[processFollowupQuestion] Extension result received:', result);
+      // console.log('[processFollowupQuestion] Extension result received:', result);
       
       // Complete the progress indicator
       if (progressElement && (progressElement as any).progressIndicator) {
@@ -3594,7 +3593,7 @@ async function processFollowupQuestion(question: string): Promise<void> {
         return;
       }
       
-      console.log('[processFollowupQuestion] Displaying results...');
+      // console.log('[processFollowupQuestion] Displaying results...');
       displayAgentResults(result.data);
       
       // Store memory if available - try multiple content sources
@@ -3618,7 +3617,7 @@ async function processFollowupQuestion(question: string): Promise<void> {
         }
         
         if (summary && summary.trim()) {
-          console.log('[Memory] Storing followup result in memory');
+          // console.log('[Memory] Storing followup result in memory');
           
           // Get current page info for memory context
           const webview = getActiveWebview();
@@ -3627,7 +3626,7 @@ async function processFollowupQuestion(question: string): Promise<void> {
           
           storeInMemory(url, question, summary, title);
         } else {
-          console.log('[Memory] No suitable content found for memory storage in followup');
+          // console.log('[Memory] No suitable content found for memory storage in followup');
         }
       }
     } catch (extensionError) {
@@ -3653,24 +3652,24 @@ async function processFollowupQuestion(question: string): Promise<void> {
   } finally {
     // Always clear the execution flag when function ends
     isWorkflowExecuting = false;
-    console.log('[processFollowupQuestion] Clearing execution flag on function completion');
+    // console.log('[processFollowupQuestion] Clearing execution flag on function completion');
   }
 }
 
 async function processFollowupQuestionWithContexts(question: string, contexts: WebpageContext[]): Promise<void> {
-  console.log('[processFollowupQuestionWithContexts] Processing question:', question);
-  console.log('[processFollowupQuestionWithContexts] Contexts:', contexts.length);
+  // console.log('[processFollowupQuestionWithContexts] Processing question:', question);
+  // console.log('[processFollowupQuestionWithContexts] Contexts:', contexts.length);
   
   // Prevent follow-up execution when workflow is already executing
   if (isWorkflowExecuting) {
-    console.log('[processFollowupQuestionWithContexts] Workflow already executing, skipping follow-up execution');
+    // console.log('[processFollowupQuestionWithContexts] Workflow already executing, skipping follow-up execution');
     showToast('Workflow already in progress...', 'info');
     return;
   }
   
   // Set execution flag immediately to prevent race conditions
   isWorkflowExecuting = true;
-  console.log('[processFollowupQuestionWithContexts] Setting execution flag at start to prevent conflicts');
+  // console.log('[processFollowupQuestionWithContexts] Setting execution flag at start to prevent conflicts');
   
   // Helper function to clear loading indicators
   const clearLoadingIndicators = () => {
@@ -3713,28 +3712,28 @@ async function processFollowupQuestionWithContexts(question: string, contexts: W
     }
     
     const currentUrl = activeWebview.src || '';
-    console.log('[processFollowupQuestionWithContexts] Extracting page content from:', currentUrl);
+    // console.log('[processFollowupQuestionWithContexts] Extracting page content from:', currentUrl);
     const pageContent = await extractPageContent(activeWebview);
     
     // Debug: Log enhanced content and contexts
-    console.log('🔍 [CONTEXT DEBUG] Page content extracted for agent:');
-    console.log('📄 Title:', pageContent.title);
-    console.log('📝 Text content length:', pageContent.content?.length || 0, 'chars');
-    console.log('🌐 HTML content length:', pageContent.html?.length || 0, 'chars');
-    console.log('🔗 HTML includes links:', pageContent.html?.includes('<a ') || false);
-    console.log('📋 Additional contexts:', contexts.length);
+    // console.log('🔍 [CONTEXT DEBUG] Page content extracted for agent:');
+    // console.log('📄 Title:', pageContent.title);
+    // console.log('📝 Text content length:', pageContent.content?.length || 0, 'chars');
+    // console.log('🌐 HTML content length:', pageContent.html?.length || 0, 'chars');
+    // console.log('🔗 HTML includes links:', pageContent.html?.includes('<a ') || false);
+    // console.log('📋 Additional contexts:', contexts.length);
     
     // Log each additional context in detail
     if (contexts.length > 0) {
-      console.log('🔍 [CONTEXT DEBUG] Additional webpage contexts:');
+      // console.log('🔍 [CONTEXT DEBUG] Additional webpage contexts:');
       for (let i = 0; i < contexts.length; i++) {
         const ctx = contexts[i];
-        console.log(`  📄 Context ${i + 1}:`);
-        console.log(`    Title: ${ctx.title}`);
-        console.log(`    URL: ${ctx.url}`);
-        console.log(`    Content length: ${ctx.content?.content?.length || 0} chars`);
-        console.log(`    HTML length: ${ctx.content?.html?.length || 0} chars`);
-        console.log(`    Has actual content: ${(ctx.content?.content?.length || 0) > 50}`);
+        // console.log(`  📄 Context ${i + 1}:`);
+        // console.log(`    Title: ${ctx.title}`);
+        // console.log(`    URL: ${ctx.url}`);
+        // console.log(`    Content length: ${ctx.content?.content?.length || 0} chars`);
+        // console.log(`    HTML length: ${ctx.content?.html?.length || 0} chars`);
+        // console.log(`    Has actual content: ${(ctx.content?.content?.length || 0) > 50}`);
       }
     }
     
@@ -3749,29 +3748,29 @@ async function processFollowupQuestionWithContexts(question: string, contexts: W
     };
     
     // Debug: Log the final enhanced page content structure
-    console.log('🔍 [CONTEXT DEBUG] Enhanced page content structure:');
-    console.log('  Current page content length:', enhancedPageContent.content?.length || 0);
-    console.log('  Current page HTML length:', enhancedPageContent.html?.length || 0);
-    console.log('  Additional contexts count:', enhancedPageContent.additionalContexts?.length || 0);
+    // console.log('🔍 [CONTEXT DEBUG] Enhanced page content structure:');
+    // console.log('  Current page content length:', enhancedPageContent.content?.length || 0);
+    // console.log('  Current page HTML length:', enhancedPageContent.html?.length || 0);
+    // console.log('  Additional contexts count:', enhancedPageContent.additionalContexts?.length || 0);
     enhancedPageContent.additionalContexts?.forEach((ctx: any, index: number) => {
-      console.log(`  Additional context ${index + 1} content length:`, ctx.content?.content?.length || 0);
+      // console.log(`  Additional context ${index + 1} content length:`, ctx.content?.content?.length || 0);
     });
     
     // Route request to appropriate extension for question answering
     const questionRequest = `Answer this question using the current page and any provided webpage contexts: ${question}`;
     
-    console.log('[processFollowupQuestionWithContexts] Routing extension request...');
+    // console.log('[processFollowupQuestionWithContexts] Routing extension request...');
     const routingResult = await ipcRenderer.invoke('route-extension-request', questionRequest);
-    console.log('Follow-up question with contexts routing result:', routingResult);
+    // console.log('Follow-up question with contexts routing result:', routingResult);
     
     // Clear loading indicators first
     clearLoadingIndicators();
     
     // Check if routing returned a workflow result
     if (routingResult.type === 'workflow') {
-      console.log('Follow-up question with contexts received workflow result:', routingResult);
+      // console.log('Follow-up question with contexts received workflow result:', routingResult);
       
-      console.log('Follow-up workflow detected - progress will be initialized by backend workflow-start event');
+      // console.log('Follow-up workflow detected - progress will be initialized by backend workflow-start event');
       
       // Execute workflow asynchronously with progress events
       try {
@@ -3814,7 +3813,7 @@ async function processFollowupQuestionWithContexts(question: string, contexts: W
       }]
     };
     
-    console.log('🚨 [FOLLOWUP CONTEXT DEBUG] Creating progress indicator for single extension:', singleExtensionWorkflowData);
+    // console.log('🚨 [FOLLOWUP CONTEXT DEBUG] Creating progress indicator for single extension:', singleExtensionWorkflowData);
     const progressElement = addWorkflowProgressToChat(singleExtensionWorkflowData);
     
     // Start the progress indicator
@@ -3837,8 +3836,8 @@ async function processFollowupQuestionWithContexts(question: string, contexts: W
       conversationHistory: await buildConversationHistoryWithMemories(currentUrl, question)
     };
     
-    console.log(`[processFollowupQuestionWithContexts] Executing extension with question: ${extensionId} (confidence: ${routingResult.confidence}) - ${question}`);
-    console.log(`Follow-up with contexts routing reason: ${routingResult.reason}`);
+    // console.log(`[processFollowupQuestionWithContexts] Executing extension with question: ${extensionId} (confidence: ${routingResult.confidence}) - ${question}`);
+    // console.log(`Follow-up with contexts routing reason: ${routingResult.reason}`);
     
     const startTime = Date.now();
     
@@ -3854,7 +3853,7 @@ async function processFollowupQuestionWithContexts(question: string, contexts: W
       const endTime = Date.now();
       const executionTime = endTime - startTime;
       
-      console.log('[processFollowupQuestionWithContexts] Extension result received:', result);
+      // console.log('[processFollowupQuestionWithContexts] Extension result received:', result);
       
       // Complete the progress indicator
       if (progressElement && (progressElement as any).progressIndicator) {
@@ -3876,7 +3875,7 @@ async function processFollowupQuestionWithContexts(question: string, contexts: W
         return;
       }
       
-      console.log('[processFollowupQuestionWithContexts] Displaying results...');
+      // console.log('[processFollowupQuestionWithContexts] Displaying results...');
       displayAgentResults(result.data);
       
       // Store memory if available - try multiple content sources
@@ -3900,7 +3899,7 @@ async function processFollowupQuestionWithContexts(question: string, contexts: W
         }
         
         if (summary && summary.trim()) {
-          console.log('[Memory] Storing followup with contexts result in memory');
+          // console.log('[Memory] Storing followup with contexts result in memory');
           
           // Get current page info for memory context
           const webview = getActiveWebview();
@@ -3909,7 +3908,7 @@ async function processFollowupQuestionWithContexts(question: string, contexts: W
           
           storeInMemory(url, question, summary, title);
         } else {
-          console.log('[Memory] No suitable content found for memory storage in followup with contexts');
+          // console.log('[Memory] No suitable content found for memory storage in followup with contexts');
         }
       }
     } catch (extensionError) {
@@ -3935,12 +3934,12 @@ async function processFollowupQuestionWithContexts(question: string, contexts: W
   } finally {
     // Always clear the execution flag when function ends
     isWorkflowExecuting = false;
-    console.log('[processFollowupQuestionWithContexts] Clearing execution flag on function completion');
+    // console.log('[processFollowupQuestionWithContexts] Clearing execution flag on function completion');
   }
 }
 
 async function processDoTask(taskInstruction: string): Promise<void> {
-  console.log('[processDoTask] Processing task:', taskInstruction);
+  // console.log('[processDoTask] Processing task:', taskInstruction);
   
   if (!DOAGENT_ENABLED) {
     addMessageToChat('assistant', 'DoAgent functionality is disabled in this build.');
@@ -3949,14 +3948,14 @@ async function processDoTask(taskInstruction: string): Promise<void> {
   
   // Prevent duplicate execution
   if (isWorkflowExecuting) {
-    console.log('[processDoTask] Workflow already executing, skipping task execution');
+    // console.log('[processDoTask] Workflow already executing, skipping task execution');
     showToast('Task already in progress...', 'info');
     return;
   }
   
   // Set execution flag
   isWorkflowExecuting = true;
-  console.log('[processDoTask] Setting execution flag for task execution');
+  // console.log('[processDoTask] Setting execution flag for task execution');
   
   try {
     const activeWebview = getActiveWebview();
@@ -3970,7 +3969,7 @@ async function processDoTask(taskInstruction: string): Promise<void> {
     
     // Create DoAgent instance with enhanced progress callback
     const doAgent = new DoAgent((task, step) => {
-      console.log('[DoAgent Progress]', `Step ${step.id}: ${step.description} - ${step.status}`);
+      // console.log('[DoAgent Progress]', `Step ${step.id}: ${step.description} - ${step.status}`);
       
       // Create detailed progress message with LLM reasoning
       let progressMessage = `**${step.id}:** ${step.description}`;
@@ -4123,14 +4122,14 @@ async function processDoTask(taskInstruction: string): Promise<void> {
   } finally {
     // Always clear execution flag
     isWorkflowExecuting = false;
-    console.log('[processDoTask] Clearing execution flag');
+    // console.log('[processDoTask] Clearing execution flag');
   }
 }
 
 // ========================= EXTENSION STORE =========================
 
 function showExtensionStore(): void {
-  console.log('Showing extension store');
+  // console.log('Showing extension store');
   
   // Hide the current webview
   const currentWebview = getActiveWebview();
@@ -4198,7 +4197,7 @@ function createAddToChatButton(): HTMLElement {
   // Add click handler
   addToChatButton.addEventListener('click', () => {
     if (currentSelection) {
-      console.log('[Add to Chat] Adding selected text to chat:', currentSelection.text.substring(0, 50) + '...');
+      // console.log('[Add to Chat] Adding selected text to chat:', currentSelection.text.substring(0, 50) + '...');
       
       // Add the selected text as a context message to chat
       addMessageToChat('context', `**Selected Text:**\n\n${currentSelection.text}`);
@@ -4216,7 +4215,7 @@ function createAddToChatButton(): HTMLElement {
 }
 
 function showAddToChatButton(text: string, rect: any, webview: any): void {
-  console.log('[Add to Chat] Showing button for selection:', text.substring(0, 30) + '...');
+  // console.log('[Add to Chat] Showing button for selection:', text.substring(0, 30) + '...');
   
   // Store current selection
   currentSelection = { text, rect, webview };
@@ -4274,21 +4273,21 @@ document.addEventListener('scroll', hideAddToChatButton, true);
 window.addEventListener('resize', hideAddToChatButton);
 
 function setupTextSelectionListener(): void {
-  console.log('[Text Selection] Setting up message listener for text selections');
+  // console.log('[Text Selection] Setting up message listener for text selections');
   
   // Listen for messages from webviews about text selections
   window.addEventListener('message', (event) => {
-    console.log('🔍 [MESSAGE DEBUG] Received window message:', event.data);
+    // console.log('🔍 [MESSAGE DEBUG] Received window message:', event.data);
     // Only handle messages from our webviews
     if (event.data && event.data.type === 'add-to-chat') {
-      console.log('✅ [Add to Chat] Received postMessage with text:', event.data.text?.substring(0, 30) + '...');
+      // console.log('✅ [Add to Chat] Received postMessage with text:', event.data.text?.substring(0, 30) + '...');
       if (event.data.text) {
         // Add selected text to @ context system instead of just chat
         const activeWebview = getActiveWebview();
         if (activeWebview) {
           addSelectedTextToContextSystem(event.data.text, activeWebview);
           showToast('✅ Text added to context!', 'success');
-          console.log('✅ [Add to Chat] Text successfully added to context system via postMessage');
+          // console.log('✅ [Add to Chat] Text successfully added to context system via postMessage');
         }
       } else {
         console.warn('⚠️ [Add to Chat] PostMessage received but no text found');
@@ -4296,7 +4295,7 @@ function setupTextSelectionListener(): void {
     }
   });
   
-  console.log('[Text Selection] Message listener set up successfully');
+  // console.log('[Text Selection] Message listener set up successfully');
 }
 
 function injectEnhancedSelectionHandler(webview: any): void {
@@ -4304,22 +4303,22 @@ function injectEnhancedSelectionHandler(webview: any): void {
   
   // Check if webview is valid and ready
   if (!webview.id || !webview.src || webview.src === 'about:blank' || webview.isDestroyed) {
-    console.log('[Selection Handler] Skipping injection - webview not ready');
+    // console.log('[Selection Handler] Skipping injection - webview not ready');
     return;
   }
   
   try {
-    console.log('[Selection Handler] Injecting enhanced selection handler for webview:', webview.id);
+    // console.log('[Selection Handler] Injecting enhanced selection handler for webview:', webview.id);
     
     const injectionScript = `
       (function() {
         // Prevent multiple injections
         if (window.__browzerSelectionHandler) {
-          console.log('Selection handler already installed');
+          // console.log('Selection handler already installed');
           return;
         }
         
-        console.log('Installing Browzer enhanced selection handler...');
+        // console.log('Installing Browzer enhanced selection handler...');
         window.__browzerSelectionHandler = true;
         
         // Create and style the add to chat button
@@ -4383,7 +4382,7 @@ function injectEnhancedSelectionHandler(webview: any): void {
               e.preventDefault();
               e.stopPropagation();
               
-              console.log('Add to Chat clicked, sending text:', selectedText.substring(0, 50));
+              // console.log('Add to Chat clicked, sending text:', selectedText.substring(0, 50));
               
               let messageSent = false;
               
@@ -4396,14 +4395,14 @@ function injectEnhancedSelectionHandler(webview: any): void {
                      if (ipcRenderer && typeof ipcRenderer.sendToHost === 'function') {
                        ipcRenderer.sendToHost('add-to-chat', selectedText);
                        messageSent = true;
-                       console.log('Message sent via IPC sendToHost');
+                       // console.log('Message sent via IPC sendToHost');
                      }
                    } catch (electronErr) {
-                     console.log('Electron require failed in webview:', electronErr.message);
+                     // console.log('Electron require failed in webview:', electronErr.message);
                    }
                  }
                } catch (err) {
-                 console.log('IPC sendToHost method failed:', err.message);
+                 // console.log('IPC sendToHost method failed:', err.message);
                }
               
               // Method 2: PostMessage to parent
@@ -4415,9 +4414,9 @@ function injectEnhancedSelectionHandler(webview: any): void {
                     source: 'browzer-selection'
                   }, '*');
                   messageSent = true;
-                  console.log('Message sent via postMessage to parent');
+                  // console.log('Message sent via postMessage to parent');
                 } catch (err) {
-                  console.log('PostMessage to parent failed:', err.message);
+                  // console.log('PostMessage to parent failed:', err.message);
                 }
               }
               
@@ -4430,14 +4429,14 @@ function injectEnhancedSelectionHandler(webview: any): void {
                     source: 'browzer-selection'
                   }, '*');
                   messageSent = true;
-                  console.log('Message sent via postMessage to top');
+                  // console.log('Message sent via postMessage to top');
                 } catch (err) {
-                  console.log('PostMessage to top failed:', err.message);
+                  // console.log('PostMessage to top failed:', err.message);
                 }
               }
               
               if (messageSent) {
-                console.log('Text sent to chat:', selectedText.substring(0, 30) + '...');
+                // console.log('Text sent to chat:', selectedText.substring(0, 30) + '...');
                 hideAddToChatButton();
               } else {
                 console.error('Failed to send text to chat - no communication method worked');
@@ -4446,7 +4445,7 @@ function injectEnhancedSelectionHandler(webview: any): void {
             
             // Add to DOM
             document.body.appendChild(addToChatBtn);
-            console.log('Add to Chat button created and positioned');
+            // console.log('Add to Chat button created and positioned');
             
             // Auto-hide after 7 seconds
             setTimeout(hideAddToChatButton, 7000);
@@ -4475,7 +4474,7 @@ function injectEnhancedSelectionHandler(webview: any): void {
                 if (range) {
                   const rect = range.getBoundingClientRect();
                   if (rect.width > 0 && rect.height > 0) {
-                    console.log('Text selected for add to chat:', text.substring(0, 30) + '...');
+                    // console.log('Text selected for add to chat:', text.substring(0, 30) + '...');
                     createAddToChatButton(text, rect);
                   }
                 }
@@ -4504,20 +4503,20 @@ function injectEnhancedSelectionHandler(webview: any): void {
         document.addEventListener('scroll', hideAddToChatButton, true);
         window.addEventListener('resize', hideAddToChatButton);
         
-        console.log('✓ Enhanced selection handler installed successfully');
+        // console.log('✓ Enhanced selection handler installed successfully');
         
       })();
     `;
     
     // Check one more time before execution
     if (!webview || webview.isDestroyed || !webview.executeJavaScript) {
-      console.log('[Selection Handler] Webview no longer valid, skipping injection');
+      // console.log('[Selection Handler] Webview no longer valid, skipping injection');
       return;
     }
     
     webview.executeJavaScript(injectionScript, false)
       .then(() => {
-        console.log('[Selection Handler] ✓ Enhanced selection handler injection successful for webview:', webview.id);
+        // console.log('[Selection Handler] ✓ Enhanced selection handler injection successful for webview:', webview.id);
       })
       .catch((error: any) => {
         // Don't log errors for destroyed webviews or common navigation errors
@@ -4554,7 +4553,7 @@ function addWorkflowProgressToChat(workflowData: any): HTMLElement {
   
   // Create chat container if it doesn't exist
   if (!chatContainer) {
-    console.log('[addWorkflowProgressToChat] Chat container not found, creating one');
+    // console.log('[addWorkflowProgressToChat] Chat container not found, creating one');
     
     const agentResults = document.getElementById('agentResults');
     if (!agentResults) {
@@ -4574,10 +4573,10 @@ function addWorkflowProgressToChat(workflowData: any): HTMLElement {
     chatContainer.className = 'chat-container';
     agentResults.appendChild(chatContainer);
     
-    console.log('[addWorkflowProgressToChat] Chat container created successfully');
+    // console.log('[addWorkflowProgressToChat] Chat container created successfully');
   }
 
-  console.log('[addWorkflowProgressToChat] Creating workflow progress for:', workflowData);
+  // console.log('[addWorkflowProgressToChat] Creating workflow progress for:', workflowData);
 
   // Create workflow progress message container
   const messageDiv = document.createElement('div');
@@ -4603,7 +4602,7 @@ function addWorkflowProgressToChat(workflowData: any): HTMLElement {
   // Scroll to bottom
   chatContainer.scrollTop = chatContainer.scrollHeight;
 
-  console.log('[addWorkflowProgressToChat] Workflow progress message added to chat');
+  // console.log('[addWorkflowProgressToChat] Workflow progress message added to chat');
   return messageDiv;
 }
 
@@ -4619,7 +4618,7 @@ function findWorkflowProgressInChat(workflowId: string): HTMLElement | null {
 
 async function addSelectedTextToContextSystem(selectedText: string, webview: any): Promise<void> {
   try {
-    console.log('[Context System] Adding selected text to @ context system:', selectedText.substring(0, 50) + '...');
+    // console.log('[Context System] Adding selected text to @ context system:', selectedText.substring(0, 50) + '...');
     
     // Get current page info
     const url = webview.src || '';
@@ -4646,8 +4645,8 @@ async function addSelectedTextToContextSystem(selectedText: string, webview: any
     // Add to the context system
     addWebpageContext(webpageContext);
     
-    console.log('[Context System] Selected text successfully added to @ context system');
-    console.log('[Context System] Total contexts now:', selectedWebpageContexts.length);
+    // console.log('[Context System] Selected text successfully added to @ context system');
+    // console.log('[Context System] Total contexts now:', selectedWebpageContexts.length);
     
   } catch (error) {
     console.error('[Context System] Error adding selected text to context system:', error);
@@ -4661,7 +4660,7 @@ async function addSelectedTextToContextSystem(selectedText: string, webview: any
 function getAvailableWebpages(): WebpageContext[] {
   try {
     const history = JSON.parse(localStorage.getItem(HISTORY_STORAGE_KEY) || '[]');
-    console.log('🔍 [DROPDOWN DEBUG] Total history items:', history.length);
+    // console.log('🔍 [DROPDOWN DEBUG] Total history items:', history.length);
     
     // Filter out internal pages and take up to 15 items for @ mentions
     const filteredHistory = history.filter((item: any) => {
@@ -4674,7 +4673,7 @@ function getAvailableWebpages(): WebpageContext[] {
              item.title !== 'New Tab';
     });
     
-    console.log('🔍 [DROPDOWN DEBUG] Filtered history items:', filteredHistory.length);
+    // console.log('🔍 [DROPDOWN DEBUG] Filtered history items:', filteredHistory.length);
     
     const webpages = filteredHistory.slice(0, 15).map((item: any) => ({
       id: item.id.toString(),
@@ -4683,9 +4682,9 @@ function getAvailableWebpages(): WebpageContext[] {
       timestamp: item.timestamp
     }));
     
-    console.log('🔍 [DROPDOWN DEBUG] Available webpages for dropdown:', webpages.length);
+    // console.log('🔍 [DROPDOWN DEBUG] Available webpages for dropdown:', webpages.length);
     webpages.forEach((webpage: WebpageContext, index: number) => {
-      console.log(`🔍 [DROPDOWN DEBUG] ${index + 1}. ${webpage.title} - ${webpage.url}`);
+      // console.log(`🔍 [DROPDOWN DEBUG] ${index + 1}. ${webpage.title} - ${webpage.url}`);
     });
     
     return webpages;
@@ -4696,33 +4695,33 @@ function getAvailableWebpages(): WebpageContext[] {
 }
 
 function addWebpageContext(webpage: WebpageContext): void {
-  console.log('🚨 [ADD CONTEXT] Adding webpage context:', webpage.title);
-  console.log('🚨 [ADD CONTEXT] Current contexts before add:', selectedWebpageContexts.length);
+  // console.log('🚨 [ADD CONTEXT] Adding webpage context:', webpage.title);
+  // console.log('🚨 [ADD CONTEXT] Current contexts before add:', selectedWebpageContexts.length);
   
   // Avoid duplicates
   if (!selectedWebpageContexts.find(ctx => ctx.url === webpage.url)) {
     selectedWebpageContexts.push(webpage);
-    console.log('🔍 [CONTEXT] Added webpage context:', webpage.title);
-    console.log('🚨 [ADD CONTEXT] Context added successfully, new total:', selectedWebpageContexts.length);
+    // console.log('🔍 [CONTEXT] Added webpage context:', webpage.title);
+    // console.log('🚨 [ADD CONTEXT] Context added successfully, new total:', selectedWebpageContexts.length);
     updateContextVisualIndicators();
   } else {
-    console.log('🚨 [ADD CONTEXT] Context already exists, skipping duplicate');
+    // console.log('🚨 [ADD CONTEXT] Context already exists, skipping duplicate');
   }
 }
 
 function removeWebpageContext(webpageId: string): void {
-  console.log('🚨 [REMOVE CONTEXT] Removing context with ID:', webpageId);
+  // console.log('🚨 [REMOVE CONTEXT] Removing context with ID:', webpageId);
   const beforeCount = selectedWebpageContexts.length;
   selectedWebpageContexts = selectedWebpageContexts.filter(ctx => ctx.id !== webpageId);
-  console.log('🔍 [CONTEXT] Removed webpage context:', webpageId);
-  console.log('🚨 [REMOVE CONTEXT] Contexts before/after:', beforeCount, '→', selectedWebpageContexts.length);
+  // console.log('🔍 [CONTEXT] Removed webpage context:', webpageId);
+  // console.log('🚨 [REMOVE CONTEXT] Contexts before/after:', beforeCount, '→', selectedWebpageContexts.length);
   updateContextVisualIndicators();
 }
 
 function clearAllWebpageContexts(): void {
-  console.log('🚨 [CLEAR CONTEXTS] Clearing all contexts, current count:', selectedWebpageContexts.length);
+  // console.log('🚨 [CLEAR CONTEXTS] Clearing all contexts, current count:', selectedWebpageContexts.length);
   selectedWebpageContexts = [];
-  console.log('🔍 [CONTEXT] Cleared all webpage contexts');
+  // console.log('🔍 [CONTEXT] Cleared all webpage contexts');
   updateContextVisualIndicators();
 }
 
@@ -4733,12 +4732,12 @@ async function fetchWebpageContent(url: string): Promise<any> {
     if (matchingTab) {
       const webview = document.getElementById(matchingTab.webviewId);
       if (webview) {
-        console.log('🔍 [FETCH] Found open tab for URL:', url);
+        // console.log('🔍 [FETCH] Found open tab for URL:', url);
         return await extractPageContent(webview);
       }
     }
     
-    console.log('🔍 [FETCH] Creating hidden webview to fetch content for:', url);
+    // console.log('🔍 [FETCH] Creating hidden webview to fetch content for:', url);
     
     // Create a hidden webview to fetch the content
     return new Promise((resolve, reject) => {
@@ -4764,12 +4763,12 @@ async function fetchWebpageContent(url: string): Promise<any> {
       
       hiddenWebview.addEventListener('did-finish-load', async () => {
         try {
-          console.log('🔍 [FETCH] Hidden webview loaded, extracting content for:', url);
+          // console.log('🔍 [FETCH] Hidden webview loaded, extracting content for:', url);
           clearTimeout(timeout);
           
           // Extract content from the hidden webview
           const content = await extractPageContent(hiddenWebview);
-          console.log('🔍 [FETCH] Content extracted successfully:', content.title);
+          // console.log('🔍 [FETCH] Content extracted successfully:', content.title);
           
           // Clean up
           hiddenWebview.remove();
@@ -4819,30 +4818,30 @@ async function fetchWebpageContent(url: string): Promise<any> {
 }
 
 function updateContextVisualIndicators(): void {
-  console.log('🚨 [VISUAL INDICATORS] Updating context visual indicators');
-  console.log('🚨 [VISUAL INDICATORS] Selected contexts count:', selectedWebpageContexts.length);
+  // console.log('🚨 [VISUAL INDICATORS] Updating context visual indicators');
+  // console.log('🚨 [VISUAL INDICATORS] Selected contexts count:', selectedWebpageContexts.length);
   
   // Update UI to show selected contexts
   const chatInputArea = document.querySelector('.chat-input-area');
   if (!chatInputArea) {
-    console.log('🚨 [VISUAL INDICATORS] Chat input area not found, returning');
+    // console.log('🚨 [VISUAL INDICATORS] Chat input area not found, returning');
     return;
   }
   
   // Remove existing context indicators
   const existingIndicators = document.querySelectorAll('.context-indicators');
-  console.log('🚨 [VISUAL INDICATORS] Removing existing indicators:', existingIndicators.length);
+  // console.log('🚨 [VISUAL INDICATORS] Removing existing indicators:', existingIndicators.length);
   existingIndicators.forEach(indicator => indicator.remove());
   
   // Add context indicators directly attached to the chat input area
   if (selectedWebpageContexts.length > 0) {
-    console.log('🚨 [VISUAL INDICATORS] Creating context container for', selectedWebpageContexts.length, 'contexts');
+    // console.log('🚨 [VISUAL INDICATORS] Creating context container for', selectedWebpageContexts.length, 'contexts');
     
     const contextContainer = document.createElement('div');
     contextContainer.className = 'context-indicators';
     
     selectedWebpageContexts.forEach(context => {
-      console.log('🚨 [VISUAL INDICATORS] Creating indicator for:', context.title);
+      // console.log('🚨 [VISUAL INDICATORS] Creating indicator for:', context.title);
       const indicator = document.createElement('div');
       indicator.className = 'context-indicator';
       indicator.innerHTML = `
@@ -4854,24 +4853,24 @@ function updateContextVisualIndicators(): void {
     
     // Insert the context container right before the chat input area to create seamless connection
     chatInputArea.parentElement?.insertBefore(contextContainer, chatInputArea);
-    console.log('🚨 [VISUAL INDICATORS] Context container inserted before chat input area');
+    // console.log('🚨 [VISUAL INDICATORS] Context container inserted before chat input area');
     
     // Add CSS class to chat input area to modify its styling when context is present
     chatInputArea.classList.add('has-context');
-    console.log('🚨 [VISUAL INDICATORS] Added has-context class to chat input area');
+    // console.log('🚨 [VISUAL INDICATORS] Added has-context class to chat input area');
     
     // Add remove event listeners
     contextContainer.querySelectorAll('.context-remove').forEach(btn => {
       btn.addEventListener('click', (e) => {
         const contextId = (e.target as HTMLElement).dataset.contextId;
         if (contextId) {
-          console.log('🚨 [VISUAL INDICATORS] Remove button clicked for context:', contextId);
+          // console.log('🚨 [VISUAL INDICATORS] Remove button clicked for context:', contextId);
           removeWebpageContext(contextId);
         }
       });
     });
   } else {
-    console.log('🚨 [VISUAL INDICATORS] No contexts, removing has-context class');
+    // console.log('🚨 [VISUAL INDICATORS] No contexts, removing has-context class');
     // Remove the has-context class when no contexts
     chatInputArea.classList.remove('has-context');
   }
@@ -4903,27 +4902,27 @@ function createMentionDropdown(): HTMLElement {
       const webpageId = (e.currentTarget as HTMLElement).dataset.webpageId;
       const webpageUrl = (e.currentTarget as HTMLElement).dataset.webpageUrl;
       
-      console.log('🚨 [MENTION CLICK] Webpage selected:', { webpageId, webpageUrl });
+      // console.log('🚨 [MENTION CLICK] Webpage selected:', { webpageId, webpageUrl });
       
       if (webpageId && webpageUrl) {
         const webpage = webpages.find(w => w.id === webpageId);
         if (webpage) {
-          console.log('🚨 [MENTION CLICK] Found webpage object:', webpage.title);
-          console.log('🚨 [MENTION CLICK] Calling fetchWebpageContent for:', webpageUrl);
+          // console.log('🚨 [MENTION CLICK] Found webpage object:', webpage.title);
+          // console.log('🚨 [MENTION CLICK] Calling fetchWebpageContent for:', webpageUrl);
           
           // Fetch content for this webpage
           const content = await fetchWebpageContent(webpageUrl);
-          console.log('🚨 [MENTION CLICK] Content fetched:', {
-            title: content.title,
-            contentLength: content.content?.length || 0,
-            htmlLength: content.html?.length || 0
-          });
+          // console.log('🚨 [MENTION CLICK] Content fetched:', {
+          //   title: content.title,
+          //   contentLength: content.content?.length || 0,
+          //   htmlLength: content.html?.length || 0
+          // });
           
           webpage.content = content;
           
-          console.log('🚨 [MENTION CLICK] Adding webpage context');
+          // console.log('🚨 [MENTION CLICK] Adding webpage context');
           addWebpageContext(webpage);
-          console.log('🚨 [MENTION CLICK] Context added, total contexts:', selectedWebpageContexts.length);
+          // console.log('🚨 [MENTION CLICK] Context added, total contexts:', selectedWebpageContexts.length);
           
           hideMentionDropdown();
           
@@ -4933,7 +4932,7 @@ function createMentionDropdown(): HTMLElement {
             const value = chatInput.value;
             const lastAtIndex = value.lastIndexOf('@');
             if (lastAtIndex !== -1) {
-              console.log('🚨 [MENTION CLICK] Removing @ from input');
+              // console.log('🚨 [MENTION CLICK] Removing @ from input');
               chatInput.value = value.substring(0, lastAtIndex);
               chatInput.focus();
             }
@@ -4951,15 +4950,15 @@ function createMentionDropdown(): HTMLElement {
 }
 
 function showMentionDropdown(chatInput: HTMLInputElement): void {
-  console.log('🚨 [MENTION DROPDOWN] showMentionDropdown called');
-  console.log('🚨 [MENTION DROPDOWN] isShowingMentionDropdown:', isShowingMentionDropdown);
+  // console.log('🚨 [MENTION DROPDOWN] showMentionDropdown called');
+  // console.log('🚨 [MENTION DROPDOWN] isShowingMentionDropdown:', isShowingMentionDropdown);
   
   if (isShowingMentionDropdown) {
-    console.log('🚨 [MENTION DROPDOWN] Already showing, returning');
+    // console.log('🚨 [MENTION DROPDOWN] Already showing, returning');
     return;
   }
   
-  console.log('🚨 [MENTION DROPDOWN] Creating mention dropdown');
+  // console.log('🚨 [MENTION DROPDOWN] Creating mention dropdown');
   const dropdown = createMentionDropdown();
   isShowingMentionDropdown = true;
   
@@ -4972,22 +4971,22 @@ function showMentionDropdown(chatInput: HTMLInputElement): void {
   dropdown.style.maxHeight = '200px';
   
   document.body.appendChild(dropdown);
-  console.log('🚨 [MENTION DROPDOWN] Dropdown added to body');
+  // console.log('🚨 [MENTION DROPDOWN] Dropdown added to body');
   
-  console.log('🔍 [MENTION] Showing mention dropdown');
+  // console.log('🔍 [MENTION] Showing mention dropdown');
 }
 
 function hideMentionDropdown(): void {
-  console.log('🚨 [MENTION DROPDOWN] hideMentionDropdown called');
+  // console.log('🚨 [MENTION DROPDOWN] hideMentionDropdown called');
   
   const dropdown = document.getElementById('mentionDropdown');
   if (dropdown) {
-    console.log('🚨 [MENTION DROPDOWN] Removing dropdown from DOM');
+    // console.log('🚨 [MENTION DROPDOWN] Removing dropdown from DOM');
     dropdown.remove();
     isShowingMentionDropdown = false;
-    console.log('🔍 [MENTION] Hiding mention dropdown');
+    // console.log('🔍 [MENTION] Hiding mention dropdown');
   } else {
-    console.log('🚨 [MENTION DROPDOWN] No dropdown found to remove');
+    // console.log('🚨 [MENTION DROPDOWN] No dropdown found to remove');
   }
 }
 
@@ -5055,7 +5054,7 @@ async function buildConversationHistoryWithMemories(currentUrl: string, query: s
           return questionMatch || answerMatch;
         }).slice(0, 5); // Take top 5 relevant memories
         
-        console.log(`[Memory] Found ${relevantMemories.length} relevant memories for query:`, query);
+        // console.log(`[Memory] Found ${relevantMemories.length} relevant memories for query:`, query);
         
         // Format memories with proper structure expected by Python agents
         relevantMemories.forEach((memory: any) => {
@@ -5092,7 +5091,7 @@ async function buildConversationHistoryWithMemories(currentUrl: string, query: s
       console.error('[Memory] Error retrieving memories:', memoryError);
     }
     
-         console.log(`[Memory] Built conversation history with ${conversationHistory.length} items (${conversationHistory.filter(item => item.isMemory).length} from memory)`);
+         // console.log(`[Memory] Built conversation history with ${conversationHistory.length} items (${conversationHistory.filter(item => item.isMemory).length} from memory)`);
      return conversationHistory;
      
    } catch (error) {
@@ -5106,7 +5105,7 @@ function storeInMemory(url: string, question: string, answer: string, title: str
   try {
     // Skip storing memory for empty content
     if (!url || (!question && !answer)) {
-      console.log('Skipping memory storage due to empty content');
+      // console.log('Skipping memory storage due to empty content');
       return;
     }
     
@@ -5175,7 +5174,7 @@ function storeInMemory(url: string, question: string, answer: string, title: str
     // Save to localStorage immediately
     try {
       localStorage.setItem(MEMORY_KEY, JSON.stringify(memory));
-      console.log('Memory stored:', { url, question: question.substring(0, 50), topic: pageTopic });
+      // console.log('Memory stored:', { url, question: question.substring(0, 50), topic: pageTopic });
     } catch (saveError) {
       console.error('Error saving memory to localStorage:', saveError);
     }
@@ -5224,7 +5223,7 @@ function extractTopicSimple(itemContent: any): string {
 // ========================= AD BLOCKER SETUP =========================
 
 function setupAdBlocker(): void {
-  console.log('[AdBlocker] Setting up ad blocker controls...');
+  // console.log('[AdBlocker] Setting up ad blocker controls...');
   
   // Get UI elements
   const adBlockEnabledCheckbox = document.getElementById('adBlockEnabled') as HTMLInputElement;
@@ -5252,7 +5251,7 @@ function setupAdBlocker(): void {
       const result = await ipcRenderer.invoke('toggle-adblock', enabled);
       
       if (result.success) {
-        console.log(`[AdBlocker] Ad blocking ${enabled ? 'enabled' : 'disabled'}`);
+        // console.log(`[AdBlocker] Ad blocking ${enabled ? 'enabled' : 'disabled'}`);
         showToast(`Ad blocking ${enabled ? 'enabled' : 'disabled'}`, 'success');
         
         // Re-inject CSS into all webviews
@@ -5287,7 +5286,7 @@ function setupAdBlocker(): void {
     try {
       const result = await ipcRenderer.invoke('add-blocked-domain', domain);
       if (result.success) {
-        console.log(`[AdBlocker] Added blocked domain: ${domain}`);
+        // console.log(`[AdBlocker] Added blocked domain: ${domain}`);
         showToast(`Blocked domain: ${domain}`, 'success');
         domainInput.value = '';
         loadAdBlockerStatus();
@@ -5311,7 +5310,7 @@ function setupAdBlocker(): void {
     try {
       const result = await ipcRenderer.invoke('add-allowed-domain', domain);
       if (result.success) {
-        console.log(`[AdBlocker] Added allowed domain: ${domain}`);
+        // console.log(`[AdBlocker] Added allowed domain: ${domain}`);
         showToast(`Allowed domain: ${domain}`, 'success');
         domainInput.value = '';
         loadAdBlockerStatus();
@@ -5337,7 +5336,7 @@ function setupAdBlocker(): void {
     }
   });
   
-  console.log('[AdBlocker] Ad blocker controls set up successfully');
+  // console.log('[AdBlocker] Ad blocker controls set up successfully');
 }
 
 async function loadAdBlockerStatus(): Promise<void> {
@@ -5359,7 +5358,7 @@ async function loadAdBlockerStatus(): Promise<void> {
     if (cssRulesCount) cssRulesCount.textContent = status.stats.cssRules.toString();
     if (filterRulesCount) filterRulesCount.textContent = status.stats.filterRules.toString();
     
-    console.log('[AdBlocker] Status loaded:', status);
+    // console.log('[AdBlocker] Status loaded:', status);
   } catch (error) {
     console.error('[AdBlocker] Error loading status:', error);
     
@@ -5856,7 +5855,7 @@ function initializeTabPreview(): void {
   tabPreviewCanvas.width = PREVIEW_WIDTH;
   tabPreviewCanvas.height = PREVIEW_HEIGHT;
 
-  console.log('Tab preview initialized');
+  // console.log('Tab preview initialized');
 }
 
 function setupTabPreviewEvents(tabElement: HTMLElement, tabId: string): void {

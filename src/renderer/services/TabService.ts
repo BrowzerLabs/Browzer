@@ -69,7 +69,7 @@ export class TabService {
   }
 
   private async restoreTabs(): Promise<void> {
-    console.log('Attempting to restore tabs');
+    // console.log('Attempting to restore tabs');
     
     if (!this.tabsContainer || !this.webviewsContainer) {
       console.error('Cannot restore tabs: containers not found');
@@ -85,7 +85,7 @@ export class TabService {
         let savedTabs = [];
         try {
           savedTabs = JSON.parse(savedTabsJSON);
-          console.log('Restored tabs from localStorage:', savedTabs);
+          // console.log('Restored tabs from localStorage:', savedTabs);
         } catch (parseErr) {
           console.error('Error parsing saved tabs JSON:', parseErr);
           localStorage.removeItem(this.SAVED_TABS_KEY);
@@ -98,7 +98,7 @@ export class TabService {
           this.tabsContainer.innerHTML = '';
           this.webviewsContainer.innerHTML = '';
           
-          console.log(`Attempting to restore ${savedTabs.length} tabs`);
+          // console.log(`Attempting to restore ${savedTabs.length} tabs`);
           
           let restoredCount = 0;
           
@@ -113,7 +113,7 @@ export class TabService {
             }
           }
           
-          console.log(`Successfully restored ${restoredCount} out of ${savedTabs.length} tabs`);
+          // console.log(`Successfully restored ${restoredCount} out of ${savedTabs.length} tabs`);
           
           if (restoredCount > 0) {
             return;
@@ -124,14 +124,14 @@ export class TabService {
       console.error('Error in restoreTabs:', err);
     }
     
-    console.log('Creating default tab as fallback');
+    // console.log('Creating default tab as fallback');
     this.createNewTab();
   }
 
   saveTabs(): void {
     try {
       if (!this.tabs || this.tabs.length === 0) {
-        console.log('No tabs to save');
+        // console.log('No tabs to save');
         return;
       }
       
@@ -153,14 +153,14 @@ export class TabService {
       });
       
       localStorage.setItem(this.SAVED_TABS_KEY, JSON.stringify(tabsToSave));
-      console.log(`Saved ${tabsToSave.length} tabs to localStorage`);
+      // console.log(`Saved ${tabsToSave.length} tabs to localStorage`);
     } catch (err) {
       console.error('Error saving tabs:', err);
     }
   }
 
   createNewTab(url: string = this.NEW_TAB_URL): string | null {
-    console.log('createNewTab called with URL:', url);
+    // console.log('createNewTab called with URL:', url);
     
     if (!this.tabsContainer || !this.webviewsContainer) {
       console.error('Cannot create tab: containers not found');
@@ -184,7 +184,7 @@ export class TabService {
       `;
       
       this.tabsContainer.appendChild(tab);
-      console.log('Tab element created:', tabId);
+      // console.log('Tab element created:', tabId);
       
       // Create webview
       const webview = document.createElement('webview') as any;
@@ -195,7 +195,7 @@ export class TabService {
       this.configureWebview(webview, url);
       
       this.webviewsContainer.appendChild(webview);
-      console.log('Webview element created:', webviewId);
+      // console.log('Webview element created:', webviewId);
       
       // Add to tabs array
       const newTab: TabData = {
@@ -221,7 +221,7 @@ export class TabService {
       // Save tab state
       this.saveTabs();
       
-      console.log('Tab created successfully:', tabId);
+      // console.log('Tab created successfully:', tabId);
       return tabId;
     } catch (error) {
       console.error('Error creating tab:', error);
@@ -273,7 +273,7 @@ export class TabService {
     if (closeBtn) {
       closeBtn.addEventListener('click', (e) => {
         e.stopPropagation();
-        console.log('Close button clicked for tab:', tabId);
+        // console.log('Close button clicked for tab:', tabId);
         this.closeTab(tabId);
       });
     }
@@ -324,11 +324,11 @@ export class TabService {
   }
 
   selectTab(tabId: string): void {
-    console.log('Selecting tab:', tabId);
+    // console.log('Selecting tab:', tabId);
     
     try {
       if (!this.tabs || this.tabs.length === 0) {
-        console.log('No tabs available, creating a new one');
+        // console.log('No tabs available, creating a new one');
         this.createNewTab();
         return;
       }
@@ -376,17 +376,17 @@ export class TabService {
         }
       }
       
-      console.log('Tab selection complete:', tabId);
+      // console.log('Tab selection complete:', tabId);
     } catch (error) {
       console.error('Error in selectTab:', error);
     }
   }
 
   closeTab(tabId: string): void {
-    console.log('closeTab called for tab:', tabId);
+    // console.log('closeTab called for tab:', tabId);
     
     if (this.tabs.length <= 1) {
-      console.log('Preventing closing the last tab, creating a new one instead');
+      // console.log('Preventing closing the last tab, creating a new one instead');
       this.createNewTab();
       return;
     }
@@ -406,7 +406,7 @@ export class TabService {
       if (webview) webview.remove();
       
       this.tabs.splice(tabIndex, 1);
-      console.log('Tab removed from tabs array, remaining tabs:', this.tabs.length);
+      // console.log('Tab removed from tabs array, remaining tabs:', this.tabs.length);
       
       if (this.activeTabId === tabId) {
         const newTabId = this.tabs[Math.max(0, tabIndex - 1)].id;
@@ -414,7 +414,7 @@ export class TabService {
       }
       
       this.saveTabs();
-      console.log('Tab closed successfully:', tabId);
+      // console.log('Tab closed successfully:', tabId);
     } catch (error) {
       console.error('Error closing tab:', error);
     }

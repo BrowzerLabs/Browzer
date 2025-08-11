@@ -101,7 +101,7 @@ if (!window.electronAPI) {
   }
   });
 } else {
-  // console.log('electronAPI already exists, skipping preload setup');
+  // // console.log('electronAPI already exists, skipping preload setup');
 }
 
 // Type declarations for the exposed API
