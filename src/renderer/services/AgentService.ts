@@ -15,7 +15,7 @@ export class AgentService {
     const startTime = Date.now();
 
     try {
-      console.log(`Executing ${agentType} agent with params:`, params);
+      // console.log(`Executing ${agentType} agent with params:`, params);
       
       const agentPath = this.getAgentPath(agentType);
       if (!agentPath) {
@@ -108,12 +108,12 @@ export class AgentService {
 
   async autoSummarizePage(url: string, webview: any): Promise<void> {
     if (!url || !url.startsWith('http')) {
-      console.log('Skipping auto-summarize for non-HTTP URL:', url);
+      // console.log('Skipping auto-summarize for non-HTTP URL:', url);
       return;
     }
 
     try {
-      console.log('Auto-summarizing page:', url);
+      // console.log('Auto-summarizing page:', url);
       
       // Extract page content
       const pageContent = await this.extractPageContent(webview, {
@@ -123,7 +123,7 @@ export class AgentService {
       });
 
       if (!pageContent || !pageContent.content) {
-        console.log('No content extracted for auto-summarization');
+        // console.log('No content extracted for auto-summarization');
         return;
       }
 
@@ -146,7 +146,7 @@ export class AgentService {
       const result = await this.executeAgent(agentType, agentParams);
       
       if (result.success) {
-        console.log('Auto-summarization completed');
+        // console.log('Auto-summarization completed');
         // The result will be handled by the UI components
       } else {
         console.error('Auto-summarization failed:', result.error);

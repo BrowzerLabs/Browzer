@@ -364,7 +364,7 @@
 
         // Navigation functionality
         function showSection(sectionId) {
-            console.log('Showing section:', sectionId);
+            // console.log('Showing section:', sectionId);
             
             // Hide all sections
             document.querySelectorAll('.settings-section').forEach(section => {
@@ -380,7 +380,7 @@
             const targetSection = document.getElementById(sectionId);
             if (targetSection) {
                 targetSection.classList.remove('hidden');
-                console.log('Successfully showed section:', sectionId);
+                // console.log('Successfully showed section:', sectionId);
             } else {
                 console.warn('Section not found:', sectionId);
             }
@@ -389,13 +389,13 @@
             const activeLink = document.querySelector(`[data-section="${sectionId}"]`);
             if (activeLink) {
                 activeLink.classList.add('active');
-                console.log('Set active nav link for section:', sectionId);
+                // console.log('Set active nav link for section:', sectionId);
             }
             
             // Update the URL hash without reloading the page
             if (window.location.hash !== '#' + sectionId) {
                 window.history.replaceState(null, null, '#' + sectionId);
-                console.log('Updated URL hash to:', '#' + sectionId);
+                // console.log('Updated URL hash to:', '#' + sectionId);
             }
         }
 
@@ -441,10 +441,10 @@
             // Check for anchor in URL and navigate to that section
             const hash = window.location.hash.substring(1); // Remove the #
             if (hash) {
-                console.log('Settings page loaded with anchor:', hash);
+                // console.log('Settings page loaded with anchor:', hash);
                 showSection(hash);
             } else {
-                console.log('Settings page loaded, waiting for data injection...');
+                // console.log('Settings page loaded, waiting for data injection...');
             }
         });
 
@@ -452,7 +452,7 @@
         window.addEventListener('hashchange', () => {
             const hash = window.location.hash.substring(1);
             if (hash) {
-                console.log('Hash changed to:', hash);
+                // console.log('Hash changed to:', hash);
                 showSection(hash);
             }
         });

@@ -33,8 +33,8 @@ export class ExtensionManager {
       appPath = process.cwd();
       this.extensionsDir = path.join(appPath, 'extensions');
     }
-    console.log('[ExtensionManager] App path:', appPath);
-    console.log('[ExtensionManager] Extensions directory set to:', this.extensionsDir);
+    // console.log('[ExtensionManager] App path:', appPath);
+    // console.log('[ExtensionManager] Extensions directory set to:', this.extensionsDir);
     
     // Initialize the new extension framework
     const frameworkConfig: ExtensionFrameworkConfig = {
@@ -60,7 +60,7 @@ export class ExtensionManager {
     
     // Set up event listeners
     this.extensionFramework.onExtensionEvent((event) => {
-      console.log('Extension event:', event);
+      // console.log('Extension event:', event);
       
       // Auto-update master.json when extension is installed
       if (event.type === ExtensionEventType.INSTALLED) {
@@ -75,14 +75,14 @@ export class ExtensionManager {
 
   async loadExtensions(): Promise<void> {
     if (!fs.existsSync(this.extensionsDir)) {
-      console.log('Extensions directory does not exist');
+      // console.log('Extensions directory does not exist');
       return;
     }
 
     try {
       // Check which extensions are already loaded by the framework
       const frameworkExtensions = this.extensionFramework.getRuntime().getLoadedExtensions();
-      console.log(`[ExtensionManager] Framework has already loaded ${frameworkExtensions.length} extensions`);
+      // console.log(`[ExtensionManager] Framework has already loaded ${frameworkExtensions.length} extensions`);
       
       // Sync the loaded extensions from framework to our legacy map
       for (const context of frameworkExtensions) {
@@ -92,13 +92,13 @@ export class ExtensionManager {
           enabled: true, // Framework extensions are enabled during loadInstalledExtensions
           path: context.path
         });
-        console.log(`[ExtensionManager] Synced framework extension: ${context.manifest.name} (${context.id})`);
+        // console.log(`[ExtensionManager] Synced framework extension: ${context.manifest.name} (${context.id})`);
       }
 
       const extensions = fs.readdirSync(this.extensionsDir);
       
       if (extensions.length === 0) {
-        console.log('No extensions found in directory');
+        // console.log('No extensions found in directory');
         return;
       }
 
@@ -115,7 +115,7 @@ export class ExtensionManager {
               
               // Check if already loaded by framework
               if (frameworkExtensions.some(ctx => ctx.id === manifest.id)) {
-                console.log(`[ExtensionManager] Extension ${manifest.name} (${manifest.id}) already loaded by framework, skipping`);
+                // console.log(`[ExtensionManager] Extension ${manifest.name} (${manifest.id}) already loaded by framework, skipping`);
                 continue;
               }
               
@@ -133,7 +133,7 @@ export class ExtensionManager {
                 path: extPath
               });
               
-              console.log(`[ExtensionManager] Loaded and enabled framework extension: ${context.manifest.name} (${context.manifest.type})`);
+              // console.log(`[ExtensionManager] Loaded and enabled framework extension: ${context.manifest.name} (${context.manifest.type})`);
             } else {
               // Try loading as Chrome extension (legacy)
               const extension = await session.defaultSession.loadExtension(extPath, {
@@ -147,7 +147,7 @@ export class ExtensionManager {
                 path: extPath
               });
               
-              console.log(`[ExtensionManager] Loaded Chrome extension: ${extension.name}`);
+              // console.log(`[ExtensionManager] Loaded Chrome extension: ${extension.name}`);
             }
           } catch (err) {
             console.error(`Failed to load extension ${ext}:`, err);
@@ -155,7 +155,7 @@ export class ExtensionManager {
         }
       }
       
-      console.log(`[ExtensionManager] Extension loading complete. Total extensions: ${this.loadedExtensions.size}`);
+      // console.log(`[ExtensionManager] Extension loading complete. Total extensions: ${this.loadedExtensions.size}`);
     } catch (err) {
       console.error('Error loading extensions:', err);
     }
@@ -179,8 +179,8 @@ export class ExtensionManager {
         pythonExecutable = path.join(process.cwd(), 'python-bundle', 'python-runtime', 'bin', 'python');
       }
       
-      console.log('[ExtensionManager] Router path:', routerPath);
-      console.log('[ExtensionManager] Python executable:', pythonExecutable);
+      // console.log('[ExtensionManager] Router path:', routerPath);
+      // console.log('[ExtensionManager] Python executable:', pythonExecutable);
       
       // Fallback to system Python if bundled Python doesn't exist
       if (!fs.existsSync(pythonExecutable)) {
@@ -196,7 +196,7 @@ export class ExtensionManager {
         }
         
         if (fs.existsSync(venvPythonPath)) {
-          console.log('[ExtensionManager] Using venv Python');
+          // console.log('[ExtensionManager] Using venv Python');
           pythonExecutable = venvPythonPath;
         } else {
           console.warn('[ExtensionManager] No Python found, using system Python');
@@ -204,7 +204,7 @@ export class ExtensionManager {
         }
       }
       
-      console.log(`[ExtensionManager] Routing request: "${userRequest}"`);
+      // console.log(`[ExtensionManager] Routing request: "${userRequest}"`);
       
       // Prepare workflow data with API keys for the router
       const workflowData = {
@@ -217,7 +217,7 @@ export class ExtensionManager {
         conversationHistory: []
       };
       
-      console.log(`[ExtensionManager] Passing API keys to router:`, Object.keys(workflowData.browserApiKeys));
+      // console.log(`[ExtensionManager] Passing API keys to router:`, Object.keys(workflowData.browserApiKeys));
       
       return new Promise((resolve, reject) => {
         const { spawn } = require('child_process');
@@ -258,7 +258,7 @@ export class ExtensionManager {
           
           try {
             const result = JSON.parse(output.trim());
-            console.log(`[ExtensionManager] Routing result:`, result);
+            // console.log(`[ExtensionManager] Routing result:`, result);
             
             // Handle workflow vs single extension results
             if (result.type === 'workflow') {
@@ -336,7 +336,7 @@ export class ExtensionManager {
       const browserApiKeys = this.getBrowserApiKeys();
       const selectedProvider = this.getSelectedProvider();
       
-      console.log(`[ExtensionManager] Executing Python extension: ${extensionId} with provider: ${selectedProvider}`);
+      // console.log(`[ExtensionManager] Executing Python extension: ${extensionId} with provider: ${selectedProvider}`);
       
       // Debug: Check if extension is loaded
       const loadedExtensions = this.extensionFramework.getRuntime().getLoadedExtensions();
@@ -344,11 +344,11 @@ export class ExtensionManager {
       
       if (!targetExtension) {
         console.error(`[ExtensionManager] Extension ${extensionId} not found in loaded extensions`);
-        console.log(`[ExtensionManager] Available extensions:`, loadedExtensions.map(ext => ext.id));
+        // console.log(`[ExtensionManager] Available extensions:`, loadedExtensions.map(ext => ext.id));
         throw new Error(`Extension ${extensionId} is not loaded`);
       }
       
-      console.log(`[ExtensionManager] Found extension: ${targetExtension.manifest.name} (${targetExtension.manifest.type})`);
+      // console.log(`[ExtensionManager] Found extension: ${targetExtension.manifest.name} (${targetExtension.manifest.type})`);
       
       // Execute using the extension framework
       const result = await this.extensionFramework.getRuntime().executePythonExtension(
@@ -359,7 +359,7 @@ export class ExtensionManager {
         selectedProvider
       );
       
-      console.log(`[ExtensionManager] Extension execution completed for ${extensionId}`);
+      // console.log(`[ExtensionManager] Extension execution completed for ${extensionId}`);
       return result;
     } catch (error) {
       console.error(`[ExtensionManager] Failed to execute Python extension ${extensionId}:`, error);
@@ -378,13 +378,13 @@ export class ExtensionManager {
   // Method to update API keys from renderer
   updateBrowserApiKeys(apiKeys: Record<string, string>): void {
     this.currentBrowserApiKeys = apiKeys;
-    console.log(`[ExtensionManager] Updated API keys for providers:`, Object.keys(apiKeys));
+    // console.log(`[ExtensionManager] Updated API keys for providers:`, Object.keys(apiKeys));
   }
 
   // Method to update selected provider from renderer  
   updateSelectedProvider(provider: string): void {
     this.currentSelectedProvider = provider;
-    console.log(`[ExtensionManager] Updated selected provider:`, provider);
+    // console.log(`[ExtensionManager] Updated selected provider:`, provider);
   }
 
   private async updateMasterJson(extensionId: string): Promise<void> {
@@ -438,11 +438,11 @@ export class ExtensionManager {
       if (existingIndex >= 0) {
         // Update existing entry
         masterData.extensions[existingIndex] = extensionEntry;
-        console.log(`Updated existing extension in master.json: ${manifest.name}`);
+        // console.log(`Updated existing extension in master.json: ${manifest.name}`);
       } else {
         // Add new entry
         masterData.extensions.push(extensionEntry);
-        console.log(`Added new extension to master.json: ${manifest.name}`);
+        // console.log(`Added new extension to master.json: ${manifest.name}`);
       }
 
       // Update lastUpdated timestamp
@@ -450,7 +450,7 @@ export class ExtensionManager {
 
       // Write back to master.json
       fs.writeFileSync(masterJsonPath, JSON.stringify(masterData, null, 2), 'utf-8');
-      console.log(`Successfully updated master.json for extension: ${manifest.name}`);
+      // console.log(`Successfully updated master.json for extension: ${manifest.name}`);
 
     } catch (error) {
       console.error(`Failed to update master.json for extension ${extensionId}:`, error);
@@ -463,7 +463,7 @@ export class ExtensionManager {
       const masterJsonPath = path.join(this.extensionsDir, 'master.json');
       
       if (!fs.existsSync(masterJsonPath)) {
-        console.log('master.json does not exist, nothing to remove');
+        // console.log('master.json does not exist, nothing to remove');
         return;
       }
 
@@ -480,9 +480,9 @@ export class ExtensionManager {
         
         // Write back to master.json
         fs.writeFileSync(masterJsonPath, JSON.stringify(masterData, null, 2), 'utf-8');
-        console.log(`Successfully removed extension ${extensionId} from master.json`);
+        // console.log(`Successfully removed extension ${extensionId} from master.json`);
       } else {
-        console.log(`Extension ${extensionId} was not found in master.json`);
+        // console.log(`Extension ${extensionId} was not found in master.json`);
       }
 
     } catch (error) {
@@ -629,23 +629,23 @@ export class ExtensionManager {
       try {
         const { extensionId, action, data, browserApiKeys, selectedProvider } = params;
         
-        console.log(`[IPC] Received execute-python-extension request:`, {
-          extensionId,
-          action,
-          provider: selectedProvider,
-          hasData: !!data,
-          hasApiKeys: !!browserApiKeys
-        });
+        // console.log(`[IPC] Received execute-python-extension request:`, {
+        //   extensionId,
+        //   action,
+        //   provider: selectedProvider,
+        //   hasData: !!data,
+        //   hasApiKeys: !!browserApiKeys
+        // });
         
         // Update browser API keys for this execution
         this.currentBrowserApiKeys = browserApiKeys || {};
         this.currentSelectedProvider = selectedProvider || 'openai';
         
-        console.log(`[IPC] Executing extension ${extensionId} with action ${action}`);
+        // console.log(`[IPC] Executing extension ${extensionId} with action ${action}`);
         
         const result = await this.executePythonExtension(extensionId, action, data);
         
-        console.log(`[IPC] Extension execution successful for ${extensionId}`);
+        // console.log(`[IPC] Extension execution successful for ${extensionId}`);
         return result;
       } catch (error) {
         console.error('[IPC] Extension execution error:', error);
@@ -718,21 +718,21 @@ export class ExtensionManager {
     ipcMain.handle('get-python-extensions', async () => {
       try {
         const loadedExtensions = this.extensionFramework.getRuntime().getLoadedExtensions();
-        console.log('All loaded extensions:', loadedExtensions.map(ext => ({
-          id: ext.id,
-          name: ext.manifest.name,
-          type: ext.manifest.type
-        })));
+        // console.log('All loaded extensions:', loadedExtensions.map(ext => ({
+        //   id: ext.id,
+        //   name: ext.manifest.name,
+        //   type: ext.manifest.type
+        // })));
         
         const pythonExtensions = loadedExtensions.filter(ext => 
           ext.manifest.type === 'python_agent' || ext.manifest.type === 'ai_assistant'
         );
         
-        console.log('Python extensions found:', pythonExtensions.map(ext => ({
-          id: ext.id,
-          name: ext.manifest.name,
-          type: ext.manifest.type
-        })));
+        // console.log('Python extensions found:', pythonExtensions.map(ext => ({
+        //   id: ext.id,
+        //   name: ext.manifest.name,
+        //   type: ext.manifest.type
+        // })));
         
         return pythonExtensions.map(ext => ({
           id: ext.id,
@@ -793,7 +793,7 @@ export class ExtensionManager {
         // Remove from extension framework if it's a framework extension
         try {
           await this.extensionFramework.getRuntime().disableExtension(extensionId);
-          console.log(`Disabled framework extension: ${extensionId}`);
+          // console.log(`Disabled framework extension: ${extensionId}`);
         } catch (frameworkError) {
           console.warn('Extension was not in framework:', frameworkError);
         }
@@ -803,9 +803,9 @@ export class ExtensionManager {
         
         // Delete extension files from filesystem
         if (extension.path && fs.existsSync(extension.path)) {
-          console.log(`Deleting extension files at: ${extension.path}`);
+          // console.log(`Deleting extension files at: ${extension.path}`);
           fs.rmSync(extension.path, { recursive: true, force: true });
-          console.log(`Successfully deleted extension files for: ${extensionId}`);
+          // console.log(`Successfully deleted extension files for: ${extensionId}`);
         }
         
         // Remove from master.json
@@ -842,7 +842,7 @@ export class ExtensionManager {
           // Remove the .bzx file after extraction
           fs.unlinkSync(extFile);
         } catch (unzipError) {
-          console.log('Unzip failed, trying as direct files...');
+          // console.log('Unzip failed, trying as direct files...');
           // If unzip fails, maybe it's already extracted or a different format
         }
         
@@ -895,7 +895,7 @@ export class ExtensionManager {
   private ensureExtensionsDirectory(): void {
     if (!fs.existsSync(this.extensionsDir)) {
       fs.mkdirSync(this.extensionsDir, { recursive: true });
-      console.log('Created extensions directory');
+      // console.log('Created extensions directory');
     }
   }
 

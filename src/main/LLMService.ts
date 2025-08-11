@@ -21,7 +21,7 @@ export class LLMService {
 
   async callLLM(request: LLMRequest): Promise<LLMResponse> {
     try {
-      console.log('[LLMService] Making API call to:', request.provider);
+      // console.log('[LLMService] Making API call to:', request.provider);
       
       if (request.provider === 'anthropic') {
         return await this.callAnthropicAPI(request);

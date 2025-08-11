@@ -95,9 +95,9 @@ export const logInfo = (tag: string, message: any, ...args: any[]) => log.info(t
 export const logWarn = (tag: string, message: any, ...args: any[]) => log.warn(tag, message, ...args);
 export const logError = (tag: string, message: any, ...args: any[]) => log.error(tag, message, ...args);
 
-// Legacy console.log replacement (for gradual migration)
+// Legacy // console.log replacement (for gradual migration)
 export const debugLog = (...args: any[]) => {
   if (isDevelopment) {
-    console.log(...args);
+    // console.log(...args);
   }
 }; 

@@ -460,11 +460,11 @@ class OnboardingManager {
       // Send to main process via IPC
       if (window.electronAPI && window.electronAPI.ipcInvoke) {
         await window.electronAPI.ipcInvoke('save-api-key', { provider, key });
-        console.log(`✅ API key saved for ${provider}`);
+        // console.log(`✅ API key saved for ${provider}`);
       } else {
         // Fallback to localStorage for development
         localStorage.setItem(`apiKey_${provider}`, key);
-        console.log(`✅ API key saved to localStorage for ${provider}`);
+        // console.log(`✅ API key saved to localStorage for ${provider}`);
       }
     } catch (error) {
       console.error('Failed to save API key:', error);
@@ -731,7 +731,7 @@ class OnboardingManager {
       console.error('Email service API error:', error);
       
       // Fallback to development mode
-      console.log(`🔐 DEVELOPMENT MODE - OTP for ${email}: ${otp}`);
+      // console.log(`🔐 DEVELOPMENT MODE - OTP for ${email}: ${otp}`);
       return {
         success: true,
         message: 'OTP sent (development mode - check console)',
@@ -773,7 +773,7 @@ class OnboardingManager {
     // Simulate API call delay
     await new Promise(resolve => setTimeout(resolve, 1500));
     // In production, this would call your email service API
-    console.log(`OTP sent to ${email}`);
+    // console.log(`OTP sent to ${email}`);
     return true;
   }
 
@@ -808,10 +808,10 @@ class OnboardingManager {
     localStorage.setItem('sidebarEnabled', sidebarToggle.checked.toString());
     localStorage.setItem('adBlockEnabled', adblockToggle.checked.toString());
     
-    console.log('[Onboarding] Settings saved to localStorage:', {
-      sidebarEnabled: sidebarToggle.checked,
-      adBlockEnabled: adblockToggle.checked
-    });
+    // console.log('[Onboarding] Settings saved to localStorage:', {
+    //   sidebarEnabled: sidebarToggle.checked,
+    //   adBlockEnabled: adblockToggle.checked
+    // });
     
     // Save to backend if user is logged in
     if (this.userPreferences.user && window.electronAPI && window.electronAPI.ipcInvoke) {
@@ -898,7 +898,7 @@ class OnboardingManager {
         const result = await window.electronAPI.ipcInvoke('import-browser-data', { browser });
         if (result.success) {
           statusText.textContent = result.message || 'Import completed successfully!';
-          console.log('Browser import successful:', result);
+          // console.log('Browser import successful:', result);
         } else {
           statusText.textContent = result.message || 'Import failed';
           console.error('Browser import failed:', result.message);
@@ -941,17 +941,17 @@ class OnboardingManager {
     
     if (sidebarToggle) {
       localStorage.setItem('sidebarEnabled', sidebarToggle.checked.toString());
-      console.log('[Onboarding] Final sidebar setting:', sidebarToggle.checked);
+      // console.log('[Onboarding] Final sidebar setting:', sidebarToggle.checked);
     }
     
     if (adblockToggle) {
       localStorage.setItem('adBlockEnabled', adblockToggle.checked.toString());
-      console.log('[Onboarding] Final adblock setting:', adblockToggle.checked);
+      // console.log('[Onboarding] Final adblock setting:', adblockToggle.checked);
     }
     
     // Mark onboarding as completed
     localStorage.setItem('onboardingCompleted', 'true');
-    console.log('[Onboarding] Settings finalized and onboarding marked as completed');
+    // console.log('[Onboarding] Settings finalized and onboarding marked as completed');
   }
 }
 

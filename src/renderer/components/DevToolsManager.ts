@@ -27,7 +27,7 @@ export class DevToolsManager {
       webview.openDevTools();
       this.openDevToolsWindows.set(webviewId, webview);
       
-      console.log(`DevTools opened for webview: ${webviewId}`);
+      // console.log(`DevTools opened for webview: ${webviewId}`);
       
       // Listen for webview destruction to cleanup
       webview.addEventListener('destroyed', () => {
@@ -49,7 +49,7 @@ export class DevToolsManager {
       try {
         webview.closeDevTools();
         this.openDevToolsWindows.delete(webviewId);
-        console.log(`DevTools closed for webview: ${webviewId}`);
+        // console.log(`DevTools closed for webview: ${webviewId}`);
       } catch (error) {
         console.error('Failed to close DevTools:', error);
       }
@@ -364,7 +364,7 @@ export class DevToolsManager {
     // Wait for webview to be ready
     const setupDevTools = () => {
       if (webview.openDevTools) {
-        console.log(`DevTools enabled for webview: ${webview.id}`);
+        // console.log(`DevTools enabled for webview: ${webview.id}`);
         
         // Add double-click to open DevTools (for debugging)
         webview.addEventListener('dblclick', (event: MouseEvent) => {

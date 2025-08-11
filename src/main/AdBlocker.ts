@@ -38,7 +38,7 @@ export class AdBlocker {
    * Initialize ad blocking for all sessions
    */
   public initialize(): void {
-    console.log('[AdBlocker] Initializing ad blocker...');
+    // console.log('[AdBlocker] Initializing ad blocker...');
     
     // Set up blocking for default session
     this.setupSessionBlocking(session.defaultSession);
@@ -55,7 +55,7 @@ export class AdBlocker {
     const compatSession = session.fromPartition('persist:compat-session');
     this.setupSessionBlocking(compatSession);
     
-    console.log(`[AdBlocker] Initialized with ${this.filterLists.length} filter rules`);
+    // console.log(`[AdBlocker] Initialized with ${this.filterLists.length} filter rules`);
   }
 
   /**
@@ -73,7 +73,7 @@ export class AdBlocker {
       const shouldBlock = this.shouldBlockRequest(url, details.resourceType);
       
       if (shouldBlock) {
-        console.log(`[AdBlocker] Blocked: ${url}`);
+        // console.log(`[AdBlocker] Blocked: ${url}`);
         callback({ cancel: true });
       } else {
         callback({ cancel: false });
@@ -248,7 +248,7 @@ export class AdBlocker {
       '[id*="google_ads"] { display: none !important; }'
     ];
 
-    console.log(`[AdBlocker] Loaded ${adDomains.length} built-in blocked domains`);
+    // console.log(`[AdBlocker] Loaded ${adDomains.length} built-in blocked domains`);
   }
 
   /**
@@ -275,7 +275,7 @@ export class AdBlocker {
           this.cssRules.push(...customRules.cssRules);
         }
         
-        console.log('[AdBlocker] Loaded custom rules');
+        // console.log('[AdBlocker] Loaded custom rules');
       }
     } catch (error) {
       console.error('[AdBlocker] Error loading custom rules:', error);
@@ -293,7 +293,7 @@ export class AdBlocker {
         const cacheData = JSON.parse(fs.readFileSync(cacheFile, 'utf8'));
         const hourAgo = Date.now() - (60 * 60 * 1000);
         if (cacheData.lastDownload > hourAgo) {
-          console.log('[AdBlocker] Using cached filter lists');
+          // console.log('[AdBlocker] Using cached filter lists');
           return;
         }
       }
@@ -326,7 +326,7 @@ export class AdBlocker {
       // Ignore cache write errors
     }
 
-    console.log(`[AdBlocker] Downloaded ${successCount}/${filterUrls.length} filter lists`);
+    // console.log(`[AdBlocker] Downloaded ${successCount}/${filterUrls.length} filter lists`);
   }
 
   /**
@@ -334,7 +334,7 @@ export class AdBlocker {
    */
   private downloadFilterList(url: string): Promise<void> {
     return new Promise((resolve, reject) => {
-      console.log(`[AdBlocker] Downloading filter list: ${url}`);
+      // console.log(`[AdBlocker] Downloading filter list: ${url}`);
       
       // Set a timeout for the request
       const timeout = setTimeout(() => {
@@ -378,7 +378,7 @@ export class AdBlocker {
           clearTimeout(timeout);
           try {
             this.parseFilterList(data);
-            console.log(`[AdBlocker] Successfully parsed filter list from ${url}`);
+            // console.log(`[AdBlocker] Successfully parsed filter list from ${url}`);
             resolve();
           } catch (error) {
             reject(error);
@@ -460,7 +460,7 @@ export class AdBlocker {
       }
     }
     
-    console.log(`[AdBlocker] Added ${rulesAdded} rules from filter list`);
+    // console.log(`[AdBlocker] Added ${rulesAdded} rules from filter list`);
   }
 
   /**
@@ -508,7 +508,7 @@ export class AdBlocker {
   public addBlockedDomain(domain: string): void {
     this.blockedDomains.add(domain.toLowerCase());
     this.saveCustomRules();
-    console.log(`[AdBlocker] Added blocked domain: ${domain}`);
+    // console.log(`[AdBlocker] Added blocked domain: ${domain}`);
   }
 
   /**
@@ -517,7 +517,7 @@ export class AdBlocker {
   public addAllowedDomain(domain: string): void {
     this.allowedDomains.add(domain.toLowerCase());
     this.saveCustomRules();
-    console.log(`[AdBlocker] Added allowed domain: ${domain}`);
+    // console.log(`[AdBlocker] Added allowed domain: ${domain}`);
   }
 
   /**
@@ -526,7 +526,7 @@ export class AdBlocker {
   public removeBlockedDomain(domain: string): void {
     this.blockedDomains.delete(domain.toLowerCase());
     this.saveCustomRules();
-    console.log(`[AdBlocker] Removed blocked domain: ${domain}`);
+    // console.log(`[AdBlocker] Removed blocked domain: ${domain}`);
   }
 
   /**
@@ -535,7 +535,7 @@ export class AdBlocker {
   public removeAllowedDomain(domain: string): void {
     this.allowedDomains.delete(domain.toLowerCase());
     this.saveCustomRules();
-    console.log(`[AdBlocker] Removed allowed domain: ${domain}`);
+    // console.log(`[AdBlocker] Removed allowed domain: ${domain}`);
   }
 
   /**
@@ -560,7 +560,7 @@ export class AdBlocker {
    */
   public setEnabled(enabled: boolean): void {
     this.enabled = enabled;
-    console.log(`[AdBlocker] Ad blocking ${enabled ? 'enabled' : 'disabled'}`);
+    // console.log(`[AdBlocker] Ad blocking ${enabled ? 'enabled' : 'disabled'}`);
   }
 
   /**

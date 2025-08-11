@@ -32,7 +32,7 @@
 
         // Function to receive history data from the main process
         function receiveHistoryData(data) {
-            console.log('Received history data:', data);
+            // console.log('Received history data:', data);
             historyData = Array.isArray(data) ? data : [];
             filteredData = [...historyData];
             renderHistory();
@@ -91,7 +91,7 @@
 
         // Function to navigate to a URL
         function navigateToUrl(url) {
-            console.log('Navigating to:', url);
+            // console.log('Navigating to:', url);
             // Send message to parent window
             if (window.parent) {
                 window.parent.postMessage({
@@ -103,7 +103,7 @@
 
         // Function to delete a history item
         function deleteHistoryItem(itemId) {
-            console.log('Deleting history item:', itemId);
+            // console.log('Deleting history item:', itemId);
             
             // Remove from local data
             historyData = historyData.filter(item => item.id !== itemId);
@@ -124,7 +124,7 @@
         // Function to clear all history
         function clearHistory() {
             if (confirm('Are you sure you want to clear all browsing history? This action cannot be undone.')) {
-                console.log('Clearing all history');
+                // console.log('Clearing all history');
                 
                 historyData = [];
                 filteredData = [];
@@ -186,14 +186,14 @@
 
         // Listen for messages from parent window
         window.addEventListener('message', (event) => {
-            console.log('History page received message:', event.data);
+            // console.log('History page received message:', event.data);
             
             if (event.data && event.data.type === 'history-data') {
                 receiveHistoryData(event.data.data);
             }
         });
 
-        console.log('History page loaded and ready');
+        // console.log('History page loaded and ready');
     </script>
 </body>
 </html> 

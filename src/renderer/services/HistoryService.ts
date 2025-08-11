@@ -13,7 +13,7 @@ export class HistoryService {
       const historyData = localStorage.getItem(this.HISTORY_STORAGE_KEY);
       if (historyData) {
         this.history = JSON.parse(historyData);
-        console.log(`Loaded ${this.history.length} history items`);
+        // console.log(`Loaded ${this.history.length} history items`);
       }
     } catch (error) {
       console.error('Error loading history:', error);
@@ -70,7 +70,7 @@ export class HistoryService {
       }
 
       this.saveHistory();
-      console.log('Added history item:', { url, title });
+      // console.log('Added history item:', { url, title });
     } catch (error) {
       console.error('Error adding history item:', error);
     }
@@ -101,7 +101,7 @@ export class HistoryService {
       if (index !== -1) {
         this.history.splice(index, 1);
         this.saveHistory();
-        console.log('Deleted history item:', itemId);
+        // console.log('Deleted history item:', itemId);
         return true;
       }
       return false;
@@ -115,7 +115,7 @@ export class HistoryService {
     try {
       this.history = [];
       this.saveHistory();
-      console.log('History cleared');
+      // console.log('History cleared');
     } catch (error) {
       console.error('Error clearing history:', error);
     }
@@ -131,7 +131,7 @@ export class HistoryService {
       const deletedCount = originalLength - this.history.length;
       if (deletedCount > 0) {
         this.saveHistory();
-        console.log(`Cleared ${deletedCount} history items older than ${days} days`);
+        // console.log(`Cleared ${deletedCount} history items older than ${days} days`);
       }
       
       return deletedCount;
@@ -262,7 +262,7 @@ export class HistoryService {
         this.history.sort((a, b) => b.visitTime - a.visitTime);
         
         this.saveHistory();
-        console.log(`Imported ${newItems.length} new history items`);
+        // console.log(`Imported ${newItems.length} new history items`);
         return true;
       }
       

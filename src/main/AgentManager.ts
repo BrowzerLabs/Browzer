@@ -34,9 +34,9 @@ export class AgentManager {
       this.frameworkDir = path.join(this.appPath, 'extensions-framework');
     }
     
-    console.log('[AgentManager] App path:', this.appPath);
-    console.log('[AgentManager] Extensions directory:', this.extensionsDir);
-    console.log('[AgentManager] Framework directory:', this.frameworkDir);
+    // console.log('[AgentManager] App path:', this.appPath);
+    // console.log('[AgentManager] Extensions directory:', this.extensionsDir);
+    // console.log('[AgentManager] Framework directory:', this.frameworkDir);
     
     this.agentLogFile = path.join(this.appPath, 'agent-execution.log');
     this.rendererLogFile = path.join(this.appPath, 'renderer_agent.log');
@@ -66,7 +66,7 @@ export class AgentManager {
   }
 
   private async executeWorkflow(event: IpcMainInvokeEvent, query: string, data: any): Promise<AgentResult> {
-    console.log(`IPC: execute-workflow received with query=${query}`);
+    // console.log(`IPC: execute-workflow received with query=${query}`);
     this.logWorkflowEvent(`Starting workflow execution for query: ${query}`);
     
     // Verify sender is still valid
@@ -113,7 +113,7 @@ export class AgentManager {
   private async runWorkflowProcess(pythonPath: string, routerPath: string, params: any, sender: Electron.WebContents): Promise<AgentResult> {
     const pythonArgs = [routerPath, this.extensionsDir, params.query];
     
-    console.log(`Starting workflow process: ${pythonPath} ${pythonArgs.join(' ')}`);
+    // console.log(`Starting workflow process: ${pythonPath} ${pythonArgs.join(' ')}`);
     this.logWorkflowEvent(`Starting workflow process: ${pythonPath} ${pythonArgs.join(' ')}`);
     
     return new Promise((resolve) => {
@@ -142,7 +142,7 @@ export class AgentManager {
       pythonProcess.stdout?.on('data', (data) => {
         const dataStr = data.toString();
         result += dataStr;
-        console.log(`Workflow stdout: ${dataStr}`);
+        // console.log(`Workflow stdout: ${dataStr}`);
         this.logWorkflowEvent(`Workflow stdout: ${dataStr}`);
       });
 
@@ -170,7 +170,7 @@ export class AgentManager {
               if (progressLine && progressLine.startsWith('{')) {
                 const progressEvent: WorkflowProgressEvent = JSON.parse(progressLine);
                 
-                console.log(`Workflow progress event: ${progressEvent.type}`, progressEvent.data);
+                // console.log(`Workflow progress event: ${progressEvent.type}`, progressEvent.data);
                 this.logWorkflowEvent(`Progress event: ${progressEvent.type} - ${JSON.stringify(progressEvent.data)}`);
                 
                 // Send progress event to renderer
@@ -221,7 +221,7 @@ export class AgentManager {
               if (progressLine && progressLine.startsWith('{')) {
                 const progressEvent: WorkflowProgressEvent = JSON.parse(progressLine);
                 
-                console.log(`Final workflow progress event: ${progressEvent.type}`, progressEvent.data);
+                // console.log(`Final workflow progress event: ${progressEvent.type}`, progressEvent.data);
                 this.logWorkflowEvent(`Final progress event: ${progressEvent.type} - ${JSON.stringify(progressEvent.data)}`);
                 
                 this.sendWorkflowProgressToRenderer(progressEvent, sender);
@@ -237,7 +237,7 @@ export class AgentManager {
           }
         }
         
-        console.log(`Workflow process exited with code ${code}`);
+        // console.log(`Workflow process exited with code ${code}`);
         this.logWorkflowEvent(`Workflow process exited with code ${code}`);
         
         if (code !== 0) {
@@ -252,13 +252,13 @@ export class AgentManager {
           resolve({ success: false, error: error || `Workflow process exited with code ${code}` });
         } else {
           try {
-            console.log(`Parsing workflow result: ${result}`);
+            // console.log(`Parsing workflow result: ${result}`);
             this.logWorkflowEvent(`Parsing workflow result: ${result}`);
             const parsedResult = JSON.parse(result);
             
             // ALWAYS send workflow completion event for successful workflows
             if (sender && !sender.isDestroyed()) {
-              console.log(`Sending workflow-complete event for result:`, parsedResult);
+              // console.log(`Sending workflow-complete event for result:`, parsedResult);
               this.logWorkflowEvent(`Sending workflow-complete event for result: ${JSON.stringify(parsedResult)}`);
               
               sender.send('workflow-complete', { 
@@ -327,7 +327,7 @@ export class AgentManager {
   }
 
   private async executeAgent(event: IpcMainInvokeEvent, agentPath: string, agentParams: AgentParams): Promise<AgentResult> {
-    console.log(`IPC: execute-agent received with path=${agentPath} params=`, agentParams);
+    // console.log(`IPC: execute-agent received with path=${agentPath} params=`, agentParams);
     
     // Verify sender is still valid
     if (!event.sender || event.sender.isDestroyed()) {
@@ -338,7 +338,7 @@ export class AgentManager {
     // Get and clean query
     const query = agentParams.query || '';
     const cleanedQuery = this.cleanQueryString(query);
-    console.log(`Using cleaned query: ${cleanedQuery}`);
+    // console.log(`Using cleaned query: ${cleanedQuery}`);
     
     // Log execution start
     this.logAgentEvent(`Executing: ${agentPath} with params: ${JSON.stringify(agentParams)}`);
@@ -350,7 +350,7 @@ export class AgentManager {
       // Validate paths
       if (!fs.existsSync(pythonPath) && !this.isSystemPython(pythonPath)) {
         const fallbackPython = this.getFallbackPython();
-        console.log(`Python not found at ${pythonPath}, falling back to: ${fallbackPython}`);
+        // console.log(`Python not found at ${pythonPath}, falling back to: ${fallbackPython}`);
         this.logAgentEvent(`Python not found at ${pythonPath}, falling back to: ${fallbackPython}`);
       }
       
@@ -385,7 +385,7 @@ export class AgentManager {
   private async runPythonProcessWithNotifications(pythonPath: string, agentPath: string, params: any, sender: Electron.WebContents): Promise<AgentResult> {
     const pythonArgs = [agentPath];
     
-    console.log(`Starting Python process: ${pythonPath} ${pythonArgs.join(' ')}`);
+    // console.log(`Starting Python process: ${pythonPath} ${pythonArgs.join(' ')}`);
     this.logAgentEvent(`Starting Python process: ${pythonPath} ${pythonArgs.join(' ')}`);
     
     // Generate workflow ID once and reuse it
@@ -430,7 +430,7 @@ export class AgentManager {
       pythonProcess.stdout?.on('data', (data) => {
         const dataStr = data.toString();
         result += dataStr;
-        console.log(`Python stdout: ${dataStr}`);
+        // console.log(`Python stdout: ${dataStr}`);
         this.logAgentEvent(`Python stdout: ${dataStr}`);
       });
 
@@ -457,7 +457,7 @@ export class AgentManager {
         }
       });
       
-      console.log(`Sending data to Python stdin: ${inputData.substring(0, 200)}...`);
+      // console.log(`Sending data to Python stdin: ${inputData.substring(0, 200)}...`);
       this.logAgentEvent(`Sending data to Python stdin (${inputData.length} chars)`);
       
       // Add error handler for stdin before writing
@@ -511,7 +511,7 @@ export class AgentManager {
       pythonProcess.on('close', (code) => {
         clearTimeout(timeout);
         
-        console.log(`Python process exited with code ${code}`);
+        // console.log(`Python process exited with code ${code}`);
         this.logAgentEvent(`Python process exited with code ${code}`);
         
         if (code !== 0) {
@@ -529,13 +529,13 @@ export class AgentManager {
           resolve({ success: false, error: error || `Python process exited with code ${code}` });
         } else {
           try {
-            console.log(`Parsing result: ${result}`);
+            // console.log(`Parsing result: ${result}`);
             this.logAgentEvent(`Parsing result: ${result}`);
             const parsedResult = JSON.parse(result);
             
             // Send completion events to frontend with consistent workflow ID
             if (sender && !sender.isDestroyed()) {
-              console.log(`Sending completion events for workflow ID: ${workflowId}`);
+              // console.log(`Sending completion events for workflow ID: ${workflowId}`);
               
               // Send step complete event
               sender.send('workflow-step-complete', {
@@ -598,7 +598,7 @@ export class AgentManager {
         const urlObj = new URL(query);
         const searchQuery = urlObj.searchParams.get('q');
         if (searchQuery) {
-          console.log(`Extracted search query from URL: ${searchQuery}`);
+          // console.log(`Extracted search query from URL: ${searchQuery}`);
           return searchQuery;
         }
       } catch (err) {
@@ -608,7 +608,7 @@ export class AgentManager {
     
     // Truncate very long queries
     if (query.length > 500) {
-      console.log(`Truncating long query: ${query.length} chars`);
+      // console.log(`Truncating long query: ${query.length} chars`);
       return query.substring(0, 500);
     }
     
@@ -627,11 +627,11 @@ export class AgentManager {
       pythonBundlePath = path.join(this.appPath, 'python-bundle', 'python-runtime', 'bin', 'python');
     }
     
-    console.log('[AgentManager] Checking bundled Python path:', pythonBundlePath);
+    // console.log('[AgentManager] Checking bundled Python path:', pythonBundlePath);
     
     // Check if bundled Python exists
     if (fs.existsSync(pythonBundlePath)) {
-      console.log('[AgentManager] Using bundled Python');
+      // console.log('[AgentManager] Using bundled Python');
       return pythonBundlePath;
     }
     
@@ -643,10 +643,10 @@ export class AgentManager {
       venvPythonPath = path.join(this.appPath, 'agents', 'venv', 'bin', 'python');
     }
     
-    console.log('[AgentManager] Checking venv Python path:', venvPythonPath);
+    // console.log('[AgentManager] Checking venv Python path:', venvPythonPath);
     
     if (fs.existsSync(venvPythonPath)) {
-      console.log('[AgentManager] Using venv Python');
+      // console.log('[AgentManager] Using venv Python');
       return venvPythonPath;
     }
     
@@ -672,7 +672,7 @@ export class AgentManager {
         agentParams.pageContent.content = agentParams.pageContent.content.substring(0, maxContentLength) + 
           "... [content truncated due to length]";
         
-        console.log(`Page content truncated to ${maxContentLength} characters`);
+        // console.log(`Page content truncated to ${maxContentLength} characters`);
         this.logAgentEvent(`Content truncated to ${maxContentLength} characters`);
       }
     }

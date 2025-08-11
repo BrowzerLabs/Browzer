@@ -33,7 +33,7 @@ class PageEnhancer {
       this.setupEventListeners();
       
       this.isInitialized = true;
-      console.log('[PageEnhancer] Extension initialized successfully');
+      // console.log('[PageEnhancer] Extension initialized successfully');
       
     } catch (error) {
       console.error('[PageEnhancer] Initialization failed:', error);
@@ -270,7 +270,7 @@ class PageEnhancer {
 
   async saveConfig() {
     // In a real implementation, this would save to extension storage
-    console.log('[PageEnhancer] Configuration saved:', this.config);
+    // console.log('[PageEnhancer] Configuration saved:', this.config);
   }
 }
 

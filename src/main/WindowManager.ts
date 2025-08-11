@@ -129,7 +129,7 @@ export class WindowManager {
       
       fs.writeFileSync(settingsFile, JSON.stringify(settings, null, 2));
       
-      console.log('✅ First run marked as complete');
+      // console.log('✅ First run marked as complete');
     } catch (error) {
       console.error('Failed to mark first run complete:', error);
     }
@@ -148,7 +148,7 @@ export class WindowManager {
   }
 
   async handleOnboardingComplete(data: any): Promise<void> {
-    // console.log('🎉 Onboarding completed:', data);
+    // // console.log('🎉 Onboarding completed:', data);
     
     // Mark first run as complete
     this.markFirstRunComplete();
@@ -165,32 +165,32 @@ export class WindowManager {
   }
 
   async handleCloseOnboarding(): Promise<void> {
-    // console.log('🔄 handleCloseOnboarding called');
+    // // console.log('🔄 handleCloseOnboarding called');
     
     // Prevent double creation
     if (this.isCreatingMainWindow) {
-      // console.log('⚠️ Main window creation already in progress, skipping...');
+      // // console.log('⚠️ Main window creation already in progress, skipping...');
       return;
     }
     
     if (this.mainWindow) {
-      // console.log('⚠️ Main window already exists, skipping creation...');
+      // // console.log('⚠️ Main window already exists, skipping creation...');
       return;
     }
     
     if (this.onboardingWindow) {
-      // console.log('🗑️ Closing onboarding window');
+      // // console.log('🗑️ Closing onboarding window');
       this.onboardingWindow.close();
       this.onboardingWindow = null;
     }
     
     // Create the main browser window
-    // console.log('🚀 Creating main browser window...');
+    // // console.log('🚀 Creating main browser window...');
     this.isCreatingMainWindow = true;
     
     try {
       const mainWindow = await this.createMainBrowserWindow();
-      // console.log('✅ Main browser window created successfully:', !!mainWindow);
+      // // console.log('✅ Main browser window created successfully:', !!mainWindow);
     } catch (error) {
       console.error('❌ Failed to create main browser window:', error);
     } finally {
@@ -215,7 +215,7 @@ export class WindowManager {
       (apiKeys as any)[data.provider] = data.key;
       fs.writeFileSync(apiKeysFile, JSON.stringify(apiKeys, null, 2));
       
-      console.log(`✅ API key saved for ${data.provider}`);
+      // console.log(`✅ API key saved for ${data.provider}`);
     } catch (error) {
       console.error('Failed to save API key:', error);
     }
@@ -223,7 +223,7 @@ export class WindowManager {
 
   private handleOpenSettings(): void {
     // This will be handled after main window is created
-    console.log('📋 Settings requested from onboarding');
+    // console.log('📋 Settings requested from onboarding');
   }
 
   private async saveOnboardingPreferences(preferences: any): Promise<void> {
@@ -232,24 +232,24 @@ export class WindowManager {
       const preferencesFile = path.join(userDataPath, 'onboarding-preferences.json');
       
       fs.writeFileSync(preferencesFile, JSON.stringify(preferences, null, 2));
-      console.log('✅ Onboarding preferences saved');
+      // console.log('✅ Onboarding preferences saved');
     } catch (error) {
       console.error('Failed to save onboarding preferences:', error);
     }
   }
 
   private async createMainBrowserWindow(): Promise<BrowserWindow> {
-    // console.log('🏗️ Creating new BrowserWindow...');
+    // // console.log('🏗️ Creating new BrowserWindow...');
     
     const preloadPath = path.join(__dirname, '../preload/preload.js');
-    // console.log('🔧 Preload path:', preloadPath);
-    // console.log('📁 __dirname:', __dirname);
+    // // console.log('🔧 Preload path:', preloadPath);
+    // // console.log('📁 __dirname:', __dirname);
     
     // Check if preload file exists
     if (!fs.existsSync(preloadPath)) {
       console.error('❌ Preload file does not exist at:', preloadPath);
     } else {
-      // console.log('✅ Preload file exists');
+      // // console.log('✅ Preload file exists');
     }
     
     this.mainWindow = new BrowserWindow({
@@ -265,7 +265,7 @@ export class WindowManager {
       }
     });
 
-    // console.log('📱 BrowserWindow created, loading HTML...');
+    // // console.log('📱 BrowserWindow created, loading HTML...');
 
     // Enable DevTools for the main window in development
     if (process.env.NODE_ENV === 'development' || process.env.DEBUG) {
@@ -274,11 +274,11 @@ export class WindowManager {
 
     // Load the main HTML file
     const htmlPath = path.join(__dirname, '../../renderer/index.html');
-    // console.log('📄 Loading HTML from:', htmlPath);
+    // // console.log('📄 Loading HTML from:', htmlPath);
     
     try {
       await this.mainWindow.loadFile(htmlPath);
-      // console.log('✅ HTML loaded successfully');
+      // // console.log('✅ HTML loaded successfully');
     } catch (error) {
       console.error('❌ Failed to load HTML:', error);
       throw error;
@@ -288,7 +288,7 @@ export class WindowManager {
     this.setupWindowEventHandlers();
     this.setupDevToolsShortcuts();
 
-    // console.log('🎯 Main window setup complete');
+    // // console.log('🎯 Main window setup complete');
     return this.mainWindow;
   }
 
@@ -354,7 +354,7 @@ export class WindowManager {
       }
     });
 
-    console.log('DevTools shortcuts registered for main window');
+    // console.log('DevTools shortcuts registered for main window');
   }
 
   private setupContextMenuHandling(): void {
