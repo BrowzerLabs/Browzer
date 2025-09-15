@@ -369,7 +369,7 @@ class TopicAgent:
                 try:
                     # Configure the Gemini client
                     client = genai.Client(
-                        api_key="AIzaSyDuRfVEjL1ppESeitDMDrBbW3xhikSSnNo"
+                        api_key="A****"
                     )
                     response = client.models.generate_content(
                         model="gemini-2.5-flash",

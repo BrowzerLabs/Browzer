@@ -246,7 +246,7 @@ class ResearchAgent:
                 try:
                     # Select the model (use latest Gemini 1.5 Pro by default)
                     client = genai.Client(
-                        api_key="AIzaSyDuRfVEjL1ppESeitDMDrBbW3xhikSSnNo"
+                        api_key="A***"
                     )
                     
                     response = client.models.generate_content(

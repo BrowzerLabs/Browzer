@@ -412,7 +412,7 @@ class TopicAgent:
             elif provider == 'gemini':        
                 try:
                     client = genai.Client(
-                        api_key="AIzaSyDuRfVEjL1ppESeitDMDrBbW3xhikSSnNo"
+                        api_key="A**"
                     )
                     
                     response = client.models.generate_content(
