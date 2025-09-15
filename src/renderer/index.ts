@@ -5,8 +5,8 @@ import { ExtensionStore } from './components/ExtensionStore';
 import WorkflowProgressIndicator from './components/WorkflowProgress';
 import { devToolsManager } from './components/DevToolsManager';
 import { MemoryService } from './services/MemoryService';
-import { TextProcessing } from './utils/textProcessing';
 import { McpClientManager } from './services/McpClientManager';
+import { initializeSidebar as initializeSidebarModule } from './components/sidebar/index';
 
 // Import Electron APIs
 // Use electronAPI from preload script instead of direct electron access
@@ -406,7 +406,21 @@ document.addEventListener('DOMContentLoaded', () => {
   // Initialize MCP Manager for Ask queries
   initializeMcpManager();
   // setupExtensionsPanel(); // Deprecated - settings now open in new tab
-  initializeSidebar(); // Initialize sidebar layout from saved settings
+  
+  // Initialize new modular sidebar system
+  try {
+    initializeSidebarModule({
+      autoInitialize: true,
+      enableKeyboardShortcuts: true,
+      enableResponsiveBehavior: true
+    });
+    console.log('✅ Sidebar module initialized successfully');
+  } catch (error) {
+    console.error('❌ Failed to initialize sidebar module:', error);
+    // Fallback to old sidebar initialization
+    initializeSidebar();
+  }
+  
   setupAgentControls();
   setupGlobalErrorHandler();
   devToolsManager.addDevToolsButton();

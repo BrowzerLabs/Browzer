@@ -5,6 +5,9 @@
     box-sizing: border-box;
 }
 
+/* Import sidebar toggle styles */
+@import url('./components/sidebar/sidebar-toggle.css');
+
 body {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, system-ui, sans-serif;
     height: 100vh;
@@ -527,8 +530,8 @@ html, body {
 
 /* ============ AI ASSISTANT PANEL ============ */
 .agent-container {
-    width: 350px;
-    flex: 0 0 350px;
+    width: var(--sidebar-width, 350px);
+    flex: 0 0 var(--sidebar-width, 350px);
     height: 100%;
     overflow: hidden; /* Prevents double scrollbars */
     background-color: #fff;
@@ -537,6 +540,10 @@ html, body {
     flex-direction: column;
     box-shadow: -2px 0 8px rgba(0, 0, 0, 0.05);
     position: relative;
+    transition: 
+        transform var(--sidebar-animation-duration, 300ms) var(--sidebar-animation-easing, cubic-bezier(0.4, 0.0, 0.2, 1)),
+        width var(--sidebar-animation-duration, 300ms) var(--sidebar-animation-easing, cubic-bezier(0.4, 0.0, 0.2, 1)),
+        opacity var(--sidebar-animation-duration, 300ms) var(--sidebar-animation-easing, cubic-bezier(0.4, 0.0, 0.2, 1));
 }
 
 .agent-header {
@@ -544,6 +551,9 @@ html, body {
     border-bottom: 1px solid #e8eaed;
     background: #f8f9fa;
     flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
 }
 
 .agent-title {
