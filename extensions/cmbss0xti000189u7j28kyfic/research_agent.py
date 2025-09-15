@@ -18,6 +18,8 @@ import random
 import time
 from anthropic import Anthropic
 import openai
+from google import genai
+from google.genai import types
 from typing import Dict, List, Optional, Tuple
 import traceback
 
@@ -238,6 +240,28 @@ class ResearchAgent:
                 )
                 response.raise_for_status()
                 result = response.json()['choices'][0]['message']['content']
+            elif provider == 'gemini':
+                log_event(f"[DEBUG] Using Google Gemini API for research")
+                
+                try:
+                    # Select the model (use latest Gemini 1.5 Pro by default)
+                    client = genai.Client(
+                        api_key="AIzaSyDuRfVEjL1ppESeitDMDrBbW3xhikSSnNo"
+                    )
+                    
+                    response = client.models.generate_content(
+                        model="gemini-2.5-flash",
+                        contents=input_text["user"],
+                        config=types.GenerateContentConfig(
+                            thinking_config=types.ThinkingConfig(thinking_budget=0) # Disables thinking
+                        ),
+                    )
+                    result = response.text
+                    
+                except Exception as gemini_error:
+                    log_event(f"[ERROR] Gemini API error: {str(gemini_error)}")
+                    return False, f"Gemini API error: {str(gemini_error)}", 0
+                
             elif provider == 'chutes':
                 log_event(f"[DEBUG] Using Chutes API for research")
                 headers = {

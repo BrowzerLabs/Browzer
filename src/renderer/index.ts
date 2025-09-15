@@ -2885,6 +2885,7 @@ async function executeAgent(): Promise<void> {
     
     if (!apiKey) {
       showToast(`Please configure your ${provider} API key in the Extensions panel first.`, 'error');
+      console.error('please configure your anthropic key: ', apiKey);
       return;
     }
     

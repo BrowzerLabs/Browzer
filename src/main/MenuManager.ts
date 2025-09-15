@@ -8,7 +8,6 @@ export class MenuManager {
 
   private createApplicationMenu(): void {
     const template: MenuItemConstructorOptions[] = [
-      // macOS app menu
       ...(process.platform === 'darwin' ? [{
         label: 'Browzer',
         submenu: [
@@ -23,7 +22,6 @@ export class MenuManager {
           { role: 'quit' as const }
         ]
       }] : []),
-      // File menu
       {
         label: 'File',
         submenu: [
@@ -38,10 +36,8 @@ export class MenuManager {
             label: 'New Window',
             accelerator: 'CmdOrCtrl+N',
             click: () => {
-              // Create new window - this would need to be handled by WindowManager
               const focusedWindow = BrowserWindow.getFocusedWindow();
               if (focusedWindow) {
-                // For now, just send new tab action
                 this.sendMenuAction(IPC_CHANNELS.MENU_NEW_TAB);
               }
             }

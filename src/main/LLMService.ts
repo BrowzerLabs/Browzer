@@ -2,12 +2,13 @@ import * as https from 'https';
 import * as http from 'http';
 
 export interface LLMRequest {
-  provider: 'anthropic' | 'openai';
+  provider: 'anthropic' | 'openai' | 'gemini';
   apiKey: string;
   prompt: string;
-  systemPrompt?: string; // New: Optional system prompt
+  systemPrompt?: string; // Optional system prompt
   model?: string;
   maxTokens?: number;
+  temperature?: number; // Optional temperature control
 }
 
 export interface LLMResponse {
@@ -27,6 +28,8 @@ export class LLMService {
         return await this.callAnthropicAPI(request);
       } else if (request.provider === 'openai') {
         return await this.callOpenAIAPI(request);
+      } else if (request.provider === 'gemini') {
+        return await this.callGeminiAPI(request);
       } else {
         return {
           success: false,
@@ -191,6 +194,120 @@ export class LLMService {
       return {
         success: false,
         error: `OpenAI API call failed: ${(error as Error).message}`
+      };
+    }
+  }
+
+  private async callGeminiAPI(request: LLMRequest): Promise<LLMResponse> {
+    try {
+      const parts: any[] = [];
+      
+      let systemInstruction = null;
+      if (request.systemPrompt) {
+        systemInstruction = {
+          parts: [{ text: request.systemPrompt }]
+        };
+      }
+
+      parts.push({ text: request.prompt });
+
+      const requestBody: any = {
+        contents: [
+          {
+            role: 'user',
+            parts: parts
+          }
+        ],
+        generationConfig: {
+          temperature: request.temperature || 0.7,
+          topK: 40,
+          topP: 0.95,
+          maxOutputTokens: request.maxTokens || 8192,
+          stopSequences: []
+        },
+        safetySettings: [
+          {
+            category: 'HARM_CATEGORY_HARASSMENT',
+            threshold: 'BLOCK_MEDIUM_AND_ABOVE'
+          },
+          {
+            category: 'HARM_CATEGORY_HATE_SPEECH',
+            threshold: 'BLOCK_MEDIUM_AND_ABOVE'
+          },
+          {
+            category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT',
+            threshold: 'BLOCK_MEDIUM_AND_ABOVE'
+          },
+          {
+            category: 'HARM_CATEGORY_DANGEROUS_CONTENT',
+            threshold: 'BLOCK_MEDIUM_AND_ABOVE'
+          }
+        ]
+      };
+
+      if (systemInstruction) {
+        requestBody.systemInstruction = systemInstruction;
+      }
+
+      const headers = {
+        'Content-Type': 'application/json',
+        'x-goog-api-key': request.apiKey
+      };
+
+      const model = request.model || 'gemini-2.5-flash';
+      const path = `/v1beta/models/${model}:generateContent`;
+
+      const data = await this.makeHttpsRequest(
+        'generativelanguage.googleapis.com',
+        path,
+        headers,
+        JSON.stringify(requestBody)
+      );
+      
+      // Handle Gemini API response format
+      if (!data.candidates || !data.candidates[0] || !data.candidates[0].content || !data.candidates[0].content.parts) {
+        // Check for safety filters or other blocking reasons
+        if (data.candidates && data.candidates[0] && data.candidates[0].finishReason) {
+          const finishReason = data.candidates[0].finishReason;
+          if (finishReason === 'SAFETY') {
+            return {
+              success: false,
+              error: 'Content was blocked by Gemini safety filters'
+            };
+          } else if (finishReason === 'RECITATION') {
+            return {
+              success: false,
+              error: 'Content was blocked due to recitation concerns'
+            };
+          }
+        }
+        
+        return {
+          success: false,
+          error: 'Invalid response format from Gemini API'
+        };
+      }
+
+      const textParts = data.candidates[0].content.parts
+        .filter((part: any) => part.text)
+        .map((part: any) => part.text);
+
+      if (textParts.length === 0) {
+        return {
+          success: false,
+          error: 'No text content in Gemini response'
+        };
+      }
+
+      return {
+        success: true,
+        response: textParts.join('')
+      };
+    } catch (error) {
+      console.error('[LLMService] Gemini API call failed:', error);
+      return {
+        success: false,
+        error: `Gemini API call failed: ${(error as Error).message}`
       };
     }
   }

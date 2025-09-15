@@ -79,6 +79,8 @@ python3 -m pip install --target "$PYTHON_BUNDLE_DIR/python-runtime/lib/python$PY
     python-dotenv==1.1.0 \
     openai==1.82.0 \
     anthropic==0.52.0 \
+    google-auth==2.40.3 \
+    google-genai==1.36.0 \
     --no-cache-dir
 
 # Install regex separately with forced compilation
@@ -184,7 +186,9 @@ cat > "$PYTHON_BUNDLE_DIR/bundle-info.json" << EOF
         "python-dotenv==1.1.0",
         "openai==1.82.0",
         "anthropic==0.52.0",
-        "nltk==3.8.1"
+        "nltk==3.8.1",
+        "google-auth==2.40.3",
+        "google-genai==1.36.0"
     ]
 }
 EOF

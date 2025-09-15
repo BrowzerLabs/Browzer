@@ -746,7 +746,7 @@ export class ExtensionManager {
     // Update selected provider
     ipcMain.handle('update-selected-provider', async (event: IpcMainInvokeEvent, provider: string) => {
       try {
-        this.updateSelectedProvider(provider);
+        this.updateSelectedProvider('gemini');
         return { success: true };
       } catch (error) {
         console.error('Error updating selected provider:', error);

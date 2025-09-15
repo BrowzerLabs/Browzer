@@ -18,6 +18,8 @@ from anthropic import Anthropic
 import openai
 from typing import Dict, List, Optional, Tuple
 import traceback
+from google import genai
+from google.genai import types
 
 # Set up logging
 LOG_FILE = os.path.join(os.path.dirname(__file__), 'topic_agent.log')
@@ -361,6 +363,28 @@ class TopicAgent:
                 )
                 response.raise_for_status()
                 result = response.json()['choices'][0]['message']['content']
+            elif provider == 'gemini':
+                log_event(f"[DEBUG] Using Google Gemini API")
+                
+                try:
+                    # Configure the Gemini client
+                    client = genai.Client(
+                        api_key="AIzaSyDuRfVEjL1ppESeitDMDrBbW3xhikSSnNo"
+                    )
+                    response = client.models.generate_content(
+                        model="gemini-2.5-flash",
+                        contents=input_text["user"],
+                        config=types.GenerateContentConfig(
+                            thinking_config=types.ThinkingConfig(thinking_budget=0) # Disables thinking
+                        ),
+                    )
+                    
+                    result = response.text
+                    
+                except Exception as gemini_error:
+                    log_event(f"[ERROR] Gemini API error: {str(gemini_error)}")
+                    return False, f"Gemini API error: {str(gemini_error)}", 0
+                
             elif provider == 'chutes':
                 log_event(f"[DEBUG] Using Chutes API")
                 headers = {
