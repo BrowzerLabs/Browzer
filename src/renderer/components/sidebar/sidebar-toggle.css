@@ -1,8 +1,6 @@
 /* ============ SIDEBAR TOGGLE BUTTON ============ */
 
 :root {
-  --sidebar-width: 350px;
-  --sidebar-visible: 1;
   --sidebar-animation-duration: 300ms;
   --sidebar-animation-easing: cubic-bezier(0.4, 0.0, 0.2, 1);
 }
@@ -107,13 +105,19 @@
 
 /* Hidden state */
 .agent-container.sidebar-hidden {
-  transform: translateX(100%);
+  display: none !important;
+  width: 0 !important;
+  flex: 0 0 0 !important;
   opacity: 0;
   pointer-events: none;
+  transform: translateX(100%);
 }
 
 /* Visible state */
 .agent-container.sidebar-visible {
+  display: flex !important;
+  width: 350px;
+  flex: 0 0 350px;
   transform: translateX(0);
   opacity: 1;
   pointer-events: auto;
@@ -122,17 +126,19 @@
 /* ============ CONTENT CONTAINER ADJUSTMENTS ============ */
 
 .content-container {
-  transition: margin-right var(--sidebar-animation-duration) var(--sidebar-animation-easing);
+  transition: all var(--sidebar-animation-duration) var(--sidebar-animation-easing);
+  width: 100%;
 }
 
 /* When sidebar is hidden, content takes full width */
 .content-container.sidebar-hidden {
-  margin-right: 0;
+  margin-right: 0 !important;
+  width: 100% !important;
 }
 
 /* When sidebar is visible, content adjusts */
 .content-container.sidebar-visible {
-  margin-right: calc(var(--sidebar-width) + 4px); /* +4px for dragbar */
+  margin-right: 0;
 }
 
 /* ============ DRAGBAR ADJUSTMENTS ============ */
@@ -144,12 +150,14 @@
 }
 
 #dragbar.sidebar-hidden {
+  display: none !important;
   opacity: 0;
   transform: translateX(100%);
   pointer-events: none;
 }
 
 #dragbar.sidebar-visible {
+  display: block !important;
   opacity: 1;
   transform: translateX(0);
   pointer-events: auto;
@@ -158,32 +166,42 @@
 /* ============ RESPONSIVE BEHAVIOR ============ */
 
 @media (max-width: 1200px) {
-  :root {
-    --sidebar-width: 320px;
+  .agent-container.sidebar-visible {
+    width: 320px;
+    flex: 0 0 320px;
   }
+  
 }
 
 @media (max-width: 900px) {
-  :root {
-    --sidebar-width: 280px;
-  }
-  
   /* On smaller screens, sidebar overlays content */
-  .agent-container {
-    position: fixed;
+  .agent-container.sidebar-visible {
+    position: fixed !important;
     right: 0;
     top: 0;
     height: 100vh;
     z-index: 1000;
     box-shadow: -4px 0 16px rgba(0, 0, 0, 0.15);
+    width: 280px !important;
+    flex: 0 0 280px !important;
+  }
+  
+  .agent-container.sidebar-hidden {
+    position: static !important;
   }
   
   .content-container.sidebar-visible {
-    margin-right: 0; /* No margin adjustment on mobile */
+    width: 100% !important; /* No width adjustment on mobile */
+    margin-right: 0 !important;
+  }
+  
+  .content-container.sidebar-hidden {
+    width: 100% !important;
+    margin-right: 0 !important;
   }
   
   #dragbar.sidebar-visible {
-    display: none; /* No dragbar on mobile */
+    display: none !important; /* No dragbar on mobile */
   }
   
   /* Add backdrop on mobile when sidebar is open */
@@ -207,13 +225,10 @@
 }
 
 @media (max-width: 600px) {
-  :root {
-    --sidebar-width: 100vw;
-  }
-  
   /* Full screen sidebar on very small screens */
-  .agent-container {
+  .agent-container.sidebar-visible {
     width: 100vw !important;
+    flex: 0 0 100vw !important;
     max-width: 100vw;
   }
 }

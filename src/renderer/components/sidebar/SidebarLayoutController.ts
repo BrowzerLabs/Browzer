@@ -64,9 +64,8 @@ export class SidebarLayoutController {
    * Update CSS custom properties
    */
   private updateCSSProperties(state: SidebarState): void {
-    const root = document.documentElement;
-    root.style.setProperty('--sidebar-width', `${state.width}px`);
-    root.style.setProperty('--sidebar-visible', state.isVisible ? '1' : '0');
+    // CSS custom properties removed in favor of fixed responsive widths
+    // This method is kept for future extensibility
   }
 
   /**
@@ -95,6 +94,23 @@ export class SidebarLayoutController {
       dragbar.classList.add(visibilityClass);
     }
 
+    // Force layout recalculation for proper width adjustment
+    if (!state.isVisible) {
+      // When hiding, ensure content takes full width immediately
+      contentContainer.style.width = '100%';
+      contentContainer.style.marginRight = '0';
+      if (dragbar) {
+        dragbar.style.display = 'none';
+      }
+    } else {
+      // When showing, let CSS handle the widths using custom properties
+      contentContainer.style.width = '';
+      contentContainer.style.marginRight = '';
+      if (dragbar) {
+        dragbar.style.display = 'block';
+      }
+    }
+
     // Handle animation state
     if (state.isAnimating) {
       [sidebarElement, contentContainer, dragbar].forEach(el => {
@@ -115,10 +131,17 @@ export class SidebarLayoutController {
    */
   private handleMobileLayout(state: SidebarState): void {
     const isMobile = window.innerWidth <= 900;
+    const contentContainer = this.getContentContainer();
 
     if (isMobile) {
       this.handleMobileBackdrop(state.isVisible);
       this.preventBodyScroll(state.isVisible);
+      
+      // On mobile, content always takes full width
+      if (contentContainer) {
+        contentContainer.style.width = '100%';
+        contentContainer.style.marginRight = '0';
+      }
     } else {
       this.handleMobileBackdrop(false);
       this.preventBodyScroll(false);
