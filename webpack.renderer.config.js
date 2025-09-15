@@ -53,17 +53,26 @@ module.exports = (env, argv) => {
     }),
     new CopyWebpackPlugin({
       patterns: [
+        // Copy main styles
+        {
+          from: path.resolve(__dirname, 'src/renderer/styles.css'),
+          to: path.resolve(__dirname, 'dist/renderer/styles.css'),
+        },
+        // Copy entire onboarding directory structure
+        {
+          from: path.resolve(__dirname, 'src/renderer/onboarding'),
+          to: path.resolve(__dirname, 'dist/renderer/onboarding'),
+        },
+        // Copy legacy onboarding files (for backwards compatibility)
         {
           from: path.resolve(__dirname, 'src/renderer/onboarding.css'),
           to: path.resolve(__dirname, 'dist/renderer/onboarding.css'),
+          noErrorOnMissing: true,
         },
         {
           from: path.resolve(__dirname, 'src/renderer/onboarding.js'),
           to: path.resolve(__dirname, 'dist/renderer/onboarding.js'),
-        },
-        {
-          from: path.resolve(__dirname, 'src/renderer/styles.css'),
-          to: path.resolve(__dirname, 'dist/renderer/styles.css'),
+          noErrorOnMissing: true,
         },
       ],
     }),

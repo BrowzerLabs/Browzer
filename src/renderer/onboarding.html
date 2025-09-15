@@ -3,431 +3,316 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Welcome to Browzer - Your AI-Powered Browser</title>
-  <link rel="stylesheet" href="onboarding.css">
+  <title>Browzer - Enterprise Setup</title>
+  
+  <!-- Base Styles -->
+  <link rel="stylesheet" href="onboarding/styles/base.css">
+  <link rel="stylesheet" href="onboarding/styles/layout.css">
+  <link rel="stylesheet" href="onboarding/styles/components.css">
+  <link rel="stylesheet" href="onboarding/styles/forms.css">
+  <link rel="stylesheet" href="onboarding/styles/animations.css">
 </head>
 <body>
-  <div class="onboarding-container">
-    <!-- Progress Bar -->
-    <div class="progress-container">
+  <div class="onboarding-app">
+    <!-- Header -->
+    <header class="onboarding-header">
+      <div class="header-content">
+        <div class="logo-section">
+          <div class="logo-icon">B</div>
+          <span class="logo-text">Browzer</span>
+        </div>
+        <button class="skip-button" id="skipButton">Skip Setup</button>
+      </div>
+    </header>
+
+    <!-- Progress Indicator -->
+    <div class="progress-section">
       <div class="progress-bar">
         <div class="progress-fill" id="progressFill"></div>
       </div>
-      <div class="step-indicators">
-        <div class="step-dot active" data-step="0"></div>
-        <div class="step-dot" data-step="1"></div>
-        <div class="step-dot" data-step="2"></div>
-        <div class="step-dot" data-step="3"></div>
-        <div class="step-dot" data-step="4"></div>
-        <div class="step-dot" data-step="5"></div>
-        <div class="step-dot" data-step="6"></div>
-        <div class="step-dot" data-step="7"></div>
+      <div class="step-counter">
+        <span id="currentStep">1</span> of <span id="totalSteps">6</span>
       </div>
     </div>
 
-    <!-- Skip Button -->
-    <button class="skip-btn" id="skipBtn">Skip Setup</button>
+    <!-- Main Content Area -->
+    <main class="onboarding-main">
+      <div class="step-container">
+        
+        <!-- Step 1: Welcome -->
+        <section class="onboarding-step active" id="step-1">
+          <div class="step-content">
+            <div class="step-header">
+              <h1 class="step-title">Welcome to Browzer</h1>
+              <p class="step-subtitle">Enterprise-grade AI-powered browsing platform</p>
+            </div>
+            
+             <div class="feature-grid">
+               <div class="feature-card">
+                 <div class="feature-icon">
+                   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                     <path d="M12 2L2 7v10c0 5.55 3.84 10 9 11 5.16-1 9-5.45 9-11V7l-10-5z"/>
+                   </svg>
+                 </div>
+                 <h3>Enterprise Security</h3>
+                 <p>Bank-level encryption and compliance</p>
+               </div>
+               
+               <div class="feature-card">
+                 <div class="feature-icon">
+                   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                     <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
+                   </svg>
+                 </div>
+                 <h3>AI Automation</h3>
+                 <p>Intelligent workflow automation</p>
+               </div>
+               
+               <div class="feature-card">
+                 <div class="feature-icon">
+                   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                     <circle cx="12" cy="12" r="3"/>
+                     <path d="M12 1v6M12 17v6M4.22 4.22l4.24 4.24M15.54 15.54l4.24 4.24M1 12h6M17 12h6M4.22 19.78l4.24-4.24M15.54 8.46l4.24-4.24"/>
+                   </svg>
+                 </div>
+                 <h3>Advanced Analytics</h3>
+                 <p>Comprehensive insights and metrics</p>
+               </div>
+             </div>
+          </div>
+        </section>
 
-    <!-- Step 1: Welcome -->
-    <div class="onboarding-step active" id="step-0">
-      <div class="step-content">
-        <div class="hero-animation">
-          <div class="browser-icon">
-            <div class="icon-gradient"></div>
-            <div class="icon-shine"></div>
-            🌐
-          </div>
-          <div class="floating-elements">
-            <div class="floating-dot dot-1">✨</div>
-            <div class="floating-dot dot-2">🤖</div>
-            <div class="floating-dot dot-3">⚡</div>
-          </div>
-        </div>
-        <h1 class="welcome-title">Welcome to <span class="brand-name">Browzer</span></h1>
-        <p class="welcome-subtitle">The AI-powered browser that thinks ahead</p>
-        <div class="feature-highlights">
-          <div class="highlight-item">
-            <span class="highlight-icon">🤖</span>
-            <span>AI Agents</span>
-          </div>
-          <div class="highlight-item">
-            <span class="highlight-icon">⚡</span>
-            <span>Lightning Fast</span>
-          </div>
-          <div class="highlight-item">
-            <span class="highlight-icon">🎯</span>
-            <span>Smart Automation</span>
-          </div>
-        </div>
-        <button class="primary-btn" onclick="nextStep()">Get Started</button>
-      </div>
-    </div>
-
-    <!-- Step 1: Email Verification -->
-    <div class="onboarding-step" id="step-1">
-      <div class="step-content">
-        <div class="setup-visual">
-          <div class="email-icon">📧</div>
-        </div>
-        <h2 class="step-title">Create Your Account</h2>
-        <p class="step-description">
-          Get started with Browzer by creating your account. We'll send you a verification code to ensure your email is secure.
-        </p>
-        <div class="email-setup">
-          <div class="input-group">
-            <label for="userEmail">Email Address</label>
-            <input type="email" id="userEmail" class="email-input" placeholder="your@email.com" required>
-            <div class="input-status" id="emailStatus"></div>
-          </div>
-          <button class="primary-btn" id="sendOtpBtn" onclick="sendOTP()">Send Verification Code</button>
-        </div>
-        <div class="otp-section" id="otpSection" style="display: none;">
-          <div class="input-group">
-            <label for="otpCode">Verification Code</label>
-            <input type="text" id="otpCode" class="otp-input" placeholder="Enter 6-digit code" maxlength="6">
-            <div class="input-status" id="otpStatus"></div>
-          </div>
-          <div class="otp-actions">
-            <button class="primary-btn" onclick="verifyOTP()">Verify Code</button>
-            <button class="secondary-btn" onclick="resendOTP()">Resend Code</button>
-          </div>
-        </div>
-        <div class="step-buttons" id="emailButtons" style="display: none;">
-          <button class="secondary-btn" onclick="prevStep()">Back</button>
-          <button class="primary-btn" onclick="nextStep()" disabled id="emailNextBtn">Continue</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- Step 2: Browser Settings -->
-    <div class="onboarding-step" id="step-2">
-      <div class="step-content">
-        <div class="setup-visual">
-          <div class="settings-icon">⚙️</div>
-        </div>
-        <h2 class="step-title">Configure Your Browser</h2>
-        <p class="step-description">
-          Customize Browzer to match your preferences. You can always change these settings later.
-        </p>
-        <div class="settings-grid">
-          <div class="setting-item">
-            <div class="setting-header">
-              <div class="setting-info">
-                <span class="setting-icon">📱</span>
-                <div>
-                  <h3>Sidebar</h3>
-                  <p>Enable vertical sidebar for tab management</p>
+        <!-- Step 2: Account Setup -->
+        <section class="onboarding-step" id="step-2">
+          <div class="step-content">
+            <div class="step-header">
+              <h2 class="step-title">Create Your Account</h2>
+              <p class="step-subtitle">Secure your workspace with enterprise authentication</p>
+            </div>
+            
+            <div class="form-container">
+              <div class="form-group">
+                <label for="email" class="form-label">Business Email Address</label>
+                <input type="email" id="email" class="form-input" placeholder="name@company.com" required>
+                <div class="form-feedback" id="emailFeedback"></div>
+              </div>
+              
+              <button class="primary-button" id="sendVerificationBtn">Send Verification Code</button>
+              
+              <div class="verification-section hidden" id="verificationSection">
+                <div class="form-group">
+                  <label for="verificationCode" class="form-label">Verification Code</label>
+                  <input type="text" id="verificationCode" class="form-input verification-input" placeholder="000000" maxlength="6">
+                  <div class="form-feedback" id="verificationFeedback"></div>
+                </div>
+                
+                <div class="button-group">
+                  <button class="secondary-button" id="resendCodeBtn">Resend Code</button>
+                  <button class="primary-button" id="verifyCodeBtn">Verify</button>
                 </div>
               </div>
-              <label class="toggle-switch">
-                <input type="checkbox" id="sidebarToggle" checked>
-                <span class="toggle-slider"></span>
-              </label>
             </div>
           </div>
-          <div class="setting-item">
-            <div class="setting-header">
-              <div class="setting-info">
-                <span class="setting-icon">🛡️</span>
-                <div>
-                  <h3>Ad Blocker</h3>
-                  <p>Block ads and trackers for faster browsing</p>
+        </section>
+
+        <!-- Step 3: Preferences -->
+        <section class="onboarding-step" id="step-3">
+          <div class="step-content">
+            <div class="step-header">
+              <h2 class="step-title">Configure Preferences</h2>
+              <p class="step-subtitle">Customize your browsing experience</p>
+            </div>
+            
+            <div class="preferences-grid">
+              <div class="preference-card">
+                <div class="preference-header">
+                  <div class="preference-info">
+                    <h3>Sidebar Navigation</h3>
+                    <p>Enable vertical tab management</p>
+                  </div>
+                  <div class="toggle-switch">
+                    <input type="checkbox" id="sidebarToggle" checked>
+                    <label for="sidebarToggle" class="toggle-label"></label>
+                  </div>
                 </div>
               </div>
-              <label class="toggle-switch">
-                <input type="checkbox" id="adblockToggle" checked>
-                <span class="toggle-slider"></span>
-              </label>
-            </div>
-          </div>
-        </div>
-        <div class="step-buttons">
-          <button class="secondary-btn" onclick="prevStep()">Back</button>
-          <button class="primary-btn" onclick="nextStep()">Continue</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- Step 3: Chrome Import -->
-    <div class="onboarding-step" id="step-3">
-      <div class="step-content">
-        <div class="setup-visual">
-          <div class="import-icon">📥</div>
-        </div>
-        <h2 class="step-title">Import Your Data</h2>
-        <p class="step-description">
-          Seamlessly migrate your browsing history, bookmarks, and passwords from Chrome-based browsers.
-        </p>
-        <div class="import-options">
-          <div class="import-item">
-            <div class="browser-option" onclick="selectBrowser('chrome')">
-              <div class="browser-icon">🌐</div>
-              <div class="browser-info">
-                <h3>Google Chrome</h3>
-                <p>Import history, bookmarks & more</p>
-              </div>
-              <input type="radio" name="browser" value="chrome" id="chromeRadio">
-            </div>
-          </div>
-          <!--<div class="import-item">
-            <div class="browser-option" onclick="selectBrowser('edge')">
-              <div class="browser-icon">🔵</div>
-              <div class="browser-info">
-                <h3>Microsoft Edge</h3>
-                <p>Import history, bookmarks & more</p>
-              </div>
-              <input type="radio" name="browser" value="edge" id="edgeRadio">
-            </div>
-          </div>
-          <div class="import-item">
-            <div class="browser-option" onclick="selectBrowser('brave')">
-              <div class="browser-icon">🦁</div>
-              <div class="browser-info">
-                <h3>Brave Browser</h3>
-                <p>Import history, bookmarks & more</p>
-              </div>
-              <input type="radio" name="browser" value="brave" id="braveRadio">
-            </div>
-          </div>-->
-          <div class="import-item">
-            <div class="browser-option" onclick="selectBrowser('skip')">
-              <div class="browser-icon">⏭️</div>
-              <div class="browser-info">
-                <h3>Skip Import</h3>
-                <p>Start fresh without importing data</p>
-              </div>
-              <input type="radio" name="browser" value="skip" id="skipRadio">
-            </div>
-          </div>
-        </div>
-        <div class="import-progress" id="importProgress" style="display: none;">
-          <div class="progress-info">
-            <span id="importStatus">Importing your data...</span>
-            <div class="import-progress-bar">
-              <div class="import-progress-fill" id="importProgressFill"></div>
-            </div>
-          </div>
-        </div>
-        <div class="step-buttons">
-          <button class="secondary-btn" onclick="prevStep()">Back</button>
-          <button class="primary-btn" onclick="handleImport()" id="importBtn">Continue</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- Step 4: AI Features -->
-    <div class="onboarding-step" id="step-4">
-      <div class="step-content">
-        <div class="feature-showcase">
-          <div class="feature-visual">
-            <div class="chat-bubble-demo">
-              <div class="chat-message user">Find flights to Tokyo</div>
-              <div class="chat-message ai">✈️ I found 5 great options starting at $650...</div>
-            </div>
-            <div class="ai-sparkles">
-              <span class="sparkle">✨</span>
-              <span class="sparkle">⭐</span>
-              <span class="sparkle">💫</span>
-            </div>
-          </div>
-        </div>
-        <h2 class="step-title">Meet Your AI Assistant</h2>
-        <p class="step-description">
-          Get instant help with research, shopping, booking, and more. 
-          Your AI assistant can understand context and take actions for you.
-        </p>
-        <div class="feature-list">
-          <div class="feature-item">
-            <span class="check-icon">✅</span>
-            <span>Smart web research and summarization</span>
-          </div>
-          <div class="feature-item">
-            <span class="check-icon">✅</span>
-            <span>Automated form filling and booking</span>
-          </div>
-          <div class="feature-item">
-            <span class="check-icon">✅</span>
-            <span>Context-aware recommendations</span>
-          </div>
-        </div>
-        <div class="step-buttons">
-          <button class="secondary-btn" onclick="prevStep()">Back</button>
-          <button class="primary-btn" onclick="nextStep()">Continue</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- Step 5: Automation Features -->
-    <div class="onboarding-step" id="step-5">
-      <div class="step-content">
-        <div class="feature-showcase">
-          <div class="automation-demo">
-            <div class="browser-mockup">
-              <div class="browser-bar">
-                <div class="browser-dots">
-                  <span class="dot red"></span>
-                  <span class="dot yellow"></span>
-                  <span class="dot green"></span>
+              
+              <div class="preference-card">
+                <div class="preference-header">
+                  <div class="preference-info">
+                    <h3>Ad Blocker</h3>
+                    <p>Block advertisements and trackers</p>
+                  </div>
+                  <div class="toggle-switch">
+                    <input type="checkbox" id="adBlockToggle" checked>
+                    <label for="adBlockToggle" class="toggle-label"></label>
+                  </div>
                 </div>
-                <div class="url-bar">amazon.com</div>
-              </div>
-              <div class="browser-content">
-                <div class="auto-action">🎯 Auto-clicking "Add to Cart"</div>
-                <div class="auto-action">📝 Auto-filling checkout form</div>
-                <div class="auto-action">✅ Order completed!</div>
               </div>
             </div>
           </div>
-        </div>
-        <h2 class="step-title">Powerful Automation</h2>
-        <p class="step-description">
-          Let Browzer handle repetitive tasks automatically. 
-          From online shopping to form submissions, we've got you covered.
-        </p>
-        <div class="feature-list">
-          <div class="feature-item">
-            <span class="check-icon">🤖</span>
-            <span>Smart click and form automation</span>
-          </div>
-          <div class="feature-item">
-            <span class="check-icon">🔄</span>
-            <span>Multi-step workflow execution</span>
-          </div>
-          <div class="feature-item">
-            <span class="check-icon">🎯</span>
-            <span>Intelligent element detection</span>
-          </div>
-        </div>
-        <div class="step-buttons">
-          <button class="secondary-btn" onclick="prevStep()">Back</button>
-          <button class="primary-btn" onclick="nextStep()">Continue</button>
-        </div>
-      </div>
-    </div>
+        </section>
 
-    <!-- Step 6: Setup API Keys -->
-    <div class="onboarding-step" id="step-6">
-      <div class="step-content">
-        <div class="setup-visual">
-          <div class="key-icon">🔑</div>
-          <div class="connection-lines">
-            <div class="line line-1"></div>
-            <div class="line line-2"></div>
-            <div class="line line-3"></div>
-          </div>
-          <div class="service-icons">
-            <div class="service-icon">🤖</div>
-            <div class="service-icon">🧠</div>
-            <div class="service-icon">⚡</div>
-          </div>
-        </div>
-        <h2 class="step-title">Connect Your AI Services</h2>
-        <p class="step-description">
-          To unlock the full power of Browzer, connect your preferred AI services. 
-          Don't worry - you can always set this up later.
-        </p>
-        <div class="api-setup">
-          <div class="api-service">
-            <div class="service-header">
-              <span class="service-logo">🤖</span>
-              <span class="service-name">Anthropic Claude</span>
-              <span class="recommended-badge">Recommended</span>
+        <!-- Step 4: Data Import -->
+        <section class="onboarding-step" id="step-4">
+          <div class="step-content">
+            <div class="step-header">
+              <h2 class="step-title">Import Browser Data</h2>
+              <p class="step-subtitle">Migrate your existing bookmarks and history</p>
             </div>
-            <input type="password" class="api-input" placeholder="Enter your Anthropic API key (optional)" id="anthropicKey">
-          </div>
-          <div class="help-text">
-            <span class="help-icon">💡</span>
-            <span>Need help getting API keys? <a href="#" onclick="openApiHelp()">Click here for a guide</a></span>
-          </div>
-        </div>
-        <div class="step-buttons">
-          <button class="secondary-btn" onclick="prevStep()">Back</button>
-          <button class="primary-btn" onclick="nextStep()">Continue</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- Step 7: Ready to Go -->
-    <!-- Python Setup Step -->
-    <div class="onboarding-step" id="step-7">
-      <div class="step-content">
-        <div class="setup-animation">
-          <div class="setup-icon">
-            <div class="spinner"></div>
-            <div class="python-logo">🐍</div>
-          </div>
-        </div>
-        <h2 class="step-title">Setting up Browzer for an optimized experience</h2>
-        <p class="step-description">
-          We're installing AI components to enhance your browsing experience. This will only take a moment...
-        </p>
-        <div class="progress-container">
-          <div class="progress-bar">
-            <div class="progress-fill" id="setup-progress"></div>
-          </div>
-          <p class="progress-text" id="setup-status">Initializing...</p>
-        </div>
-        <div class="setup-details" id="setup-details">
-          <p class="detail-item">✓ Creating environment</p>
-          <p class="detail-item">⏳ Installing AI models</p>
-          <p class="detail-item">⏳ Configuring language processing</p>
-          <p class="detail-item">⏳ Optimizing performance</p>
-        </div>
-      </div>
-    </div>
-
-    <!-- Completion Step -->
-    <div class="onboarding-step" id="step-8">
-      <div class="step-content">
-        <div class="completion-animation">
-          <div class="success-icon">
-            <div class="checkmark">✅</div>
-            <div class="celebration-particles">
-              <span class="particle">🎉</span>
-              <span class="particle">✨</span>
-              <span class="particle">🎊</span>
-              <span class="particle">⭐</span>
+            
+            <div class="import-options">
+              <div class="import-card" data-browser="chrome">
+                <div class="import-icon">
+                  <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                    <circle cx="12" cy="12" r="10"/>
+                    <circle cx="12" cy="12" r="4"/>
+                    <path d="M21.17 8H12M3.95 6.06L8.54 14M10.88 21.94L15.46 14"/>
+                  </svg>
+                </div>
+                <div class="import-info">
+                  <h3>Google Chrome</h3>
+                  <p>Import bookmarks, history, and passwords</p>
+                </div>
+                <input type="radio" name="browser" value="chrome" class="import-radio">
+              </div>
+              
+              <div class="import-card" data-browser="skip">
+                <div class="import-icon">
+                  <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                    <path d="M5 12l5 5L20 7"/>
+                  </svg>
+                </div>
+                <div class="import-info">
+                  <h3>Skip Import</h3>
+                  <p>Start fresh without importing data</p>
+                </div>
+                <input type="radio" name="browser" value="skip" class="import-radio">
+              </div>
+            </div>
+            
+            <div class="import-progress hidden" id="importProgress">
+              <div class="progress-indicator">
+                <div class="progress-bar">
+                  <div class="progress-fill" id="importProgressFill"></div>
+                </div>
+                <p class="progress-text" id="importStatus">Importing data...</p>
+              </div>
             </div>
           </div>
-        </div>
-        <h2 class="step-title">You're All Set!</h2>
-        <p class="step-description">
-          Welcome to the future of browsing. Your AI-powered browser is ready to help you 
-          browse smarter, faster, and more efficiently.
-        </p>
-        <div class="quick-tips">
-          <h3>Quick Tips to Get Started:</h3>
-          <div class="tip-item">
-            <span class="tip-icon">💬</span>
-            <span>Use the chat to ask questions or request actions</span>
+        </section>
+
+        <!-- Step 5: AI Configuration -->
+        <section class="onboarding-step" id="step-5">
+          <div class="step-content">
+            <div class="step-header">
+              <h2 class="step-title">AI Service Configuration</h2>
+              <p class="step-subtitle">Connect your AI services for enhanced functionality</p>
+            </div>
+            
+            <div class="ai-services">
+              <div class="service-card">
+                <div class="service-header">
+                  <div class="service-info">
+                    <div class="service-logo">
+                      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M12 2L2 7v10c0 5.55 3.84 10 9 11 5.16-1 9-5.45 9-11V7l-10-5z"/>
+                      </svg>
+                    </div>
+                    <div>
+                      <h3>Anthropic Claude</h3>
+                      <span class="service-badge">Recommended</span>
+                    </div>
+                  </div>
+                </div>
+                <div class="form-group">
+                  <input type="password" id="anthropicKey" class="form-input" placeholder="Enter API key (optional)">
+                  <div class="form-feedback" id="anthropicFeedback"></div>
+                </div>
+              </div>
+              
+              <div class="help-section">
+                <p class="help-text">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10"/>
+                    <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/>
+                    <path d="M12 17h.01"/>
+                  </svg>
+                  Need help getting API keys? <a href="#" id="apiHelpLink">View setup guide</a>
+                </p>
+              </div>
+            </div>
           </div>
-          <div class="tip-item">
-            <span class="tip-icon">🎯</span>
-            <span>Try "Book a flight to Paris" or "Find the best laptop deals"</span>
+        </section>
+
+        <!-- Step 6: Setup Complete -->
+        <section class="onboarding-step" id="step-6">
+          <div class="step-content">
+            <div class="step-header">
+              <div class="success-icon">
+                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+                  <polyline points="22,4 12,14.01 9,11.01"/>
+                </svg>
+              </div>
+              <h2 class="step-title">Setup Complete</h2>
+              <p class="step-subtitle">Your enterprise browser is ready for use</p>
+            </div>
+            
+            <div class="completion-info">
+              <div class="info-grid">
+                <div class="info-item">
+                  <h4>Quick Start Tips</h4>
+                  <ul>
+                    <li>Use Ctrl+T to open new tabs</li>
+                    <li>Access AI features via the sidebar</li>
+                    <li>Customize settings anytime in preferences</li>
+                  </ul>
+                </div>
+                
+                <div class="info-item">
+                  <h4>Enterprise Features</h4>
+                  <ul>
+                    <li>Advanced security controls</li>
+                    <li>Team collaboration tools</li>
+                    <li>Detailed analytics dashboard</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+            
+            <div class="final-actions">
+              <button class="secondary-button" id="openSettingsBtn">Open Settings</button>
+              <button class="primary-button" id="launchBrowserBtn">Launch Browser</button>
+            </div>
           </div>
-          <div class="tip-item">
-            <span class="tip-icon">⚙️</span>
-            <span>Access settings anytime to customize your experience</span>
-          </div>
-        </div>
-        <div class="final-actions">
-          <button class="secondary-btn" onclick="openSettings()">Customize Settings</button>
-          <button class="primary-btn celebration-btn" onclick="finishOnboarding()">
-            <span>Start Browsing</span>
-            <span class="btn-sparkle">✨</span>
-          </button>
-        </div>
+        </section>
+
       </div>
+    </main>
+
+    <!-- Navigation -->
+    <footer class="onboarding-footer">
+      <div class="navigation-controls">
+        <button class="nav-button secondary-button" id="prevButton" disabled>Previous</button>
+        <button class="nav-button primary-button" id="nextButton">Continue</button>
+      </div>
+    </footer>
+  </div>
+
+  <!-- Loading Overlay -->
+  <div class="loading-overlay hidden" id="loadingOverlay">
+    <div class="loading-spinner">
+      <div class="spinner"></div>
+      <p class="loading-text">Setting up your workspace...</p>
     </div>
   </div>
 
-  <!-- Background Elements -->
-  <div class="background-elements">
-    <div class="gradient-orb orb-1"></div>
-    <div class="gradient-orb orb-2"></div>
-    <div class="gradient-orb orb-3"></div>
-  </div>
-
-  <script src="onboarding.js"></script>
+  <!-- Scripts -->
+  <script src="onboarding/scripts/OnboardingManager.js"></script>
+  <script src="onboarding/scripts/StepManager.js"></script>
+  <script src="onboarding/scripts/FormValidator.js"></script>
+  <script src="onboarding/scripts/ApiService.js"></script>
+  <script src="onboarding/scripts/main.js"></script>
 </body>
 </html>

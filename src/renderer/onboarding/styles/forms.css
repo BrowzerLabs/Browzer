@@ -1,0 +1,296 @@
+/* Form Styles - Professional Input Elements */
+
+/* Form Container */
+.form-container {
+  max-width: 400px;
+  margin: 0 auto;
+  text-align: left;
+}
+
+/* Form Groups */
+.form-group {
+  margin-bottom: var(--space-4);
+}
+
+.form-label {
+  display: block;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--text-primary);
+  margin-bottom: var(--space-2);
+}
+
+/* Input Styles */
+.form-input {
+  width: 100%;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--border-medium);
+  border-radius: var(--radius-lg);
+  font-size: var(--font-size-base);
+  color: var(--text-primary);
+  background: var(--bg-primary);
+  transition: all var(--transition-fast);
+  box-shadow: var(--shadow-sm);
+}
+
+.form-input:focus {
+  outline: none;
+  border-color: var(--primary-500);
+  box-shadow: 0 0 0 3px var(--primary-100);
+}
+
+.form-input:hover {
+  border-color: var(--border-dark);
+}
+
+.form-input::placeholder {
+  color: var(--text-tertiary);
+}
+
+.form-input:invalid {
+  border-color: var(--error-500);
+}
+
+.form-input:invalid:focus {
+  border-color: var(--error-500);
+  box-shadow: 0 0 0 3px var(--error-50);
+}
+
+/* Verification Input */
+.verification-input {
+  text-align: center;
+  font-size: var(--font-size-xl);
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: 0.5em;
+  padding: var(--space-4);
+}
+
+/* Form Feedback */
+.form-feedback {
+  margin-top: var(--space-2);
+  font-size: var(--font-size-sm);
+  min-height: 20px;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.form-feedback.success {
+  color: var(--success-600);
+}
+
+.form-feedback.error {
+  color: var(--error-600);
+}
+
+.form-feedback.warning {
+  color: var(--warning-600);
+}
+
+/* Button Styles */
+.primary-button {
+  background: linear-gradient(135deg, var(--primary-600), var(--primary-700));
+  color: var(--text-inverse);
+  border: none;
+  padding: var(--space-3) var(--space-6);
+  border-radius: var(--radius-lg);
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-medium);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  box-shadow: var(--shadow-sm);
+  position: relative;
+  overflow: hidden;
+}
+
+.primary-button:hover {
+  background: linear-gradient(135deg, var(--primary-700), var(--primary-800));
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
+}
+
+.primary-button:active {
+  transform: translateY(0);
+  box-shadow: var(--shadow-sm);
+}
+
+.primary-button:disabled {
+  background: var(--gray-300);
+  color: var(--text-tertiary);
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+  opacity: 0.6;
+  transition: all var(--transition-fast);
+}
+
+.primary-button:disabled:hover {
+  background: var(--gray-300);
+  transform: none;
+  box-shadow: none;
+  opacity: 0.6;
+}
+
+.secondary-button {
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  border: 1px solid var(--border-medium);
+  padding: var(--space-3) var(--space-6);
+  border-radius: var(--radius-lg);
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-medium);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  box-shadow: var(--shadow-sm);
+}
+
+.secondary-button:hover {
+  background: var(--bg-secondary);
+  border-color: var(--border-dark);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
+}
+
+.secondary-button:active {
+  transform: translateY(0);
+  box-shadow: var(--shadow-sm);
+}
+
+.secondary-button:disabled {
+  background: var(--bg-secondary);
+  color: var(--text-tertiary);
+  border-color: var(--border-light);
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+/* Skip Button */
+.skip-button {
+  background: transparent;
+  color: var(--text-secondary);
+  border: 1px solid var(--border-light);
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-lg);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.skip-button:hover {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  border-color: var(--border-medium);
+}
+
+/* Button Groups */
+.button-group {
+  display: flex;
+  gap: var(--space-3);
+  justify-content: center;
+  margin-top: var(--space-4);
+}
+
+/* Verification Section */
+.verification-section {
+  margin-top: var(--space-4);
+  padding: var(--space-4);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-lg);
+}
+
+/* Button Loading State */
+.primary-button.loading {
+  position: relative;
+  color: transparent;
+}
+
+.primary-button.loading::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top: 2px solid white;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+/* Form Validation States */
+.form-group.success .form-input {
+  border-color: var(--success-500);
+}
+
+.form-group.success .form-input:focus {
+  border-color: var(--success-500);
+  box-shadow: 0 0 0 3px var(--success-50);
+}
+
+.form-group.error .form-input {
+  border-color: var(--error-500);
+}
+
+.form-group.error .form-input:focus {
+  border-color: var(--error-500);
+  box-shadow: 0 0 0 3px var(--error-50);
+}
+
+/* Input Icons */
+.input-with-icon {
+  position: relative;
+}
+
+.input-icon {
+  position: absolute;
+  left: var(--space-3);
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-tertiary);
+  pointer-events: none;
+}
+
+.input-with-icon .form-input {
+  padding-left: var(--space-10);
+}
+
+/* Responsive Forms */
+@media (max-width: 768px) {
+  .form-container {
+    max-width: 100%;
+  }
+  
+  .button-group {
+    flex-direction: column;
+  }
+  
+  .button-group button {
+    width: 100%;
+  }
+  
+  .verification-section {
+    padding: var(--space-4);
+  }
+}
+
+@media (max-width: 480px) {
+  .form-input {
+    padding: var(--space-3);
+    font-size: var(--font-size-base);
+  }
+  
+  .verification-input {
+    font-size: var(--font-size-lg);
+    letter-spacing: 0.3em;
+  }
+  
+  .primary-button,
+  .secondary-button {
+    padding: var(--space-3) var(--space-4);
+    font-size: var(--font-size-base);
+  }
+}
