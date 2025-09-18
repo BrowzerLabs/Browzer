@@ -4436,9 +4436,6 @@ function formatEmailResults(data: any, toolName: string): string {
 
   let formatted = '📧 **Your Recent Emails:**\n\n';
 
-  // DIAGNOSTIC: Add debug info to formatted output for now
-  formatted += `**[DEBUG] Data type: ${typeof data}, IsArray: ${Array.isArray(data)}**\n`;
-  formatted += `**[DEBUG] Keys: ${typeof data === 'object' ? Object.keys(data).join(', ') : 'N/A'}**\n\n`;
 
   try {
     // Handle different data formats from different MCP tools
@@ -4481,8 +4478,6 @@ function formatEmailResults(data: any, toolName: string): string {
             const parsedContent = JSON.parse(firstContent.text);
             console.log('[formatEmailResults] Parsed MCP text content:', parsedContent);
 
-            // DIAGNOSTIC: Show parsed structure
-            formatted += `**[DEBUG] Parsed MCP content - Type: ${typeof parsedContent}, Has results: ${!!parsedContent.results}**\n\n`;
 
             if (parsedContent.results && Array.isArray(parsedContent.results)) {
               if (parsedContent.results.length === 0) {
@@ -4498,7 +4493,6 @@ function formatEmailResults(data: any, toolName: string): string {
             }
           } catch (parseError) {
             console.error('[formatEmailResults] Failed to parse MCP text content:', parseError);
-            formatted += `**[DEBUG] Parse error: ${parseError}**\n`;
             // Fallback to original content processing
             data.content.slice(0, 3).forEach((email: any, index: number) => {
               formatted += formatSingleEmail(email, index + 1);

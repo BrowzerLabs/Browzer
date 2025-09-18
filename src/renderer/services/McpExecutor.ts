@@ -143,16 +143,12 @@ export class McpExecutor {
       console.log('[DEBUG] Expected tool schema:', toolInfo.inputSchema);
     }
 
-    // DIAGNOSTIC ALERT: Show what we're about to send
-    alert(`🛠️ CALLING GMAIL TOOL:\nTool: ${toolName}\nInstructions: ${toolParams.instructions}\nQuery: ${toolParams.query}`);
 
     try {
       const result = await this.mcpManager.callTool(toolName, toolParams);
       console.log('[DEBUG] Tool call successful, result type:', typeof result);
       console.log('[DEBUG] Full result from Gmail tool:', JSON.stringify(result, null, 2));
 
-      // DIAGNOSTIC ALERT: Show what we got back
-      alert(`✅ GMAIL TOOL SUCCESS!\nResult type: ${typeof result}\nFull result: ${JSON.stringify(result, null, 2).substring(0, 500)}...`);
 
       return result;
     } catch (error) {
@@ -164,8 +160,6 @@ export class McpExecutor {
         params: toolParams
       });
 
-      // DIAGNOSTIC ALERT: Show the error
-      alert(`❌ GMAIL TOOL FAILED!\nError: ${errorMessage}\nParams: ${JSON.stringify(toolParams, null, 2)}`);
 
       throw error;
     }
