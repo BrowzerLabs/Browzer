@@ -69,8 +69,16 @@ export class McpRouter {
 
     // GMAIL SCORING - HIGH PRIORITY
     if (serverName.includes('gmail') || toolName.includes('gmail')) {
-      // Email reading queries
-      if (query.includes('email') || query.includes('inbox') || query.includes('message')) {
+      // HIGHEST PRIORITY: Sending emails (must be checked first to override reading scores)
+      if (query.includes('send') || query.includes('reply') || query.includes('forward') ||
+          query.includes('compose') || query.includes('write email') || query.includes('email to')) {
+        if (tool.includes('send')) score += 10; // Higher than reading tools
+        if (tool.includes('reply')) score += 10;
+        // Penalize find tools for send queries to avoid wrong routing
+        if (tool.includes('find') || tool.includes('get') || tool.includes('search')) score -= 5;
+      }
+      // Email reading queries (only if not a send query)
+      else if (query.includes('email') || query.includes('inbox') || query.includes('message')) {
         if (tool.includes('find') || tool.includes('get') || tool.includes('read')) score += 5;
         if (tool.includes('search') || tool.includes('list')) score += 4;
       }
@@ -84,12 +92,6 @@ export class McpRouter {
       const numberMatch = query.match(/(\d+)/);
       if (numberMatch) {
         if (tool.includes('find') || tool.includes('get')) score += 3;
-      }
-
-      // Sending emails
-      if (query.includes('send') || query.includes('reply') || query.includes('forward')) {
-        if (tool.includes('send')) score += 5;
-        if (tool.includes('reply')) score += 5;
       }
 
       // Gmail-specific terms

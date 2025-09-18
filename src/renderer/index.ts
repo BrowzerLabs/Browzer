@@ -4369,7 +4369,7 @@ async function processGetItDoneTask(taskInstruction: string): Promise<void> {
       for (const result of results) {
         if (result.success) {
           hasSuccess = true;
-          responseContent += formatMcpResults(result.data, result.toolName);
+          responseContent += formatMcpResults(result.data, result.toolName, taskInstruction);
         } else {
           // Use error handler to get user-friendly error messages
           const mcpExecutor = new McpExecutor(mcpManager);
@@ -4510,12 +4510,12 @@ function getToolSpecificMessage(toolName: string): string {
 }
 
 // Format MCP results for display in chat - routes to appropriate formatter based on tool type
-function formatMcpResults(data: any, toolName: string): string {
+function formatMcpResults(data: any, toolName: string, originalQuery?: string): string {
   if (!data) return 'No results found.\n\n';
 
   // Route to appropriate formatter based on tool type
   if (toolName.includes('gmail') || toolName.includes('email')) {
-    return formatEmailResults(data, toolName);
+    return formatEmailResults(data, toolName, originalQuery);
   } else if (toolName.includes('calendar')) {
     return formatCalendarResults(data, toolName);
   } else {
@@ -4625,19 +4625,103 @@ function formatGenericResults(data: any, toolName: string): string {
   return formatted;
 }
 
+// Format email send/reply results for display in chat
+function formatEmailSendResults(data: any, toolName: string, originalQuery?: string): string {
+  console.log('[formatEmailSendResults] Received data structure:', JSON.stringify(data, null, 2));
+
+  let formatted = '**📧 Email Action Result:**\n\n';
+
+  try {
+    // Handle MCP send response structure
+    if (data.content && Array.isArray(data.content) && data.content[0]?.type === 'text') {
+      const parsedContent = JSON.parse(data.content[0].text);
+      console.log('[formatEmailSendResults] Parsed send content:', parsedContent);
+
+      if (parsedContent.execution && parsedContent.execution.status === 'SUCCESS') {
+        formatted += '✅ **Email sent successfully!**\n\n';
+
+        // Extract send details if available
+        const params = parsedContent.execution.resolvedParams || parsedContent.execution.params;
+        if (params) {
+          // Helper function to extract value from parameter object
+          const extractValue = (param: any) => {
+            if (typeof param === 'string') return param;
+            if (param && typeof param === 'object') {
+              return param.value || param.label || param.name || JSON.stringify(param);
+            }
+            return param;
+          };
+
+          if (params.to || params.recipient) {
+            const toValue = extractValue(params.to || params.recipient);
+            formatted += `📬 **To:** ${toValue}\n`;
+          }
+          if (params.subject) {
+            const subjectValue = extractValue(params.subject);
+            formatted += `📝 **Subject:** ${subjectValue}\n`;
+          }
+          if (params.body || params.message) {
+            const bodyValue = extractValue(params.body || params.message);
+            const truncatedBody = bodyValue && bodyValue.length > 100 ? bodyValue.substring(0, 100) + '...' : bodyValue;
+            formatted += `💬 **Message:** ${truncatedBody}\n`;
+          }
+        }
+      } else if (parsedContent.execution && parsedContent.execution.status === 'FAILED') {
+        formatted += '❌ **Email sending failed**\n\n';
+        if (parsedContent.execution.error) {
+          formatted += `**Error:** ${parsedContent.execution.error}\n`;
+        }
+      } else {
+        formatted += '⏳ **Email sending in progress...**\n\n';
+      }
+    } else if (typeof data === 'object' && data.success) {
+      formatted += '✅ **Email sent successfully!**\n\n';
+    } else if (typeof data === 'object' && data.error) {
+      formatted += `❌ **Email sending failed:** ${data.error}\n\n`;
+    } else {
+      // Generic success response
+      formatted += '✅ **Email action completed**\n\n';
+    }
+  } catch (error) {
+    console.error('[formatEmailSendResults] Error parsing send results:', error);
+    formatted += '⚠️ **Email action completed** (status unclear)\n\n';
+  }
+
+  return formatted;
+}
+
 // Format email results for display in chat
-function formatEmailResults(data: any, toolName: string): string {
+function formatEmailResults(data: any, toolName: string, originalQuery?: string): string {
   if (!data) return 'No emails found.\n\n';
 
   // DIAGNOSTIC: Show what data structure we're working with
   console.log('[formatEmailResults] Received data structure:', JSON.stringify(data, null, 2));
 
+  // Check if this is a send/reply operation
+  const isSendOperation = toolName.includes('send') || toolName.includes('reply') ||
+    (originalQuery && (originalQuery.includes('send') || originalQuery.includes('compose') || originalQuery.includes('reply')));
+
+  if (isSendOperation) {
+    return formatEmailSendResults(data, toolName, originalQuery);
+  }
+
   // Detect the provider/source and customize formatting
   const provider = detectEmailProvider(toolName, data);
   console.log('[formatEmailResults] Detected provider:', provider);
 
+  // Determine if user wants just the latest/single email
+  const wantsSingleEmail = originalQuery && (
+    originalQuery.toLowerCase().includes('latest email') ||
+    originalQuery.toLowerCase().includes('most recent email') ||
+    originalQuery.toLowerCase().includes('last email') ||
+    originalQuery.toLowerCase().includes('newest email') ||
+    originalQuery.toLowerCase().includes('my latest email')
+  );
+
   let formatted = getProviderHeader(provider);
 
+  // Determine email limit based on query intent
+  const emailLimit = wantsSingleEmail ? 1 : 3;
 
   try {
     // Handle different data formats from different MCP tools
@@ -4645,7 +4729,7 @@ function formatEmailResults(data: any, toolName: string): string {
       if (data.length === 0) {
         formatted += 'No emails found in the array.\n\n';
       } else {
-        data.slice(0, 3).forEach((email: any, index: number) => {
+        data.slice(0, emailLimit).forEach((email: any, index: number) => {
           formatted += formatSingleEmail(email, index + 1, provider);
         });
       }
@@ -4654,7 +4738,7 @@ function formatEmailResults(data: any, toolName: string): string {
       if (data.emails.length === 0) {
         formatted += 'No emails found in the emails array.\n\n';
       } else {
-        data.emails.slice(0, 3).forEach((email: any, index: number) => {
+        data.emails.slice(0, emailLimit).forEach((email: any, index: number) => {
           formatted += formatSingleEmail(email, index + 1, provider);
         });
       }
@@ -4663,7 +4747,7 @@ function formatEmailResults(data: any, toolName: string): string {
       if (data.items.length === 0) {
         formatted += 'No emails found in the items array.\n\n';
       } else {
-        data.items.slice(0, 3).forEach((email: any, index: number) => {
+        data.items.slice(0, emailLimit).forEach((email: any, index: number) => {
           formatted += formatSingleEmail(email, index + 1, provider);
         });
       }
@@ -4685,7 +4769,7 @@ function formatEmailResults(data: any, toolName: string): string {
               if (parsedContent.results.length === 0) {
                 formatted += 'No emails found in parsed results.\n\n';
               } else {
-                parsedContent.results.slice(0, 3).forEach((email: any, index: number) => {
+                parsedContent.results.slice(0, emailLimit).forEach((email: any, index: number) => {
                   formatted += formatSingleEmail(email, index + 1, provider);
                 });
               }
@@ -4696,7 +4780,7 @@ function formatEmailResults(data: any, toolName: string): string {
           } catch (parseError) {
             console.error('[formatEmailResults] Failed to parse MCP text content:', parseError);
             // Fallback to original content processing
-            data.content.slice(0, 3).forEach((email: any, index: number) => {
+            data.content.slice(0, emailLimit).forEach((email: any, index: number) => {
               formatted += formatSingleEmail(email, index + 1, provider);
             });
           }

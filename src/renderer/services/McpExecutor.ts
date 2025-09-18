@@ -478,21 +478,76 @@ export class McpExecutor {
   }
 
   private parseEmailSendQuery(query: string): { to: string; subject: string; body: string } {
-    // Extract recipient
-    const toMatch = query.match(/(?:send|email|to)\s+([^\s@]+@[^\s]+)/i) ||
-                   query.match(/to\s+([^\s@]+@[^\s]+)/i);
+    console.log('[DEBUG] parseEmailSendQuery input:', query);
 
-    // Extract subject
-    const subjectMatch = query.match(/subject[:\s]+([^,\n]+)/i);
+    // First check for "send [message] to [email]" pattern
+    const sendMessageToPattern = query.match(/^send\s+(.+?)\s+to\s+([^\s@]+@[^\s]+)/i);
 
-    // Extract body/message
-    const bodyMatch = query.match(/(?:saying|message|body)[:\s]+(.+)/i);
+    if (sendMessageToPattern) {
+      const message = sendMessageToPattern[1].trim();
+      const email = sendMessageToPattern[2].trim();
 
-    return {
-      to: toMatch?.[1] || '',
-      subject: subjectMatch?.[1]?.trim() || 'Message from Browzer',
-      body: bodyMatch?.[1]?.trim() || query
+      const result = {
+        to: email,
+        subject: 'Message from Browzer',
+        body: message
+      };
+
+      console.log('[DEBUG] parseEmailSendQuery result (send-message-to pattern):', result);
+      return result;
+    }
+
+    // Extract recipient - improved patterns
+    const toMatch = query.match(/(?:send|email)\s+(?:to\s+)?([^\s@]+@[^\s]+)/i) ||
+                   query.match(/to\s+([^\s@]+@[^\s]+)/i) ||
+                   query.match(/([^\s@]+@[^\s]+)/i);
+
+    const recipientEmail = toMatch?.[1] || '';
+
+    // Extract subject - look for explicit "subject:" or infer from "about"
+    let subject = '';
+    const subjectMatch = query.match(/(?:subject|title)[:\s]+([^,\n]+)/i);
+    const aboutMatch = query.match(/about\s+(.+?)(?:\s+saying|\s+with\s+message|\s*$)/i);
+
+    if (subjectMatch) {
+      subject = subjectMatch[1].trim();
+    } else if (aboutMatch) {
+      subject = aboutMatch[1].trim();
+    } else {
+      subject = 'Message from Browzer';
+    }
+
+    // Extract body/message - improved patterns
+    let body = '';
+    const sayingMatch = query.match(/saying\s+(.+)$/i);
+    const messageMatch = query.match(/(?:with\s+message|message)[:\s]+(.+)$/i);
+    const bodyMatch = query.match(/(?:body)[:\s]+(.+)$/i);
+
+    if (sayingMatch) {
+      body = sayingMatch[1].trim();
+    } else if (messageMatch) {
+      body = messageMatch[1].trim();
+    } else if (bodyMatch) {
+      body = bodyMatch[1].trim();
+    } else {
+      // For "about X" queries, use the subject as body if no explicit body found
+      if (aboutMatch) {
+        body = aboutMatch[1].trim();
+      } else {
+        // Last resort - extract everything after email address
+        const afterEmailMatch = query.match(new RegExp(`${recipientEmail.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s+(.+)$`, 'i'));
+        body = afterEmailMatch?.[1]?.trim() || 'Hello!';
+      }
+    }
+
+    const result = {
+      to: recipientEmail,
+      subject: subject,
+      body: body
     };
+
+    console.log('[DEBUG] parseEmailSendQuery result:', result);
+    return result;
   }
 
   private parseEmailReplyQuery(query: string): { messageId: string; body: string } {
