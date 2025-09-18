@@ -508,27 +508,60 @@ export class McpClientManager {
   }
 
   async callTool(fullName: string, args: any): Promise<any> {
+    // DIAGNOSTIC: Enhanced callTool debugging
+    console.log('[DEBUG] callTool invoked:', { fullName, args });
+
     const tool = this.toolIndex.get(fullName);
-    if (!tool) {
-      throw new Error(`Tool ${fullName} not found`);
+    console.log('[DEBUG] Tool exists in registry:', !!tool);
+    if (tool) {
+      console.log('[DEBUG] Tool info:', {
+        name: tool.name,
+        serverName: tool.serverName,
+        description: tool.description,
+        inputSchema: tool.inputSchema
+      });
     }
-    
+
+    if (!tool) {
+      console.error('[DEBUG] Available tools in registry:', Array.from(this.toolIndex.keys()));
+      throw new Error(`Tool ${fullName} not found in registry. Available tools: ${Array.from(this.toolIndex.keys()).join(', ')}`);
+    }
+
     const client = this.clients.get(tool.serverName);
+    console.log('[DEBUG] Client exists for server:', { serverName: tool.serverName, clientExists: !!client });
+    console.log('[DEBUG] All connected servers:', Array.from(this.clients.keys()));
+
     if (!client) {
-      throw new Error(`Server ${tool.serverName} not connected`);
+      throw new Error(`Server ${tool.serverName} not connected. Connected servers: ${Array.from(this.clients.keys()).join(', ')}`);
     }
 
     try {
       console.log(`[MCP] Calling tool ${fullName} with args:`, args);
+      console.log('[DEBUG] Actual MCP call parameters:', {
+        toolName: tool.name,
+        serverName: tool.serverName,
+        arguments: args
+      });
+
       const response = await client.callTool({
         name: tool.name,
         arguments: args
       });
-      
+
       console.log(`[MCP] Tool ${fullName} response:`, response);
+      console.log('[DEBUG] Response type and structure:', {
+        type: typeof response,
+        isArray: Array.isArray(response),
+        keys: typeof response === 'object' ? Object.keys(response) : null
+      });
       return response;
     } catch (error) {
       console.error(`[MCP] Tool call failed for ${fullName}:`, error);
+      console.error('[DEBUG] Full error details:', {
+        message: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+        name: error instanceof Error ? error.name : typeof error
+      });
       throw error;
     }
   }

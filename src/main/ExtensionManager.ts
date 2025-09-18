@@ -20,6 +20,7 @@ export class ExtensionManager {
   private extensionFramework: ExtensionFramework;
   private currentBrowserApiKeys: Record<string, string> = {};
   private currentSelectedProvider: string = 'openai';
+  private currentMcpServers: Array<{name: string, url: string, enabled: boolean}> = [];
 
   constructor() {
     // Proper path resolution for both development and packaged apps
@@ -236,7 +237,7 @@ export class ExtensionManager {
       
       console.log(`[ExtensionManager] Routing request: "${userRequest}"`);
       
-      // Prepare workflow data with API keys for the router
+      // Prepare workflow data with API keys and MCP servers for the router
       const workflowData = {
         query: userRequest,
         pageContent: null,
@@ -244,10 +245,12 @@ export class ExtensionManager {
         selectedProvider: this.getSelectedProvider(),
         selectedModel: 'claude-3-7-sonnet-latest',
         isQuestion: true,
-        conversationHistory: []
+        conversationHistory: [],
+        mcpServers: this.getMcpServers()
       };
       
       console.log(`[ExtensionManager] Passing API keys to router:`, Object.keys(workflowData.browserApiKeys));
+      console.log(`[ExtensionManager] Passing MCP servers to router:`, workflowData.mcpServers.map(s => `${s.name}(${s.enabled ? 'enabled' : 'disabled'})`));
       
       return new Promise((resolve, reject) => {
         const { spawn } = require('child_process');
@@ -372,11 +375,14 @@ export class ExtensionManager {
   // New method to execute Python extensions (replaces AgentManager functionality)
   async executePythonExtension(extensionId: string, action: string, data: any): Promise<any> {
     try {
-      // Get browser API keys from localStorage or settings
+      // Get browser API keys and MCP servers from current state
       const browserApiKeys = this.getBrowserApiKeys();
       const selectedProvider = this.getSelectedProvider();
-      
+      const mcpServers = this.getMcpServers();
+
       console.log(`[ExtensionManager] Executing Python extension: ${extensionId} with provider: ${selectedProvider}`);
+      console.log(`[ExtensionManager] API keys available:`, Object.keys(browserApiKeys));
+      console.log(`[ExtensionManager] MCP servers available:`, mcpServers.map(s => `${s.name}(${s.enabled ? 'enabled' : 'disabled'})`));
       
       // Debug: Check if extension is loaded
       const loadedExtensions = this.extensionFramework.getRuntime().getLoadedExtensions();
@@ -390,13 +396,14 @@ export class ExtensionManager {
       
       console.log(`[ExtensionManager] Found extension: ${targetExtension.manifest.name} (${targetExtension.manifest.type})`);
       
-      // Execute using the extension framework
+      // Execute using the extension framework with API keys and MCP servers
       const result = await this.extensionFramework.getRuntime().executePythonExtension(
         extensionId,
         action,
         data,
         browserApiKeys,
-        selectedProvider
+        selectedProvider,
+        mcpServers
       );
       
       console.log(`[ExtensionManager] Extension execution completed for ${extensionId}`);
@@ -415,17 +422,22 @@ export class ExtensionManager {
     return this.currentSelectedProvider;
   }
 
+  private getMcpServers(): Array<{name: string, url: string, enabled: boolean}> {
+    return this.currentMcpServers;
+  }
+
   // Method to update API keys from renderer
   updateBrowserApiKeys(apiKeys: Record<string, string>): void {
     this.currentBrowserApiKeys = apiKeys;
     console.log(`[ExtensionManager] Updated API keys for providers:`, Object.keys(apiKeys));
   }
 
-  // Method to update selected provider from renderer  
+  // Method to update selected provider from renderer
   updateSelectedProvider(provider: string): void {
     this.currentSelectedProvider = provider;
     console.log(`[ExtensionManager] Updated selected provider:`, provider);
   }
+
 
   private async updateMasterJson(extensionId: string): Promise<void> {
     try {
@@ -667,19 +679,22 @@ export class ExtensionManager {
     // Execute Python extension (replaces agent execution)
     ipcMain.handle('execute-python-extension', async (event: IpcMainInvokeEvent, params: any) => {
       try {
-        const { extensionId, action, data, browserApiKeys, selectedProvider } = params;
-        
+        const { extensionId, action, data, browserApiKeys, selectedProvider, mcpServers } = params;
+
         console.log(`[IPC] Received execute-python-extension request:`, {
           extensionId,
           action,
           provider: selectedProvider,
           hasData: !!data,
-          hasApiKeys: !!browserApiKeys
+          hasApiKeys: !!browserApiKeys,
+          hasMcpServers: !!mcpServers,
+          mcpServerCount: mcpServers ? mcpServers.length : 0
         });
-        
-        // Update browser API keys for this execution
+
+        // Update browser API keys and MCP servers for this execution
         this.currentBrowserApiKeys = browserApiKeys || {};
         this.currentSelectedProvider = selectedProvider || 'openai';
+        this.currentMcpServers = mcpServers || [];
         
         console.log(`[IPC] Executing extension ${extensionId} with action ${action}`);
         
@@ -753,6 +768,7 @@ export class ExtensionManager {
         return { success: false, error: (error as Error).message };
       }
     });
+
 
     // Get available Python extensions for execution
     ipcMain.handle('get-python-extensions', async () => {

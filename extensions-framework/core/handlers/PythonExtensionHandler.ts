@@ -163,7 +163,8 @@ export class PythonExtensionHandler {
     action: string,
     data: any,
     browserApiKeys: Record<string, string>,
-    selectedProvider: string
+    selectedProvider: string,
+    mcp_servers: any
   ): Promise<any> {
     try {
       this.logger.info(`Executing Python extension: ${context.manifest.name} (ID: ${context.id}), action: ${action}`);
@@ -197,7 +198,8 @@ export class PythonExtensionHandler {
         permissions: context.permissions,
         browser_api_keys: browserApiKeys,
         selected_provider: selectedProvider,
-        selected_model: this.getModelForProvider(selectedProvider)
+        selected_model: this.getModelForProvider(selectedProvider),
+        mcp_servers: mcp_servers
       };
 
       // Prepare the request payload

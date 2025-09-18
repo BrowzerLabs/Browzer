@@ -17,14 +17,30 @@ export class McpRouter {
   async routeQuery(userQuery: string, maxTools: number = 3): Promise<ToolMatch[]> {
     const allToolNames = await this.mcpManager.listAllTools();
     const query = userQuery.toLowerCase();
-    
+
+    // DIAGNOSTIC: Log all discovered tool names
+    console.log('[DEBUG] All discovered tool names:', allToolNames);
+    console.log('[DEBUG] Query for routing:', query);
+
     const matches: ToolMatch[] = [];
-    
+    const scoringResults: any[] = [];
+
     for (const toolName of allToolNames) {
       const toolInfo = this.mcpManager.getToolInfo(toolName);
-      if (!toolInfo) continue;
-      
+      if (!toolInfo) {
+        console.log('[DEBUG] No tool info found for:', toolName);
+        continue;
+      }
+
       const score = this.scoreToolForQuery(toolName, query);
+
+      // DIAGNOSTIC: Log all scoring attempts
+      scoringResults.push({
+        toolName,
+        score,
+        description: toolInfo.description || this.getToolDescription(toolName)
+      });
+
       if (score > 0) {
         matches.push({
           toolName,
@@ -34,7 +50,11 @@ export class McpRouter {
         });
       }
     }
-    
+
+    // DIAGNOSTIC: Log complete scoring results
+    console.log('[DEBUG] Query scoring results:', scoringResults);
+    console.log('[DEBUG] Tools with score > 0:', matches);
+
     // Sort by score descending and take top K
     return matches
       .sort((a, b) => b.score - a.score)
@@ -44,9 +64,38 @@ export class McpRouter {
   private scoreToolForQuery(toolName: string, query: string): number {
     const [serverName, ...toolParts] = toolName.split('.');
     const tool = toolParts.join('.');
-    
+
     let score = 0;
-    
+
+    // GMAIL SCORING - HIGH PRIORITY
+    if (serverName === 'zap2' || serverName.includes('gmail') || toolName.includes('gmail')) {
+      // Email reading queries
+      if (query.includes('email') || query.includes('inbox') || query.includes('message')) {
+        if (tool.includes('find') || tool.includes('get') || tool.includes('read')) score += 5;
+        if (tool.includes('search') || tool.includes('list')) score += 4;
+      }
+
+      // Specific email actions
+      if (query.includes('first') || query.includes('recent') || query.includes('latest')) {
+        if (tool.includes('find') || tool.includes('list') || tool.includes('get')) score += 4;
+      }
+
+      // Email count queries
+      const numberMatch = query.match(/(\d+)/);
+      if (numberMatch) {
+        if (tool.includes('find') || tool.includes('get')) score += 3;
+      }
+
+      // Sending emails
+      if (query.includes('send') || query.includes('reply') || query.includes('forward')) {
+        if (tool.includes('send')) score += 5;
+        if (tool.includes('reply')) score += 5;
+      }
+
+      // Gmail-specific terms
+      if (query.includes('gmail')) score += 2;
+    }
+
     // Filesystem scoring
     if (serverName === 'filesystem') {
       if (query.includes('read') || query.includes('open') || query.includes('file')) {
@@ -88,7 +137,26 @@ export class McpRouter {
   private getToolDescription(toolName: string): string {
     const [serverName, ...toolParts] = toolName.split('.');
     const tool = toolParts.join('.');
-    
+
+    // Gmail/Email tool descriptions
+    if (serverName === 'zap2' || serverName.includes('gmail') || toolName.includes('gmail')) {
+      if (tool.includes('find_email') || tool.includes('find')) {
+        return 'Search and find emails in Gmail inbox';
+      }
+      if (tool.includes('send_email') || tool.includes('send')) {
+        return 'Send a new email via Gmail';
+      }
+      if (tool.includes('reply_to_email') || tool.includes('reply')) {
+        return 'Reply to an existing email';
+      }
+      if (tool.includes('get_email') || tool.includes('get')) {
+        return 'Get specific email content from Gmail';
+      }
+      if (tool.includes('list')) {
+        return 'List emails from Gmail inbox';
+      }
+    }
+
     // Simple descriptions based on common patterns
     if (serverName === 'filesystem') {
       if (tool.includes('read')) return 'Read contents of a file';
@@ -96,12 +164,12 @@ export class McpRouter {
       if (tool.includes('list')) return 'List files and directories';
       if (tool.includes('delete')) return 'Delete a file or directory';
     }
-    
+
     if (serverName === 'slack') {
       if (tool.includes('send')) return 'Send a message to Slack';
       if (tool.includes('channel')) return 'List or manage Slack channels';
     }
-    
+
     return `Execute ${tool} on ${serverName}`;
   }
 

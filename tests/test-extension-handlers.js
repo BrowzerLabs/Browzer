@@ -72,7 +72,8 @@ async function testExtensionHandlers() {
           'analyze_content',
           { text: 'This is a test message for analysis.' },
           { openai: 'test-key' },
-          'openai'
+          'openai',
+          [] // Empty MCP servers array for test
         );
         console.log(`✅ Python extension executed:`, pythonResult);
       } catch (pythonError) {

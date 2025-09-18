@@ -504,7 +504,7 @@ export class ExtensionRuntime extends EventEmitter {
     // Implementation will be added
   }
 
-  async executePythonExtension(extensionId: string, action: string, data: any, browserApiKeys: Record<string, string>, selectedProvider: string): Promise<any> {
+  async executePythonExtension(extensionId: string, action: string, data: any, browserApiKeys: Record<string, string>, selectedProvider: string, mcp_servers: any): Promise<any> {
     const context = this.loadedExtensions.get(extensionId);
     if (!context) {
       throw new ExtensionError(
@@ -527,7 +527,8 @@ export class ExtensionRuntime extends EventEmitter {
       action,
       data,
       browserApiKeys,
-      selectedProvider
+      selectedProvider,
+      mcp_servers
     );
   }
 

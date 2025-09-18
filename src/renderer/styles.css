@@ -3128,3 +3128,47 @@ select:focus-visible {
     border-bottom: 8px solid transparent;
     filter: drop-shadow(2px 0 4px rgba(0, 0, 0, 0.1));
 }
+
+/* ============ MCP PROGRESS INDICATORS ============ */
+.mcp-progress {
+    background: linear-gradient(90deg, #e3f2fd, #f0f8ff);
+    border: 1px solid #4a9eff;
+    border-radius: 12px;
+    padding: 16px 20px;
+    margin: 12px 0;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    color: #0066cc;
+    font-size: 14px;
+    font-weight: 500;
+    box-shadow: 0 2px 8px rgba(74, 158, 255, 0.15);
+    animation: mcpPulse 1.8s ease-in-out infinite;
+    position: relative;
+    overflow: hidden;
+}
+
+.mcp-progress::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+    animation: mcpShimmer 2s linear infinite;
+}
+
+@keyframes mcpPulse {
+    0%, 100% {
+        opacity: 1;
+        transform: scale(1);
+    }
+    50% {
+        opacity: 0.85;
+        transform: scale(1.01);
+    }
+}
+
+@keyframes mcpShimmer {
+    0% { left: -100%; }
+    100% { left: 100%; }
+}
