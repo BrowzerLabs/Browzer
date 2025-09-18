@@ -17,18 +17,43 @@ export interface RecoveryStrategy {
   execute: (context: ErrorContext) => Promise<McpExecutionResult | null>;
 }
 
+export interface CircuitBreakerState {
+  failures: number;
+  lastFailureTime: number;
+  state: 'CLOSED' | 'OPEN' | 'HALF_OPEN';
+  nextAttemptTime: number;
+}
+
+export interface McpServerStats {
+  totalCalls: number;
+  successfulCalls: number;
+  failedCalls: number;
+  averageResponseTime: number;
+  lastResponseTime: number;
+  uptime: number;
+  downSince?: number;
+}
+
 /**
  * Enhanced error handling system for MCP tool execution failures.
- * Provides intelligent fallback strategies and retry logic.
+ * Provides intelligent fallback strategies, retry logic, and circuit breakers for Phase 2.
  */
 export class McpErrorHandler {
   private recoveryStrategies: RecoveryStrategy[] = [];
+  private circuitBreakers: Map<string, CircuitBreakerState> = new Map();
+  private serverStats: Map<string, McpServerStats> = new Map();
+
+  // Circuit breaker configuration
+  private readonly FAILURE_THRESHOLD = 5;
+  private readonly RECOVERY_TIMEOUT = 30000; // 30 seconds
+  private readonly HALF_OPEN_MAX_ATTEMPTS = 3;
 
   constructor(
     private mcpManager: McpClientManager,
     private router: McpRouter
   ) {
     this.initializeRecoveryStrategies();
+    this.startHealthMonitoring();
   }
 
   /**
@@ -307,5 +332,185 @@ export class McpErrorHandler {
     }
 
     return { healthy, unhealthy };
+  }
+
+  /**
+   * Circuit breaker: Check if server is available for requests
+   */
+  canCallServer(serverName: string): boolean {
+    const circuitBreaker = this.circuitBreakers.get(serverName);
+    if (!circuitBreaker) {
+      return true; // First time calling, allow
+    }
+
+    switch (circuitBreaker.state) {
+      case 'CLOSED':
+        return true;
+      case 'OPEN':
+        // Check if recovery timeout has passed
+        if (Date.now() >= circuitBreaker.nextAttemptTime) {
+          // Move to half-open state
+          circuitBreaker.state = 'HALF_OPEN';
+          console.log(`[McpErrorHandler] Circuit breaker for ${serverName} moving to HALF_OPEN`);
+          return true;
+        }
+        return false;
+      case 'HALF_OPEN':
+        return true; // Allow limited attempts
+    }
+  }
+
+  /**
+   * Circuit breaker: Record successful server call
+   */
+  recordSuccess(serverName: string, responseTime: number): void {
+    const circuitBreaker = this.circuitBreakers.get(serverName) || {
+      failures: 0,
+      lastFailureTime: 0,
+      state: 'CLOSED',
+      nextAttemptTime: 0
+    };
+
+    // Reset circuit breaker on success
+    circuitBreaker.failures = 0;
+    circuitBreaker.state = 'CLOSED';
+    this.circuitBreakers.set(serverName, circuitBreaker);
+
+    // Update server statistics
+    this.updateServerStats(serverName, true, responseTime);
+    console.log(`[McpErrorHandler] Circuit breaker for ${serverName} reset to CLOSED`);
+  }
+
+  /**
+   * Circuit breaker: Record failed server call
+   */
+  recordFailure(serverName: string, error: string): void {
+    const circuitBreaker = this.circuitBreakers.get(serverName) || {
+      failures: 0,
+      lastFailureTime: 0,
+      state: 'CLOSED',
+      nextAttemptTime: 0
+    };
+
+    circuitBreaker.failures++;
+    circuitBreaker.lastFailureTime = Date.now();
+
+    if (circuitBreaker.failures >= this.FAILURE_THRESHOLD) {
+      circuitBreaker.state = 'OPEN';
+      circuitBreaker.nextAttemptTime = Date.now() + this.RECOVERY_TIMEOUT;
+      console.log(`[McpErrorHandler] Circuit breaker for ${serverName} OPENED after ${circuitBreaker.failures} failures`);
+    }
+
+    this.circuitBreakers.set(serverName, circuitBreaker);
+
+    // Update server statistics
+    this.updateServerStats(serverName, false, 0);
+  }
+
+  /**
+   * Update server performance statistics
+   */
+  private updateServerStats(serverName: string, success: boolean, responseTime: number): void {
+    const stats = this.serverStats.get(serverName) || {
+      totalCalls: 0,
+      successfulCalls: 0,
+      failedCalls: 0,
+      averageResponseTime: 0,
+      lastResponseTime: 0,
+      uptime: 100,
+      downSince: undefined
+    };
+
+    stats.totalCalls++;
+    stats.lastResponseTime = responseTime;
+
+    if (success) {
+      stats.successfulCalls++;
+      stats.averageResponseTime = ((stats.averageResponseTime * (stats.successfulCalls - 1)) + responseTime) / stats.successfulCalls;
+      if (stats.downSince) {
+        delete stats.downSince; // Server is back up
+      }
+    } else {
+      stats.failedCalls++;
+      if (!stats.downSince) {
+        stats.downSince = Date.now(); // Mark server as down
+      }
+    }
+
+    // Calculate uptime percentage
+    stats.uptime = (stats.successfulCalls / stats.totalCalls) * 100;
+    this.serverStats.set(serverName, stats);
+  }
+
+  /**
+   * Get server performance statistics
+   */
+  getServerStats(serverName: string): McpServerStats | undefined {
+    return this.serverStats.get(serverName);
+  }
+
+  /**
+   * Get all server statistics
+   */
+  getAllServerStats(): Map<string, McpServerStats> {
+    return new Map(this.serverStats);
+  }
+
+  /**
+   * Start periodic health monitoring of MCP servers
+   */
+  private startHealthMonitoring(): void {
+    // Run health checks every 60 seconds
+    setInterval(async () => {
+      try {
+        const health = await this.validateServerHealth();
+        console.log(`[McpErrorHandler] Health check - Healthy: ${health.healthy.join(', ')}, Unhealthy: ${health.unhealthy.join(', ')}`);
+
+        // Reset circuit breakers for healthy servers
+        for (const serverName of health.healthy) {
+          const circuitBreaker = this.circuitBreakers.get(serverName);
+          if (circuitBreaker && circuitBreaker.state === 'OPEN') {
+            console.log(`[McpErrorHandler] Resetting circuit breaker for recovered server: ${serverName}`);
+            this.recordSuccess(serverName, 0);
+          }
+        }
+      } catch (error) {
+        console.error('[McpErrorHandler] Health monitoring error:', error);
+      }
+    }, 60000); // 60 seconds
+  }
+
+  /**
+   * Check if tool is compatible with current MCP server configuration
+   */
+  async isToolCompatible(toolName: string): Promise<boolean> {
+    try {
+      const [serverName] = toolName.split('.');
+
+      // Check circuit breaker first
+      if (!this.canCallServer(serverName)) {
+        console.log(`[McpErrorHandler] Tool ${toolName} blocked by circuit breaker`);
+        return false;
+      }
+
+      // Check if tool exists in server
+      const toolInfo = this.mcpManager.getToolInfo(toolName);
+      if (!toolInfo) {
+        console.log(`[McpErrorHandler] Tool ${toolName} not found in server`);
+        return false;
+      }
+
+      return true;
+    } catch (error) {
+      console.error(`[McpErrorHandler] Tool compatibility check failed for ${toolName}:`, error);
+      return false;
+    }
+  }
+
+  /**
+   * Get circuit breaker status for debugging
+   */
+  getCircuitBreakerStatus(): Map<string, CircuitBreakerState> {
+    return new Map(this.circuitBreakers);
   }
 }

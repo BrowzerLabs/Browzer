@@ -4347,9 +4347,9 @@ async function processGetItDoneTask(taskInstruction: string): Promise<void> {
         results = await mcpExecutor.executeComplexQuery(taskInstruction);
       } else {
         console.log('[processGetItDoneTask] Using standard email query execution');
-        showMcpProgress('Gmail', 'connecting');
-        setTimeout(() => showMcpProgress('Gmail', 'fetching'), 800);
-        results = await mcpExecutor.executeEmailQuery(taskInstruction);
+        showMcpProgress('MCP', 'connecting');
+        setTimeout(() => showMcpProgress('MCP', 'running'), 800);
+        results = await mcpExecutor.executeQuery(taskInstruction);
       }
     } catch (error) {
       console.error('[processGetItDoneTask] McpExecutor failed:', error);
@@ -4369,7 +4369,7 @@ async function processGetItDoneTask(taskInstruction: string): Promise<void> {
       for (const result of results) {
         if (result.success) {
           hasSuccess = true;
-          responseContent += formatEmailResults(result.data, result.toolName);
+          responseContent += formatMcpResults(result.data, result.toolName);
         } else {
           // Use error handler to get user-friendly error messages
           const mcpExecutor = new McpExecutor(mcpManager);
@@ -4507,6 +4507,122 @@ function getToolSpecificMessage(toolName: string): string {
     default:
       return 'Processing request...';
   }
+}
+
+// Format MCP results for display in chat - routes to appropriate formatter based on tool type
+function formatMcpResults(data: any, toolName: string): string {
+  if (!data) return 'No results found.\n\n';
+
+  // Route to appropriate formatter based on tool type
+  if (toolName.includes('gmail') || toolName.includes('email')) {
+    return formatEmailResults(data, toolName);
+  } else if (toolName.includes('calendar')) {
+    return formatCalendarResults(data, toolName);
+  } else {
+    // Generic formatter for other tools
+    return formatGenericResults(data, toolName);
+  }
+}
+
+// Format calendar results for display in chat
+function formatCalendarResults(data: any, toolName: string): string {
+  if (!data) return 'No calendar events found.\n\n';
+
+  console.log('[formatCalendarResults] Received data structure:', JSON.stringify(data, null, 2));
+
+  let formatted = '**📅 Your Calendar Events:**\n\n';
+
+  try {
+    // Handle MCP calendar response structure
+    if (data.content && Array.isArray(data.content) && data.content[0]?.type === 'text') {
+      const parsedContent = JSON.parse(data.content[0].text);
+      console.log('[formatCalendarResults] Parsed calendar content:', parsedContent);
+
+      if (parsedContent.results && Array.isArray(parsedContent.results)) {
+        if (parsedContent.results.length === 0) {
+          formatted += 'No events found for today.\n\n';
+        } else {
+          parsedContent.results.forEach((event: any, index: number) => {
+            formatted += formatSingleCalendarEvent(event, index + 1);
+          });
+        }
+      } else {
+        formatted += 'No events found.\n\n';
+      }
+    } else if (Array.isArray(data)) {
+      if (data.length === 0) {
+        formatted += 'No events found.\n\n';
+      } else {
+        data.forEach((event: any, index: number) => {
+          formatted += formatSingleCalendarEvent(event, index + 1);
+        });
+      }
+    } else {
+      formatted += 'Unable to parse calendar data.\n\n';
+    }
+  } catch (error) {
+    console.error('[formatCalendarResults] Error parsing calendar data:', error);
+    formatted += 'Error parsing calendar events.\n\n';
+  }
+
+  return formatted;
+}
+
+// Format a single calendar event
+function formatSingleCalendarEvent(event: any, index: number): string {
+  let formatted = `${index}. `;
+
+  if (event.summary || event.title) {
+    formatted += `**${event.summary || event.title}**\n`;
+  } else {
+    formatted += '**Untitled Event**\n';
+  }
+
+  if (event.start && event.end) {
+    const startTime = new Date(event.start.dateTime || event.start.date).toLocaleString();
+    const endTime = new Date(event.end.dateTime || event.end.date).toLocaleString();
+    formatted += `   ⏰ ${startTime} - ${endTime}\n`;
+  }
+
+  if (event.description) {
+    formatted += `   📝 ${event.description}\n`;
+  }
+
+  if (event.location) {
+    formatted += `   📍 ${event.location}\n`;
+  }
+
+  formatted += '\n';
+  return formatted;
+}
+
+// Generic formatter for non-email, non-calendar results
+function formatGenericResults(data: any, toolName: string): string {
+  if (!data) return 'No results found.\n\n';
+
+  let formatted = `**Results from ${toolName}:**\n\n`;
+
+  try {
+    if (typeof data === 'string') {
+      formatted += data + '\n\n';
+    } else if (Array.isArray(data)) {
+      if (data.length === 0) {
+        formatted += 'No items found.\n\n';
+      } else {
+        data.slice(0, 5).forEach((item: any, index: number) => {
+          formatted += `${index + 1}. ${typeof item === 'string' ? item : JSON.stringify(item)}\n`;
+        });
+        formatted += '\n';
+      }
+    } else {
+      formatted += JSON.stringify(data, null, 2) + '\n\n';
+    }
+  } catch (error) {
+    console.error('[formatGenericResults] Error formatting results:', error);
+    formatted += 'Error formatting results.\n\n';
+  }
+
+  return formatted;
 }
 
 // Format email results for display in chat

@@ -68,7 +68,7 @@ export class McpRouter {
     let score = 0;
 
     // GMAIL SCORING - HIGH PRIORITY
-    if (serverName === 'zap2' || serverName.includes('gmail') || toolName.includes('gmail')) {
+    if (serverName.includes('gmail') || toolName.includes('gmail')) {
       // Email reading queries
       if (query.includes('email') || query.includes('inbox') || query.includes('message')) {
         if (tool.includes('find') || tool.includes('get') || tool.includes('read')) score += 5;
@@ -111,8 +111,32 @@ export class McpRouter {
       }
     }
     
+    // GOOGLE CALENDAR SCORING
+    if (toolName.includes('calendar')) {
+      // Calendar viewing queries
+      if (query.includes('calendar') || query.includes('schedule') || query.includes('appointment') || query.includes('meeting')) {
+        if (tool.includes('find') || tool.includes('get') || tool.includes('events')) score += 5;
+        if (tool.includes('list')) score += 4;
+      }
+
+      // Time-based queries
+      if (query.includes('today') || query.includes('tomorrow') || query.includes('week') || query.includes('month')) {
+        if (tool.includes('find') || tool.includes('events')) score += 4;
+      }
+
+      // Event creation
+      if (query.includes('create') || query.includes('add') || query.includes('schedule') || query.includes('book')) {
+        if (tool.includes('add') || tool.includes('create') || tool.includes('quick')) score += 5;
+      }
+
+      // Event updates
+      if (query.includes('update') || query.includes('change') || query.includes('modify')) {
+        if (tool.includes('update') || tool.includes('edit')) score += 5;
+      }
+    }
+
     // Slack scoring
-    if (serverName === 'slack') {
+    if (serverName.includes('slack') || toolName.includes('slack')) {
       if (query.includes('slack') || query.includes('message') || query.includes('send')) {
         if (tool.includes('send') || tool.includes('message')) score += 3;
         if (tool.includes('channel')) score += 2;
@@ -120,7 +144,7 @@ export class McpRouter {
     }
     
     // Web/browser scoring
-    if (serverName === 'web' || serverName === 'browser') {
+    if (serverName.includes('web') || serverName.includes('browser') || toolName.includes('web') || toolName.includes('browser')) {
       if (query.includes('search') || query.includes('web') || query.includes('browse')) {
         if (tool.includes('search')) score += 3;
         if (tool.includes('navigate')) score += 2;
@@ -139,7 +163,7 @@ export class McpRouter {
     const tool = toolParts.join('.');
 
     // Gmail/Email tool descriptions
-    if (serverName === 'zap2' || serverName.includes('gmail') || toolName.includes('gmail')) {
+    if (serverName.includes('gmail') || toolName.includes('gmail')) {
       if (tool.includes('find_email') || tool.includes('find')) {
         return 'Search and find emails in Gmail inbox';
       }
