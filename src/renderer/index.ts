@@ -4281,7 +4281,7 @@ async function processDoTask(taskInstruction: string): Promise<void> {
       }
     });
 
-    addMessageToChat('assistant', `❌ **Task execution failed:** ${(error as Error).message}`);
+    addMessageToChat('assistant', `**Task execution failed:** ${(error as Error).message}`);
   } finally {
     // Always clear execution flag
     isWorkflowExecuting = false;
@@ -4314,7 +4314,7 @@ async function processGetItDoneTask(taskInstruction: string): Promise<void> {
     }
 
     if (!mcpManager) {
-      addMessageToChat('assistant', '❌ MCP tools are not available. Please configure MCP servers in Settings.');
+      addMessageToChat('assistant', 'MCP tools are not available. Please configure MCP servers in Settings.');
       return;
     }
 
@@ -4322,10 +4322,10 @@ async function processGetItDoneTask(taskInstruction: string): Promise<void> {
     const mcpServers = getBrowserMcpServers();
     const enabledServers = mcpServers.filter(server => server.enabled);
 
-    alert(`[processGetItDoneTask] Found ${mcpServers.length} total MCP servers, ${enabledServers.length} enabled`);
+    console.log(`[processGetItDoneTask] Found ${mcpServers.length} total MCP servers, ${enabledServers.length} enabled`);
 
     if (enabledServers.length === 0) {
-      addMessageToChat('assistant', `❌ No MCP servers configured or enabled.\n\nPlease add and enable MCP servers in Settings → MCP Servers.\n\nDebug info:\n- Total servers: ${mcpServers.length}\n- Enabled servers: ${enabledServers.length}\n- Servers: ${mcpServers.map(s => `${s.name}(${s.enabled ? 'enabled' : 'disabled'})`).join(', ')}`);
+      addMessageToChat('assistant', `No MCP servers configured or enabled.\n\nPlease add and enable MCP servers in Settings → MCP Servers.\n\nDebug info:\n- Total servers: ${mcpServers.length}\n- Enabled servers: ${enabledServers.length}\n- Servers: ${mcpServers.map(s => `${s.name}(${s.enabled ? 'enabled' : 'disabled'})`).join(', ')}`);
       return;
     }
 
@@ -4335,29 +4335,31 @@ async function processGetItDoneTask(taskInstruction: string): Promise<void> {
 
     // NEW: Use McpExecutor for intelligent tool selection and execution
     const mcpExecutor = new McpExecutor(mcpManager);
-    showMcpProgress('MCP', 'running');
+    showMcpProgress('MCP', 'routing');
 
     let results;
     try {
       // Check if it's a complex query requiring multiple tools
       if (mcpExecutor.isComplexQuery(taskInstruction)) {
         console.log('[processGetItDoneTask] Detected complex query, using complex execution');
-        showMcpProgress('Gmail', 'fetching');
+        showMcpProgress('Gmail', 'connecting');
+        setTimeout(() => showMcpProgress('Gmail', 'fetching'), 800);
         results = await mcpExecutor.executeComplexQuery(taskInstruction);
       } else {
         console.log('[processGetItDoneTask] Using standard email query execution');
-        showMcpProgress('Gmail', 'fetching');
+        showMcpProgress('Gmail', 'connecting');
+        setTimeout(() => showMcpProgress('Gmail', 'fetching'), 800);
         results = await mcpExecutor.executeEmailQuery(taskInstruction);
       }
     } catch (error) {
       console.error('[processGetItDoneTask] McpExecutor failed:', error);
       showMcpProgress('MCP', 'error', (error as Error).message);
       // Fallback to original logic if McpExecutor fails
-      addMessageToChat('assistant', `❌ MCP execution failed: ${(error as Error).message}`);
+      addMessageToChat('assistant', `MCP execution failed: ${(error as Error).message}`);
       return;
     }
 
-    showMcpProgress('MCP', 'complete');
+    showMcpProgress('MCP', 'parsing');
 
     // Process and display results
     if (results && results.length > 0) {
@@ -4369,23 +4371,40 @@ async function processGetItDoneTask(taskInstruction: string): Promise<void> {
           hasSuccess = true;
           responseContent += formatEmailResults(result.data, result.toolName);
         } else {
-          responseContent += `❌ **${result.toolName} failed:** ${result.error}\n\n`;
+          // Use error handler to get user-friendly error messages
+          const mcpExecutor = new McpExecutor(mcpManager);
+          const errorHandler = (mcpExecutor as any).errorHandler;
+          if (errorHandler) {
+            const friendlyMessage = errorHandler.getUserFriendlyMessage(result.error || 'Unknown error', {
+              originalQuery: taskInstruction,
+              failedTool: result.toolName,
+              errorMessage: result.error || 'Unknown error',
+              attemptCount: 1,
+              availableAlternatives: []
+            });
+            responseContent += `${friendlyMessage}\n\n`;
+          } else {
+            responseContent += `**${result.toolName} failed:** ${result.error}\n\n`;
+          }
         }
       }
 
       if (hasSuccess) {
         addMessageToChat('assistant', responseContent);
+        showMcpProgress('MCP', 'complete');
       } else {
-        addMessageToChat('assistant', '❌ All MCP tools failed. Please check your server configuration and try again.');
+        addMessageToChat('assistant', 'All MCP tools failed. Please check your server configuration and try again.');
+        showMcpProgress('MCP', 'error', 'All tools failed');
       }
     } else {
-      addMessageToChat('assistant', '❓ No results returned from MCP tools. The query may not match any available tools.');
+      addMessageToChat('assistant', 'No results returned from MCP tools. The query may not match any available tools.');
+      showMcpProgress('MCP', 'error', 'No results returned');
     }
 
   } catch (error) {
     console.error('[processGetItDoneTask] Error executing MCP task:', error);
     showMcpProgress('MCP', 'error');
-    addMessageToChat('assistant', `❌ **Task execution failed:** ${(error as Error).message}`);
+    addMessageToChat('assistant', `**Task execution failed:** ${(error as Error).message}`);
   } finally {
     // Always clear execution flag
     isWorkflowExecuting = false;
@@ -4394,81 +4413,148 @@ async function processGetItDoneTask(taskInstruction: string): Promise<void> {
 }
 
 // Enhanced progress indicator functions for MCP tool execution
-function showMcpProgress(toolName: string, status: 'starting' | 'running' | 'fetching' | 'complete' | 'error', details?: string): void {
-  const chatMessages = document.getElementById('chat-messages');
+function showMcpProgress(toolName: string, status: 'starting' | 'running' | 'fetching' | 'complete' | 'error' | 'routing' | 'connecting' | 'parsing', details?: string): void {
+  // Get the correct chat container - first try chatContainer, then agentResults as fallback
+  let chatContainer = document.getElementById('chatContainer');
+
+  if (!chatContainer) {
+    const agentResults = document.getElementById('agentResults');
+
+    if (agentResults) {
+      // Remove welcome container if it exists
+      const welcomeContainer = agentResults.querySelector('.welcome-container');
+      if (welcomeContainer) {
+        welcomeContainer.remove();
+      }
+
+      // Create chatContainer if it doesn't exist
+      chatContainer = document.createElement('div');
+      chatContainer.id = 'chatContainer';
+      chatContainer.className = 'chat-container';
+      agentResults.appendChild(chatContainer);
+    }
+  }
+
   let progressElement = document.getElementById('mcp-progress');
 
   if (!progressElement && status !== 'complete') {
     progressElement = document.createElement('div');
     progressElement.id = 'mcp-progress';
     progressElement.className = 'mcp-progress';
-    chatMessages?.appendChild(progressElement);
+
+    if (chatContainer) {
+      chatContainer.appendChild(progressElement);
+    } else {
+      console.error('[showMcpProgress] No chatContainer available to append progress element');
+      return;
+    }
   }
 
   if (progressElement) {
+    // Add status-specific CSS classes for better styling
+    progressElement.className = `mcp-progress mcp-${status}`;
+
     switch (status) {
       case 'starting':
-        progressElement.innerHTML = `🔄 Connecting to ${toolName === 'MCP' ? 'MCP servers' : toolName}...`;
+        progressElement.innerHTML = `Initializing MCP System...`;
+        progressElement.className = 'loading';
+        break;
+      case 'connecting':
+        progressElement.innerHTML = `Connecting to ${toolName}...`;
+        progressElement.className = 'loading';
+        break;
+      case 'routing':
+        progressElement.innerHTML = `Finding best tools...`;
+        progressElement.className = 'loading';
         break;
       case 'running':
-        progressElement.innerHTML = `🛠️ Using ${toolName === 'MCP' ? 'MCP tools' : toolName}...`;
+        const toolSpecificMessage = getToolSpecificMessage(toolName);
+        progressElement.innerHTML = `${toolSpecificMessage}`;
+        progressElement.className = 'loading';
         break;
       case 'fetching':
-        progressElement.innerHTML = `📧 Retrieving emails from Gmail...<br><small>This may take a few seconds</small>`;
+        progressElement.innerHTML = `Retrieving emails...`;
+        progressElement.className = 'loading';
+        break;
+      case 'parsing':
+        progressElement.innerHTML = `Processing results...`;
+        progressElement.className = 'loading';
         break;
       case 'complete':
         progressElement.remove();
         break;
       case 'error':
-        progressElement.innerHTML = `❌ ${toolName === 'MCP' ? 'MCP tools' : toolName} failed${details ? ': ' + details : ''}`;
-        setTimeout(() => progressElement?.remove(), 3000);
+        progressElement.innerHTML = `Error: ${details || 'An unexpected error occurred'}`;
+        progressElement.className = 'error-message';
+        setTimeout(() => progressElement?.remove(), 5000);
         break;
     }
   }
 }
 
+function getToolSpecificMessage(toolName: string): string {
+  switch (toolName.toLowerCase()) {
+    case 'gmail':
+    case 'zap2.gmail_find_email':
+      return 'Searching Gmail inbox...';
+    case 'calendar':
+      return 'Accessing calendar events...';
+    case 'slack':
+      return 'Connecting to Slack...';
+    case 'filesystem':
+      return 'Accessing files...';
+    case 'mcp':
+    default:
+      return 'Processing request...';
+  }
+}
+
 // Format email results for display in chat
 function formatEmailResults(data: any, toolName: string): string {
-  if (!data) return '📭 No emails found.\n\n';
+  if (!data) return 'No emails found.\n\n';
 
   // DIAGNOSTIC: Show what data structure we're working with
   console.log('[formatEmailResults] Received data structure:', JSON.stringify(data, null, 2));
 
-  let formatted = '📧 **Your Recent Emails:**\n\n';
+  // Detect the provider/source and customize formatting
+  const provider = detectEmailProvider(toolName, data);
+  console.log('[formatEmailResults] Detected provider:', provider);
+
+  let formatted = getProviderHeader(provider);
 
 
   try {
     // Handle different data formats from different MCP tools
     if (Array.isArray(data)) {
       if (data.length === 0) {
-        formatted += '📭 No emails found in the array.\n\n';
+        formatted += 'No emails found in the array.\n\n';
       } else {
         data.slice(0, 3).forEach((email: any, index: number) => {
-          formatted += formatSingleEmail(email, index + 1);
+          formatted += formatSingleEmail(email, index + 1, provider);
         });
       }
     } else if (data.emails && Array.isArray(data.emails)) {
       // Handle structured response with emails array
       if (data.emails.length === 0) {
-        formatted += '📭 No emails found in the emails array.\n\n';
+        formatted += 'No emails found in the emails array.\n\n';
       } else {
         data.emails.slice(0, 3).forEach((email: any, index: number) => {
-          formatted += formatSingleEmail(email, index + 1);
+          formatted += formatSingleEmail(email, index + 1, provider);
         });
       }
     } else if (data.items && Array.isArray(data.items)) {
       // Handle Gmail API style response
       if (data.items.length === 0) {
-        formatted += '📭 No emails found in the items array.\n\n';
+        formatted += 'No emails found in the items array.\n\n';
       } else {
         data.items.slice(0, 3).forEach((email: any, index: number) => {
-          formatted += formatSingleEmail(email, index + 1);
+          formatted += formatSingleEmail(email, index + 1, provider);
         });
       }
     } else if (data.content && Array.isArray(data.content)) {
       // Handle MCP content array - check for JSON-stringified data
       if (data.content.length === 0) {
-        formatted += '📭 No emails found in the content array.\n\n';
+        formatted += 'No emails found in the content array.\n\n';
       } else {
         // Check if this is MCP text content with JSON-stringified email data
         const firstContent = data.content[0];
@@ -4481,27 +4567,27 @@ function formatEmailResults(data: any, toolName: string): string {
 
             if (parsedContent.results && Array.isArray(parsedContent.results)) {
               if (parsedContent.results.length === 0) {
-                formatted += '📭 No emails found in parsed results.\n\n';
+                formatted += 'No emails found in parsed results.\n\n';
               } else {
                 parsedContent.results.slice(0, 3).forEach((email: any, index: number) => {
-                  formatted += formatSingleEmail(email, index + 1);
+                  formatted += formatSingleEmail(email, index + 1, provider);
                 });
               }
             } else {
               // Fallback to treating parsed content as direct email data
-              formatted += formatSingleEmail(parsedContent, 1);
+              formatted += formatSingleEmail(parsedContent, 1, provider);
             }
           } catch (parseError) {
             console.error('[formatEmailResults] Failed to parse MCP text content:', parseError);
             // Fallback to original content processing
             data.content.slice(0, 3).forEach((email: any, index: number) => {
-              formatted += formatSingleEmail(email, index + 1);
+              formatted += formatSingleEmail(email, index + 1, provider);
             });
           }
         } else {
           // Original content processing for non-text content
           data.content.slice(0, 3).forEach((email: any, index: number) => {
-            formatted += formatSingleEmail(email, index + 1);
+            formatted += formatSingleEmail(email, index + 1, provider);
           });
         }
       }
@@ -4512,7 +4598,7 @@ function formatEmailResults(data: any, toolName: string): string {
         formatted += `**Zapier Response:**\n${data.message || data.text || data.result}\n\n`;
       } else {
         // Try to format as single email
-        formatted += formatSingleEmail(data, 1);
+        formatted += formatSingleEmail(data, 1, provider);
       }
     } else if (typeof data === 'string') {
       // Plain text response
@@ -4531,39 +4617,209 @@ function formatEmailResults(data: any, toolName: string): string {
   return formatted;
 }
 
-function formatSingleEmail(email: any, index: number): string {
-  if (!email) return '';
-
-  const subject = email.subject || email.title || 'No Subject';
-
-  // Handle Gmail API format where from is an object {name, email}
-  let from = 'Unknown Sender';
-  if (email.from) {
-    if (typeof email.from === 'object' && (email.from.name || email.from.email)) {
-      from = email.from.name ?
-        (email.from.email ? `${email.from.name} <${email.from.email}>` : email.from.name) :
-        (email.from.email || 'Unknown Sender');
-    } else if (typeof email.from === 'string') {
-      from = email.from;
-    }
-  } else if (email.sender || email.fromEmail) {
-    from = email.sender || email.fromEmail || 'Unknown Sender';
+function detectEmailProvider(toolName: string, data: any): 'gmail' | 'outlook' | 'zapier' | 'generic' {
+  // Detect provider based on tool name
+  if (toolName.toLowerCase().includes('gmail') || toolName.includes('zap2.gmail')) {
+    return 'gmail';
+  }
+  if (toolName.toLowerCase().includes('outlook') || toolName.toLowerCase().includes('office365')) {
+    return 'outlook';
+  }
+  if (toolName.toLowerCase().includes('zap') || toolName.toLowerCase().includes('zapier')) {
+    return 'zapier';
   }
 
-  const date = email.date || email.timestamp || email.receivedDateTime || 'Unknown Date';
-  const preview = email.snippet || email.preview || email.body || email.bodyPreview || '';
+  // Detect provider based on data structure patterns
+  if (data && typeof data === 'object') {
+    if (data.content && Array.isArray(data.content)) {
+      // Likely MCP/Zapier format
+      return 'zapier';
+    }
+    if (data.value && Array.isArray(data.value)) {
+      // Likely Outlook Graph API format
+      return 'outlook';
+    }
+    if (data.messages || data.items) {
+      // Could be Gmail API format
+      return 'gmail';
+    }
+  }
 
-  let formatted = `**${index}. ${subject}**\n`;
-  formatted += `**From:** ${from}\n`;
-  formatted += `**Date:** ${date}\n`;
+  return 'generic';
+}
 
-  if (preview) {
-    const truncatedPreview = preview.substring(0, 150);
-    formatted += `**Preview:** ${truncatedPreview}${preview.length > 150 ? '...' : ''}\n`;
+function getProviderHeader(provider: 'gmail' | 'outlook' | 'zapier' | 'generic'): string {
+  switch (provider) {
+    case 'gmail':
+      return '**Your Gmail Emails:**\n\n';
+    case 'outlook':
+      return '**Your Outlook Emails:**\n\n';
+    case 'zapier':
+      return '**Your Recent Emails (via Zapier):**\n\n';
+    default:
+      return '**Your Recent Emails:**\n\n';
+  }
+}
+
+function formatSingleEmail(email: any, index: number, provider: 'gmail' | 'outlook' | 'zapier' | 'generic' = 'generic'): string {
+  if (!email) return '';
+
+  // Provider-specific field mappings
+  const fields = getEmailFields(email, provider);
+
+  let formatted = `**${index}. ${fields.subject}**\n`;
+  formatted += `**From:** ${fields.from}\n`;
+  formatted += `**Date:** ${formatEmailDate(fields.date)}\n`;
+
+  // Add provider-specific metadata
+  if (provider === 'gmail' && email.labels) {
+    formatted += `**Labels:** ${email.labels.join(', ')}\n`;
+  }
+  if (provider === 'outlook' && email.importance) {
+    formatted += `**Importance:** ${email.importance}\n`;
+  }
+  if (provider === 'zapier' && email.id) {
+    formatted += `**ID:** ${email.id.substring(0, 8)}...\n`;
+  }
+
+  // Enhanced preview with better text cleaning
+  if (fields.preview) {
+    const cleanedPreview = cleanEmailPreview(fields.preview);
+    const truncatedPreview = cleanedPreview.substring(0, 150);
+    formatted += `**Preview:** ${truncatedPreview}${cleanedPreview.length > 150 ? '...' : ''}\n`;
+  }
+
+  // Add read/unread status if available
+  if (email.unread !== undefined || email.isRead !== undefined) {
+    const isUnread = email.unread === true || email.isRead === false;
+    formatted += `**Status:** ${isUnread ? 'Unread' : 'Read'}\n`;
   }
 
   formatted += '\n---\n\n';
   return formatted;
+}
+
+function getEmailFields(email: any, provider: 'gmail' | 'outlook' | 'zapier' | 'generic'): {
+  subject: string;
+  from: string;
+  date: string;
+  preview: string;
+} {
+  let subject = 'No Subject';
+  let from = 'Unknown Sender';
+  let date = 'Unknown Date';
+  let preview = '';
+
+  switch (provider) {
+    case 'gmail':
+      subject = email.subject || email.snippet || 'No Subject';
+      from = formatGmailFrom(email.from || email.sender);
+      date = email.date || email.internalDate || email.receivedDateTime || 'Unknown Date';
+      preview = email.snippet || email.body || email.bodyPreview || '';
+      break;
+
+    case 'outlook':
+      subject = email.subject || 'No Subject';
+      from = formatOutlookFrom(email.from || email.sender);
+      date = email.receivedDateTime || email.sentDateTime || email.createdDateTime || 'Unknown Date';
+      preview = email.bodyPreview || email.body?.content || '';
+      break;
+
+    case 'zapier':
+      subject = email.subject || email.title || 'No Subject';
+      from = formatZapierFrom(email.from || email.sender || email.fromEmail);
+      date = email.date || email.timestamp || email.received_at || 'Unknown Date';
+      preview = email.snippet || email.preview || email.body || email.text || '';
+      break;
+
+    default:
+      // Generic format - try all common field names
+      subject = email.subject || email.title || email.summary || 'No Subject';
+      from = email.from || email.sender || email.fromEmail || email.author || 'Unknown Sender';
+      date = email.date || email.timestamp || email.receivedDateTime || email.createdAt || 'Unknown Date';
+      preview = email.snippet || email.preview || email.body || email.bodyPreview || email.text || '';
+      break;
+  }
+
+  return { subject, from, date, preview };
+}
+
+function formatGmailFrom(from: any): string {
+  if (!from) return 'Unknown Sender';
+
+  if (typeof from === 'object' && (from.name || from.email)) {
+    return from.name ?
+      (from.email ? `${from.name} <${from.email}>` : from.name) :
+      (from.email || 'Unknown Sender');
+  }
+
+  return typeof from === 'string' ? from : 'Unknown Sender';
+}
+
+function formatOutlookFrom(from: any): string {
+  if (!from) return 'Unknown Sender';
+
+  if (typeof from === 'object') {
+    if (from.emailAddress) {
+      return from.emailAddress.name ?
+        `${from.emailAddress.name} <${from.emailAddress.address}>` :
+        from.emailAddress.address;
+    }
+    if (from.name || from.address) {
+      return from.name ?
+        (from.address ? `${from.name} <${from.address}>` : from.name) :
+        from.address;
+    }
+  }
+
+  return typeof from === 'string' ? from : 'Unknown Sender';
+}
+
+function formatZapierFrom(from: any): string {
+  if (!from) return 'Unknown Sender';
+
+  // Zapier often passes Gmail-style from objects
+  if (typeof from === 'object' && (from.name || from.email)) {
+    return from.name ?
+      (from.email ? `${from.name} <${from.email}>` : from.name) :
+      (from.email || 'Unknown Sender');
+  }
+
+  return typeof from === 'string' ? from : 'Unknown Sender';
+}
+
+function formatEmailDate(date: string): string {
+  if (!date || date === 'Unknown Date') return 'Unknown Date';
+
+  try {
+    const dateObj = new Date(date);
+    if (isNaN(dateObj.getTime())) return date; // Return original if parsing fails
+
+    const now = new Date();
+    const diffInHours = (now.getTime() - dateObj.getTime()) / (1000 * 60 * 60);
+
+    if (diffInHours < 1) {
+      return `${Math.floor(diffInHours * 60)} minutes ago`;
+    } else if (diffInHours < 24) {
+      return `${Math.floor(diffInHours)} hours ago`;
+    } else if (diffInHours < 7 * 24) {
+      return `${Math.floor(diffInHours / 24)} days ago`;
+    } else {
+      return dateObj.toLocaleDateString();
+    }
+  } catch (error) {
+    return date; // Return original on any error
+  }
+}
+
+function cleanEmailPreview(preview: string): string {
+  if (!preview) return '';
+
+  return preview
+    .replace(/\n\s*\n/g, ' ') // Replace multiple newlines with space
+    .replace(/\s+/g, ' ')     // Replace multiple spaces with single space
+    .replace(/^\s+|\s+$/g, '') // Trim
+    .replace(/^(Re:|Fwd?:|RE:|FWD?:)\s*/i, ''); // Remove reply/forward prefixes
 }
 
 // Helper function to select appropriate tools based on the task

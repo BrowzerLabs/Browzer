@@ -1,5 +1,6 @@
 import { McpClientManager } from './McpClientManager';
 import { McpRouter, ToolMatch } from './McpRouter';
+import { McpErrorHandler } from './McpErrorHandler';
 
 export interface McpExecutionResult {
   success: boolean;
@@ -14,11 +15,31 @@ export interface McpExecutionResult {
  * Handles real tool execution with proper error handling and result formatting.
  */
 export class McpExecutor {
-  constructor(private mcpManager: McpClientManager) {}
+  private errorHandler: McpErrorHandler;
+
+  constructor(private mcpManager: McpClientManager) {
+    const router = new McpRouter(this.mcpManager);
+    this.errorHandler = new McpErrorHandler(this.mcpManager, router);
+  }
 
   async executeEmailQuery(query: string): Promise<McpExecutionResult[]> {
     const results: McpExecutionResult[] = [];
     console.log('[McpExecutor] Executing email query:', query);
+
+    // Pre-flight server health check
+    const healthStatus = await this.errorHandler.validateServerHealth();
+    console.log('[McpExecutor] Server health status:', healthStatus);
+
+    if (healthStatus.healthy.length === 0 && healthStatus.unhealthy.length > 0) {
+      console.error('[McpExecutor] All MCP servers are unhealthy');
+      return [{
+        success: false,
+        data: null,
+        error: `All MCP servers are unavailable: ${healthStatus.unhealthy.join(', ')}`,
+        toolName: 'MCP System',
+        executionTime: 0
+      }];
+    }
 
     // DIAGNOSTIC: Check what tools are actually available
     const allAvailableTools = await this.mcpManager.listAllTools();
@@ -47,11 +68,30 @@ export class McpExecutor {
     const result = await this.executeSingleTool(topMatch, query);
     results.push(result);
 
-    // Step 3: If first tool failed and we have fallbacks, try them
-    if (!result.success && matches.length > 1) {
-      console.log('[McpExecutor] First tool failed, trying fallback:', matches[1].toolName);
-      const fallbackResult = await this.executeSingleTool(matches[1], query);
-      results.push(fallbackResult);
+    // Step 3: Enhanced error handling - try intelligent recovery first
+    if (!result.success) {
+      console.log('[McpExecutor] First tool failed, attempting intelligent recovery');
+
+      // Try intelligent error recovery
+      const recoveryResult = await this.errorHandler.handleToolFailure(
+        query,
+        topMatch.toolName,
+        result.error || 'Unknown error',
+        1
+      );
+
+      if (recoveryResult && recoveryResult.success) {
+        console.log('[McpExecutor] Recovery successful');
+        results.push(recoveryResult);
+      } else if (matches.length > 1) {
+        // Fallback to next best tool if recovery failed
+        console.log('[McpExecutor] Recovery failed, trying fallback tool:', matches[1].toolName);
+        const fallbackResult = await this.executeSingleTool(matches[1], query);
+        results.push(fallbackResult);
+      } else {
+        // No recovery possible, add the original failed result
+        results.push(result);
+      }
     }
 
     return results;

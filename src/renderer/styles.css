@@ -980,6 +980,30 @@ html, body {
     animation: spin 1s linear infinite;
 }
 
+/* Loading and error styles for chat container */
+.loading {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    color: #5f6368;
+    font-style: italic;
+}
+
+.loading::before {
+    content: '';
+    width: 16px;
+    height: 16px;
+    border: 2px solid #e3e3e3;
+    border-top: 2px solid #1a73e8;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+.error-message {
+    color: #d93025;
+    font-style: normal;
+}
+
 @keyframes spin {
     0% { transform: rotate(0deg); }
     100% { transform: rotate(360deg); }
@@ -3144,6 +3168,97 @@ select:focus-visible {
     animation: mcpPulse 1.8s ease-in-out infinite;
     position: relative;
     overflow: hidden;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.mcp-progress .progress-icon {
+    font-size: 18px;
+    flex-shrink: 0;
+}
+
+.mcp-progress .progress-content {
+    flex-grow: 1;
+}
+
+.mcp-progress .progress-title {
+    font-weight: 600;
+    font-size: 14px;
+    margin-bottom: 4px;
+}
+
+.mcp-progress .progress-detail {
+    font-size: 12px;
+    opacity: 0.8;
+    line-height: 1.3;
+}
+
+.mcp-progress .progress-detail.error {
+    color: #d32f2f;
+    opacity: 1;
+}
+
+.mcp-progress .progress-spinner {
+    width: 16px;
+    height: 16px;
+    border: 2px solid rgba(74, 158, 255, 0.3);
+    border-top: 2px solid #4a9eff;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin-top: 6px;
+}
+
+/* Status-specific styling */
+.mcp-progress.mcp-starting {
+    background: linear-gradient(90deg, #e8f5e8, #f0f8f0);
+    border-color: #4caf50;
+    color: #2e7d32;
+}
+
+.mcp-progress.mcp-routing {
+    background: linear-gradient(90deg, #fff3e0, #fdf7f0);
+    border-color: #ff9800;
+    color: #e65100;
+}
+
+.mcp-progress.mcp-connecting {
+    background: linear-gradient(90deg, #f3e5f5, #f8f0f8);
+    border-color: #9c27b0;
+    color: #6a1b9a;
+}
+
+.mcp-progress.mcp-running {
+    background: linear-gradient(90deg, #e1f5fe, #f0f9ff);
+    border-color: #03a9f4;
+    color: #0277bd;
+}
+
+.mcp-progress.mcp-fetching {
+    background: linear-gradient(90deg, #e3f2fd, #f0f8ff);
+    border-color: #4a9eff;
+    color: #0066cc;
+    animation: mcpPulse 1.2s ease-in-out infinite;
+}
+
+.mcp-progress.mcp-parsing {
+    background: linear-gradient(90deg, #f1f8e9, #f7fbf4);
+    border-color: #689f38;
+    color: #388e3c;
+}
+
+.mcp-progress.mcp-complete {
+    background: linear-gradient(90deg, #e8f5e8, #f0f8f0);
+    border-color: #4caf50;
+    color: #2e7d32;
+    animation: mcpSuccess 0.8s ease-out;
+}
+
+.mcp-progress.mcp-error {
+    background: linear-gradient(90deg, #ffebee, #fdf2f2);
+    border-color: #f44336;
+    color: #c62828;
+    animation: mcpError 0.5s ease-out;
 }
 
 .mcp-progress::before {
@@ -3171,4 +3286,39 @@ select:focus-visible {
 @keyframes mcpShimmer {
     0% { left: -100%; }
     100% { left: 100%; }
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+@keyframes mcpSuccess {
+    0% {
+        transform: scale(1);
+        box-shadow: 0 2px 8px rgba(76, 175, 80, 0.15);
+    }
+    50% {
+        transform: scale(1.02);
+        box-shadow: 0 4px 16px rgba(76, 175, 80, 0.3);
+    }
+    100% {
+        transform: scale(1);
+        box-shadow: 0 2px 8px rgba(76, 175, 80, 0.15);
+    }
+}
+
+@keyframes mcpError {
+    0% {
+        transform: translateX(0);
+    }
+    25% {
+        transform: translateX(-2px);
+    }
+    75% {
+        transform: translateX(2px);
+    }
+    100% {
+        transform: translateX(0);
+    }
 }
