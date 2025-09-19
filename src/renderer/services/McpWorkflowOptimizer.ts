@@ -8,7 +8,7 @@
  * - Context-aware MCP tool selection and routing
  * - Dynamic workflow adaptation and learning
  *
- * Week 8: AI-Enhanced MCP Routing - Workflow Optimizer
+ * AI-Enhanced MCP Routing - Workflow Optimizer
  */
 
 import { McpClientManager } from './McpClientManager';

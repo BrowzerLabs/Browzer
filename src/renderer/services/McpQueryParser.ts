@@ -25,7 +25,7 @@ export interface ConditionalLogic {
 }
 
 /**
- * Phase 2 Week 4: Multi-Tool Query Parser
+ * Multi-Tool Query Parser
  * Parses complex natural language queries into executable workflow steps
  */
 export class McpQueryParser {

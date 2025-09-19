@@ -27,7 +27,7 @@ export interface WorkflowRecoveryResult {
 }
 
 /**
- * Phase 2 Week 5: Multi-Tool MCP Workflow Error Handler
+ * Multi-Tool MCP Workflow Error Handler
  * Handles failures in complex multi-step workflows with intelligent recovery
  */
 export class McpWorkflowErrorHandler {

@@ -6,8 +6,6 @@
  * - Project management workflows
  * - Multi-platform data synchronization
  * - Communication workflows
- *
- * Week 6: MCP Workflow Templates & Optimization
  */
 
 import { ConditionalWorkflow, WorkflowStep } from './McpWorkflowOrchestrator';

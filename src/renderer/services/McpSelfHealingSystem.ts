@@ -8,7 +8,7 @@
  * - Proactive MCP failure prevention
  * - Self-healing workflows with intelligent recovery strategies
  *
- * Week 8: AI-Enhanced MCP Routing - Self-Healing System
+ * AI-Enhanced MCP Routing - Self-Healing System
  */
 
 import { McpClientManager } from './McpClientManager';

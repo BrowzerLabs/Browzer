@@ -2,7 +2,7 @@
  * MCP Server Integrations
  *
  * Complete "Get It Done" Mode ecosystem with all target MCP servers:
- * - Gmail ✅ (already integrated)
+ * - Gmail (already integrated)
  * - Google Calendar (GCal) MCP server integration
  * - Trello MCP server integration and board/card operations
  * - Notion MCP server integration for pages/databases
@@ -11,7 +11,7 @@
  * - Slack MCP server integration (enhanced version)
  * - Tool-specific parameter optimization for each MCP server
  *
- * Week 7: Target MCP Server Integration
+ * Target MCP Server Integration
  */
 
 import { McpClientManager } from './McpClientManager';

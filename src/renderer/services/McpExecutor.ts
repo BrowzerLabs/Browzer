@@ -29,7 +29,7 @@ export interface CacheEntry {
 }
 
 /**
- * Enhanced MCP tool executor for Phase 2 multi-tool orchestration.
+ * Enhanced MCP tool executor for ool orchestration.
  * Handles real tool execution with performance optimization, caching, and circuit breakers.
  * Now includes multi-tool workflow orchestration for complex queries.
  */
@@ -217,11 +217,11 @@ export class McpExecutor {
     }
 
     try {
-      // Phase 3 Week 8: Use AI-enhanced query understanding
+      // Use AI-enhanced query understanding
       const intelligentAnalysis = await this.intelligentParser.analyzeQuery(query);
       console.log('[McpExecutor] AI analysis completed, confidence:', intelligentAnalysis.intent.confidence);
 
-      // Phase 3 Week 8: Optimize workflow based on AI analysis
+      // Optimize workflow based on AI analysis
       const optimization = await this.workflowOptimizer.optimizeWorkflow(
         intelligentAnalysis,
         'hybrid', // Use hybrid optimization for best balance
@@ -236,10 +236,10 @@ export class McpExecutor {
         console.log('[McpExecutor] Detected simple query pattern, using direct execution');
         return await this.executeFallbackQuery(query, startTime);
       } else if (intelligentAnalysis.intent.context.complexity === 'complex' ||
-          this.detectConditionalQuery(query)) {
+        this.detectConditionalQuery(query)) {
         return await this.executeOptimizedConditionalWorkflow(intelligentAnalysis, optimization, startTime);
       } else if (intelligentAnalysis.intent.context.complexity === 'medium' ||
-                 this.detectComplexQuery(query)) {
+        this.detectComplexQuery(query)) {
         return await this.executeOptimizedWorkflowQuery(intelligentAnalysis, optimization, startTime);
       } else {
         // Simple query - execute with AI-enhanced tool selection
@@ -260,7 +260,7 @@ export class McpExecutor {
     // Generate cache key for this query
     const cacheKey = this.generateCacheKey(query);
 
-    // Phase 2 Week 6: Check if this is a conditional workflow query
+    //  Check if this is a conditional workflow query
     const isConditional = this.detectConditionalQuery(query);
     console.log('[McpExecutor] Conditional query detected:', isConditional);
 
@@ -268,7 +268,7 @@ export class McpExecutor {
       return await this.executeConditionalWorkflow(query, startTime);
     }
 
-    // Phase 2 Week 4: Check if this is a complex multi-tool query
+    // Check if this is a complex multi-tool query
     const isComplex = this.detectComplexQuery(query);
     console.log('[McpExecutor] Complex query detected:', isComplex);
 
@@ -695,8 +695,8 @@ export class McpExecutor {
 
     // Extract recipient - improved patterns
     const toMatch = query.match(/(?:send|email)\s+(?:to\s+)?([^\s@]+@[^\s]+)/i) ||
-                   query.match(/to\s+([^\s@]+@[^\s]+)/i) ||
-                   query.match(/([^\s@]+@[^\s]+)/i);
+      query.match(/to\s+([^\s@]+@[^\s]+)/i) ||
+      query.match(/([^\s@]+@[^\s]+)/i);
 
     const recipientEmail = toMatch?.[1] || '';
 
@@ -772,7 +772,7 @@ export class McpExecutor {
   }
 
   /**
-   * Phase 2 Week 6: Detect if query requires conditional workflow execution
+   *  Detect if query requires conditional workflow execution
    */
   private detectConditionalQuery(query: string): boolean {
     const queryLower = query.toLowerCase();
@@ -789,7 +789,7 @@ export class McpExecutor {
   }
 
   /**
-   * Phase 2 Week 6: Execute conditional workflow
+   *  Execute conditional workflow
    */
   private async executeConditionalWorkflow(query: string, startTime: number): Promise<McpExecutionResult[]> {
     console.log('[McpExecutor] Executing conditional workflow for query:', query);
@@ -834,7 +834,7 @@ export class McpExecutor {
   }
 
   /**
-   * Phase 2 Week 4: Enhanced complex query detection
+   * Enhanced complex query detection
    */
   private detectComplexQuery(query: string): boolean {
     const queryLower = query.toLowerCase();
@@ -883,7 +883,7 @@ export class McpExecutor {
   }
 
   /**
-   * Phase 2 Week 4: Execute complex multi-tool workflows
+   * Execute complex multi-tool workflows
    */
   async executeComplexQuery(query: string): Promise<McpExecutionResult[]> {
     console.log('[McpExecutor] Complex query detected, executing workflow:', query);
@@ -891,7 +891,7 @@ export class McpExecutor {
   }
 
   /**
-   * Phase 2 Week 4: Execute multi-tool workflow queries
+   * Execute multi-tool workflow queries
    */
   private async executeWorkflowQuery(query: string, startTime: number): Promise<McpExecutionResult[]> {
     console.log('[McpExecutor] Starting workflow execution for:', query);
@@ -959,7 +959,7 @@ export class McpExecutor {
   }
 
   /**
-   * Phase 2 Week 4: Execute individual workflow steps
+   * Execute individual workflow steps
    */
   private async executeWorkflowSteps(plan: ExecutionPlan, context: any): Promise<McpExecutionResult[]> {
     const results: McpExecutionResult[] = [];
@@ -1118,7 +1118,7 @@ export class McpExecutor {
   }
 
   /**
-   * Phase 2 Week 5: Build context-aware query for workflow steps
+   *  Build context-aware query for workflow steps
    */
   private buildContextAwareQuery(step: any, transformedParams: Record<string, any>): string {
     let enhancedQuery = step.description;
@@ -1454,7 +1454,7 @@ export class McpExecutor {
 
     // Extract path if mentioned
     const pathMatch = query.match(/(?:path|directory|folder)\s+([^\s]+)/i) ||
-                     query.match(/in\s+([^\s]+)/i);
+      query.match(/in\s+([^\s]+)/i);
 
     // Determine operation type
     if (queryLower.includes('list') || queryLower.includes('show')) {
@@ -1494,7 +1494,7 @@ export class McpExecutor {
 
     // Extract message content
     const messageMatch = query.match(/(?:saying|message|send)\s+["']?([^"']+)["']?/i) ||
-                        query.match(/["']([^"']+)["']/);
+      query.match(/["']([^"']+)["']/);
 
     return {
       channel: channelMatch?.[1] || 'general',
@@ -1509,7 +1509,7 @@ export class McpExecutor {
   private parseWebQuery(query: string): any {
     // Extract search terms
     const searchMatch = query.match(/(?:search|find|lookup)\s+(?:for\s+)?(.+)/i) ||
-                       query.match(/(.+)/);
+      query.match(/(.+)/);
 
     // Extract URL if mentioned
     const urlMatch = query.match(/(https?:\/\/[^\s]+)/i);
@@ -1554,7 +1554,7 @@ export class McpExecutor {
   }
 
   /**
-   * Phase 2: Caching and Performance Optimization Methods
+   * g and Performance Optimization Methods
    */
 
   /**

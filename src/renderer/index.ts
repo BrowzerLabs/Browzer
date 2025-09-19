@@ -4427,6 +4427,13 @@ async function processGetItDoneTask(taskInstruction: string): Promise<void> {
           showMcpProgress('MCP', 'error', assistantResponse.error);
         }
 
+        // CRITICAL FIX: Preserve conversation ID for potential multi-step workflows
+        // This ensures conversation context is maintained even after execution
+        if (assistantResponse.conversationId) {
+          (window as any).currentConversationId = assistantResponse.conversationId;
+          console.log('[processGetItDoneTask] Preserving conversation ID for continuation:', assistantResponse.conversationId);
+        }
+
       } else if (assistantResponse.responseType === 'suggest') {
         // Handle suggestions
         let suggestionMessage = 'Here are some suggestions:\n\n';

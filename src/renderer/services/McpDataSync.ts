@@ -7,7 +7,7 @@
  * - MCP server capability detection and adaptation
  * - Unified MCP tool discovery and registration
  *
- * Week 7: Cross-Platform MCP Data Synchronization
+ * Cross-Platform MCP Data Synchronization
  */
 
 import { McpClientManager } from './McpClientManager';

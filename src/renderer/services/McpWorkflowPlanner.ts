@@ -33,7 +33,7 @@ export interface ValidationResult {
 }
 
 /**
- * Phase 2 Week 4: Multi-Tool Workflow Planner
+ * Multi-Tool Workflow Planner
  * Creates executable plans from parsed workflows
  */
 export class McpWorkflowPlanner {

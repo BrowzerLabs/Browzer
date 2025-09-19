@@ -5,7 +5,7 @@
  * - "Read email, schedule meeting. If no time, reply asking for slots"
  * - Gmail → GCal → Conditional (schedule OR reply)
  *
- * Week 6: Conditional Multi-Tool MCP Orchestration
+ * Conditional Multi-Tool MCP Orchestration
  */
 
 import { McpExecutor } from './McpExecutor';

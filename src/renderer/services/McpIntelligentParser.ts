@@ -8,7 +8,7 @@
  * - Natural language to MCP workflow translation
  * - Advanced query understanding with semantic analysis
  *
- * Week 8: AI-Enhanced MCP Routing - Intelligent Parser
+ * AI-Enhanced MCP Routing - Intelligent Parser
  */
 
 import { McpClientManager } from './McpClientManager';
