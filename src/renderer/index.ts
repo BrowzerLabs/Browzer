@@ -4333,66 +4333,125 @@ async function processGetItDoneTask(taskInstruction: string): Promise<void> {
     console.log('[processGetItDoneTask] Waiting for MCP connections to initialize...');
     await new Promise(resolve => setTimeout(resolve, 1000)); // Reduced from 2s to 1s
 
-    // NEW: Use McpExecutor for intelligent tool selection and execution
+    // NEW: Use SmartAssistant for intelligent task processing
     const mcpExecutor = new McpExecutor(mcpManager);
+
+    // Import and initialize the smart assistant
+    const { McpSmartAssistant } = await import('./services/McpSmartAssistant');
+    const smartAssistant = new McpSmartAssistant(mcpExecutor, mcpManager);
+
     showMcpProgress('MCP', 'routing');
 
-    let results;
+    let assistantResponse;
     try {
-      // NEW: Use Claude API for intelligent message understanding and tool selection
-      console.log('[processGetItDoneTask] Using Claude API for intelligent message analysis and MCP routing');
+      // NEW: Use Smart Assistant for intelligent message understanding and processing
+      console.log('[processGetItDoneTask] Using Smart Assistant for intelligent task processing');
       showMcpProgress('MCP', 'routing');
       setTimeout(() => showMcpProgress('MCP', 'running'), 800);
 
-      results = await mcpExecutor.executeQueryWithClaudeAPI(taskInstruction);
+      // Check if this is a continuation of an existing conversation
+      const currentConversationId = (window as any).currentConversationId;
+      console.log('[processGetItDoneTask] Current conversation ID:', currentConversationId);
+
+      assistantResponse = await smartAssistant.processQuery(taskInstruction, currentConversationId);
     } catch (error) {
-      console.error('[processGetItDoneTask] McpExecutor failed:', error);
+      console.error('[processGetItDoneTask] SmartAssistant failed:', error);
       showMcpProgress('MCP', 'error', (error as Error).message);
-      // Fallback to original logic if McpExecutor fails
-      addMessageToChat('assistant', `MCP execution failed: ${(error as Error).message}`);
+      // Fallback to original logic if SmartAssistant fails
+      console.log('[processGetItDoneTask] Falling back to original McpExecutor with Claude API');
+      const results = await mcpExecutor.executeQueryWithClaudeAPI(taskInstruction);
+
+      if (results && results.length > 0) {
+        let hasSuccess = false;
+        let responseContent = '';
+
+        for (const result of results) {
+          if (result.success) {
+            hasSuccess = true;
+            responseContent += formatMcpResults(result.data, result.toolName, taskInstruction);
+          }
+        }
+
+        if (hasSuccess) {
+          addMessageToChat('assistant', responseContent);
+          showMcpProgress('MCP', 'complete');
+        } else {
+          addMessageToChat('assistant', 'Task execution failed. Please try rephrasing your request.');
+          showMcpProgress('MCP', 'error', 'All tools failed');
+        }
+      } else {
+        addMessageToChat('assistant', 'No results returned from MCP tools.');
+        showMcpProgress('MCP', 'error', 'No results');
+      }
       return;
     }
 
     showMcpProgress('MCP', 'parsing');
 
-    // Process and display results
-    if (results && results.length > 0) {
-      let hasSuccess = false;
-      let responseContent = '';
+    // Process Smart Assistant response
+    if (assistantResponse) {
+      console.log('[processGetItDoneTask] Smart Assistant Response:', assistantResponse);
 
-      for (const result of results) {
-        if (result.success) {
-          hasSuccess = true;
-          responseContent += formatMcpResults(result.data, result.toolName, taskInstruction);
-        } else {
-          // Use error handler to get user-friendly error messages
-          const mcpExecutor = new McpExecutor(mcpManager);
-          const errorHandler = (mcpExecutor as any).errorHandler;
-          if (errorHandler) {
-            const friendlyMessage = errorHandler.getUserFriendlyMessage(result.error || 'Unknown error', {
-              originalQuery: taskInstruction,
-              failedTool: result.toolName,
-              errorMessage: result.error || 'Unknown error',
-              attemptCount: 1,
-              availableAlternatives: []
-            });
-            responseContent += `${friendlyMessage}\n\n`;
-          } else {
-            responseContent += `**${result.toolName} failed:** ${result.error}\n\n`;
-          }
-        }
-      }
-
-      if (hasSuccess) {
-        addMessageToChat('assistant', responseContent);
+      if (assistantResponse.responseType === 'clarify') {
+        // Handle clarification request
         showMcpProgress('MCP', 'complete');
+        let clarificationMessage = `${assistantResponse.clarificationQuestion}\n\n`;
+
+        if (assistantResponse.clarificationOptions && assistantResponse.clarificationOptions.length > 0) {
+          clarificationMessage += '**Options:**\n';
+          assistantResponse.clarificationOptions.forEach((option, index) => {
+            clarificationMessage += `${index + 1}. ${option}\n`;
+          });
+        }
+
+        if (assistantResponse.suggestedValues) {
+          clarificationMessage += '\n**Suggestions:**\n';
+          Object.entries(assistantResponse.suggestedValues).forEach(([key, value]) => {
+            clarificationMessage += `- ${key}: ${value}\n`;
+          });
+        }
+
+        clarificationMessage += '\nPlease provide the requested information and I\'ll complete your task.';
+        addMessageToChat('assistant', clarificationMessage);
+
+        // Store conversation ID for continuation
+        (window as any).currentConversationId = assistantResponse.conversationId;
+
+      } else if (assistantResponse.responseType === 'execute') {
+        // Handle successful execution
+        if (assistantResponse.success && assistantResponse.formattedResponse) {
+          addMessageToChat('assistant', assistantResponse.formattedResponse);
+          showMcpProgress('MCP', 'complete');
+        } else {
+          addMessageToChat('assistant', assistantResponse.error || 'Task execution failed.');
+          showMcpProgress('MCP', 'error', assistantResponse.error);
+        }
+
+      } else if (assistantResponse.responseType === 'suggest') {
+        // Handle suggestions
+        let suggestionMessage = 'Here are some suggestions:\n\n';
+        if (assistantResponse.suggestions) {
+          assistantResponse.suggestions.forEach((suggestion, index) => {
+            suggestionMessage += `${index + 1}. **${suggestion.type}**: ${suggestion.value} (${suggestion.reason})\n`;
+          });
+        }
+        addMessageToChat('assistant', suggestionMessage);
+        showMcpProgress('MCP', 'complete');
+
+      } else if (assistantResponse.responseType === 'error') {
+        // Handle error
+        addMessageToChat('assistant', `**Error:** ${assistantResponse.error}`);
+        showMcpProgress('MCP', 'error', assistantResponse.error);
+
       } else {
-        addMessageToChat('assistant', 'All MCP tools failed. Please check your server configuration and try again.');
-        showMcpProgress('MCP', 'error', 'All tools failed');
+        // Unknown response type
+        addMessageToChat('assistant', 'I received an unexpected response type. Please try again.');
+        showMcpProgress('MCP', 'error', 'Unknown response type');
       }
+
     } else {
-      addMessageToChat('assistant', 'No results returned from MCP tools. The query may not match any available tools.');
-      showMcpProgress('MCP', 'error', 'No results returned');
+      addMessageToChat('assistant', 'No response from Smart Assistant. Please try again.');
+      showMcpProgress('MCP', 'error', 'No response');
     }
 
   } catch (error) {
