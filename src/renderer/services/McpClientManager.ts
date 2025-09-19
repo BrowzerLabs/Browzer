@@ -313,6 +313,27 @@ export class McpClientManager {
     return Array.from(this.toolIndex.keys());
   }
 
+  /**
+   * Get all server configurations and their connection status
+   */
+  async getAllServers(): Promise<Array<{name: string, id: string, connected: boolean, config: McpServerConfig}>> {
+    const configs = this.loadConfigs();
+    const servers = [];
+
+    for (const config of configs) {
+      const isConnected = this.clients.has(config.name);
+      servers.push({
+        name: config.name,
+        id: config.name, // Use name as ID for simplicity
+        connected: isConnected && config.enabled,
+        config: config
+      });
+    }
+
+    console.log('[McpClientManager] getAllServers returning:', servers.length, 'servers');
+    return servers;
+  }
+
   getToolInfo(fullName: string): McpTool | undefined {
     return this.toolIndex.get(fullName);
   }

@@ -4339,18 +4339,12 @@ async function processGetItDoneTask(taskInstruction: string): Promise<void> {
 
     let results;
     try {
-      // Check if it's a complex query requiring multiple tools
-      if (mcpExecutor.isComplexQuery(taskInstruction)) {
-        console.log('[processGetItDoneTask] Detected complex query, using complex execution');
-        showMcpProgress('Gmail', 'connecting');
-        setTimeout(() => showMcpProgress('Gmail', 'fetching'), 800);
-        results = await mcpExecutor.executeComplexQuery(taskInstruction);
-      } else {
-        console.log('[processGetItDoneTask] Using standard email query execution');
-        showMcpProgress('MCP', 'connecting');
-        setTimeout(() => showMcpProgress('MCP', 'running'), 800);
-        results = await mcpExecutor.executeQuery(taskInstruction);
-      }
+      // NEW: Use Claude API for intelligent message understanding and tool selection
+      console.log('[processGetItDoneTask] Using Claude API for intelligent message analysis and MCP routing');
+      showMcpProgress('MCP', 'routing');
+      setTimeout(() => showMcpProgress('MCP', 'running'), 800);
+
+      results = await mcpExecutor.executeQueryWithClaudeAPI(taskInstruction);
     } catch (error) {
       console.error('[processGetItDoneTask] McpExecutor failed:', error);
       showMcpProgress('MCP', 'error', (error as Error).message);
@@ -4413,7 +4407,7 @@ async function processGetItDoneTask(taskInstruction: string): Promise<void> {
 }
 
 // Enhanced progress indicator functions for MCP tool execution
-function showMcpProgress(toolName: string, status: 'starting' | 'running' | 'fetching' | 'complete' | 'error' | 'routing' | 'connecting' | 'parsing', details?: string): void {
+function showMcpProgress(toolName: string, status: 'starting' | 'running' | 'fetching' | 'complete' | 'error' | 'routing' | 'connecting' | 'parsing' | 'step_executing' | 'conditional_evaluating' | 'workflow_complete' | 'step_complete', details?: string, stepInfo?: { current: number, total: number, stepName?: string }): void {
   // Get the correct chat container - first try chatContainer, then agentResults as fallback
   let chatContainer = document.getElementById('chatContainer');
 
@@ -4480,6 +4474,26 @@ function showMcpProgress(toolName: string, status: 'starting' | 'running' | 'fet
         progressElement.innerHTML = `Processing results...`;
         progressElement.className = 'loading';
         break;
+      case 'step_executing':
+        const stepProgress = stepInfo ? `Step ${stepInfo.current}/${stepInfo.total}: ` : '';
+        const stepName = stepInfo?.stepName || toolName;
+        progressElement.innerHTML = `${stepProgress}Executing ${stepName}...`;
+        progressElement.className = 'loading';
+        break;
+      case 'conditional_evaluating':
+        progressElement.innerHTML = `Evaluating conditions...`;
+        progressElement.className = 'loading';
+        break;
+      case 'step_complete':
+        const completedStep = stepInfo ? `Step ${stepInfo.current}/${stepInfo.total} completed` : 'Step completed';
+        progressElement.innerHTML = `✓ ${completedStep}`;
+        progressElement.className = 'success';
+        break;
+      case 'workflow_complete':
+        progressElement.innerHTML = `✅ Workflow completed successfully`;
+        progressElement.className = 'success';
+        setTimeout(() => progressElement?.remove(), 2000);
+        break;
       case 'complete':
         progressElement.remove();
         break;
@@ -4509,9 +4523,97 @@ function getToolSpecificMessage(toolName: string): string {
   }
 }
 
+// Format conditional workflow results for display in chat
+function formatConditionalWorkflowResults(workflowData: any, originalQuery?: string): string {
+  if (!workflowData) return 'Workflow execution failed.\n\n';
+
+  console.log('[formatConditionalWorkflowResults] Processing workflow data:', JSON.stringify(workflowData, null, 2));
+
+  let formatted = '**🔄 Conditional Workflow Results:**\n\n';
+
+  try {
+    if (workflowData.status === 'completed') {
+      formatted += '✅ **Workflow completed successfully**\n\n';
+
+      // Show step-by-step results
+      if (workflowData.results) {
+        formatted += '**Steps executed:**\n';
+        let stepNumber = 1;
+
+        for (const [stepId, result] of Object.entries(workflowData.results)) {
+          formatted += `${stepNumber}. **${stepId.replace(/_/g, ' ')}**\n`;
+
+          // Format individual step results
+          if (typeof result === 'object' && result !== null) {
+            if (Array.isArray(result) && result.length > 0) {
+              formatted += `   ✓ Found ${result.length} item(s)\n`;
+            } else if ((result as any).success !== undefined) {
+              formatted += `   ${(result as any).success ? '✓' : '❌'} ${(result as any).success ? 'Success' : 'Failed'}\n`;
+            } else {
+              formatted += '   ✓ Completed\n';
+            }
+          } else {
+            formatted += '   ✓ Completed\n';
+          }
+
+          stepNumber++;
+        }
+        formatted += '\n';
+      }
+
+      // Show final workflow summary
+      if (workflowData.finalContext) {
+        const contextKeys = Object.keys(workflowData.finalContext);
+        if (contextKeys.length > 0) {
+          formatted += '**Final results:**\n';
+          for (const key of contextKeys.slice(0, 3)) { // Show top 3 context items
+            const value = workflowData.finalContext[key];
+            if (typeof value === 'string' && value.length > 0) {
+              const truncated = value.length > 50 ? value.substring(0, 50) + '...' : value;
+              formatted += `• ${key}: ${truncated}\n`;
+            }
+          }
+          formatted += '\n';
+        }
+      }
+
+    } else if (workflowData.status === 'failed') {
+      formatted += '❌ **Workflow execution failed**\n\n';
+
+      if (workflowData.error) {
+        formatted += `**Error:** ${workflowData.error}\n\n`;
+      }
+
+      // Show partial results if available
+      if (workflowData.partialResults && Object.keys(workflowData.partialResults).length > 0) {
+        formatted += '**Partial results before failure:**\n';
+        for (const [stepId, result] of Object.entries(workflowData.partialResults)) {
+          formatted += `• ${stepId.replace(/_/g, ' ')}: `;
+          formatted += result ? 'Completed' : 'Failed';
+          formatted += '\n';
+        }
+        formatted += '\n';
+      }
+    } else {
+      formatted += '⏳ **Workflow in progress...**\n\n';
+    }
+
+  } catch (error) {
+    console.error('[formatConditionalWorkflowResults] Error formatting workflow results:', error);
+    formatted += '⚠️ **Workflow completed** (formatting error)\n\n';
+  }
+
+  return formatted;
+}
+
 // Format MCP results for display in chat - routes to appropriate formatter based on tool type
 function formatMcpResults(data: any, toolName: string, originalQuery?: string): string {
   if (!data) return 'No results found.\n\n';
+
+  // Handle conditional workflow results
+  if (toolName === 'ConditionalWorkflow') {
+    return formatConditionalWorkflowResults(data, originalQuery);
+  }
 
   // Route to appropriate formatter based on tool type
   if (toolName.includes('gmail') || toolName.includes('email')) {
@@ -4538,6 +4640,14 @@ function formatCalendarResults(data: any, toolName: string): string {
       const parsedContent = JSON.parse(data.content[0].text);
       console.log('[formatCalendarResults] Parsed calendar content:', parsedContent);
 
+      // Check for error conditions first
+      if (parsedContent.isError === true || parsedContent.error) {
+        formatted = '**❌ Calendar access failed:**\n\n';
+        const errorMessage = parsedContent.error || parsedContent.message || 'Unknown error occurred';
+        formatted += `**Error:** ${errorMessage}\n\n`;
+        return formatted;
+      }
+
       if (parsedContent.results && Array.isArray(parsedContent.results)) {
         if (parsedContent.results.length === 0) {
           formatted += 'No events found for today.\n\n';
@@ -4549,6 +4659,11 @@ function formatCalendarResults(data: any, toolName: string): string {
       } else {
         formatted += 'No events found.\n\n';
       }
+    } else if (typeof data === 'object' && (data.isError === true || data.error)) {
+      // Handle direct error response (not wrapped in content array)
+      formatted = '**❌ Calendar access failed:**\n\n';
+      const errorMessage = data.error || data.message || 'Unknown error occurred';
+      formatted += `**Error:** ${errorMessage}\n\n`;
     } else if (Array.isArray(data)) {
       if (data.length === 0) {
         formatted += 'No events found.\n\n';
@@ -4603,6 +4718,30 @@ function formatGenericResults(data: any, toolName: string): string {
   let formatted = `**Results from ${toolName}:**\n\n`;
 
   try {
+    // Check for MCP error responses first
+    if (data.content && Array.isArray(data.content) && data.content[0]?.type === 'text') {
+      try {
+        const parsedContent = JSON.parse(data.content[0].text);
+        if (parsedContent.isError === true || parsedContent.error) {
+          formatted = `**❌ ${toolName} failed:**\n\n`;
+          const errorMessage = parsedContent.error || parsedContent.message || 'Unknown error occurred';
+          formatted += `**Error:** ${errorMessage}\n\n`;
+          return formatted;
+        }
+      } catch (parseError) {
+        // Continue with normal formatting if JSON parsing fails
+      }
+    }
+
+    // Check for direct error responses
+    if (typeof data === 'object' && (data.isError === true || data.error)) {
+      formatted = `**❌ ${toolName} failed:**\n\n`;
+      const errorMessage = data.error || data.message || 'Unknown error occurred';
+      formatted += `**Error:** ${errorMessage}\n\n`;
+      return formatted;
+    }
+
+    // Normal formatting for successful responses
     if (typeof data === 'string') {
       formatted += data + '\n\n';
     } else if (Array.isArray(data)) {
@@ -4637,7 +4776,18 @@ function formatEmailSendResults(data: any, toolName: string, originalQuery?: str
       const parsedContent = JSON.parse(data.content[0].text);
       console.log('[formatEmailSendResults] Parsed send content:', parsedContent);
 
-      if (parsedContent.execution && parsedContent.execution.status === 'SUCCESS') {
+      // Check for error conditions first
+      if (parsedContent.isError === true || parsedContent.error) {
+        formatted += '❌ **Email action failed**\n\n';
+        const errorMessage = parsedContent.error || parsedContent.message || 'Unknown error occurred';
+        formatted += `**Error:** ${errorMessage}\n\n`;
+
+        // Provide helpful context if it's a parameter validation error
+        if (errorMessage.toLowerCase().includes('subject') || errorMessage.toLowerCase().includes('body')) {
+          formatted += '💡 **Tip:** Make sure to provide both subject and body for email sending. For example:\n';
+          formatted += '```\nSend email to john@example.com with subject "Meeting Tomorrow" and body "Hi John, let\'s meet tomorrow at 2pm."\n```\n';
+        }
+      } else if (parsedContent.execution && parsedContent.execution.status === 'SUCCESS') {
         formatted += '✅ **Email sent successfully!**\n\n';
 
         // Extract send details if available
@@ -4671,8 +4821,29 @@ function formatEmailSendResults(data: any, toolName: string, originalQuery?: str
         if (parsedContent.execution.error) {
           formatted += `**Error:** ${parsedContent.execution.error}\n`;
         }
-      } else {
+      } else if (parsedContent.execution && parsedContent.execution.status === 'PENDING') {
         formatted += '⏳ **Email sending in progress...**\n\n';
+      } else {
+        // Check if there's any other error indication
+        if (parsedContent.status === 'error' || parsedContent.success === false) {
+          formatted += '❌ **Email action failed**\n\n';
+          if (parsedContent.message) {
+            formatted += `**Error:** ${parsedContent.message}\n`;
+          }
+        } else {
+          formatted += '✅ **Email action completed**\n\n';
+        }
+      }
+    } else if (typeof data === 'object' && (data.isError === true || data.error)) {
+      // Handle direct error response (not wrapped in content array)
+      formatted += '❌ **Email action failed**\n\n';
+      const errorMessage = data.error || data.message || 'Unknown error occurred';
+      formatted += `**Error:** ${errorMessage}\n\n`;
+
+      // Provide helpful context if it's a parameter validation error
+      if (errorMessage.toLowerCase().includes('subject') || errorMessage.toLowerCase().includes('body')) {
+        formatted += '💡 **Tip:** Make sure to provide both subject and body for email sending. For example:\n';
+        formatted += '```\nSend email to john@example.com with subject "Meeting Tomorrow" and body "Hi John, let\'s meet tomorrow at 2pm."\n```\n';
       }
     } else if (typeof data === 'object' && data.success) {
       formatted += '✅ **Email sent successfully!**\n\n';

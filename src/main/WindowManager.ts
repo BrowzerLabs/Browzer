@@ -22,7 +22,7 @@ export class WindowManager {
       height: 800,
       title: 'Browzer',
       webPreferences: {
-        nodeIntegration: true,
+        nodeIntegration: false, // Must be false when contextIsolation is true
         contextIsolation: true, // Enable context isolation for security and contextBridge
         webviewTag: true,
         webSecurity: true,
@@ -257,7 +257,7 @@ export class WindowManager {
       height: 800,
       title: 'Browzer',
       webPreferences: {
-        nodeIntegration: true,
+        nodeIntegration: false, // Must be false when contextIsolation is true
         contextIsolation: true,
         webviewTag: true,
         webSecurity: true,

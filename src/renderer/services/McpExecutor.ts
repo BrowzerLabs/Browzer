@@ -5,6 +5,12 @@ import { McpQueryParser, ParsedWorkflow } from './McpQueryParser';
 import { McpWorkflowPlanner, ExecutionPlan } from './McpWorkflowPlanner';
 import { McpContextManager } from './McpContextManager';
 import { McpWorkflowErrorHandler } from './McpWorkflowErrorHandler';
+import { McpWorkflowOrchestrator, ConditionalWorkflow } from './McpWorkflowOrchestrator';
+import { McpIntelligentParser } from './McpIntelligentParser';
+import { McpWorkflowOptimizer } from './McpWorkflowOptimizer';
+import { McpSelfHealingSystem } from './McpSelfHealingSystem';
+import { McpClaudeService, McpMessageAnalysis } from './McpClaudeService';
+import { McpToolDiscoveryService, ToolRegistry } from './McpToolDiscoveryService';
 
 export interface McpExecutionResult {
   success: boolean;
@@ -35,6 +41,12 @@ export class McpExecutor {
   private workflowPlanner: McpWorkflowPlanner;
   private contextManager: McpContextManager;
   private workflowErrorHandler: McpWorkflowErrorHandler;
+  private workflowOrchestrator: McpWorkflowOrchestrator;
+  private intelligentParser: McpIntelligentParser;
+  private workflowOptimizer: McpWorkflowOptimizer;
+  private selfHealingSystem: McpSelfHealingSystem;
+  private claudeService: McpClaudeService;
+  private toolDiscoveryService: McpToolDiscoveryService;
 
   // Cache configuration
   private readonly CACHE_TTL = 300000; // 5 minutes
@@ -47,7 +59,139 @@ export class McpExecutor {
     this.workflowPlanner = new McpWorkflowPlanner(this.mcpManager, router);
     this.contextManager = new McpContextManager();
     this.workflowErrorHandler = new McpWorkflowErrorHandler(this.contextManager, this.errorHandler);
+    this.workflowOrchestrator = new McpWorkflowOrchestrator(this, this.contextManager, this.workflowErrorHandler);
+
+    // Initialize AI-enhanced components
+    this.intelligentParser = new McpIntelligentParser(this.mcpManager);
+    this.workflowOptimizer = new McpWorkflowOptimizer(this.mcpManager);
+    this.selfHealingSystem = new McpSelfHealingSystem(this.mcpManager);
+    this.claudeService = new McpClaudeService();
+    this.toolDiscoveryService = new McpToolDiscoveryService(this.mcpManager);
+
     this.startPerformanceMonitoring();
+  }
+
+  /**
+   * NEW: AI-Enhanced entry point using Claude API for message understanding
+   */
+  async executeQueryWithClaudeAPI(query: string): Promise<McpExecutionResult[]> {
+    const startTime = Date.now();
+    console.log('[McpExecutor] Starting Claude API-enhanced execution for:', query);
+
+    try {
+      // Step 1: Check if Claude API is available
+      console.log('[McpExecutor] Checking Claude API availability...');
+      this.claudeService.refreshApiKey(); // Refresh API key from localStorage
+      const isClaudeAvailable = this.claudeService.isAvailable();
+      console.log('[McpExecutor] Claude API available:', isClaudeAvailable);
+
+      if (!isClaudeAvailable) {
+        console.log('[McpExecutor] Claude API not available, falling back to traditional execution');
+        console.log('[McpExecutor] Check that anthropic_api_key is set in localStorage');
+        return await this.executeQuery(query);
+      }
+
+      console.log('[McpExecutor] Using Claude API for dynamic tool selection');
+
+      // Step 2: DYNAMIC TOOL DISCOVERY - Get all available tools from all MCP servers
+      console.log('[McpExecutor] Starting dynamic tool discovery...');
+      const toolRegistry: ToolRegistry = await this.toolDiscoveryService.discoverAllTools();
+      const availableTools = this.toolDiscoveryService.getAllToolsForClaudeAPI();
+      console.log('[McpExecutor] Dynamic tool discovery complete:', {
+        totalTools: toolRegistry.totalTools,
+        categories: Array.from(toolRegistry.categories.keys()),
+        servers: availableTools.map(t => t.serverName).filter((v, i, a) => a.indexOf(v) === i)
+      });
+
+      // Step 3: Use Claude API to analyze user message with ALL discovered tools
+      const claudeAnalysis: McpMessageAnalysis = await this.claudeService.analyzeUserMessageWithDynamicTools(query, availableTools);
+      console.log('[McpExecutor] Claude analysis completed:', claudeAnalysis);
+
+      // Step 4: Route based on Claude's analysis
+      if (claudeAnalysis.tools.length === 0) {
+        console.log('[McpExecutor] Claude found no suitable tools, falling back to traditional routing');
+        return await this.executeQuery(query);
+      }
+
+      // Step 5: Execute using Claude's recommendations (single or multi-step)
+      if (claudeAnalysis.tools.length === 1) {
+        return await this.executeWithClaudeRecommendations(claudeAnalysis, startTime);
+      } else {
+        // Multi-step execution
+        console.log('[McpExecutor] Multi-step execution required for', claudeAnalysis.tools.length, 'tools');
+        return await this.executeMultiStepWorkflow(claudeAnalysis, startTime);
+      }
+
+    } catch (error) {
+      console.error('[McpExecutor] Claude API-enhanced execution failed:', error);
+
+      // Fallback to traditional execution on any Claude API error
+      console.log('[McpExecutor] Falling back to traditional execution');
+      return await this.executeQuery(query);
+    }
+  }
+
+  /**
+   * Execute MCP tools based on Claude's recommendations
+   */
+  private async executeWithClaudeRecommendations(
+    analysis: McpMessageAnalysis,
+    startTime: number
+  ): Promise<McpExecutionResult[]> {
+    console.log('[McpExecutor] Executing with Claude recommendations');
+
+    const results: McpExecutionResult[] = [];
+
+    // Execute the top recommended tool
+    const topTool = analysis.tools[0];
+    console.log('[McpExecutor] Executing top Claude recommendation:', topTool.name);
+
+    try {
+      // Create tool match from Claude recommendation
+      const toolMatch: ToolMatch = {
+        toolName: topTool.name,
+        score: topTool.confidence,
+        description: topTool.reasoning
+      };
+
+      // Execute the tool with Claude's recommended parameters
+      const queryType = this.analyzeQueryType(analysis.intent);
+      console.log('[McpExecutor] Executing tool with Claude parameters:', topTool.parameters);
+
+      // Use Claude's parameters for the MCP tool execution
+      const result = await this.executeSingleToolWithClaudeParams(
+        toolMatch,
+        analysis.intent,
+        topTool.parameters,
+        queryType
+      );
+
+      // Enhanced result with Claude insights
+      result.stepDescription = `Claude AI: ${topTool.reasoning}`;
+      results.push(result);
+
+      // Record performance metrics
+      const executionTime = Date.now() - startTime;
+      this.recordPerformanceMetric('claude_enhanced', executionTime);
+
+      console.log(`[McpExecutor] Claude-enhanced execution completed in ${executionTime}ms`);
+      return results;
+
+    } catch (error) {
+      console.error('[McpExecutor] Claude recommendation execution failed:', error);
+
+      // Create error result
+      results.push({
+        success: false,
+        data: null,
+        error: `Claude recommendation failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        toolName: topTool.name,
+        executionTime: Date.now() - startTime,
+        stepDescription: `Failed to execute Claude recommendation: ${topTool.name}`
+      });
+
+      return results;
+    }
   }
 
   async executeQuery(query: string): Promise<McpExecutionResult[]> {
@@ -62,7 +206,7 @@ export class McpExecutor {
 
   private async executeUniversalQuery(query: string): Promise<McpExecutionResult[]> {
     const startTime = Date.now();
-    console.log('[McpExecutor] Executing universal query:', query);
+    console.log('[McpExecutor] Executing universal query with AI enhancement:', query);
 
     // Check cache first
     const cacheKey = this.generateCacheKey(query);
@@ -70,6 +214,58 @@ export class McpExecutor {
     if (cachedResult) {
       console.log('[McpExecutor] Returning cached result for query:', query);
       return cachedResult;
+    }
+
+    try {
+      // Phase 3 Week 8: Use AI-enhanced query understanding
+      const intelligentAnalysis = await this.intelligentParser.analyzeQuery(query);
+      console.log('[McpExecutor] AI analysis completed, confidence:', intelligentAnalysis.intent.confidence);
+
+      // Phase 3 Week 8: Optimize workflow based on AI analysis
+      const optimization = await this.workflowOptimizer.optimizeWorkflow(
+        intelligentAnalysis,
+        'hybrid', // Use hybrid optimization for best balance
+        { context: intelligentAnalysis.intent.context }
+      );
+      console.log('[McpExecutor] Workflow optimized with', optimization.optimizationType, 'strategy');
+
+      // Execute the optimized workflow with improved simple query detection
+      const isDefinitelySimple = this.isDefinitelySimpleQuery(query);
+
+      if (isDefinitelySimple) {
+        console.log('[McpExecutor] Detected simple query pattern, using direct execution');
+        return await this.executeFallbackQuery(query, startTime);
+      } else if (intelligentAnalysis.intent.context.complexity === 'complex' ||
+          this.detectConditionalQuery(query)) {
+        return await this.executeOptimizedConditionalWorkflow(intelligentAnalysis, optimization, startTime);
+      } else if (intelligentAnalysis.intent.context.complexity === 'medium' ||
+                 this.detectComplexQuery(query)) {
+        return await this.executeOptimizedWorkflowQuery(intelligentAnalysis, optimization, startTime);
+      } else {
+        // Simple query - execute with AI-enhanced tool selection
+        return await this.executeOptimizedSimpleQuery(intelligentAnalysis, optimization, startTime);
+      }
+
+    } catch (aiError) {
+      console.error('[McpExecutor] AI enhancement failed, falling back to traditional execution:', aiError);
+
+      // Fallback to traditional execution flow
+      return await this.executeFallbackQuery(query, startTime);
+    }
+  }
+
+  private async executeFallbackQuery(query: string, startTime: number): Promise<McpExecutionResult[]> {
+    console.log('[McpExecutor] Executing fallback query logic');
+
+    // Generate cache key for this query
+    const cacheKey = this.generateCacheKey(query);
+
+    // Phase 2 Week 6: Check if this is a conditional workflow query
+    const isConditional = this.detectConditionalQuery(query);
+    console.log('[McpExecutor] Conditional query detected:', isConditional);
+
+    if (isConditional) {
+      return await this.executeConditionalWorkflow(query, startTime);
     }
 
     // Phase 2 Week 4: Check if this is a complex multi-tool query
@@ -576,6 +772,68 @@ export class McpExecutor {
   }
 
   /**
+   * Phase 2 Week 6: Detect if query requires conditional workflow execution
+   */
+  private detectConditionalQuery(query: string): boolean {
+    const queryLower = query.toLowerCase();
+
+    // Look for conditional patterns
+    const conditionalPatterns = [
+      /if\s+.+\s*,?\s*then\s+.+/i,
+      /if\s+.+\s*,?\s*else\s+.+/i,
+      /if\s+.+\s*,?\s*otherwise\s+.+/i,
+      /.+\.\s*if\s+.+,?\s*.+/i
+    ];
+
+    return conditionalPatterns.some(pattern => pattern.test(queryLower));
+  }
+
+  /**
+   * Phase 2 Week 6: Execute conditional workflow
+   */
+  private async executeConditionalWorkflow(query: string, startTime: number): Promise<McpExecutionResult[]> {
+    console.log('[McpExecutor] Executing conditional workflow for query:', query);
+
+    try {
+      // Parse conditional workflow
+      const conditionalWorkflow = this.workflowOrchestrator.parseConditionalQuery(query);
+      console.log('[McpExecutor] Parsed conditional workflow:', conditionalWorkflow);
+
+      // Execute the workflow
+      const workflowResult = await this.workflowOrchestrator.executeConditionalWorkflow(conditionalWorkflow);
+
+      // Cache the result
+      const cacheKey = this.generateCacheKey(query);
+      const executionTime = Date.now() - startTime;
+      const result: McpExecutionResult = {
+        success: workflowResult.status === 'completed',
+        data: workflowResult,
+        toolName: 'ConditionalWorkflow',
+        error: workflowResult.error || undefined,
+        executionTime: executionTime
+      };
+      this.addToCache(cacheKey, [result], query);
+
+      // Record performance metrics
+      this.recordPerformanceMetric('conditional', executionTime);
+
+      return [result];
+
+    } catch (error) {
+      console.error('[McpExecutor] Conditional workflow execution failed:', error);
+
+      const executionTime = Date.now() - startTime;
+      return [{
+        success: false,
+        data: null,
+        toolName: 'ConditionalWorkflow',
+        error: (error as Error).message,
+        executionTime: executionTime
+      }];
+    }
+  }
+
+  /**
    * Phase 2 Week 4: Enhanced complex query detection
    */
   private detectComplexQuery(query: string): boolean {
@@ -706,8 +964,11 @@ export class McpExecutor {
   private async executeWorkflowSteps(plan: ExecutionPlan, context: any): Promise<McpExecutionResult[]> {
     const results: McpExecutionResult[] = [];
 
+    // Convert between ExecutionPlan formats if needed
+    const workflowPlan = this.convertToWorkflowPlan(plan);
+
     // Get execution order (handles dependencies)
-    const executionOrder = this.workflowPlanner.getExecutionOrder(plan);
+    const executionOrder = this.workflowPlanner.getExecutionOrder(workflowPlan);
     console.log('[McpExecutor] Executing', executionOrder.length, 'groups of steps');
 
     // Execute each group (steps in same group can run in parallel)
@@ -1358,8 +1619,502 @@ export class McpExecutor {
   }
 
   /**
+   * Resolve tool name from Claude's recommendation to full MCP registry format
+   */
+  private async resolveFullToolName(toolName: string): Promise<string> {
+    // If already in full format (server.toolName), return as-is
+    if (toolName.includes('.')) {
+      return toolName;
+    }
+
+    try {
+      // Get all available tools from MCP registry
+      const allTools = await this.mcpManager.listAllTools();
+      console.log('[McpExecutor] Available tools for resolution:', allTools);
+
+      // Find the full name that matches our tool name
+      const matchingTool = allTools.find((fullName: string) => {
+        const shortName = fullName.split('.').pop(); // Get part after the last dot
+        return shortName === toolName;
+      });
+
+      if (matchingTool) {
+        console.log('[McpExecutor] Found matching tool in registry:', matchingTool);
+        return matchingTool;
+      }
+    } catch (error) {
+      console.warn('[McpExecutor] Failed to get tools list:', error);
+    }
+
+    // Fallback: assume it's from the main server (common case)
+    const fallbackName = `zap2.${toolName}`;
+    console.warn('[McpExecutor] Tool not found in registry, using fallback:', fallbackName);
+    return fallbackName;
+  }
+
+  /**
+   * Apply result limiting if MCP tool ignored the limit parameter
+   */
+  private applyResultLimiting(result: any, claudeParams: Record<string, any>, intent: string, toolName: string): any {
+    // Extract the requested limit from the intent or parameters
+    const requestedLimit = this.extractRequestedLimit(intent, claudeParams);
+
+    if (!requestedLimit) {
+      console.log('[McpExecutor] No limit specified, returning all results');
+      return result;
+    }
+
+    console.log(`[McpExecutor] Applying limit of ${requestedLimit} to ${toolName} results`);
+
+    // Handle different result formats
+    if (result && typeof result === 'object') {
+      // Gmail/email results format: {content: [{type: 'text', text: JSON}]}
+      if (result.content && Array.isArray(result.content) && result.content.length > 0) {
+        const textContent = result.content[0]?.text;
+        if (textContent) {
+          try {
+            const parsed = JSON.parse(textContent);
+            if (parsed.results && Array.isArray(parsed.results)) {
+              parsed.results = parsed.results.slice(0, requestedLimit);
+              result.content[0].text = JSON.stringify(parsed);
+              console.log(`[McpExecutor] Limited results from ${this.getResultCount(result)} to ${requestedLimit}`);
+            }
+          } catch (e) {
+            console.warn('[McpExecutor] Could not parse MCP result for limiting:', e);
+          }
+        }
+      }
+      // Direct results array format
+      else if (Array.isArray(result)) {
+        return result.slice(0, requestedLimit);
+      }
+      // Results object with results array
+      else if (result.results && Array.isArray(result.results)) {
+        result.results = result.results.slice(0, requestedLimit);
+      }
+    }
+
+    return result;
+  }
+
+  /**
+   * Extract requested limit from user intent or Claude parameters
+   */
+  private extractRequestedLimit(intent: string, claudeParams: Record<string, any>): number | null {
+    // Check Claude parameters first
+    if (claudeParams.limit && typeof claudeParams.limit === 'number') {
+      return claudeParams.limit;
+    }
+    if (claudeParams.count && typeof claudeParams.count === 'number') {
+      return claudeParams.count;
+    }
+
+    // Extract from intent text
+    const numbers = intent.match(/\b(\d+)\b/g);
+    if (numbers) {
+      const num = parseInt(numbers[0]);
+      if (num > 0 && num <= 100) { // Reasonable limit
+        return num;
+      }
+    }
+
+    // Check for specific phrases
+    if (intent.includes('single') || intent.includes('one')) {
+      return 1;
+    }
+
+    return null;
+  }
+
+  /**
+   * Get count of results in various result formats
+   */
+  private getResultCount(result: any): number {
+    if (!result) return 0;
+
+    // Gmail/email results format: {content: [{type: 'text', text: JSON}]}
+    if (result.content && Array.isArray(result.content) && result.content.length > 0) {
+      const textContent = result.content[0]?.text;
+      if (textContent) {
+        try {
+          const parsed = JSON.parse(textContent);
+          if (parsed.results && Array.isArray(parsed.results)) {
+            return parsed.results.length;
+          }
+        } catch (e) {
+          // Ignore parse errors
+        }
+      }
+    }
+
+    // Direct results array
+    if (Array.isArray(result)) {
+      return result.length;
+    }
+
+    // Results object with results array
+    if (result.results && Array.isArray(result.results)) {
+      return result.results.length;
+    }
+
+    return 1; // Assume single result
+  }
+
+  /**
    * Record performance metric for query type
    */
+  /**
+   * Execute MCP tool with Claude's recommended parameters
+   */
+  private async executeSingleToolWithClaudeParams(
+    toolMatch: ToolMatch,
+    intent: string,
+    claudeParams: Record<string, any>,
+    queryType: string
+  ): Promise<McpExecutionResult> {
+    console.log('[McpExecutor] Executing tool with Claude parameters:', {
+      tool: toolMatch.toolName,
+      intent,
+      claudeParams,
+      queryType
+    });
+
+    try {
+      // Build parameters for MCP tool using Claude's analysis
+      const mcpParameters = this.buildMcpParameters(toolMatch.toolName, claudeParams, intent);
+      console.log('[McpExecutor] Built MCP parameters:', mcpParameters);
+
+      // Resolve the tool name to full MCP registry format (server.toolName)
+      const fullToolName = await this.resolveFullToolName(toolMatch.toolName);
+      console.log('[McpExecutor] Resolved tool name:', toolMatch.toolName, '→', fullToolName);
+
+      // Execute the tool with proper parameters
+      const result = await this.mcpManager.callTool(fullToolName, mcpParameters);
+
+      // Post-process result to apply limit if MCP tool ignored it
+      const processedResult = this.applyResultLimiting(result, claudeParams, intent, toolMatch.toolName);
+      console.log('[McpExecutor] Applied result limiting:', {
+        originalCount: this.getResultCount(result),
+        processedCount: this.getResultCount(processedResult)
+      });
+
+      const executionResult: McpExecutionResult = {
+        success: true,
+        data: processedResult,
+        toolName: toolMatch.toolName,
+        executionTime: 0,
+        stepDescription: `Claude AI recommended: ${toolMatch.description}`
+      };
+
+      console.log('[McpExecutor] Claude-enhanced tool execution successful');
+      return executionResult;
+
+    } catch (error) {
+      console.error('[McpExecutor] Claude-enhanced tool execution failed:', error);
+
+      return {
+        success: false,
+        data: null,
+        error: error instanceof Error ? error.message : 'Unknown error',
+        toolName: toolMatch.toolName,
+        executionTime: 0,
+        stepDescription: `Claude AI execution failed: ${toolMatch.toolName}`
+      };
+    }
+  }
+
+  /**
+   * Execute multi-step workflow with Claude's tool recommendations
+   */
+  private async executeMultiStepWorkflow(
+    analysis: McpMessageAnalysis,
+    startTime: number
+  ): Promise<McpExecutionResult[]> {
+    console.log('[McpExecutor] Starting multi-step workflow execution');
+    const results: McpExecutionResult[] = [];
+    const executionContext = new Map<string, any>();
+
+    // Store original query in context
+    executionContext.set('originalQuery', analysis.intent);
+    executionContext.set('startTime', startTime);
+
+    for (let i = 0; i < analysis.tools.length; i++) {
+      const tool = analysis.tools[i];
+      console.log(`[McpExecutor] Executing step ${i + 1}/${analysis.tools.length}: ${tool.name}`);
+
+      try {
+        // Execute the tool with context from previous steps
+        const stepResult = await this.executeToolWithContext(tool, i, executionContext, analysis);
+        results.push(stepResult);
+
+        // If this step failed and it's critical, stop execution
+        if (!stepResult.success && this.isStepCritical(tool, analysis)) {
+          console.error(`[McpExecutor] Critical step ${i + 1} failed, stopping workflow`);
+          break;
+        }
+
+        // Store result in context for next steps
+        executionContext.set(`step_${i}_result`, stepResult.data);
+        executionContext.set(`step_${i}_success`, stepResult.success);
+
+      } catch (error) {
+        console.error(`[McpExecutor] Step ${i + 1} failed:`, error);
+
+        // Create error result
+        const errorResult: McpExecutionResult = {
+          success: false,
+          data: null,
+          error: error instanceof Error ? error.message : 'Unknown error',
+          toolName: tool.name,
+          executionTime: Date.now() - startTime,
+          stepDescription: `Step ${i + 1} failed: ${tool.name}`
+        };
+
+        results.push(errorResult);
+
+        // Attempt self-healing if available
+        if (this.selfHealingSystem) {
+          try {
+            console.log('[McpExecutor] Attempting self-healing for failed step');
+
+            // Create IntelligentQueryAnalysis for healing system
+            const healingAnalysis = {
+              originalQuery: analysis.intent,
+              processedQuery: analysis.intent,
+              intent: {
+                action: analysis.intent,
+                context: {
+                  domain: 'general',
+                  complexity: analysis.complexity
+                }
+              },
+              recommendedTools: [{
+                tool: {
+                  toolName: tool.name,
+                  displayName: tool.name,
+                  category: 'general'
+                },
+                server: {
+                  serverId: 'unknown',
+                  displayName: 'Unknown Server'
+                },
+                parameters: tool.parameters,
+                confidence: tool.confidence,
+                reasoning: tool.reasoning || 'Step recovery attempt'
+              }],
+              workflowSuggestions: [],
+              executionPlan: {
+                steps: [{
+                  tool: {
+                    toolName: tool.name,
+                    displayName: tool.name,
+                    category: 'general'
+                  },
+                  server: {
+                    serverId: 'unknown',
+                    displayName: 'Unknown Server'
+                  },
+                  parameters: tool.parameters,
+                  confidence: tool.confidence
+                }],
+                totalSteps: 1,
+                estimatedTime: 30
+              },
+              alternatives: []
+            };
+
+            const healingResult = await this.selfHealingSystem.healWorkflow(
+              healingAnalysis as any, // Type assertion for self-healing context
+              error as Error,
+              {
+                toolName: tool.name,
+                serverName: 'unknown',
+                query: analysis.intent,
+                stepIndex: i,
+                context: Object.fromEntries(executionContext.entries())
+              }
+            );
+
+            if (healingResult.recovered && healingResult.result) {
+              console.log('[McpExecutor] Self-healing succeeded, updating step result');
+              errorResult.success = true;
+              errorResult.data = healingResult.result;
+              errorResult.error = undefined;
+              errorResult.stepDescription = `Step ${i + 1} recovered: ${tool.name}`;
+            }
+          } catch (healingError) {
+            console.error('[McpExecutor] Self-healing failed:', healingError);
+          }
+        }
+
+        // Log the error and continue with next step
+        console.error('[McpExecutor] Step failed, continuing with next step');
+      }
+    }
+
+    // Record performance metrics
+    const totalExecutionTime = Date.now() - startTime;
+    this.recordPerformanceMetric('multi_step_claude', totalExecutionTime);
+
+    console.log(`[McpExecutor] Multi-step workflow completed in ${totalExecutionTime}ms`);
+    return results;
+  }
+
+  /**
+   * Execute individual tool with context from previous steps
+   */
+  private async executeToolWithContext(
+    tool: any,
+    stepIndex: number,
+    context: Map<string, any>,
+    analysis: McpMessageAnalysis
+  ): Promise<McpExecutionResult> {
+    console.log(`[McpExecutor] Executing tool ${tool.name} with context:`, {
+      stepIndex,
+      contextKeys: Array.from(context.keys()),
+      toolParams: tool.parameters
+    });
+
+    // Enhance tool parameters with context data if needed
+    const enhancedParams = this.enhanceParametersWithContext(tool.parameters, context, stepIndex);
+
+    // Create tool match
+    const toolMatch: ToolMatch = {
+      toolName: tool.name,
+      score: tool.confidence,
+      description: `Step ${stepIndex + 1}: ${tool.reasoning}`
+    };
+
+    // Execute the tool
+    const result = await this.executeSingleToolWithClaudeParams(
+      toolMatch,
+      analysis.intent,
+      enhancedParams,
+      'dynamic'
+    );
+
+    return result;
+  }
+
+  /**
+   * Enhance tool parameters with data from previous execution steps
+   */
+  private enhanceParametersWithContext(
+    toolParams: Record<string, any>,
+    context: Map<string, any>,
+    stepIndex: number
+  ): Record<string, any> {
+    const enhanced = { ...toolParams };
+
+    // For steps after the first, check if we can use previous step data
+    if (stepIndex > 0) {
+      const previousResult = context.get(`step_${stepIndex - 1}_result`);
+      if (previousResult) {
+        // Try to extract useful data from previous step
+        if (typeof previousResult === 'object' && previousResult.id) {
+          enhanced.contextId = previousResult.id;
+        }
+        if (typeof previousResult === 'string' && previousResult.includes('@')) {
+          // Previous step might have returned an email address
+          enhanced.contextEmail = previousResult.match(/[\w.-]+@[\w.-]+\.\w+/)?.[0];
+        }
+      }
+    }
+
+    console.log('[McpExecutor] Enhanced parameters with context:', enhanced);
+    return enhanced;
+  }
+
+  /**
+   * Check if a step is critical for workflow continuation
+   */
+  private isStepCritical(tool: any, analysis: McpMessageAnalysis): boolean {
+    // If there's only one tool or this is the last tool, it's critical
+    if (analysis.tools.length === 1) {
+      return true;
+    }
+
+    // Tools with high confidence are usually critical
+    return tool.confidence > 0.8;
+  }
+
+  // TODO: Implement step healing with proper interface integration
+
+  /**
+   * NEW: Build MCP tool parameters dynamically (no hardcoded tool logic)
+   */
+  private buildMcpParameters(toolName: string, claudeParams: Record<string, any>, intent: string): Record<string, any> {
+    console.log('[McpExecutor] Building dynamic MCP parameters for tool:', toolName, 'with Claude params:', claudeParams);
+
+    // NEW APPROACH: Use Claude's parameters directly - no hardcoded tool logic
+    const mcpParams: Record<string, any> = {};
+
+    // Copy all Claude parameters as they should be tool-agnostic
+    Object.assign(mcpParams, claudeParams);
+
+    // ENHANCEMENT: Ensure limit parameter is included for tools that need it
+    const requestedLimit = this.extractRequestedLimit(intent, claudeParams);
+    if (requestedLimit && !mcpParams.limit && !mcpParams.max_results && !mcpParams.count) {
+      // Add multiple parameter variations since different tools use different names
+      mcpParams.limit = requestedLimit;
+      mcpParams.max_results = requestedLimit;
+      mcpParams.count = requestedLimit;
+      console.log(`[McpExecutor] Added limit parameters: ${requestedLimit}`);
+    }
+
+    // Log the enhanced parameter mapping
+    console.log('[McpExecutor] Enhanced parameter mapping (with limits):', mcpParams);
+
+    return mcpParams;
+  }
+
+  /**
+   * Detect definitively simple queries that should bypass AI complexity analysis
+   */
+  private isDefinitelySimpleQuery(query: string): boolean {
+    const simplePatterns = [
+      // Simple email queries
+      /^(?:get|fetch|find|show|retrieve)\s+\d*\s*emails?$/i,
+      /^(?:get|fetch|find|show|retrieve)\s+(?:latest|recent|new)\s+emails?$/i,
+      /^(?:get|fetch|find|show|retrieve)\s+(?:my\s+)?emails?$/i,
+      /^(?:list|show)\s+(?:my\s+)?emails?$/i,
+
+      // Simple file queries
+      /^(?:list|show)\s+files?$/i,
+      /^(?:get|find)\s+file\s+\w+$/i,
+
+      // Simple calendar queries
+      /^(?:check|show)\s+(?:my\s+)?calendar$/i,
+      /^(?:what|show)\s+(?:meetings?|events?)$/i,
+
+      // Simple status queries
+      /^(?:status|health)\s+check$/i,
+      /^(?:list|show)\s+(?:tools?|servers?)$/i
+    ];
+
+    return simplePatterns.some(pattern => pattern.test(query.trim()));
+  }
+
+  /**
+   * Convert between different ExecutionPlan interface formats
+   */
+  private convertToWorkflowPlan(plan: any): import('./McpWorkflowPlanner').ExecutionPlan {
+    // If it already has executionSteps, return as-is
+    if (plan.executionSteps) {
+      return plan as import('./McpWorkflowPlanner').ExecutionPlan;
+    }
+
+    // Convert from AI-enhanced format (steps[]) to workflow format (executionSteps[])
+    return {
+      workflowId: plan.planId || `workflow_${Date.now()}`,
+      originalQuery: plan.originalQuery || '',
+      executionSteps: plan.steps || [],
+      estimatedDuration: plan.estimatedDuration || 5000,
+      requiresUserInput: false,
+      riskLevel: plan.riskLevel || 'low'
+    } as import('./McpWorkflowPlanner').ExecutionPlan;
+  }
+
   private recordPerformanceMetric(queryType: string, executionTime: number): void {
     if (!this.performanceMetrics.has(queryType)) {
       this.performanceMetrics.set(queryType, []);
@@ -1440,5 +2195,227 @@ export class McpExecutor {
    */
   getCircuitBreakerStatus(): Map<string, any> {
     return this.errorHandler.getCircuitBreakerStatus();
+  }
+
+  // AI-Enhanced Execution Methods (Week 8)
+
+  /**
+   * Execute optimized conditional workflow using AI analysis
+   */
+  private async executeOptimizedConditionalWorkflow(
+    analysis: any,
+    optimization: any,
+    startTime: number
+  ): Promise<McpExecutionResult[]> {
+    console.log('[McpExecutor] Executing AI-optimized conditional workflow');
+
+    try {
+      // Use the optimized execution plan
+      const conditionalWorkflow = this.workflowOrchestrator.parseConditionalQuery(analysis.originalQuery);
+      const workflowResult = await this.workflowOrchestrator.executeConditionalWorkflow(conditionalWorkflow);
+
+      // Record optimization performance
+      const executionTime = Date.now() - startTime;
+      await this.workflowOptimizer.recordOptimizationPerformance(
+        optimization,
+        {
+          executionTime,
+          successRate: workflowResult.status === 'completed' ? 1 : 0,
+          resourceUsage: 0.5, // Simplified
+          userSatisfaction: 0.8, // Simplified
+          errorRate: workflowResult.status === 'completed' ? 0 : 1,
+          cachePerfectRate: 0.7 // Simplified
+        }
+      );
+
+      const result: McpExecutionResult = {
+        success: workflowResult.status === 'completed',
+        data: workflowResult,
+        toolName: 'AI-Enhanced-ConditionalWorkflow',
+        error: workflowResult.error || undefined,
+        executionTime: executionTime
+      };
+
+      // Cache successful results
+      if (result.success) {
+        const cacheKey = this.generateCacheKey(analysis.originalQuery);
+        this.addToCache(cacheKey, [result], analysis.originalQuery);
+      }
+
+      return [result];
+
+    } catch (error) {
+      console.error('[McpExecutor] AI-optimized conditional workflow failed:', error);
+
+      // Attempt self-healing
+      const healingResult = await this.selfHealingSystem.healWorkflow(
+        analysis,
+        error as Error,
+        { optimization, executionType: 'conditional' }
+      );
+
+      if (healingResult.recovered) {
+        return [healingResult.result];
+      }
+
+      // Return error result
+      return [{
+        success: false,
+        data: null,
+        toolName: 'AI-Enhanced-ConditionalWorkflow',
+        error: (error as Error).message,
+        executionTime: Date.now() - startTime
+      }];
+    }
+  }
+
+  /**
+   * Execute optimized multi-step workflow using AI analysis
+   */
+  private async executeOptimizedWorkflowQuery(
+    analysis: any,
+    optimization: any,
+    startTime: number
+  ): Promise<McpExecutionResult[]> {
+    console.log('[McpExecutor] Executing AI-optimized multi-step workflow');
+
+    try {
+      // Use AI-enhanced workflow execution
+      const workflow = this.queryParser.parseQuery(analysis.originalQuery);
+      const plan = await this.workflowPlanner.createExecutionPlan(workflow);
+
+      // Apply optimization to the plan
+      const optimizedPlan = optimization.optimizedPlan;
+      const context = { query: analysis.originalQuery, optimization };
+      const results = await this.executeWorkflowSteps(optimizedPlan, context);
+
+      // Record optimization performance
+      const executionTime = Date.now() - startTime;
+      await this.workflowOptimizer.recordOptimizationPerformance(
+        optimization,
+        {
+          executionTime,
+          successRate: results.some(r => r.success) ? 1 : 0,
+          resourceUsage: 0.6, // Simplified
+          userSatisfaction: 0.8, // Simplified
+          errorRate: results.some(r => !r.success) ? 0.2 : 0,
+          cachePerfectRate: 0.8 // Simplified
+        }
+      );
+
+      return results;
+
+    } catch (error) {
+      console.error('[McpExecutor] AI-optimized workflow failed:', error);
+
+      // Attempt self-healing
+      const healingResult = await this.selfHealingSystem.healWorkflow(
+        analysis,
+        error as Error,
+        { optimization, executionType: 'multi-step' }
+      );
+
+      if (healingResult.recovered) {
+        return [healingResult.result];
+      }
+
+      // Fall back to traditional execution
+      return await this.executeWorkflowQuery(analysis.originalQuery, startTime);
+    }
+  }
+
+  /**
+   * Execute optimized simple query using AI analysis
+   */
+  private async executeOptimizedSimpleQuery(
+    analysis: any,
+    optimization: any,
+    startTime: number
+  ): Promise<McpExecutionResult[]> {
+    console.log('[McpExecutor] Executing AI-optimized simple query');
+
+    try {
+      // Use AI-recommended tools with fallback to traditional routing
+      const bestTool = analysis.recommendedTools?.[0];
+      if (!bestTool) {
+        console.log('[McpExecutor] No AI recommendations, falling back to traditional tool routing');
+        return await this.executeFallbackQuery(analysis.originalQuery, startTime);
+      }
+
+      // Execute with optimized parameters
+      const toolMatch: ToolMatch = {
+        toolName: bestTool.tool.toolName,
+        score: bestTool.confidence,
+        description: bestTool.reasoning
+      };
+
+      const queryType = this.analyzeQueryType(analysis.originalQuery);
+      const result = await this.executeSingleToolWithType(toolMatch, analysis.originalQuery, queryType);
+
+      // Record optimization performance
+      const executionTime = Date.now() - startTime;
+      await this.workflowOptimizer.recordOptimizationPerformance(
+        optimization,
+        {
+          executionTime,
+          successRate: result.success ? 1 : 0,
+          resourceUsage: 0.3, // Simple queries use fewer resources
+          userSatisfaction: 0.9, // Simple queries typically have high satisfaction
+          errorRate: result.success ? 0 : 1,
+          cachePerfectRate: 0.9 // Simple queries cache well
+        }
+      );
+
+      // Learn from the execution
+      await this.intelligentParser.learnFromExecution(analysis, {
+        success: result.success,
+        actualDuration: executionTime / 1000,
+        userFeedback: result.success ? 'successful execution' : 'execution failed'
+      });
+
+      return [result];
+
+    } catch (error) {
+      console.error('[McpExecutor] AI-optimized simple query failed:', error);
+
+      // Attempt self-healing
+      const healingResult = await this.selfHealingSystem.healWorkflow(
+        analysis,
+        error as Error,
+        { optimization, executionType: 'simple' }
+      );
+
+      if (healingResult.recovered) {
+        return [healingResult.result];
+      }
+
+      // Fall back to traditional execution
+      const results: McpExecutionResult[] = [];
+      const router = new McpRouter(this.mcpManager);
+      const matches = await router.routeQuery(analysis.originalQuery, 1);
+
+      if (matches.length > 0) {
+        const queryType = this.analyzeQueryType(analysis.originalQuery);
+        const result = await this.executeSingleToolWithType(matches[0], analysis.originalQuery, queryType);
+        results.push(result);
+      }
+
+      return results;
+    }
+  }
+
+  /**
+   * Get AI system statistics
+   */
+  getAISystemStats(): {
+    intelligentParser: any;
+    workflowOptimizer: any;
+    selfHealingSystem: any;
+  } {
+    return {
+      intelligentParser: this.intelligentParser.getIntelligenceStats(),
+      workflowOptimizer: this.workflowOptimizer.getOptimizationStats(),
+      selfHealingSystem: this.selfHealingSystem.getSystemState()
+    };
   }
 }
