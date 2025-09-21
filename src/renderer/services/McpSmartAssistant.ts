@@ -265,6 +265,32 @@ export class McpSmartAssistant {
       // Check if MCP returned a clarification question
       const mcpClarification = this.conversationManager.detectMcpClarification(mcpResults[0]?.data);
       if (mcpClarification) {
+        // Handle auto-resolved clarifications
+        if (mcpClarification.type === 'auto_resolved' && mcpClarification.autoResponse !== undefined) {
+          console.log('[McpSmartAssistant] Auto-resolved MCP clarification, retrying with:', mcpClarification.autoResponse);
+
+          // Retry the tool with the auto-resolved parameter
+          const retryParameters = { ...parameterExtraction.validatedParameters };
+          if (mcpClarification.parameterName) {
+            retryParameters[mcpClarification.parameterName] = mcpClarification.autoResponse;
+          }
+
+          // Retry the tool call with the resolved parameter
+          const retryResults = await this.executeMcpTool(toolName, retryParameters, conversation.originalQuery);
+
+          return {
+            success: retryResults.length > 0 && retryResults[0].success,
+            conversationId,
+            responseType: 'execute',
+            mcpResults: retryResults,
+            formattedResponse: this.formatMcpResults(retryResults, toolName, conversation.originalQuery),
+            confidence: classification.confidence,
+            intent: classification.primaryIntent,
+            conversationState: conversation || undefined
+          };
+        }
+
+        // Regular clarification flow
         this.conversationManager.updateConversation(conversationId, {
           currentStep: 'clarifying'
         });
@@ -426,6 +452,32 @@ export class McpSmartAssistant {
         // Check if MCP returned a clarification question
         const mcpClarification = this.conversationManager.detectMcpClarification(mcpResults[0]?.data);
         if (mcpClarification) {
+          // Handle auto-resolved clarifications
+          if (mcpClarification.type === 'auto_resolved' && mcpClarification.autoResponse !== undefined) {
+            console.log('[McpSmartAssistant] Auto-resolved MCP clarification, retrying with:', mcpClarification.autoResponse);
+
+            // Retry the tool with the auto-resolved parameter
+            const retryParameters = { ...tool.parameters };
+            if (mcpClarification.parameterName) {
+              retryParameters[mcpClarification.parameterName] = mcpClarification.autoResponse;
+            }
+
+            // Retry the tool call with the resolved parameter
+            const retryResults = await this.executeMcpTool(tool.name, retryParameters, originalQuery);
+
+            return {
+              success: retryResults.length > 0 && retryResults[0].success,
+              conversationId,
+              responseType: 'execute',
+              mcpResults: retryResults,
+              formattedResponse: this.formatMcpResults(retryResults, tool.name, originalQuery),
+              confidence: claudeAnalysis.confidence,
+              intent: claudeAnalysis.intent,
+              conversationState: this.conversationManager.getConversation(conversationId) || undefined
+            };
+          }
+
+          // Regular clarification flow
           this.conversationManager.updateConversation(conversationId, {
             currentStep: 'clarifying'
           });
@@ -476,6 +528,26 @@ export class McpSmartAssistant {
           // Check for clarifications in multi-step
           const mcpClarification = this.conversationManager.detectMcpClarification(mcpResults[0]?.data);
           if (mcpClarification) {
+            // Handle auto-resolved clarifications
+            if (mcpClarification.type === 'auto_resolved' && mcpClarification.autoResponse !== undefined) {
+              console.log('[McpSmartAssistant] Auto-resolved MCP clarification in multi-step, retrying with:', mcpClarification.autoResponse);
+
+              // Retry the tool with the auto-resolved parameter
+              const retryParameters = { ...tool.parameters };
+              if (mcpClarification.parameterName) {
+                retryParameters[mcpClarification.parameterName] = mcpClarification.autoResponse;
+              }
+
+              // Retry the tool call with the resolved parameter
+              const retryResults = await this.executeMcpTool(tool.name, retryParameters, originalQuery);
+
+              // Replace the failed result with the retry result
+              allResults[allResults.length - mcpResults.length] = retryResults[0];
+
+              // Continue with the workflow instead of returning clarification
+              continue;
+            }
+
             // Return clarification for the current step
             return {
               success: true,
@@ -950,10 +1022,19 @@ export class McpSmartAssistant {
 
 
   /**
-   * Enhance parameters with limits from original query
+   * Enhance parameters with limits and instructions from original query
    */
   private enhanceParametersWithLimits(parameters: Record<string, any>, originalQuery: string): Record<string, any> {
     const enhanced = { ...parameters };
+
+    // CRITICAL FIX: Ensure instructions parameter is present
+    if (!enhanced.instructions) {
+      enhanced.instructions = `Execute the requested operation: "${originalQuery}"`;
+      console.log('[McpSmartAssistant] Added missing instructions parameter');
+    }
+
+    // SMART DEFAULTS: Add intelligent defaults for common query patterns
+    this.applySmartDefaults(enhanced, originalQuery);
 
     // Extract limit from query
     const numberMatch = originalQuery.match(/\b(\d+)\b/);
@@ -1188,24 +1269,303 @@ export class McpSmartAssistant {
   }
 
   /**
-   * Format results from multi-step workflows
+   * Format results from multi-step workflows with conversational flow
    */
   private formatMultiStepResults(allResults: any[], workflowContext: any): string {
     console.log('[McpSmartAssistant] Formatting multi-step workflow results');
 
-    let formatted = '## 🔄 **Multi-Step Workflow Results**\n\n';
-
     const stepResults = workflowContext.stepResults || [];
+
+    // Generate contextual header based on the tools used
+    const header = this.generateConversationalHeader(stepResults, workflowContext.originalQuery);
+    let formatted = header + '\n\n';
+
+    // Format each step with conversational transitions
     stepResults.forEach((step: any, index: number) => {
-      formatted += `### Step ${index + 1}: ${step.toolName}\n`;
-      if (step.success && Array.isArray(step.results)) {
-        const stepFormatted = this.formatMcpResults(step.results, step.toolName, workflowContext.originalQuery);
-        formatted += stepFormatted + '\n\n';
-      } else {
-        formatted += '❌ Step failed\n\n';
-      }
+      const transition = this.generateStepTransition(step, index, stepResults.length);
+      const stepContent = this.formatConversationalStep(step, workflowContext.originalQuery);
+
+      formatted += transition + '\n' + stepContent + '\n\n';
     });
 
     return formatted;
+  }
+
+  /**
+   * Generate contextual conversational header for multi-step results
+   */
+  private generateConversationalHeader(steps: any[], originalQuery: string): string {
+    const successfulSteps = steps.filter(step => step.success);
+    const totalSteps = steps.length;
+
+    // Identify the main actions performed
+    const emailSteps = steps.filter(step => step.toolName.includes('gmail') || step.toolName.includes('email'));
+    const calendarSteps = steps.filter(step => step.toolName.includes('calendar'));
+    const notionSteps = steps.filter(step => step.toolName.includes('notion'));
+    const trelloSteps = steps.filter(step => step.toolName.includes('trello'));
+    const slackSteps = steps.filter(step => step.toolName.includes('slack'));
+
+    if (successfulSteps.length === totalSteps) {
+      // All steps successful
+      if (emailSteps.length > 0 && calendarSteps.length > 0) {
+        return '✅ **Email & Calendar Tasks Completed**';
+      } else if (emailSteps.length > 0) {
+        return '✅ **Email Task Completed Successfully**';
+      } else if (calendarSteps.length > 0) {
+        return '✅ **Calendar Task Completed Successfully**';
+      } else if (notionSteps.length > 0) {
+        return '✅ **Notion Task Completed Successfully**';
+      } else if (trelloSteps.length > 0) {
+        return '✅ **Trello Task Completed Successfully**';
+      } else if (slackSteps.length > 0) {
+        return '✅ **Slack Task Completed Successfully**';
+      } else {
+        return '✅ **Tasks Completed Successfully**';
+      }
+    } else if (successfulSteps.length > 0) {
+      // Partial success with more contextual messaging
+      const failedSteps = totalSteps - successfulSteps.length;
+      if (emailSteps.length > 0 && calendarSteps.length > 0) {
+        return failedSteps === 1
+          ? '⚠️ **Email & Calendar Tasks - One Step Failed**'
+          : `⚠️ **Email & Calendar Tasks - ${failedSteps} Steps Failed**`;
+      } else {
+        return `⚠️ **Partial Success** - ${successfulSteps.length} of ${totalSteps} tasks completed`;
+      }
+    } else {
+      // All failed - provide more specific guidance
+      if (emailSteps.length > 0 || calendarSteps.length > 0) {
+        return '❌ **Email & Calendar Tasks Failed**';
+      } else if (notionSteps.length > 0) {
+        return '❌ **Notion Task Failed**';
+      } else {
+        return '❌ **All Tasks Failed**';
+      }
+    }
+  }
+
+  /**
+   * Generate conversational transition for each step
+   */
+  private generateStepTransition(step: any, index: number, totalSteps: number): string {
+    if (totalSteps === 1) {
+      return ''; // No transition needed for single steps
+    }
+
+    const toolType = this.getToolDisplayName(step.toolName).toLowerCase();
+
+    if (index === 0) {
+      if (step.toolName.includes('gmail') || step.toolName.includes('email')) {
+        return '**First,** I sent your email...';
+      } else if (step.toolName.includes('calendar')) {
+        return '**First,** I checked your calendar...';
+      } else if (step.toolName.includes('notion')) {
+        return '**First,** I accessed your Notion...';
+      } else {
+        return `**First,** I handled the ${toolType} request...`;
+      }
+    } else if (index === totalSteps - 1) {
+      if (step.toolName.includes('calendar')) {
+        return '**Then,** I created your calendar event...';
+      } else if (step.toolName.includes('notion')) {
+        return '**Then,** I retrieved the Notion page...';
+      } else {
+        return `**Then,** I completed the ${toolType} task...`;
+      }
+    } else {
+      return `**Next,** I handled the ${toolType} request...`;
+    }
+  }
+
+  /**
+   * Format individual step with conversational language
+   */
+  private formatConversationalStep(step: any, originalQuery: string): string {
+    if (!step.success) {
+      return this.formatFailedStep(step);
+    }
+
+    // Use the enhanced formatter for the step results
+    const stepFormatted = this.formatMcpResults(step.results, step.toolName, originalQuery);
+
+    // Remove the technical headers from individual step results
+    return stepFormatted
+      .replace(/^📧 \*\*Your Gmail Emails\*\*/m, '📧 **Email Sent Successfully**')
+      .replace(/^📅 \*\*Your Calendar Events\*\*/m, '📅 **Meeting Scheduled**')
+      .replace(/^📄 \*\*Notion Page\*\*/m, '📄 **Notion Page Retrieved**')
+      .replace(/^🗂️ \*\*Trello Cards\*\*/m, '🗂️ **Trello Cards Found**')
+      .replace(/^💬 \*\*Slack Messages\*\*/m, '💬 **Slack Messages Retrieved**');
+  }
+
+  /**
+   * Format failed step with helpful information
+   */
+  private formatFailedStep(step: any): string {
+    const toolDisplayName = this.getToolDisplayName(step.toolName);
+    let content = `❌ **${toolDisplayName} Failed**\n\n`;
+
+    if (step.error) {
+      content += `**Error:** ${step.error}\n\n`;
+    } else {
+      content += `Something went wrong while processing this step.\n\n`;
+    }
+
+    // Provide tool-specific troubleshooting tips
+    const troubleshootingTip = this.getTroubleshootingTip(step.toolName);
+    if (troubleshootingTip) {
+      content += `💡 **Troubleshooting:** ${troubleshootingTip}\n\n`;
+    }
+
+    content += `🔄 **Next steps:** You can try this operation again or ask for help with "${step.toolName.replace(/[_-]/g, ' ')}"`;
+
+    return content;
+  }
+
+  /**
+   * Get specific troubleshooting tips based on tool type
+   */
+  private getTroubleshootingTip(toolName: string): string {
+    const toolLower = toolName.toLowerCase();
+
+    if (toolLower.includes('gmail') || toolLower.includes('email')) {
+      return 'Check your email connection and permissions. Make sure Gmail is connected to the system.';
+    } else if (toolLower.includes('calendar')) {
+      return 'Verify your calendar permissions and connection. Try refreshing your calendar integration.';
+    } else if (toolLower.includes('notion')) {
+      return 'Check your Notion integration and page permissions. Make sure the page exists and you have access.';
+    } else if (toolLower.includes('trello')) {
+      return 'Verify your Trello board access and API connection.';
+    } else if (toolLower.includes('slack')) {
+      return 'Check your Slack workspace connection and channel permissions.';
+    } else if (toolLower.includes('gdocs') || toolLower.includes('google')) {
+      return 'Verify your Google account connection and document permissions.';
+    }
+
+    return 'Check your connection and permissions for this service.';
+  }
+
+  /**
+   * Get user-friendly display name for tools
+   */
+  private getToolDisplayName(toolName: string): string {
+    const toolLower = toolName.toLowerCase();
+
+    if (toolLower.includes('gmail_send')) return 'Email Sending';
+    if (toolLower.includes('gmail_find')) return 'Email Search';
+    if (toolLower.includes('gmail')) return 'Email';
+    if (toolLower.includes('calendar_quick_add')) return 'Calendar Event Creation';
+    if (toolLower.includes('calendar_find')) return 'Calendar Search';
+    if (toolLower.includes('calendar')) return 'Calendar';
+    if (toolLower.includes('notion')) return 'Notion';
+    if (toolLower.includes('trello')) return 'Trello';
+    if (toolLower.includes('slack')) return 'Slack';
+    if (toolLower.includes('gdocs')) return 'Google Docs';
+
+    // Capitalize and clean up the tool name
+    return toolName.replace(/[_-]/g, ' ')
+      .replace(/\b\w/g, l => l.toUpperCase())
+      .replace(/^.*\./, ''); // Remove server prefix like "zap2."
+  }
+
+  /**
+   * Apply smart defaults for common query patterns to reduce clarification requests
+   */
+  private applySmartDefaults(parameters: Record<string, any>, originalQuery: string): void {
+    const queryLower = originalQuery.toLowerCase();
+
+    // Smart defaults for "list all" patterns
+    if (this.isListAllQuery(queryLower)) {
+      // For Notion page searches
+      if (queryLower.includes('pages') && queryLower.includes('notion') && !parameters.title) {
+        parameters.title = ''; // Empty title to search all pages
+        console.log('[McpSmartAssistant] Applied smart default: empty title for "list all pages"');
+      }
+
+      // For Google Docs searches
+      if ((queryLower.includes('documents') || queryLower.includes('docs')) && queryLower.includes('google') && !parameters.query) {
+        parameters.query = ''; // Empty query to list all documents
+        console.log('[McpSmartAssistant] Applied smart default: empty query for "list all documents"');
+      }
+
+      // For Trello searches
+      if ((queryLower.includes('cards') || queryLower.includes('trello')) && !parameters.board) {
+        parameters.board = 'all'; // Search all boards
+        console.log('[McpSmartAssistant] Applied smart default: "all" for Trello board search');
+      }
+
+      // For general file/item searches
+      if (!parameters.search && !parameters.query && !parameters.filter) {
+        parameters.search = '*'; // Wildcard search
+        console.log('[McpSmartAssistant] Applied smart default: wildcard search for "list all"');
+      }
+    }
+
+    // Smart defaults for "show me" or "get" patterns
+    if (this.isShowMeQuery(queryLower)) {
+      // Default to recent items if no specific criteria
+      if (!parameters.sort && !parameters.order_by) {
+        parameters.sort = 'modified'; // Sort by last modified
+        parameters.order = 'desc'; // Most recent first
+        console.log('[McpSmartAssistant] Applied smart default: sort by recent for "show me" query');
+      }
+    }
+
+    // Smart defaults for calendar queries
+    if (this.isCalendarQuery(queryLower)) {
+      if (!parameters.timeMin && !parameters.start_date) {
+        // Default to today for calendar queries
+        const today = new Date();
+        parameters.timeMin = today.toISOString();
+        console.log('[McpSmartAssistant] Applied smart default: today\'s date for calendar query');
+      }
+
+      if (!parameters.timeMax && !parameters.end_date && queryLower.includes('today')) {
+        // For "today" queries, set end of day
+        const endOfDay = new Date();
+        endOfDay.setHours(23, 59, 59, 999);
+        parameters.timeMax = endOfDay.toISOString();
+        console.log('[McpSmartAssistant] Applied smart default: end of day for "today" calendar query');
+      }
+    }
+
+    // Smart defaults for email queries
+    if (this.isEmailQuery(queryLower)) {
+      if (!parameters.maxResults && !parameters.limit) {
+        // Default to reasonable number of emails
+        const defaultLimit = queryLower.includes('all') ? 50 : 10;
+        parameters.maxResults = defaultLimit;
+        parameters.limit = defaultLimit;
+        console.log(`[McpSmartAssistant] Applied smart default: ${defaultLimit} emails for email query`);
+      }
+    }
+  }
+
+  /**
+   * Check if query is a "list all" pattern
+   */
+  private isListAllQuery(queryLower: string): boolean {
+    return /\b(list|show|get|find|all|every)\s+(all|my)?\s*(pages?|documents?|files?|items?|cards?|everything)\b/.test(queryLower) ||
+           /\ball\s+(of\s+)?(my\s+)?(pages?|documents?|files?|items?|cards?)\b/.test(queryLower);
+  }
+
+  /**
+   * Check if query is a "show me" pattern
+   */
+  private isShowMeQuery(queryLower: string): boolean {
+    return /\b(show\s+me|give\s+me|get\s+me|find\s+me)\b/.test(queryLower);
+  }
+
+  /**
+   * Check if query is calendar-related
+   */
+  private isCalendarQuery(queryLower: string): boolean {
+    return /\b(calendar|meeting|event|appointment|schedule)\b/.test(queryLower);
+  }
+
+  /**
+   * Check if query is email-related
+   */
+  private isEmailQuery(queryLower: string): boolean {
+    return /\b(email|mail|message|inbox)\b/.test(queryLower);
   }
 }

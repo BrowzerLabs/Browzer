@@ -2052,6 +2052,12 @@ export class McpExecutor {
     // Copy all Claude parameters as they should be tool-agnostic
     Object.assign(mcpParams, claudeParams);
 
+    // CRITICAL FIX: Ensure 'instructions' parameter is always provided
+    if (!mcpParams.instructions) {
+      mcpParams.instructions = this.generateInstructionsFromIntent(toolName, intent, claudeParams);
+      console.log(`[McpExecutor] Added missing instructions parameter:`, mcpParams.instructions);
+    }
+
     // ENHANCEMENT: Ensure limit parameter is included for tools that need it
     const requestedLimit = this.extractRequestedLimit(intent, claudeParams);
     if (requestedLimit && !mcpParams.limit && !mcpParams.max_results && !mcpParams.count) {
@@ -2063,9 +2069,56 @@ export class McpExecutor {
     }
 
     // Log the enhanced parameter mapping
-    console.log('[McpExecutor] Enhanced parameter mapping (with limits):', mcpParams);
+    console.log('[McpExecutor] Enhanced parameter mapping (with limits and instructions):', mcpParams);
 
     return mcpParams;
+  }
+
+  /**
+   * Generate instructions parameter from user intent and tool context
+   */
+  private generateInstructionsFromIntent(toolName: string, intent: string, params: Record<string, any>): string {
+    const toolNameLower = toolName.toLowerCase();
+
+    // Email tools
+    if (toolNameLower.includes('gmail_send_email')) {
+      if (params.to) {
+        return `Send an email to ${params.to}${params.subject ? ` with subject "${params.subject}"` : ''}${params.body ? ` saying: "${params.body}"` : ''}. Original request: "${intent}"`;
+      }
+      return `Send an email as requested: "${intent}"`;
+    }
+
+    if (toolNameLower.includes('gmail_find_email') || toolNameLower.includes('gmail_search')) {
+      return `Find emails in Gmail. Original request: "${intent}"`;
+    }
+
+    if (toolNameLower.includes('gmail_reply_to_email')) {
+      return `Reply to an email as requested: "${intent}"`;
+    }
+
+    // Calendar tools
+    if (toolNameLower.includes('google_calendar_quick_add_event')) {
+      if (params.text) {
+        return `Create a calendar event from the text: "${params.text}". Original request: "${intent}"`;
+      }
+      return `Create a calendar event as requested: "${intent}"`;
+    }
+
+    if (toolNameLower.includes('google_calendar_find_events')) {
+      return `Find calendar events as requested: "${intent}"`;
+    }
+
+    if (toolNameLower.includes('google_calendar_update_event')) {
+      return `Update calendar event as requested: "${intent}"`;
+    }
+
+    // Slack tools
+    if (toolNameLower.includes('slack')) {
+      return `Perform Slack operation as requested: "${intent}"`;
+    }
+
+    // Generic fallback
+    return `Execute the requested operation: "${intent}"`;
   }
 
   /**
