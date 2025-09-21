@@ -26,6 +26,23 @@ export interface ConversationState {
   createdAt: Date;
   lastActivity: Date;
   context: Record<string, any>;
+
+  // NEW: Error-aware context retention
+  errorContext?: {
+    originalIntent: string;                    // Original user request that led to error
+    errorType: 'tool_error' | 'access_error' | 'parameter_error' | 'clarification_error';
+    errorMessage: string;                      // Raw error message from MCP tool
+    clarificationQuestion: string;             // Formatted question shown to user
+    toolName: string;                         // Which tool failed
+    attemptedParameters: Record<string, any>; // Parameters that were attempted
+    retryCount: number;                       // Number of retry attempts
+    timestamp: Date;                          // When error occurred
+    conversationalContext?: {                 // Additional context for better UX
+      taskDescription: string;                // Human-readable task description
+      expectedOutcome: string;                // What user was trying to accomplish
+      suggestedAlternatives: string[];        // Alternative approaches if retry fails
+    };
+  };
 }
 
 export interface ClarificationResponse {
@@ -691,6 +708,221 @@ export class McpConversationManager {
     }
 
     return lines.join('\n');
+  }
+
+  /**
+   * CONTEXT RETENTION: Capture error context when MCP tool fails
+   */
+  captureErrorContext(
+    conversationId: string,
+    originalIntent: string,
+    errorMessage: string,
+    toolName: string,
+    attemptedParameters: Record<string, any>,
+    errorType: 'tool_error' | 'access_error' | 'parameter_error' | 'clarification_error' = 'tool_error'
+  ): void {
+    const conversation = this.conversations.get(conversationId);
+    if (!conversation) return;
+
+    console.log('[McpConversationManager] Capturing error context for conversation:', conversationId);
+    console.log('[McpConversationManager] Original intent:', originalIntent);
+    console.log('[McpConversationManager] Tool:', toolName, 'Error:', errorMessage);
+
+    // Create conversational context for better UX
+    const conversationalContext = this.generateConversationalContext(originalIntent, toolName, errorType);
+
+    conversation.errorContext = {
+      originalIntent,
+      errorType,
+      errorMessage,
+      clarificationQuestion: '', // Will be filled when clarification is generated
+      toolName,
+      attemptedParameters,
+      retryCount: (conversation.errorContext?.retryCount || 0),
+      timestamp: new Date(),
+      conversationalContext
+    };
+
+    // Update conversation step to clarifying
+    conversation.currentStep = 'clarifying';
+    conversation.lastActivity = new Date();
+
+    console.log('[McpConversationManager] Error context captured:', conversation.errorContext);
+  }
+
+  /**
+   * Update error context with the clarification question that will be shown to user
+   */
+  updateErrorContextWithClarification(conversationId: string, clarificationQuestion: string): void {
+    const conversation = this.conversations.get(conversationId);
+    if (!conversation || !conversation.errorContext) return;
+
+    conversation.errorContext.clarificationQuestion = clarificationQuestion;
+    console.log('[McpConversationManager] Updated error context with clarification:', clarificationQuestion);
+  }
+
+  /**
+   * Check if conversation has error context that needs merging with user response
+   */
+  hasErrorContext(conversationId: string): boolean {
+    const conversation = this.conversations.get(conversationId);
+    return !!(conversation?.errorContext);
+  }
+
+  /**
+   * Get error context for conversation
+   */
+  getErrorContext(conversationId: string): ConversationState['errorContext'] | null {
+    const conversation = this.conversations.get(conversationId);
+    return conversation?.errorContext || null;
+  }
+
+  /**
+   * Increment retry count for error context
+   */
+  incrementErrorRetryCount(conversationId: string): void {
+    const conversation = this.conversations.get(conversationId);
+    if (conversation?.errorContext) {
+      conversation.errorContext.retryCount += 1;
+      console.log('[McpConversationManager] Incremented retry count to:', conversation.errorContext.retryCount);
+    }
+  }
+
+  /**
+   * Clear error context after successful resolution
+   */
+  clearErrorContext(conversationId: string): void {
+    const conversation = this.conversations.get(conversationId);
+    if (conversation) {
+      conversation.errorContext = undefined;
+      console.log('[McpConversationManager] Cleared error context for conversation:', conversationId);
+    }
+  }
+
+  /**
+   * Generate conversational context for better error UX
+   */
+  private generateConversationalContext(
+    originalIntent: string,
+    toolName: string,
+    errorType: string
+  ): NonNullable<ConversationState['errorContext']>['conversationalContext'] {
+    const intentLower = originalIntent.toLowerCase();
+    const toolLower = toolName.toLowerCase();
+
+    let taskDescription = '';
+    let expectedOutcome = '';
+    let suggestedAlternatives: string[] = [];
+
+    // Tool-specific context generation
+    if (toolLower.includes('google_docs') || toolLower.includes('docs')) {
+      if (intentLower.includes('create')) {
+        taskDescription = 'Creating a Google document';
+        expectedOutcome = 'Document created and accessible in Google Drive';
+        suggestedAlternatives = [
+          'Create local text file preview',
+          'Try different Google account',
+          'Create with simplified content'
+        ];
+      } else if (intentLower.includes('find') || intentLower.includes('search')) {
+        taskDescription = 'Searching Google documents';
+        expectedOutcome = 'List of matching documents';
+        suggestedAlternatives = [
+          'Search in specific folder',
+          'Try broader search terms',
+          'Check document permissions'
+        ];
+      }
+    } else if (toolLower.includes('gmail') || toolLower.includes('email')) {
+      if (intentLower.includes('send')) {
+        taskDescription = 'Sending an email';
+        expectedOutcome = 'Email sent successfully';
+        suggestedAlternatives = [
+          'Save as draft',
+          'Send with simplified content',
+          'Try different recipient format'
+        ];
+      } else {
+        taskDescription = 'Finding emails';
+        expectedOutcome = 'List of matching emails';
+        suggestedAlternatives = [
+          'Search in different folder',
+          'Broaden search criteria',
+          'Check email connection'
+        ];
+      }
+    } else if (toolLower.includes('calendar')) {
+      if (intentLower.includes('create') || intentLower.includes('add')) {
+        taskDescription = 'Creating calendar event';
+        expectedOutcome = 'Event added to calendar';
+        suggestedAlternatives = [
+          'Create with basic details only',
+          'Try different time slot',
+          'Use default calendar'
+        ];
+      } else if (intentLower.includes('delete')) {
+        taskDescription = 'Deleting calendar events';
+        expectedOutcome = 'Events removed from calendar';
+        suggestedAlternatives = [
+          'Delete from primary calendar only',
+          'Confirm event exists first',
+          'Try specific date range'
+        ];
+      }
+    } else if (toolLower.includes('slack')) {
+      if (intentLower.includes('create') && intentLower.includes('channel')) {
+        taskDescription = 'Creating Slack channel';
+        expectedOutcome = 'Channel created and accessible';
+        suggestedAlternatives = [
+          'Create public channel instead',
+          'Try different channel name',
+          'Check Slack permissions'
+        ];
+      } else if (intentLower.includes('find') && intentLower.includes('channel')) {
+        taskDescription = 'Finding Slack channels';
+        expectedOutcome = 'List of matching channels';
+        suggestedAlternatives = [
+          'Search public channels only',
+          'Try partial channel name',
+          'Check Slack workspace access'
+        ];
+      }
+    } else if (toolLower.includes('notion')) {
+      if (intentLower.includes('create')) {
+        taskDescription = 'Creating Notion page';
+        expectedOutcome = 'Page created in Notion workspace';
+        suggestedAlternatives = [
+          'Create in default workspace',
+          'Use template page',
+          'Try simplified page structure'
+        ];
+      } else {
+        taskDescription = 'Finding Notion pages';
+        expectedOutcome = 'List of matching pages';
+        suggestedAlternatives = [
+          'Search in specific database',
+          'Try partial title match',
+          'Check page permissions'
+        ];
+      }
+    }
+
+    // Fallback for unknown tools
+    if (!taskDescription) {
+      taskDescription = `Using ${toolName}`;
+      expectedOutcome = 'Task completed successfully';
+      suggestedAlternatives = [
+        'Try with simplified parameters',
+        'Check service connection',
+        'Use alternative approach'
+      ];
+    }
+
+    return {
+      taskDescription,
+      expectedOutcome,
+      suggestedAlternatives
+    };
   }
 
   // Private helper methods

@@ -13,6 +13,7 @@ import { McpContextManager, ContextualSuggestion } from './McpContextManager';
 import { McpToolDiscoveryService, ToolRegistry } from './McpToolDiscoveryService';
 import { McpClaudeService, McpMessageAnalysis } from './McpClaudeService';
 import { McpResultFormatter, FormattedResult } from './McpResultFormatter';
+import { McpLLMIntentService, LLMIntentAnalysis, LLMToolRecommendation } from './McpLLMIntentService';
 
 export interface SmartAssistantResponse {
   success: boolean;
@@ -49,6 +50,7 @@ export class McpSmartAssistant {
   private contextManager: McpContextManager;
   private toolDiscoveryService: McpToolDiscoveryService;
   private claudeService: McpClaudeService;
+  private llmIntentService: McpLLMIntentService;
   private resultFormatter: McpResultFormatter;
   private mcpExecutor: any; // Will be injected
   private mcpManager: any;
@@ -65,6 +67,7 @@ export class McpSmartAssistant {
     // Initialize dynamic tool discovery services
     this.toolDiscoveryService = new McpToolDiscoveryService(this.mcpManager);
     this.claudeService = new McpClaudeService();
+    this.llmIntentService = new McpLLMIntentService();
     this.resultFormatter = new McpResultFormatter();
   }
 
@@ -98,31 +101,36 @@ export class McpSmartAssistant {
         servers: availableTools.map(t => t.serverName).filter((v, i, a) => a.indexOf(v) === i)
       });
 
-      // Step 2: Use Claude API to analyze user message with ALL discovered tools
-      console.log('[McpSmartAssistant] Using Claude API for intelligent tool selection...');
-      this.claudeService.refreshApiKey(); // Refresh API key from localStorage
+      // Step 2: Use LLM Intent Service for comprehensive intent understanding
+      console.log('[McpSmartAssistant] Using LLM Intent Service for comprehensive intent understanding...');
+      this.llmIntentService.refreshApiKey(); // Refresh API key from localStorage
 
-      if (!this.claudeService.isAvailable()) {
-        console.log('[McpSmartAssistant] Claude API not available, falling back to traditional analysis');
+      if (!this.llmIntentService.isAvailable()) {
+        console.log('[McpSmartAssistant] LLM Intent Service not available, falling back to traditional analysis');
         return await this.fallbackToTraditionalAnalysis(newConversationId, query, conversation);
       }
 
-      const claudeAnalysis: McpMessageAnalysis = await this.claudeService.analyzeUserMessageWithDynamicTools(query, availableTools);
-      console.log('[McpSmartAssistant] Claude analysis completed:', claudeAnalysis);
+      const llmAnalysis: LLMIntentAnalysis = await this.llmIntentService.analyzeUserIntent(query, availableTools, newConversationId);
+      console.log('[McpSmartAssistant] LLM Intent analysis completed:', {
+        intent: llmAnalysis.intent,
+        category: llmAnalysis.intentCategory,
+        toolCount: llmAnalysis.tools.length,
+        confidence: llmAnalysis.confidence
+      });
 
       this.conversationManager.updateConversation(newConversationId, {
         currentStep: 'analyzing',
-        context: { claudeAnalysis, availableTools: availableTools.length }
+        context: { llmAnalysis, availableTools: availableTools.length }
       });
 
-      // Step 3: Check if Claude found suitable tools
-      if (claudeAnalysis.tools.length === 0) {
-        console.log('[McpSmartAssistant] Claude found no suitable tools, falling back to traditional analysis');
+      // Step 3: Check if LLM found suitable tools
+      if (llmAnalysis.tools.length === 0) {
+        console.log('[McpSmartAssistant] LLM found no suitable tools, falling back to traditional analysis');
         return await this.fallbackToTraditionalAnalysis(newConversationId, query, conversation);
       }
 
-      // Step 4: Execute using Claude's recommendations
-      return await this.executeWithClaudeRecommendations(newConversationId, claudeAnalysis, query);
+      // Step 4: Execute using LLM's recommendations
+      return await this.executeWithLLMRecommendations(newConversationId, llmAnalysis, query);
 
     } catch (error) {
       console.error('[McpSmartAssistant] Error processing query:', error);
@@ -138,13 +146,24 @@ export class McpSmartAssistant {
   }
 
   /**
-   * Handle continuation of existing conversation
+   * Handle continuation of existing conversation with error-aware context merging
    */
   private async handleConversationContinuation(
     conversation: ConversationState,
     userResponse: string
   ): Promise<SmartAssistantResponse> {
     console.log('[McpSmartAssistant] Handling conversation continuation:', conversation.id);
+
+    // NEW: Check if this conversation has error context that needs merging
+    const hasErrorContext = this.conversationManager.hasErrorContext(conversation.id);
+
+    if (hasErrorContext) {
+      console.log('[McpSmartAssistant] Detected error context - performing intent merging...');
+      return await this.handleErrorContextMerging(conversation, userResponse);
+    }
+
+    // TRADITIONAL PATH: Regular clarification handling (for backward compatibility)
+    console.log('[McpSmartAssistant] Using traditional clarification handling');
 
     // Process the user's response to clarification
     const questionContext = {
@@ -211,6 +230,310 @@ export class McpSmartAssistant {
       responseType: 'error',
       error: 'Invalid conversation state',
       confidence: 0.1
+    };
+  }
+
+  /**
+   * ERROR-AWARE HANDLING: Handle conversation continuation when error context exists
+   */
+  private async handleErrorContextMerging(
+    conversation: ConversationState,
+    userResponse: string
+  ): Promise<SmartAssistantResponse> {
+    const errorContext = this.conversationManager.getErrorContext(conversation.id);
+    if (!errorContext) {
+      console.error('[McpSmartAssistant] Error context missing despite hasErrorContext check');
+      return await this.handleConversationContinuation(conversation, userResponse);
+    }
+
+    console.log('[McpSmartAssistant] Merging user response with original intent:', {
+      originalIntent: errorContext.originalIntent,
+      userResponse,
+      toolName: errorContext.toolName
+    });
+
+    try {
+      // Get available tools for merging
+      const toolRegistry = await this.toolDiscoveryService.discoverAllTools();
+      const availableTools = this.toolDiscoveryService.getAllToolsForClaudeAPI();
+
+      // Use LLM to merge user response with original intent
+      const mergedAnalysis = await this.llmIntentService.mergeErrorResponseWithOriginalIntent(
+        userResponse,
+        errorContext.originalIntent,
+        {
+          errorMessage: errorContext.errorMessage,
+          toolName: errorContext.toolName,
+          clarificationQuestion: errorContext.clarificationQuestion,
+          attemptedParameters: errorContext.attemptedParameters,
+          conversationalContext: errorContext.conversationalContext
+        },
+        availableTools,
+        conversation.id
+      );
+
+      console.log('[McpSmartAssistant] Intent merging successful, retrying with merged intent:', mergedAnalysis.intent);
+
+      // Update conversation context with successful merge
+      this.llmIntentService.addClarificationToContext(
+        conversation.id,
+        errorContext.clarificationQuestion,
+        userResponse,
+        errorContext.originalIntent
+      );
+
+      // Increment retry count
+      this.conversationManager.incrementErrorRetryCount(conversation.id);
+
+      // Execute with merged intent - includes progressive fallback logic
+      return await this.executeWithProgressiveFallback(conversation.id, mergedAnalysis, mergedAnalysis.intent);
+
+    } catch (error) {
+      console.error('[McpSmartAssistant] Error context merging failed:', error);
+
+      // Fallback to traditional handling if LLM merging fails
+      this.conversationManager.clearErrorContext(conversation.id);
+      return await this.handleConversationContinuation(conversation, userResponse);
+    }
+  }
+
+  /**
+   * PROGRESSIVE FALLBACK: Execute with multiple retry strategies
+   */
+  private async executeWithProgressiveFallback(
+    conversationId: string,
+    analysis: LLMIntentAnalysis,
+    originalQuery: string
+  ): Promise<SmartAssistantResponse> {
+    console.log('[McpSmartAssistant] Executing with progressive fallback capabilities');
+
+    const errorContext = this.conversationManager.getErrorContext(conversationId);
+    const retryCount = errorContext?.retryCount || 0;
+    const maxRetries = 3;
+
+    // First attempt: Try with merged analysis
+    console.log(`[McpSmartAssistant] Attempt ${retryCount + 1} of ${maxRetries}: Standard execution`);
+    const result = await this.executeWithLLMRecommendations(conversationId, analysis, originalQuery);
+
+    // If successful, clear error context and return
+    if (result.success) {
+      console.log('[McpSmartAssistant] Progressive fallback succeeded on standard execution');
+      return result;
+    }
+
+    // If failed and we have retries left, try progressive fallbacks
+    if (retryCount < maxRetries - 1) {
+      console.log('[McpSmartAssistant] Standard execution failed, trying progressive fallbacks...');
+
+      try {
+        return await this.attemptProgressiveFallbacks(conversationId, analysis, originalQuery, retryCount + 1);
+      } catch (fallbackError) {
+        console.error('[McpSmartAssistant] Progressive fallbacks exhausted:', fallbackError);
+      }
+    }
+
+    // All retries exhausted - provide helpful fallback response
+    console.log('[McpSmartAssistant] All retry attempts exhausted, providing fallback response');
+    return await this.generateFallbackResponse(conversationId, analysis, originalQuery);
+  }
+
+  /**
+   * Attempt various fallback strategies based on error context
+   */
+  private async attemptProgressiveFallbacks(
+    conversationId: string,
+    analysis: LLMIntentAnalysis,
+    originalQuery: string,
+    attemptNumber: number
+  ): Promise<SmartAssistantResponse> {
+    const errorContext = this.conversationManager.getErrorContext(conversationId);
+    if (!errorContext) {
+      throw new Error('No error context for fallback attempts');
+    }
+
+    console.log(`[McpSmartAssistant] Progressive fallback attempt ${attemptNumber}:`, errorContext.toolName);
+
+    // Update retry count
+    this.conversationManager.incrementErrorRetryCount(conversationId);
+
+    // Strategy 1: Simplified Parameters
+    if (attemptNumber === 2) {
+      console.log('[McpSmartAssistant] Fallback Strategy 1: Simplified parameters');
+      const simplifiedAnalysis = await this.createSimplifiedParameterAnalysis(analysis, errorContext);
+      const result = await this.executeWithLLMRecommendations(conversationId, simplifiedAnalysis, originalQuery);
+
+      if (result.success) {
+        console.log('[McpSmartAssistant] Simplified parameter strategy succeeded');
+        return result;
+      }
+    }
+
+    // Strategy 2: Alternative Tool Selection
+    if (attemptNumber === 3) {
+      console.log('[McpSmartAssistant] Fallback Strategy 2: Alternative approach');
+      const alternativeAnalysis = await this.createAlternativeToolAnalysis(analysis, errorContext);
+      const result = await this.executeWithLLMRecommendations(conversationId, alternativeAnalysis, originalQuery);
+
+      if (result.success) {
+        console.log('[McpSmartAssistant] Alternative tool strategy succeeded');
+        return result;
+      }
+    }
+
+    // If all strategies fail, throw to trigger final fallback
+    throw new Error('All progressive fallback strategies failed');
+  }
+
+  /**
+   * Create analysis with simplified parameters for retry
+   */
+  private async createSimplifiedParameterAnalysis(
+    originalAnalysis: LLMIntentAnalysis,
+    errorContext: NonNullable<ConversationState['errorContext']>
+  ): Promise<LLMIntentAnalysis> {
+    const tool = originalAnalysis.tools[0];
+    if (!tool) return originalAnalysis;
+
+    // Create simplified parameters based on tool type
+    const simplifiedParameters: Record<string, any> = {};
+    const toolLower = tool.name.toLowerCase();
+
+    if (toolLower.includes('google_docs') || toolLower.includes('docs')) {
+      if (originalAnalysis.intentCategory === 'create') {
+        simplifiedParameters.title = tool.parameters.title || 'Document';
+        simplifiedParameters.content = ''; // Always use empty content for retry
+      } else if (originalAnalysis.intentCategory === 'list_all' || originalAnalysis.intentCategory === 'search_specific') {
+        simplifiedParameters.query = ''; // Empty query to list all
+      }
+    } else if (toolLower.includes('gmail') || toolLower.includes('email')) {
+      if (originalAnalysis.intentCategory === 'create') {
+        simplifiedParameters.to = tool.parameters.to;
+        simplifiedParameters.subject = tool.parameters.subject || 'Message';
+        simplifiedParameters.body = tool.parameters.body || 'Hello';
+      } else {
+        simplifiedParameters.limit = 5; // Smaller limit for retry
+        simplifiedParameters.query = ''; // Broad search
+      }
+    } else if (toolLower.includes('slack')) {
+      if (originalAnalysis.intentCategory === 'create') {
+        simplifiedParameters.channelName = tool.parameters.channelName?.toLowerCase().replace(/[^a-z0-9-]/g, '-');
+        simplifiedParameters.instructions = `create channel ${simplifiedParameters.channelName}`;
+      } else {
+        simplifiedParameters.instructions = 'find channels';
+      }
+    } else if (toolLower.includes('calendar')) {
+      if (originalAnalysis.intentCategory === 'delete') {
+        simplifiedParameters.instructions = 'delete events from primary calendar today';
+      } else {
+        simplifiedParameters.title = tool.parameters.title || 'Event';
+        simplifiedParameters.start_time = new Date(Date.now() + 60*60*1000).toISOString(); // 1 hour from now
+      }
+    } else if (toolLower.includes('notion')) {
+      if (originalAnalysis.intentCategory === 'create') {
+        simplifiedParameters.title = tool.parameters.title || 'Page';
+        simplifiedParameters.content = ''; // Basic page
+      } else {
+        simplifiedParameters.title = ''; // List all
+      }
+    } else {
+      // Generic simplification
+      for (const [key, value] of Object.entries(tool.parameters)) {
+        if (typeof value === 'string' && value.length > 20) {
+          simplifiedParameters[key] = value.substring(0, 20); // Truncate long strings
+        } else if (typeof value === 'string' && value === '') {
+          simplifiedParameters[key] = ''; // Keep empty strings
+        } else {
+          simplifiedParameters[key] = value;
+        }
+      }
+    }
+
+    console.log('[McpSmartAssistant] Created simplified parameters:', simplifiedParameters);
+
+    return {
+      ...originalAnalysis,
+      intent: `${originalAnalysis.intent} (simplified retry)`,
+      tools: [{
+        ...tool,
+        parameters: simplifiedParameters,
+        reasoning: `Simplified retry: ${tool.reasoning}`
+      }],
+      reasoning: `Simplified parameter retry: ${originalAnalysis.reasoning}`
+    };
+  }
+
+  /**
+   * Create analysis with alternative tool approach for retry
+   */
+  private async createAlternativeToolAnalysis(
+    originalAnalysis: LLMIntentAnalysis,
+    errorContext: NonNullable<ConversationState['errorContext']>
+  ): Promise<LLMIntentAnalysis> {
+    // For now, return the original analysis with modified approach
+    // In a real implementation, this could try completely different tools or approaches
+    const tool = originalAnalysis.tools[0];
+    if (!tool) return originalAnalysis;
+
+    console.log('[McpSmartAssistant] Creating alternative tool analysis for:', tool.name);
+
+    return {
+      ...originalAnalysis,
+      intent: `${originalAnalysis.intent} (alternative approach)`,
+      tools: [{
+        ...tool,
+        reasoning: `Alternative approach retry: ${tool.reasoning}`,
+        confidence: Math.max(0.7, tool.confidence - 0.1) // Slightly lower confidence
+      }],
+      reasoning: `Alternative approach retry: ${originalAnalysis.reasoning}`
+    };
+  }
+
+  /**
+   * Generate helpful fallback response when all retries fail
+   */
+  private async generateFallbackResponse(
+    conversationId: string,
+    analysis: LLMIntentAnalysis,
+    originalQuery: string
+  ): Promise<SmartAssistantResponse> {
+    const errorContext = this.conversationManager.getErrorContext(conversationId);
+    console.log('[McpSmartAssistant] Generating fallback response after retry exhaustion');
+
+    // Clear error context since we're providing final response
+    this.conversationManager.clearErrorContext(conversationId);
+
+    // Create helpful fallback message using the result formatter
+    let fallbackMessage = '';
+
+    if (errorContext?.conversationalContext) {
+      fallbackMessage = this.resultFormatter.formatContextualError(
+        originalQuery,
+        analysis.tools[0]?.name || 'unknown',
+        errorContext.errorMessage,
+        errorContext.conversationalContext
+      );
+    } else {
+      fallbackMessage = `❌ I tried multiple approaches but couldn't complete your request: "${originalQuery}"\n\n`;
+      fallbackMessage += `**What I attempted:**\n`;
+      fallbackMessage += `• Standard execution with your requirements\n`;
+      fallbackMessage += `• Simplified parameter approach\n`;
+      fallbackMessage += `• Alternative method\n\n`;
+      fallbackMessage += `**What you can try:**\n`;
+      fallbackMessage += `• Break the request into smaller steps\n`;
+      fallbackMessage += `• Check service connections\n`;
+      fallbackMessage += `• Try with different parameters\n`;
+      fallbackMessage += `• Contact support if the issue persists`;
+    }
+
+    return {
+      success: false,
+      conversationId,
+      responseType: 'error',
+      error: 'Multiple retry attempts failed',
+      formattedResponse: fallbackMessage,
+      confidence: analysis.confidence,
+      intent: analysis.intent,
+      conversationState: this.conversationManager.getConversation(conversationId) || undefined
     };
   }
 
@@ -603,6 +926,261 @@ export class McpSmartAssistant {
         error: error instanceof Error ? error.message : 'Execution failed',
         confidence: claudeAnalysis.confidence,
         conversationState: this.conversationManager.getConversation(conversationId) || undefined || undefined
+      };
+    }
+  }
+
+  /**
+   * Execute using LLM's intelligent tool recommendations with enhanced clarification handling
+   */
+  private async executeWithLLMRecommendations(
+    conversationId: string,
+    llmAnalysis: LLMIntentAnalysis,
+    originalQuery: string
+  ): Promise<SmartAssistantResponse> {
+    console.log('[McpSmartAssistant] Executing with LLM recommendations:', llmAnalysis.tools.length, 'tools');
+    console.log('[McpSmartAssistant] Intent category:', llmAnalysis.intentCategory);
+    console.log('[McpSmartAssistant] Contextual defaults applied:', Object.keys(llmAnalysis.contextualDefaults).length);
+
+    try {
+      this.conversationManager.updateConversation(conversationId, {
+        currentStep: 'executing',
+        context: {
+          originalQuery,
+          llmAnalysis,
+          workflowType: llmAnalysis.tools.length > 1 ? 'multi-step' : 'single',
+          pendingSteps: llmAnalysis.tools.length > 1 ? llmAnalysis.tools.slice(1) : []
+        }
+      });
+
+      if (llmAnalysis.tools.length === 1) {
+        // Single tool execution with enhanced clarification handling
+        const tool = llmAnalysis.tools[0];
+        console.log('[McpSmartAssistant] Executing single tool:', tool.name, 'with parameters:', tool.parameters);
+
+        const mcpResults = await this.executeMcpTool(tool.name, tool.parameters, originalQuery);
+
+        // ENHANCED: Check if MCP returned a clarification question and use LLM to resolve it
+        const mcpClarification = this.conversationManager.detectMcpClarification(mcpResults[0]?.data);
+        if (mcpClarification) {
+          console.log('[McpSmartAssistant] MCP tool asked for clarification:', mcpClarification.question);
+          console.log('[McpSmartAssistant] Attempting LLM-based clarification resolution...');
+
+          try {
+            // Use LLM to resolve the clarification based on original intent
+            const clarificationResolution = await this.llmIntentService.analyzeUserIntent(
+              originalQuery,
+              [], // Empty tools array for clarification resolution
+              conversationId,
+              {
+                question: mcpClarification.question,
+                originalQuery: originalQuery,
+                toolName: tool.name,
+                parameterName: mcpClarification.parameterName || 'unknown'
+              }
+            );
+
+            console.log('[McpSmartAssistant] LLM clarification resolution:', clarificationResolution.clarificationResolution);
+
+            // If LLM can auto-resolve, retry with the resolved parameter
+            if (clarificationResolution.clarificationResolution?.canAutoResolve &&
+                clarificationResolution.clarificationResolution.autoResponse !== undefined) {
+
+              console.log('[McpSmartAssistant] Auto-resolving with LLM suggestion:', clarificationResolution.clarificationResolution.autoResponse);
+
+              // Update conversation context with the clarification resolution
+              this.llmIntentService.addClarificationToContext(
+                conversationId,
+                mcpClarification.question,
+                clarificationResolution.clarificationResolution.autoResponse,
+                originalQuery
+              );
+
+              // Retry the tool with the auto-resolved parameter
+              const retryParameters = { ...tool.parameters };
+              if (mcpClarification.parameterName) {
+                retryParameters[mcpClarification.parameterName] = clarificationResolution.clarificationResolution.autoResponse;
+              }
+
+              const retryResults = await this.executeMcpTool(tool.name, retryParameters, originalQuery);
+
+              // Add successful tool execution to context
+              this.llmIntentService.addToolExecutionToContext(
+                conversationId,
+                tool.name,
+                retryParameters,
+                retryResults.length > 0 && retryResults[0].success,
+                retryResults
+              );
+
+              return {
+                success: retryResults.length > 0 && retryResults[0].success,
+                conversationId,
+                responseType: 'execute',
+                mcpResults: retryResults,
+                formattedResponse: this.formatMcpResults(retryResults, tool.name, originalQuery),
+                confidence: llmAnalysis.confidence,
+                intent: llmAnalysis.intent,
+                conversationState: this.conversationManager.getConversation(conversationId) || undefined
+              };
+            }
+          } catch (llmError) {
+            console.warn('[McpSmartAssistant] LLM clarification resolution failed, falling back to traditional:', llmError);
+          }
+
+          // Handle auto-resolved clarifications from traditional pipeline (backward compatibility)
+          if (mcpClarification.type === 'auto_resolved' && mcpClarification.autoResponse !== undefined) {
+            console.log('[McpSmartAssistant] Using traditional auto-resolution:', mcpClarification.autoResponse);
+
+            const retryParameters = { ...tool.parameters };
+            if (mcpClarification.parameterName) {
+              retryParameters[mcpClarification.parameterName] = mcpClarification.autoResponse;
+            }
+
+            const retryResults = await this.executeMcpTool(tool.name, retryParameters, originalQuery);
+
+            return {
+              success: retryResults.length > 0 && retryResults[0].success,
+              conversationId,
+              responseType: 'execute',
+              mcpResults: retryResults,
+              formattedResponse: this.formatMcpResults(retryResults, tool.name, originalQuery),
+              confidence: llmAnalysis.confidence,
+              intent: llmAnalysis.intent,
+              conversationState: this.conversationManager.getConversation(conversationId) || undefined
+            };
+          }
+
+          // ENHANCED: Capture error context before asking user for clarification
+          console.log('[McpSmartAssistant] Capturing error context for clarification:', {
+            originalIntent: originalQuery,
+            toolName: tool.name,
+            errorMessage: mcpClarification.question
+          });
+
+          this.conversationManager.captureErrorContext(
+            conversationId,
+            originalQuery,                    // Original user intent
+            mcpClarification.question,        // Error message from MCP tool
+            tool.name,                       // Tool that failed
+            tool.parameters,                 // Parameters that were attempted
+            'clarification_error'            // Error type
+          );
+
+          // Update error context with the formatted clarification question
+          this.conversationManager.updateErrorContextWithClarification(conversationId, mcpClarification.question);
+
+          this.conversationManager.updateConversation(conversationId, {
+            currentStep: 'clarifying'
+          });
+          this.conversationManager.addClarificationToHistory(conversationId, mcpClarification.question);
+
+          return {
+            success: true,
+            conversationId,
+            responseType: 'clarify',
+            clarificationQuestion: mcpClarification.question,
+            clarificationOptions: mcpClarification.options,
+            confidence: llmAnalysis.confidence,
+            conversationState: this.conversationManager.getConversation(conversationId) || undefined
+          };
+        }
+
+        // Success - learn from the action and complete conversation
+        const success = mcpResults.length > 0 && mcpResults[0].success;
+
+        // ENHANCED: Clear error context on successful execution
+        if (success) {
+          this.conversationManager.clearErrorContext(conversationId);
+          console.log('[McpSmartAssistant] Cleared error context after successful execution');
+        }
+
+        // Add to LLM context for learning
+        this.llmIntentService.addToolExecutionToContext(
+          conversationId,
+          tool.name,
+          tool.parameters,
+          success,
+          mcpResults
+        );
+
+        this.contextManager.learnFromAction(llmAnalysis.intent, tool.parameters, success);
+        this.conversationManager.completeConversation(conversationId, mcpResults);
+
+        return {
+          success,
+          conversationId,
+          responseType: 'execute',
+          mcpResults,
+          formattedResponse: this.formatMcpResults(mcpResults, tool.name, originalQuery),
+          confidence: llmAnalysis.confidence,
+          intent: llmAnalysis.intent,
+          parameters: tool.parameters,
+          conversationState: this.conversationManager.getConversation(conversationId) || undefined
+        };
+
+      } else {
+        // Multi-step execution with LLM guidance
+        console.log('[McpSmartAssistant] Multi-step LLM-guided execution for', llmAnalysis.tools.length, 'tools');
+        const allResults: any[] = [];
+
+        for (const [index, tool] of llmAnalysis.tools.entries()) {
+          console.log(`[McpSmartAssistant] Executing step ${index + 1}:`, tool.name);
+          const mcpResults = await this.executeMcpTool(tool.name, tool.parameters, originalQuery);
+          allResults.push(...mcpResults);
+
+          // Add each tool execution to LLM context
+          this.llmIntentService.addToolExecutionToContext(
+            conversationId,
+            tool.name,
+            tool.parameters,
+            mcpResults.length > 0 && mcpResults[0].success,
+            mcpResults
+          );
+        }
+
+        const success = allResults.some(r => r.success);
+        this.contextManager.learnFromAction(llmAnalysis.intent, {}, success);
+        this.conversationManager.completeConversation(conversationId, allResults);
+
+        return {
+          success,
+          conversationId,
+          responseType: 'execute',
+          mcpResults: allResults,
+          formattedResponse: this.formatMultiStepResults(allResults, {
+            stepResults: allResults.map((result, index) => ({
+              step: index + 1,
+              toolName: llmAnalysis.tools[index]?.name || 'unknown',
+              results: Array.isArray(result) ? result : [result],
+              success: Array.isArray(result) ? (result.length === 0 || result[0].success !== false) : (result && result.success !== false),
+              originalQuery: originalQuery
+            })),
+            originalQuery,
+            tools: llmAnalysis.tools
+          }),
+          confidence: llmAnalysis.confidence,
+          intent: llmAnalysis.intent,
+          conversationState: this.conversationManager.getConversation(conversationId) || undefined
+        };
+      }
+
+    } catch (error) {
+      console.error('[McpSmartAssistant] LLM-based execution failed:', error);
+
+      this.conversationManager.recordMcpError(
+        conversationId,
+        error instanceof Error ? error.message : 'Unknown error',
+        llmAnalysis.tools[0]?.name || 'unknown'
+      );
+
+      return {
+        success: false,
+        conversationId,
+        responseType: 'error',
+        error: error instanceof Error ? error.message : 'Execution failed',
+        confidence: llmAnalysis.confidence,
+        conversationState: this.conversationManager.getConversation(conversationId) || undefined
       };
     }
   }

@@ -1207,4 +1207,199 @@ export class McpResultFormatter {
 
     return tips;
   }
+
+  /**
+   * ENHANCED: Create tool-aware conversational error messages with context
+   */
+  formatContextualError(
+    originalIntent: string,
+    toolName: string,
+    errorMessage: string,
+    conversationalContext?: {
+      taskDescription: string;
+      expectedOutcome: string;
+      suggestedAlternatives: string[];
+    }
+  ): string {
+    console.log('[McpResultFormatter] Creating contextual error for:', { originalIntent, toolName });
+
+    const toolLower = toolName.toLowerCase();
+    const intentLower = originalIntent.toLowerCase();
+
+    // Extract key elements from original intent for personalized error
+    let taskObject = 'your task';
+    let actionType = 'complete';
+
+    if (intentLower.includes('create') && intentLower.includes('document')) {
+      const documentMatch = originalIntent.match(/document\s+(?:named|titled|called)?\s*["']?([^"'\n]+)["']?/i);
+      taskObject = documentMatch ? `document "${documentMatch[1]}"` : 'your document';
+      actionType = 'create';
+    } else if (intentLower.includes('send') && intentLower.includes('email')) {
+      const recipientMatch = originalIntent.match(/(?:to|send)\s+([^\s]+@[^\s]+|[A-Za-z]+)/i);
+      taskObject = recipientMatch ? `email to ${recipientMatch[1]}` : 'your email';
+      actionType = 'send';
+    } else if (intentLower.includes('create') && intentLower.includes('channel')) {
+      const channelMatch = originalIntent.match(/channel\s+(?:named|called)?\s*["']?([^"'\n]+)["']?/i);
+      taskObject = channelMatch ? `channel "${channelMatch[1]}"` : 'your channel';
+      actionType = 'create';
+    } else if (intentLower.includes('find') || intentLower.includes('list') || intentLower.includes('search')) {
+      if (toolLower.includes('notion')) {
+        taskObject = 'your Notion pages';
+      } else if (toolLower.includes('docs')) {
+        taskObject = 'your documents';
+      } else if (toolLower.includes('email')) {
+        taskObject = 'your emails';
+      } else if (toolLower.includes('slack')) {
+        taskObject = 'your Slack channels';
+      }
+      actionType = 'find';
+    } else if (intentLower.includes('delete')) {
+      taskObject = 'your calendar events';
+      actionType = 'delete';
+    }
+
+    // Create conversational error message based on tool type
+    let conversationalError = '';
+
+    if (toolLower.includes('google_docs') || toolLower.includes('docs')) {
+      conversationalError = `❌ I couldn't ${actionType} ${taskObject} in Google Docs.\n\n`;
+
+      // Add specific context based on error type
+      if (errorMessage.toLowerCase().includes('content') || errorMessage.toLowerCase().includes('provide')) {
+        if (intentLower.includes('blank')) {
+          conversationalError += `Do you want me to ${actionType} ${taskObject} with **no content** (completely blank), or would you like to provide some content?\n\n`;
+          conversationalError += `**Options:**\n• **Blank document** - Empty document ready for editing\n• **Generic content** - I'll add placeholder content\n• **Custom content** - You provide the content`;
+        } else {
+          conversationalError += `Would you like me to ${actionType} ${taskObject} with **generic content**, or do you want to provide specific details?\n\n`;
+          conversationalError += `**Options:**\n• **Generic content** - I'll create standard content\n• **Custom content** - You provide the content`;
+        }
+      } else {
+        conversationalError += `**What happened:** ${errorMessage}\n\n`;
+        conversationalError += `Would you like me to try again, or should I use a different approach?`;
+      }
+
+    } else if (toolLower.includes('gmail') || toolLower.includes('email')) {
+      conversationalError = `❌ I couldn't ${actionType} ${taskObject}.\n\n`;
+
+      if (errorMessage.toLowerCase().includes('subject') || errorMessage.toLowerCase().includes('provide')) {
+        conversationalError += `Do you want me to use a **standard subject line**, or would you like to provide a specific one?\n\n`;
+        conversationalError += `**Options:**\n• **Auto-generated subject** - I'll create an appropriate subject\n• **Custom subject** - You provide the subject line`;
+      } else {
+        conversationalError += `**What happened:** ${errorMessage}\n\n`;
+        conversationalError += `Would you like me to retry with simplified settings?`;
+      }
+
+    } else if (toolLower.includes('slack')) {
+      conversationalError = `❌ I couldn't ${actionType} ${taskObject} in Slack.\n\n`;
+
+      if (errorMessage.toLowerCase().includes('channel') && intentLower.includes('create')) {
+        conversationalError += `Would you like me to try creating the channel with different settings?\n\n`;
+        conversationalError += `**Options:**\n• **Public channel** - Visible to everyone in the workspace\n• **Try different name** - Use a simpler channel name\n• **Basic setup** - Create with minimal configuration`;
+      } else if (intentLower.includes('find')) {
+        conversationalError += `Would you like me to search differently?\n\n`;
+        conversationalError += `**Options:**\n• **Public channels only** - Search only public channels\n• **Broader search** - Search with partial name matching\n• **Different keywords** - Try alternative search terms`;
+      } else {
+        conversationalError += `**What happened:** ${errorMessage}\n\n`;
+        conversationalError += `Would you like me to try a different approach?`;
+      }
+
+    } else if (toolLower.includes('calendar')) {
+      conversationalError = `❌ I couldn't ${actionType} ${taskObject}.\n\n`;
+
+      if (intentLower.includes('delete') && errorMessage.toLowerCase().includes('calendar')) {
+        conversationalError += `Should I delete events from your **main calendar** only, or would you like to specify which calendar?\n\n`;
+        conversationalError += `**Options:**\n• **Primary calendar** - Delete from your main calendar\n• **All calendars** - Delete from all accessible calendars\n• **Specific calendar** - You choose which calendar`;
+      } else if (intentLower.includes('create') && errorMessage.toLowerCase().includes('time')) {
+        conversationalError += `Should I set a **default time** for this event, or would you like to specify when?\n\n`;
+        conversationalError += `**Options:**\n• **2:00 PM today** - Standard meeting time\n• **Custom time** - You provide the date and time`;
+      } else {
+        conversationalError += `**What happened:** ${errorMessage}\n\n`;
+        conversationalError += `Would you like me to try again with simpler settings?`;
+      }
+
+    } else if (toolLower.includes('notion')) {
+      conversationalError = `❌ I couldn't ${actionType} ${taskObject} in Notion.\n\n`;
+
+      if (errorMessage.toLowerCase().includes('title') && intentLower.includes('list')) {
+        conversationalError += `Do you want me to **list all your pages**, or are you looking for something specific?\n\n`;
+        conversationalError += `**Options:**\n• **Show all pages** - Display all accessible pages\n• **Search specific** - Look for pages with certain keywords`;
+      } else if (intentLower.includes('create')) {
+        conversationalError += `Would you like me to create the page with **basic structure**, or do you want to provide details?\n\n`;
+        conversationalError += `**Options:**\n• **Basic page** - Simple page with title only\n• **Template page** - Use a standard template\n• **Custom structure** - You provide the page details`;
+      } else {
+        conversationalError += `**What happened:** ${errorMessage}\n\n`;
+        conversationalError += `Would you like me to try a different approach?`;
+      }
+
+    } else {
+      // Generic fallback for unknown tools
+      conversationalError = `❌ I couldn't ${actionType} ${taskObject}.\n\n`;
+      conversationalError += `**What happened:** ${errorMessage}\n\n`;
+      conversationalError += `Would you like me to try again with different settings?`;
+    }
+
+    // Add conversational context if available
+    if (conversationalContext) {
+      conversationalError += `\n\n💡 **Context:** ${conversationalContext.taskDescription}\n`;
+      conversationalError += `🎯 **Goal:** ${conversationalContext.expectedOutcome}`;
+
+      if (conversationalContext.suggestedAlternatives.length > 0) {
+        conversationalError += `\n\n🔄 **Alternatives:**\n`;
+        conversationalContext.suggestedAlternatives.slice(0, 3).forEach(alt => {
+          conversationalError += `• ${alt}\n`;
+        });
+      }
+    }
+
+    return conversationalError;
+  }
+
+  /**
+   * Create tool-specific clarification questions
+   */
+  generateToolAwareClarification(
+    toolName: string,
+    originalIntent: string,
+    errorType: string
+  ): string {
+    const toolLower = toolName.toLowerCase();
+    const intentLower = originalIntent.toLowerCase();
+
+    if (toolLower.includes('google_docs') || toolLower.includes('docs')) {
+      if (intentLower.includes('create') && intentLower.includes('blank')) {
+        return "Should I create a completely empty document, or add some placeholder content to get you started?";
+      } else if (intentLower.includes('create')) {
+        return "Would you like me to create the document with generic content, or do you want to provide specific details?";
+      } else if (intentLower.includes('find') || intentLower.includes('list')) {
+        return "Should I show all your documents, or are you looking for something specific?";
+      }
+    } else if (toolLower.includes('gmail') || toolLower.includes('email')) {
+      if (intentLower.includes('send')) {
+        return "Should I use an auto-generated subject line, or would you like to provide one?";
+      } else {
+        return "Should I search all your emails, or are you looking for something specific?";
+      }
+    } else if (toolLower.includes('slack')) {
+      if (intentLower.includes('create') && intentLower.includes('channel')) {
+        return "Would you like me to create a public or private channel, and should I use a different name format?";
+      } else if (intentLower.includes('find')) {
+        return "Should I search all channels or just public ones?";
+      }
+    } else if (toolLower.includes('calendar')) {
+      if (intentLower.includes('delete')) {
+        return "Should I delete events from your primary calendar or all calendars?";
+      } else if (intentLower.includes('create')) {
+        return "Should I set a default time (2 PM today) or would you like to specify when?";
+      }
+    } else if (toolLower.includes('notion')) {
+      if (intentLower.includes('list') || intentLower.includes('find')) {
+        return "Should I show all your Notion pages, or search for specific ones?";
+      } else if (intentLower.includes('create')) {
+        return "Should I create a basic page or would you like to provide structure details?";
+      }
+    }
+
+    // Generic fallback
+    return "Would you like me to try again with simplified settings, or do you want to provide more details?";
+  }
 }
