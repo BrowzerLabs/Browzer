@@ -528,9 +528,49 @@ export class McpClientManager {
     }
   }
 
+  /**
+   * Normalize parameters for MCP tool calls.
+   * MCP protocol expects string parameters, so we convert all values to strings.
+   */
+  private normalizeParametersForMCP(args: any): any {
+    if (args === null || args === undefined) {
+      return args;
+    }
+
+    if (typeof args !== 'object' || Array.isArray(args)) {
+      return args;
+    }
+
+    const normalized: any = {};
+    for (const [key, value] of Object.entries(args)) {
+      if (value === null || value === undefined) {
+        normalized[key] = value;
+      } else if (typeof value === 'boolean') {
+        // Convert boolean to string as required by MCP protocol
+        normalized[key] = String(value);
+      } else if (typeof value === 'number') {
+        // Convert number to string as required by MCP protocol
+        normalized[key] = String(value);
+      } else if (Array.isArray(value)) {
+        // Convert array to string as required by MCP protocol
+        // Empty arrays become empty strings, non-empty arrays become comma-separated strings
+        normalized[key] = value.length === 0 ? "" : value.join(",");
+      } else if (typeof value === 'object') {
+        // Recursively normalize nested objects
+        normalized[key] = this.normalizeParametersForMCP(value);
+      } else {
+        // Keep strings as-is
+        normalized[key] = value;
+      }
+    }
+
+    return normalized;
+  }
+
   async callTool(fullName: string, args: any): Promise<any> {
     // DIAGNOSTIC: Enhanced callTool debugging
     console.log('[DEBUG] callTool invoked:', { fullName, args });
+    console.log('[DEBUG] Original parameter types:', this.logParameterTypes(args));
 
     const tool = this.toolIndex.get(fullName);
     console.log('[DEBUG] Tool exists in registry:', !!tool);
@@ -557,16 +597,22 @@ export class McpClientManager {
     }
 
     try {
-      console.log(`[MCP] Calling tool ${fullName} with args:`, args);
+      // Normalize parameters for MCP protocol
+      const normalizedArgs = this.normalizeParametersForMCP(args);
+
+      console.log(`[MCP] Calling tool ${fullName} with original args:`, args);
+      console.log(`[MCP] Normalized args for MCP:`, normalizedArgs);
+      console.log('[DEBUG] Normalized parameter types:', this.logParameterTypes(normalizedArgs));
+
       console.log('[DEBUG] Actual MCP call parameters:', {
         toolName: tool.name,
         serverName: tool.serverName,
-        arguments: args
+        arguments: normalizedArgs
       });
 
       const response = await client.callTool({
         name: tool.name,
-        arguments: args
+        arguments: normalizedArgs
       });
 
       console.log(`[MCP] Tool ${fullName} response:`, response);
@@ -585,6 +631,89 @@ export class McpClientManager {
       });
       throw error;
     }
+  }
+
+  /**
+   * Helper function to log parameter types for debugging
+   */
+  private logParameterTypes(args: any): { [key: string]: string } {
+    if (!args || typeof args !== 'object' || Array.isArray(args)) {
+      return { _type: typeof args };
+    }
+
+    const types: { [key: string]: string } = {};
+    for (const [key, value] of Object.entries(args)) {
+      if (Array.isArray(value)) {
+        types[key] = `array[${value.length}]`;
+      } else {
+        types[key] = typeof value;
+      }
+    }
+    return types;
+  }
+
+  /**
+   * Test method to verify parameter normalization works correctly
+   * This can be called from the console to test the fix
+   */
+  testParameterNormalization(): void {
+    const testParams = {
+      max_results: 1,
+      reply_to: "",
+      send_to_groups: false,
+      signature: true,
+      label_ids: [],           // Empty array
+      tags: ["urgent", "work"], // Non-empty array
+      nested: {
+        count: 5,
+        enabled: true,
+        name: "test",
+        categories: ["cat1", "cat2"]
+      }
+    };
+
+    console.log('[TEST] Original parameters:', testParams);
+    console.log('[TEST] Original types:', this.logParameterTypes(testParams));
+
+    const normalized = this.normalizeParametersForMCP(testParams);
+    console.log('[TEST] Normalized parameters:', normalized);
+    console.log('[TEST] Normalized types:', this.logParameterTypes(normalized));
+
+    // Verify the transformation
+    const expectedResults = {
+      max_results: "1",        // number -> string
+      reply_to: "",            // string -> string (unchanged)
+      send_to_groups: "false", // boolean -> string
+      signature: "true",       // boolean -> string
+      label_ids: "",           // empty array -> empty string
+      tags: "urgent,work",     // array -> comma-separated string
+      nested: {
+        count: "5",            // number -> string
+        enabled: "true",       // boolean -> string
+        name: "test",          // string -> string (unchanged)
+        categories: "cat1,cat2" // array -> comma-separated string
+      }
+    };
+
+    console.log('[TEST] Expected results:', expectedResults);
+
+    const normalizedStr = JSON.stringify(normalized);
+    const expectedStr = JSON.stringify(expectedResults);
+    const matches = normalizedStr === expectedStr;
+
+    console.log('[TEST] Match expected results:', matches);
+
+    if (!matches) {
+      console.log('[TEST] Differences found:');
+      console.log('[TEST] Normalized JSON:', normalizedStr);
+      console.log('[TEST] Expected JSON:', expectedStr);
+    }
+
+    // Test specific array cases
+    console.log('\n[TEST] Array conversion examples:');
+    console.log('Empty array []:', this.normalizeParametersForMCP({ test: [] }).test);
+    console.log('Single item ["hello"]:', this.normalizeParametersForMCP({ test: ["hello"] }).test);
+    console.log('Multiple items ["a","b","c"]:', this.normalizeParametersForMCP({ test: ["a","b","c"] }).test);
   }
 
   /* ---------- Status and debugging ---------- */
