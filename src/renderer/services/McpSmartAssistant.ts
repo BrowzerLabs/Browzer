@@ -94,7 +94,7 @@ export class McpSmartAssistant {
       // Step 1: DYNAMIC TOOL DISCOVERY - Get all available tools from all MCP servers
       console.log('[McpSmartAssistant] Starting dynamic tool discovery...');
       const toolRegistry: ToolRegistry = await this.toolDiscoveryService.discoverAllTools();
-      const availableTools = this.toolDiscoveryService.getAllToolsForClaudeAPI();
+      const availableTools = await this.toolDiscoveryService.getAllToolsForClaudeAPI();
       console.log('[McpSmartAssistant] Dynamic tool discovery complete:', {
         totalTools: toolRegistry.totalTools,
         categories: Array.from(toolRegistry.categories.keys()),
@@ -255,7 +255,7 @@ export class McpSmartAssistant {
     try {
       // Get available tools for merging
       const toolRegistry = await this.toolDiscoveryService.discoverAllTools();
-      const availableTools = this.toolDiscoveryService.getAllToolsForClaudeAPI();
+      const availableTools = await this.toolDiscoveryService.getAllToolsForClaudeAPI();
 
       // Use LLM to merge user response with original intent
       const mergedAnalysis = await this.llmIntentService.mergeErrorResponseWithOriginalIntent(
@@ -566,17 +566,22 @@ export class McpSmartAssistant {
         currentStep: 'executing'
       });
 
-      // Use hardcoded mapping for traditional approach
-      const intentToTool: Record<string, string> = {
-        'email_send': 'gmail_send_email',
-        'email_read': 'gmail_find_email',
-        'email_reply': 'gmail_reply_email',
-        'calendar_create': 'gcal_create_event',
-        'calendar_delete': 'gcal_delete_event',
-        'calendar_read': 'gcal_list_events',
-        'calendar_update': 'gcal_update_event'
+      // Use semantic mapping for dynamic tool resolution
+      const intentToCapability: Record<string, string> = {
+        'email_send': '@capability:email.create',
+        'email_read': '@capability:email.read',
+        'email_reply': '@capability:email.create',
+        'calendar_create': '@capability:calendar.create',
+        'calendar_delete': '@capability:calendar.delete',
+        'calendar_read': '@capability:calendar.read',
+        'calendar_update': '@capability:calendar.update'
       };
-      const toolName = intentToTool[classification.primaryIntent] || 'ConditionalWorkflow';
+
+      // Get semantic capability identifier
+      const capability = intentToCapability[classification.primaryIntent];
+      const toolName = capability || 'ConditionalWorkflow';
+
+      console.log(`[McpSmartAssistant] Resolved intent "${classification.primaryIntent}" to capability "${capability}"`);
 
       // Execute MCP tool
       const mcpResults = await this.executeMcpTool(
@@ -1193,18 +1198,21 @@ export class McpSmartAssistant {
     classification: IntentClassification,
     parameterExtraction: ParameterExtraction
   ): Promise<SmartAssistantResponse> {
-    // Use the hardcoded fallback mapping
-    const intentToTool: Record<string, string> = {
-      'email_send': 'gmail_send_email',
-      'email_read': 'gmail_find_email',
-      'email_reply': 'gmail_reply_email',
-      'calendar_create': 'gcal_create_event',
-      'calendar_delete': 'gcal_delete_event',
-      'calendar_read': 'gcal_list_events',
-      'calendar_update': 'gcal_update_event'
+    // Use semantic capability mapping for dynamic tool resolution
+    const intentToCapability: Record<string, string> = {
+      'email_send': '@capability:email.create',
+      'email_read': '@capability:email.read',
+      'email_reply': '@capability:email.create',
+      'calendar_create': '@capability:calendar.create',
+      'calendar_delete': '@capability:calendar.delete',
+      'calendar_read': '@capability:calendar.read',
+      'calendar_update': '@capability:calendar.update'
     };
 
-    const toolName = intentToTool[classification.primaryIntent] || 'ConditionalWorkflow';
+    const capability = intentToCapability[classification.primaryIntent];
+    const toolName = capability || 'ConditionalWorkflow';
+
+    console.log(`[McpSmartAssistant] Traditional mapping resolved intent "${classification.primaryIntent}" to capability "${capability}"`);
     return await this.executeWithMcp(conversationId, classification, parameterExtraction);
   }
 
@@ -2042,7 +2050,7 @@ export class McpSmartAssistant {
     // Capitalize and clean up the tool name
     return toolName.replace(/[_-]/g, ' ')
       .replace(/\b\w/g, l => l.toUpperCase())
-      .replace(/^.*\./, ''); // Remove server prefix like "zap2."
+      .replace(/^.*\./, '');
   }
 
   /**

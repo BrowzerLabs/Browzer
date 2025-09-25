@@ -4575,7 +4575,6 @@ function showMcpProgress(toolName: string, status: 'starting' | 'running' | 'fet
 function getToolSpecificMessage(toolName: string): string {
   switch (toolName.toLowerCase()) {
     case 'gmail':
-    case 'zap2.gmail_find_email':
       return 'Searching Gmail inbox...';
     case 'calendar':
       return 'Accessing calendar events...';
@@ -5056,7 +5055,7 @@ function formatEmailResults(data: any, toolName: string, originalQuery?: string)
 
 function detectEmailProvider(toolName: string, data: any): 'gmail' | 'outlook' | 'zapier' | 'generic' {
   // Detect provider based on tool name
-  if (toolName.toLowerCase().includes('gmail') || toolName.includes('zap2.gmail')) {
+  if (toolName.toLowerCase().includes('gmail')) {
     return 'gmail';
   }
   if (toolName.toLowerCase().includes('outlook') || toolName.toLowerCase().includes('office365')) {
@@ -5308,10 +5307,19 @@ async function executeMcpTool(tool: any, task: string): Promise<string> {
   // 2. Call mcpManager.callTool(tool.name, parameters)
   // 3. Handle the response appropriately
 
-  if (tool.name.includes('gmail_find_email')) {
+  // Use dynamic tool matching instead of hardcoded checks
+  const toolName = tool.name.toLowerCase();
+
+  if (toolName.includes('email') || toolName.includes('gmail') || toolName.includes('outlook')) {
     return `Found emails related to: "${task}". (This is a demo - actual implementation would call the MCP tool)`;
-  } else if (tool.name.includes('calendar')) {
+  } else if (toolName.includes('calendar') || toolName.includes('event') || toolName.includes('schedule')) {
     return `Calendar operation completed for: "${task}". (This is a demo - actual implementation would call the MCP tool)`;
+  } else if (toolName.includes('message') || toolName.includes('slack') || toolName.includes('chat')) {
+    return `Message sent for: "${task}". (This is a demo - actual implementation would call the MCP tool)`;
+  } else if (toolName.includes('board') || toolName.includes('card') || toolName.includes('trello') || toolName.includes('project')) {
+    return `Project management action completed for: "${task}". (This is a demo - actual implementation would call the MCP tool)`;
+  } else if (toolName.includes('doc') || toolName.includes('page') || toolName.includes('notion')) {
+    return `Document operation completed for: "${task}". (This is a demo - actual implementation would call the MCP tool)`;
   } else {
     return `Executed ${tool.name} with task: "${task}". (This is a demo - actual implementation would call the MCP tool)`;
   }

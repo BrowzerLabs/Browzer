@@ -15,6 +15,7 @@ import { McpClientManager } from './McpClientManager';
 import { McpServerIntegrations, ServerIntegration } from './McpServerIntegrations';
 import { McpIntelligentParser, IntelligentQueryAnalysis, ExecutionPlan } from './McpIntelligentParser';
 import { ConditionalWorkflow } from './McpWorkflowOrchestrator';
+import { McpToolDiscoveryService } from './McpToolDiscoveryService';
 
 export interface OptimizationMetrics {
   executionTime: number;
@@ -103,6 +104,7 @@ export class McpWorkflowOptimizer {
   private mcpManager: McpClientManager;
   private serverIntegrations: McpServerIntegrations;
   private intelligentParser: McpIntelligentParser;
+  private discoveryService: McpToolDiscoveryService;
   private performanceBaselines: Map<string, PerformanceBaseline> = new Map();
   private adaptiveLearning: AdaptiveLearning;
   private optimizationHistory: Map<string, WorkflowOptimization[]> = new Map();
@@ -120,6 +122,7 @@ export class McpWorkflowOptimizer {
     this.mcpManager = mcpManager;
     this.serverIntegrations = new McpServerIntegrations(mcpManager);
     this.intelligentParser = new McpIntelligentParser(mcpManager);
+    this.discoveryService = new McpToolDiscoveryService(mcpManager);
     this.adaptiveLearning = this.initializeAdaptiveLearning();
     this.initializePerformanceBaselines();
     this.startPerformanceMonitoring();
@@ -133,9 +136,9 @@ export class McpWorkflowOptimizer {
       learnedPatterns: new Map(),
       userBehaviorModel: {
         preferredTools: new Map([
-          ['zap2.gmail_find_email', 0.9],
-          ['zap2.google_calendar_find_events', 0.8],
-          ['slack.send_message', 0.7]
+          ['@capability:email.read', 0.9],
+          ['@capability:calendar.read', 0.8],
+          ['@capability:communication.create', 0.7]
         ]),
         timePatterns: new Map([
           ['morning', 0.8], // high activity in morning
@@ -162,27 +165,49 @@ export class McpWorkflowOptimizer {
   }
 
   /**
-   * Initialize performance baselines for all tools
+   * Initialize performance baselines for all tools (using dynamic discovery)
    */
-  private initializePerformanceBaselines(): void {
+  private async initializePerformanceBaselines(): Promise<void> {
     console.log('[McpWorkflowOptimizer] Initializing performance baselines...');
 
-    const integrations = this.serverIntegrations.getAllIntegrations();
-    integrations.forEach(integration => {
-      integration.tools.forEach(tool => {
-        const baselineKey = `${integration.serverId}-${tool.toolId}`;
+    try {
+      // Use discovery service to get actual available tools
+      const discoveredTools = await this.discoveryService.getAllDiscoveredTools();
+
+      discoveredTools.forEach(tool => {
+        const baselineKey = `${tool.serverName}-${tool.name}`;
         this.performanceBaselines.set(baselineKey, {
-          toolName: tool.toolName,
-          serverName: integration.serverName,
-          averageExecutionTime: this.estimateBaselineTime(tool),
+          toolName: tool.fullName,
+          serverName: tool.serverName,
+          averageExecutionTime: this.estimateBaselineTimeFromTool(tool),
           successRate: 0.85, // Initial assumption
           lastUpdated: new Date(),
           sampleSize: 0
         });
       });
-    });
 
-    console.log(`[McpWorkflowOptimizer] Initialized ${this.performanceBaselines.size} performance baselines`);
+      console.log(`[McpWorkflowOptimizer] Initialized ${this.performanceBaselines.size} performance baselines from discovered tools`);
+    } catch (error) {
+      console.error('[McpWorkflowOptimizer] Failed to initialize performance baselines:', error);
+
+      // Fallback to capability templates
+      const integrations = this.serverIntegrations.getAllIntegrations();
+      integrations.forEach(integration => {
+        integration.tools.forEach(tool => {
+          const baselineKey = `${integration.serverId}-${tool.toolId}`;
+          this.performanceBaselines.set(baselineKey, {
+            toolName: tool.toolName,
+            serverName: integration.serverName,
+            averageExecutionTime: this.estimateBaselineTime(tool),
+            successRate: 0.85, // Initial assumption
+            lastUpdated: new Date(),
+            sampleSize: 0
+          });
+        });
+      });
+
+      console.log(`[McpWorkflowOptimizer] Initialized ${this.performanceBaselines.size} fallback performance baselines`);
+    }
   }
 
   /**
@@ -666,6 +691,33 @@ export class McpWorkflowOptimizer {
 
     const baseTime = baseTimes[tool.category as keyof typeof baseTimes] || 10;
     return baseTime * (tool.rateLimitWeight || 1);
+  }
+
+  private estimateBaselineTimeFromTool(discoveredTool: any): number {
+    // Estimate based on discovered tool characteristics
+    const baseTimes = {
+      'read': 5,
+      'search': 8,
+      'create': 12,
+      'update': 10,
+      'delete': 8
+    };
+
+    // Infer category from tool name patterns
+    const toolName = discoveredTool.name?.toLowerCase() || '';
+    let category = 'read'; // default
+
+    if (toolName.includes('find') || toolName.includes('search') || toolName.includes('get')) {
+      category = 'read';
+    } else if (toolName.includes('create') || toolName.includes('send') || toolName.includes('add')) {
+      category = 'create';
+    } else if (toolName.includes('update') || toolName.includes('edit') || toolName.includes('modify')) {
+      category = 'update';
+    } else if (toolName.includes('delete') || toolName.includes('remove')) {
+      category = 'delete';
+    }
+
+    return baseTimes[category as keyof typeof baseTimes] || 10;
   }
 
   private updatePerformanceBaselines(): void {

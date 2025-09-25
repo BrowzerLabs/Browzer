@@ -16,6 +16,7 @@
 
 import { McpClientManager } from './McpClientManager';
 import { McpRouter } from './McpRouter';
+import { McpToolDiscoveryService, ToolCapability } from './McpToolDiscoveryService';
 
 export interface ServerCapabilities {
   canRead: boolean;
@@ -65,45 +66,56 @@ export class McpServerIntegrations {
   private integrations: Map<string, ServerIntegration> = new Map();
   private mcpManager: McpClientManager;
   private router: McpRouter;
+  private discoveryService: McpToolDiscoveryService;
 
   constructor(mcpManager: McpClientManager) {
     this.mcpManager = mcpManager;
     this.router = new McpRouter(mcpManager);
+    this.discoveryService = new McpToolDiscoveryService(mcpManager);
     this.initializeIntegrations();
   }
 
   /**
-   * Initialize all target MCP server integrations
+   * Initialize capability-based server integrations using dynamic discovery
    */
   private initializeIntegrations(): void {
-    console.log('[McpServerIntegrations] Initializing target MCP server integrations...');
+    console.log('[McpServerIntegrations] Initializing capability-based server integrations...');
 
-    const integrations: ServerIntegration[] = [
-      this.createGmailIntegration(),
-      this.createGoogleCalendarIntegration(),
-      this.createTrelloIntegration(),
-      this.createNotionIntegration(),
-      this.createGoogleDocsIntegration(),
-      this.createOutlookIntegration(),
-      this.createSlackIntegration()
-    ];
+    // Define capability templates that can be dynamically matched to discovered tools
+    const capabilityTemplates = this.createCapabilityTemplates();
 
-    integrations.forEach(integration => {
-      this.integrations.set(integration.serverId, integration);
-      console.log(`[McpServerIntegrations] Registered ${integration.displayName} integration`);
+    capabilityTemplates.forEach(template => {
+      this.integrations.set(template.serverId, template);
+      console.log(`[McpServerIntegrations] Registered ${template.displayName} capability template`);
     });
 
-    console.log(`[McpServerIntegrations] Initialized ${integrations.length} MCP server integrations`);
+    console.log(`[McpServerIntegrations] Initialized ${capabilityTemplates.length} capability templates`);
+
+    // Trigger dynamic tool discovery
+    this.refreshDynamicIntegrations();
   }
 
   /**
-   * Gmail MCP Server Integration (already working)
+   * Create capability templates for dynamic tool discovery
    */
-  private createGmailIntegration(): ServerIntegration {
+  private createCapabilityTemplates(): ServerIntegration[] {
+    return [
+      this.createEmailCapabilityTemplate(),
+      this.createCalendarCapabilityTemplate(),
+      this.createProjectCapabilityTemplate(),
+      this.createDocsCapabilityTemplate(),
+      this.createCommunicationCapabilityTemplate()
+    ];
+  }
+
+  /**
+   * Email capability template (Gmail, Outlook, etc.)
+   */
+  private createEmailCapabilityTemplate(): ServerIntegration {
     return {
-      serverId: 'gmail',
-      serverName: 'zap2.gmail',
-      displayName: 'Gmail',
+      serverId: 'email',
+      serverName: 'email_capability',
+      displayName: 'Email Services',
       category: 'email',
       capabilities: {
         canRead: true,
@@ -118,10 +130,10 @@ export class McpServerIntegrations {
       },
       tools: [
         {
-          toolId: 'gmail_find_email',
-          toolName: 'zap2.gmail_find_email',
+          toolId: 'find_email',
+          toolName: '@capability:email.read',
           displayName: 'Find Emails',
-          description: 'Search and retrieve emails from Gmail inbox',
+          description: 'Search and retrieve emails from any connected email service',
           category: 'read',
           parameters: [
             {
@@ -147,10 +159,10 @@ export class McpServerIntegrations {
           rateLimitWeight: 2
         },
         {
-          toolId: 'gmail_send_email',
-          toolName: 'zap2.gmail_send_email',
+          toolId: 'send_email',
+          toolName: '@capability:email.create',
           displayName: 'Send Email',
-          description: 'Send email via Gmail',
+          description: 'Send email via any connected email service',
           category: 'create',
           parameters: [
             {
@@ -179,18 +191,18 @@ export class McpServerIntegrations {
           rateLimitWeight: 5
         }
       ],
-      connectionStatus: 'connected'
+      connectionStatus: 'disconnected'
     };
   }
 
   /**
-   * Google Calendar MCP Server Integration
+   * Calendar capability template (Google Calendar, Outlook Calendar, etc.)
    */
-  private createGoogleCalendarIntegration(): ServerIntegration {
+  private createCalendarCapabilityTemplate(): ServerIntegration {
     return {
-      serverId: 'gcal',
-      serverName: 'zap2.google_calendar',
-      displayName: 'Google Calendar',
+      serverId: 'calendar',
+      serverName: 'calendar_capability',
+      displayName: 'Calendar Services',
       category: 'calendar',
       capabilities: {
         canRead: true,
@@ -205,10 +217,10 @@ export class McpServerIntegrations {
       },
       tools: [
         {
-          toolId: 'calendar_find_events',
-          toolName: 'zap2.google_calendar_find_events',
+          toolId: 'find_events',
+          toolName: '@capability:calendar.read',
           displayName: 'Find Calendar Events',
-          description: 'Search for events in Google Calendar',
+          description: 'Search for events in any connected calendar service',
           category: 'read',
           parameters: [
             {
@@ -240,10 +252,10 @@ export class McpServerIntegrations {
           rateLimitWeight: 2
         },
         {
-          toolId: 'calendar_quick_add_event',
-          toolName: 'zap2.google_calendar_quick_add_event',
+          toolId: 'quick_add_event',
+          toolName: '@capability:calendar.create.quick',
           displayName: 'Quick Add Event',
-          description: 'Quickly add event to Google Calendar',
+          description: 'Quickly add event to any connected calendar service',
           category: 'create',
           parameters: [
             {
@@ -268,10 +280,10 @@ export class McpServerIntegrations {
           rateLimitWeight: 3
         },
         {
-          toolId: 'calendar_create_event',
-          toolName: 'zap2.google_calendar_create_event',
+          toolId: 'create_event',
+          toolName: '@capability:calendar.create',
           displayName: 'Create Detailed Event',
-          description: 'Create detailed event with all properties',
+          description: 'Create detailed event with all properties in any connected calendar service',
           category: 'create',
           parameters: [
             {
@@ -317,13 +329,13 @@ export class McpServerIntegrations {
   }
 
   /**
-   * Trello MCP Server Integration
+   * Project management capability template (Trello, Asana, etc.)
    */
-  private createTrelloIntegration(): ServerIntegration {
+  private createProjectCapabilityTemplate(): ServerIntegration {
     return {
-      serverId: 'trello',
-      serverName: 'trello',
-      displayName: 'Trello',
+      serverId: 'project',
+      serverName: 'project_capability',
+      displayName: 'Project Management',
       category: 'project',
       capabilities: {
         canRead: true,
@@ -338,10 +350,10 @@ export class McpServerIntegrations {
       },
       tools: [
         {
-          toolId: 'trello_get_boards',
-          toolName: 'trello.get_boards',
+          toolId: 'get_boards',
+          toolName: '@capability:project.read.boards',
           displayName: 'Get Boards',
-          description: 'Retrieve Trello boards',
+          description: 'Retrieve boards from any connected project management service',
           category: 'read',
           parameters: [
             {
@@ -359,10 +371,10 @@ export class McpServerIntegrations {
           rateLimitWeight: 1
         },
         {
-          toolId: 'trello_get_board_cards',
-          toolName: 'trello.get_board_cards',
+          toolId: 'get_board_cards',
+          toolName: '@capability:project.read.cards',
           displayName: 'Get Board Cards',
-          description: 'Get all cards from a Trello board',
+          description: 'Get all cards from a project board',
           category: 'read',
           parameters: [
             {
@@ -386,10 +398,10 @@ export class McpServerIntegrations {
           rateLimitWeight: 2
         },
         {
-          toolId: 'trello_create_card',
-          toolName: 'trello.create_card',
+          toolId: 'create_card',
+          toolName: '@capability:project.create.card',
           displayName: 'Create Card',
-          description: 'Create new card in Trello',
+          description: 'Create new card in any connected project management service',
           category: 'create',
           parameters: [
             {
@@ -429,13 +441,13 @@ export class McpServerIntegrations {
   }
 
   /**
-   * Notion MCP Server Integration
+   * Document capability template (Notion, Google Docs, etc.)
    */
-  private createNotionIntegration(): ServerIntegration {
+  private createDocsCapabilityTemplate(): ServerIntegration {
     return {
-      serverId: 'notion',
-      serverName: 'notion',
-      displayName: 'Notion',
+      serverId: 'docs',
+      serverName: 'docs_capability',
+      displayName: 'Document Services',
       category: 'docs',
       capabilities: {
         canRead: true,
@@ -450,10 +462,10 @@ export class McpServerIntegrations {
       },
       tools: [
         {
-          toolId: 'notion_search_pages',
-          toolName: 'notion.search_pages',
+          toolId: 'search_pages',
+          toolName: '@capability:docs.search',
           displayName: 'Search Pages',
-          description: 'Search pages and databases in Notion',
+          description: 'Search pages and documents in any connected document service',
           category: 'search',
           parameters: [
             {
@@ -476,10 +488,10 @@ export class McpServerIntegrations {
           rateLimitWeight: 2
         },
         {
-          toolId: 'notion_create_page',
-          toolName: 'notion.create_page',
+          toolId: 'create_page',
+          toolName: '@capability:docs.create',
           displayName: 'Create Page',
-          description: 'Create new page in Notion',
+          description: 'Create new page/document in any connected document service',
           category: 'create',
           parameters: [
             {
@@ -508,10 +520,10 @@ export class McpServerIntegrations {
           rateLimitWeight: 4
         },
         {
-          toolId: 'notion_update_page',
-          toolName: 'notion.update_page',
+          toolId: 'update_page',
+          toolName: '@capability:docs.update',
           displayName: 'Update Page',
-          description: 'Update existing Notion page',
+          description: 'Update existing page/document in any connected document service',
           category: 'update',
           parameters: [
             {
@@ -539,211 +551,13 @@ export class McpServerIntegrations {
   }
 
   /**
-   * Google Docs MCP Server Integration
+   * Communication capability template (Slack, Discord, etc.)
    */
-  private createGoogleDocsIntegration(): ServerIntegration {
+  private createCommunicationCapabilityTemplate(): ServerIntegration {
     return {
-      serverId: 'gdocs',
-      serverName: 'zap2.google_docs',
-      displayName: 'Google Docs',
-      category: 'docs',
-      capabilities: {
-        canRead: true,
-        canWrite: true,
-        canSearch: false,
-        canCreate: true,
-        canUpdate: true,
-        canDelete: false,
-        supportsAuth: true,
-        supportsBatch: false,
-        rateLimit: 100
-      },
-      tools: [
-        {
-          toolId: 'docs_create_document',
-          toolName: 'zap2.google_docs_create_document',
-          displayName: 'Create Document',
-          description: 'Create new Google Doc',
-          category: 'create',
-          parameters: [
-            {
-              name: 'title',
-              type: 'string',
-              required: true,
-              description: 'Document title'
-            },
-            {
-              name: 'content',
-              type: 'string',
-              required: false,
-              description: 'Initial document content'
-            }
-          ],
-          examples: [
-            'create meeting agenda document',
-            'create project specification doc'
-          ],
-          rateLimitWeight: 3
-        },
-        {
-          toolId: 'docs_get_document',
-          toolName: 'zap2.google_docs_get_document',
-          displayName: 'Get Document',
-          description: 'Retrieve Google Doc content',
-          category: 'read',
-          parameters: [
-            {
-              name: 'documentId',
-              type: 'string',
-              required: true,
-              description: 'Google Doc ID'
-            }
-          ],
-          examples: [
-            'read content from shared document',
-            'get text from meeting notes doc'
-          ],
-          rateLimitWeight: 2
-        },
-        {
-          toolId: 'docs_update_document',
-          toolName: 'zap2.google_docs_update_document',
-          displayName: 'Update Document',
-          description: 'Update Google Doc content',
-          category: 'update',
-          parameters: [
-            {
-              name: 'documentId',
-              type: 'string',
-              required: true,
-              description: 'Google Doc ID'
-            },
-            {
-              name: 'requests',
-              type: 'array',
-              required: true,
-              description: 'Batch update requests'
-            }
-          ],
-          examples: [
-            'add text to end of document',
-            'replace section in shared doc'
-          ],
-          rateLimitWeight: 4
-        }
-      ],
-      connectionStatus: 'disconnected'
-    };
-  }
-
-  /**
-   * Outlook MCP Server Integration
-   */
-  private createOutlookIntegration(): ServerIntegration {
-    return {
-      serverId: 'outlook',
-      serverName: 'zap2.outlook',
-      displayName: 'Outlook',
-      category: 'email',
-      capabilities: {
-        canRead: true,
-        canWrite: true,
-        canSearch: true,
-        canCreate: true,
-        canUpdate: true,
-        canDelete: false,
-        supportsAuth: true,
-        supportsBatch: false,
-        rateLimit: 100
-      },
-      tools: [
-        {
-          toolId: 'outlook_find_email',
-          toolName: 'zap2.outlook_find_email',
-          displayName: 'Find Emails',
-          description: 'Search emails in Outlook',
-          category: 'read',
-          parameters: [
-            {
-              name: 'searchQuery',
-              type: 'string',
-              required: false,
-              description: 'Outlook search query'
-            },
-            {
-              name: 'folder',
-              type: 'string',
-              required: false,
-              description: 'Email folder (inbox, sent, etc.)',
-              defaultValue: 'inbox'
-            },
-            {
-              name: 'maxResults',
-              type: 'number',
-              required: false,
-              description: 'Maximum emails to return',
-              defaultValue: 10
-            }
-          ],
-          examples: [
-            'get latest Outlook emails',
-            'search for emails from manager',
-            'find emails with "urgent" in subject'
-          ],
-          rateLimitWeight: 2
-        },
-        {
-          toolId: 'outlook_send_email',
-          toolName: 'zap2.outlook_send_email',
-          displayName: 'Send Email',
-          description: 'Send email via Outlook',
-          category: 'create',
-          parameters: [
-            {
-              name: 'to',
-              type: 'string',
-              required: true,
-              description: 'Recipient email address'
-            },
-            {
-              name: 'subject',
-              type: 'string',
-              required: true,
-              description: 'Email subject'
-            },
-            {
-              name: 'body',
-              type: 'string',
-              required: true,
-              description: 'Email content'
-            },
-            {
-              name: 'importance',
-              type: 'string',
-              required: false,
-              description: 'Email importance (low, normal, high)',
-              defaultValue: 'normal'
-            }
-          ],
-          examples: [
-            'send high priority email to team',
-            'reply to latest Outlook email'
-          ],
-          rateLimitWeight: 5
-        }
-      ],
-      connectionStatus: 'disconnected'
-    };
-  }
-
-  /**
-   * Enhanced Slack MCP Server Integration
-   */
-  private createSlackIntegration(): ServerIntegration {
-    return {
-      serverId: 'slack',
-      serverName: 'slack',
-      displayName: 'Slack',
+      serverId: 'communication',
+      serverName: 'communication_capability',
+      displayName: 'Communication Services',
       category: 'communication',
       capabilities: {
         canRead: true,
@@ -758,10 +572,10 @@ export class McpServerIntegrations {
       },
       tools: [
         {
-          toolId: 'slack_send_message',
-          toolName: 'slack.send_message',
+          toolId: 'send_message',
+          toolName: '@capability:communication.create',
           displayName: 'Send Message',
-          description: 'Send message to Slack channel',
+          description: 'Send message to any connected communication platform',
           category: 'create',
           parameters: [
             {
@@ -791,10 +605,10 @@ export class McpServerIntegrations {
           rateLimitWeight: 2
         },
         {
-          toolId: 'slack_get_messages',
-          toolName: 'slack.get_messages',
+          toolId: 'get_messages',
+          toolName: '@capability:communication.read',
           displayName: 'Get Messages',
-          description: 'Retrieve messages from Slack channel',
+          description: 'Retrieve messages from any connected communication platform',
           category: 'read',
           parameters: [
             {
@@ -825,10 +639,10 @@ export class McpServerIntegrations {
           rateLimitWeight: 1
         },
         {
-          toolId: 'slack_search_messages',
-          toolName: 'slack.search_messages',
+          toolId: 'search_messages',
+          toolName: '@capability:communication.search',
           displayName: 'Search Messages',
-          description: 'Search messages across Slack workspace',
+          description: 'Search messages across any connected communication platform',
           category: 'search',
           parameters: [
             {
@@ -862,6 +676,110 @@ export class McpServerIntegrations {
       ],
       connectionStatus: 'disconnected'
     };
+  }
+
+  /**
+   * Refresh dynamic integrations by discovering actual connected tools
+   */
+  async refreshDynamicIntegrations(): Promise<void> {
+    console.log('[McpServerIntegrations] Refreshing dynamic integrations...');
+
+    try {
+      // Discover all available tools from connected servers
+      const discoveredTools = await this.discoveryService.getAllDiscoveredTools();
+      console.log(`[McpServerIntegrations] Discovered ${discoveredTools.length} tools from connected servers`);
+
+      // Update connection status based on discovered tools
+      this.updateConnectionStatusFromDiscovery(discoveredTools);
+
+      console.log('[McpServerIntegrations] Dynamic integrations refreshed successfully');
+    } catch (error) {
+      console.error('[McpServerIntegrations] Failed to refresh dynamic integrations:', error);
+    }
+  }
+
+  /**
+   * Update connection status based on discovered tools
+   */
+  private updateConnectionStatusFromDiscovery(discoveredTools: any[]): void {
+    // Reset all integrations to disconnected
+    this.integrations.forEach(integration => {
+      integration.connectionStatus = 'disconnected';
+    });
+
+    // Mark integrations as connected if we have matching tools
+    discoveredTools.forEach(tool => {
+      // Determine which capability this tool matches
+      const capability = this.mapToolToCapability(tool);
+      if (capability) {
+        const integration = this.integrations.get(capability);
+        if (integration) {
+          integration.connectionStatus = 'connected';
+          integration.lastConnected = new Date();
+        }
+      }
+    });
+  }
+
+  /**
+   * Map discovered tool to capability category
+   */
+  private mapToolToCapability(tool: any): string | null {
+    const toolName = tool.name?.toLowerCase() || '';
+    const serverName = tool.serverName?.toLowerCase() || '';
+
+    // Email services
+    if (toolName.includes('email') || toolName.includes('gmail') || toolName.includes('outlook') ||
+        serverName.includes('gmail') || serverName.includes('outlook')) {
+      return 'email';
+    }
+
+    // Calendar services
+    if (toolName.includes('calendar') || toolName.includes('event') ||
+        serverName.includes('calendar') || serverName.includes('gcal')) {
+      return 'calendar';
+    }
+
+    // Project management
+    if (toolName.includes('board') || toolName.includes('card') || toolName.includes('trello') ||
+        serverName.includes('trello') || serverName.includes('asana')) {
+      return 'project';
+    }
+
+    // Documents
+    if (toolName.includes('doc') || toolName.includes('page') || toolName.includes('notion') ||
+        serverName.includes('docs') || serverName.includes('notion')) {
+      return 'docs';
+    }
+
+    // Communication
+    if (toolName.includes('message') || toolName.includes('slack') || toolName.includes('chat') ||
+        serverName.includes('slack') || serverName.includes('discord')) {
+      return 'communication';
+    }
+
+    return null;
+  }
+
+  /**
+   * Resolve capability tool name to actual discovered tool
+   */
+  async resolveCapabilityTool(capabilityToolName: string): Promise<string | null> {
+    if (!capabilityToolName.startsWith('@capability:')) {
+      return capabilityToolName; // Not a capability identifier
+    }
+
+    const capabilityPath = capabilityToolName.replace('@capability:', '');
+    const [category, action, provider] = capabilityPath.split('.');
+
+    try {
+      const capability: ToolCapability = { category: category as any, action: action as any, provider };
+      const tool = await this.discoveryService.resolveTool({ capability });
+      return tool?.fullName || null;
+    } catch (error) {
+      console.error(`[McpServerIntegrations] Failed to resolve capability tool ${capabilityToolName}:`, error);
+      return null;
+    }
   }
 
   /**
@@ -914,23 +832,34 @@ export class McpServerIntegrations {
   }
 
   /**
-   * Find tool by name across all servers
+   * Find tool by name across all servers (with capability resolution)
    */
-  findTool(toolName: string): { integration: ServerIntegration, tool: ServerTool } | null {
+  async findTool(toolName: string): Promise<{ integration: ServerIntegration, tool: ServerTool } | null> {
+    // First try direct match
     for (const integration of this.integrations.values()) {
       const tool = integration.tools.find(t => t.toolName === toolName || t.toolId === toolName);
       if (tool) {
         return { integration, tool };
       }
     }
+
+    // If not found and it's a capability identifier, try to resolve it
+    if (toolName.startsWith('@capability:')) {
+      const resolvedName = await this.resolveCapabilityTool(toolName);
+      if (resolvedName && resolvedName !== toolName) {
+        // Recursively search with resolved name
+        return this.findTool(resolvedName);
+      }
+    }
+
     return null;
   }
 
   /**
    * Get optimized parameters for a specific tool
    */
-  getOptimizedParameters(toolName: string, query: string): Record<string, any> {
-    const toolInfo = this.findTool(toolName);
+  async getOptimizedParameters(toolName: string, query: string): Promise<Record<string, any>> {
+    const toolInfo = await this.findTool(toolName);
     if (!toolInfo) {
       return {};
     }

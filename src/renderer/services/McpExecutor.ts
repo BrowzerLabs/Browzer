@@ -11,6 +11,7 @@ import { McpWorkflowOptimizer } from './McpWorkflowOptimizer';
 import { McpSelfHealingSystem } from './McpSelfHealingSystem';
 import { McpClaudeService, McpMessageAnalysis } from './McpClaudeService';
 import { McpToolDiscoveryService, ToolRegistry } from './McpToolDiscoveryService';
+import { McpToolResolver } from './McpToolResolver';
 
 export interface McpExecutionResult {
   success: boolean;
@@ -47,6 +48,7 @@ export class McpExecutor {
   private selfHealingSystem: McpSelfHealingSystem;
   private claudeService: McpClaudeService;
   private toolDiscoveryService: McpToolDiscoveryService;
+  private toolResolver: McpToolResolver;
 
   // Cache configuration
   private readonly CACHE_TTL = 300000; // 5 minutes
@@ -67,6 +69,7 @@ export class McpExecutor {
     this.selfHealingSystem = new McpSelfHealingSystem(this.mcpManager);
     this.claudeService = new McpClaudeService();
     this.toolDiscoveryService = new McpToolDiscoveryService(this.mcpManager);
+    this.toolResolver = new McpToolResolver(this.mcpManager);
 
     this.startPerformanceMonitoring();
   }
@@ -96,11 +99,11 @@ export class McpExecutor {
       // Step 2: DYNAMIC TOOL DISCOVERY - Get all available tools from all MCP servers
       console.log('[McpExecutor] Starting dynamic tool discovery...');
       const toolRegistry: ToolRegistry = await this.toolDiscoveryService.discoverAllTools();
-      const availableTools = this.toolDiscoveryService.getAllToolsForClaudeAPI();
+      const availableTools = await this.toolDiscoveryService.getAllToolsForClaudeAPI();
       console.log('[McpExecutor] Dynamic tool discovery complete:', {
         totalTools: toolRegistry.totalTools,
         categories: Array.from(toolRegistry.categories.keys()),
-        servers: availableTools.map(t => t.serverName).filter((v, i, a) => a.indexOf(v) === i)
+        servers: availableTools.map((t: any) => t.serverName).filter((v: any, i: number, a: any[]) => a.indexOf(v) === i)
       });
 
       // Step 3: Use Claude API to analyze user message with ALL discovered tools
@@ -549,7 +552,14 @@ export class McpExecutor {
     console.log('[McpExecutor] Calling gmail_find_email with params:', toolParams);
 
     try {
-      const result = await this.mcpManager.callTool('zap2.gmail_find_email', toolParams);
+  
+      const tool = await this.toolResolver.resolveGmailFindEmail();
+      if (!tool) {
+        throw new Error('Gmail find email tool not found - please check your MCP server configuration');
+      }
+
+      console.log(`[McpExecutor] Using resolved tool: ${tool.fullName} from server: ${tool.serverName}`);
+      const result = await this.toolResolver.callResolvedTool(tool, toolParams);
       console.log('[McpExecutor] Gmail find successful, result type:', typeof result);
       return result;
     } catch (error) {
@@ -579,7 +589,14 @@ export class McpExecutor {
 
     console.log('[McpExecutor] Calling gmail_send_email with params:', toolParams);
 
-    return await this.mcpManager.callTool('zap2.gmail_send_email', toolParams);
+
+    const tool = await this.toolResolver.resolveGmailSendEmail();
+    if (!tool) {
+      throw new Error('Gmail send email tool not found - please check your MCP server configuration');
+    }
+
+    console.log(`[McpExecutor] Using resolved tool: ${tool.fullName} from server: ${tool.serverName}`);
+    return await this.toolResolver.callResolvedTool(tool, toolParams);
   }
 
   private async executeGmailReply(query: string): Promise<any> {
@@ -603,7 +620,14 @@ export class McpExecutor {
 
     console.log('[McpExecutor] Calling gmail_reply_to_email with params:', toolParams);
 
-    return await this.mcpManager.callTool('zap2.gmail_reply_to_email', toolParams);
+
+    const tool = await this.toolResolver.resolveGmailReply();
+    if (!tool) {
+      throw new Error('Gmail reply email tool not found - please check your MCP server configuration');
+    }
+
+    console.log(`[McpExecutor] Using resolved tool: ${tool.fullName} from server: ${tool.serverName}`);
+    return await this.toolResolver.callResolvedTool(tool, toolParams);
   }
 
   private async executeGenericTool(toolName: string, query: string): Promise<any> {
@@ -1358,7 +1382,14 @@ export class McpExecutor {
     console.log('[McpExecutor] Calling google_calendar_find_events with params:', toolParams);
 
     try {
-      const result = await this.mcpManager.callTool('zap2.google_calendar_find_events', toolParams);
+  
+      const tool = await this.toolResolver.resolveCalendarFindEvents();
+      if (!tool) {
+        throw new Error('Google Calendar find events tool not found - please check your MCP server configuration');
+      }
+
+      console.log(`[McpExecutor] Using resolved tool: ${tool.fullName} from server: ${tool.serverName}`);
+      const result = await this.toolResolver.callResolvedTool(tool, toolParams);
       console.log('[McpExecutor] Google Calendar find successful');
       return result;
     } catch (error) {
@@ -1384,7 +1415,14 @@ export class McpExecutor {
     console.log('[McpExecutor] Calling google_calendar_quick_add_event with params:', toolParams);
 
     try {
-      const result = await this.mcpManager.callTool('zap2.google_calendar_quick_add_event', toolParams);
+  
+      const tool = await this.toolResolver.resolveCalendarQuickAddEvent();
+      if (!tool) {
+        throw new Error('Google Calendar quick add event tool not found - please check your MCP server configuration');
+      }
+
+      console.log(`[McpExecutor] Using resolved tool: ${tool.fullName} from server: ${tool.serverName}`);
+      const result = await this.toolResolver.callResolvedTool(tool, toolParams);
       console.log('[McpExecutor] Google Calendar quick add successful');
       return result;
     } catch (error) {
@@ -1414,7 +1452,14 @@ export class McpExecutor {
     console.log('[McpExecutor] Calling google_calendar_update_event with params:', toolParams);
 
     try {
-      const result = await this.mcpManager.callTool('zap2.google_calendar_update_event', toolParams);
+  
+      const tool = await this.toolResolver.resolveCalendarUpdateEvent();
+      if (!tool) {
+        throw new Error('Google Calendar update event tool not found - please check your MCP server configuration');
+      }
+
+      console.log(`[McpExecutor] Using resolved tool: ${tool.fullName} from server: ${tool.serverName}`);
+      const result = await this.toolResolver.callResolvedTool(tool, toolParams);
       console.log('[McpExecutor] Google Calendar update successful');
       return result;
     } catch (error) {
@@ -1620,6 +1665,7 @@ export class McpExecutor {
 
   /**
    * Resolve tool name from Claude's recommendation to full MCP registry format
+   * Now uses dynamic tool resolver instead of hardcoded fallbacks
    */
   private async resolveFullToolName(toolName: string): Promise<string> {
     // If already in full format (server.toolName), return as-is
@@ -1628,13 +1674,20 @@ export class McpExecutor {
     }
 
     try {
-      // Get all available tools from MCP registry
-      const allTools = await this.mcpManager.listAllTools();
-      console.log('[McpExecutor] Available tools for resolution:', allTools);
+      console.log(`[McpExecutor] Resolving tool name: ${toolName}`);
 
-      // Find the full name that matches our tool name
+      // Use dynamic tool resolver to find the tool
+      const tool = await this.toolResolver.resolveByName(toolName);
+
+      if (tool) {
+        console.log(`[McpExecutor] Resolved ${toolName} to: ${tool.fullName} from server: ${tool.serverName}`);
+        return tool.fullName;
+      }
+
+      // Try getting all tools and match by name (fallback for legacy compatibility)
+      const allTools = await this.mcpManager.listAllTools();
       const matchingTool = allTools.find((fullName: string) => {
-        const shortName = fullName.split('.').pop(); // Get part after the last dot
+        const shortName = fullName.split('.').pop();
         return shortName === toolName;
       });
 
@@ -1642,14 +1695,12 @@ export class McpExecutor {
         console.log('[McpExecutor] Found matching tool in registry:', matchingTool);
         return matchingTool;
       }
+
     } catch (error) {
-      console.warn('[McpExecutor] Failed to get tools list:', error);
+      console.warn('[McpExecutor] Failed to resolve tool name:', error);
     }
 
-    // Fallback: assume it's from the main server (common case)
-    const fallbackName = `zap2.${toolName}`;
-    console.warn('[McpExecutor] Tool not found in registry, using fallback:', fallbackName);
-    return fallbackName;
+    throw new Error(`Tool "${toolName}" not found in any connected MCP server. Please check your MCP server configuration and ensure the tool is available.`);
   }
 
   /**

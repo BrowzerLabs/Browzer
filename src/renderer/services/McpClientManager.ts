@@ -314,6 +314,13 @@ export class McpClientManager {
   }
 
   /**
+   * Get all tools with their metadata
+   */
+  getAllTools(): McpTool[] {
+    return Array.from(this.toolIndex.values());
+  }
+
+  /**
    * Get all server configurations and their connection status
    */
   async getAllServers(): Promise<Array<{name: string, id: string, connected: boolean, config: McpServerConfig}>> {

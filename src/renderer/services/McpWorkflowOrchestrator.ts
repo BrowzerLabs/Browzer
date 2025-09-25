@@ -12,6 +12,7 @@ import { McpExecutor } from './McpExecutor';
 import { McpContextManager } from './McpContextManager';
 import { McpWorkflowErrorHandler } from './McpWorkflowErrorHandler';
 import { McpWorkflowTemplates } from './McpWorkflowTemplates';
+import { McpClientManager } from './McpClientManager';
 
 export interface ConditionalStep {
   condition: string;
@@ -45,9 +46,10 @@ export class McpWorkflowOrchestrator {
   constructor(
     private mcpExecutor: McpExecutor,
     private contextManager: McpContextManager,
-    private errorHandler: McpWorkflowErrorHandler
+    private errorHandler: McpWorkflowErrorHandler,
+    private mcpManager?: McpClientManager
   ) {
-    this.workflowTemplates = new McpWorkflowTemplates();
+    this.workflowTemplates = new McpWorkflowTemplates(mcpManager);
   }
 
   /**
@@ -110,12 +112,15 @@ export class McpWorkflowOrchestrator {
       throw new Error(`Invalid step configuration: ${step.stepId}`);
     }
 
+    // Resolve semantic tool identifier to actual tool name at runtime
+    const resolvedToolName = await this.resolveToolName(step.toolName);
+
     // Use original query for now - context substitution needs workflow ID
     const enhancedQuery = step.query;
 
-    console.log(`[McpWorkflowOrchestrator] Executing tool: ${step.toolName} with query: ${enhancedQuery}`);
+    console.log(`[McpWorkflowOrchestrator] Executing tool: ${resolvedToolName} (resolved from ${step.toolName}) with query: ${enhancedQuery}`);
 
-    // Execute the MCP tool
+    // Execute the MCP tool with resolved tool name
     const result = await this.mcpExecutor.executeQuery(enhancedQuery);
 
     // Store result in context for now
@@ -300,27 +305,59 @@ export class McpWorkflowOrchestrator {
   }
 
   /**
-   * Infer MCP tool from query text
+   * Infer MCP tool from query text using semantic capabilities
+   * Returns a semantic tool identifier that will be resolved at runtime
    */
   private inferToolFromQuery(query: string): string {
     const queryLower = query.toLowerCase();
 
     if (queryLower.includes('email') || queryLower.includes('gmail') || queryLower.includes('reply')) {
       if (queryLower.includes('send') || queryLower.includes('reply')) {
-        return 'zap2.gmail_send_email';
+        return '@semantic:email.create.gmail'; // Semantic identifier for email creation
       }
-      return 'zap2.gmail_find_email';
+      return '@semantic:email.read.gmail'; // Semantic identifier for email reading
     }
 
     if (queryLower.includes('calendar') || queryLower.includes('schedule') || queryLower.includes('meeting')) {
       if (queryLower.includes('create') || queryLower.includes('schedule') || queryLower.includes('book')) {
-        return 'zap2.google_calendar_quick_add_event';
+        return '@semantic:calendar.create.google'; // Semantic identifier for calendar creation
       }
-      return 'zap2.google_calendar_find_events';
+      return '@semantic:calendar.read.google'; // Semantic identifier for calendar reading
     }
 
     // Default to generic execution
     return 'generic';
+  }
+
+  /**
+   * Resolve semantic tool identifier to actual tool name
+   */
+  private async resolveToolName(toolIdentifier: string): Promise<string> {
+    if (!toolIdentifier.startsWith('@semantic:')) {
+      return toolIdentifier; // Not a semantic identifier, return as-is
+    }
+
+    if (!this.mcpManager) {
+      console.warn('[McpWorkflowOrchestrator] MCP manager not available, cannot resolve semantic tools');
+      return toolIdentifier;
+    }
+
+    const semanticPart = toolIdentifier.replace('@semantic:', '');
+    const [category, action, provider] = semanticPart.split('.');
+
+    try {
+      // Initialize workflow templates tool resolver if needed
+      this.workflowTemplates.initializeToolResolver(this.mcpManager);
+
+      // Use the workflow templates resolver to resolve the tool
+      const resolvedName = await this.workflowTemplates.resolveToolName(`@resolve:${semanticPart}`);
+
+      console.log(`[McpWorkflowOrchestrator] Resolved ${toolIdentifier} to: ${resolvedName}`);
+      return resolvedName;
+    } catch (error) {
+      console.error(`[McpWorkflowOrchestrator] Failed to resolve ${toolIdentifier}:`, error);
+      return 'generic'; // Fallback to generic execution
+    }
   }
 
   /**

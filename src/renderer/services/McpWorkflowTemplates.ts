@@ -9,6 +9,8 @@
  */
 
 import { ConditionalWorkflow, WorkflowStep } from './McpWorkflowOrchestrator';
+import { McpToolResolver } from './McpToolResolver';
+import { McpClientManager } from './McpClientManager';
 
 export interface WorkflowTemplate {
   id: string;
@@ -23,9 +25,22 @@ export interface WorkflowTemplate {
 
 export class McpWorkflowTemplates {
   private templates: WorkflowTemplate[] = [];
+  private toolResolver: McpToolResolver | null = null;
 
-  constructor() {
+  constructor(mcpManager?: McpClientManager) {
+    if (mcpManager) {
+      this.toolResolver = new McpToolResolver(mcpManager);
+    }
     this.initializeTemplates();
+  }
+
+  /**
+   * Initialize tool resolver if not already done
+   */
+  initializeToolResolver(mcpManager: McpClientManager): void {
+    if (!this.toolResolver) {
+      this.toolResolver = new McpToolResolver(mcpManager);
+    }
   }
 
   /**
@@ -173,10 +188,108 @@ export class McpWorkflowTemplates {
   }
 
   /**
+   * Helper: Get semantic tool name instead of hardcoded ones
+   * Returns a placeholder that will be resolved at runtime
+   */
+  private getSemanticToolName(capability: {
+    category: 'email' | 'calendar' | 'project' | 'docs' | 'communication';
+    action: 'read' | 'write' | 'search' | 'create' | 'update' | 'delete';
+    provider?: string;
+  }): string {
+    // Return a semantic identifier that can be resolved at runtime
+    return `@resolve:${capability.category}.${capability.action}${capability.provider ? '.' + capability.provider : ''}`;
+  }
+
+  /**
+   * Helper: Get fallback tool name for legacy compatibility
+   */
+  private getFallbackToolName(semanticName: string, fallbackName: string): string {
+    return `@fallback:${semanticName}|${fallbackName}`;
+  }
+
+  /**
+   * Resolve semantic tool names or hardcoded tool names to actual tool names
+   * This method should be called by the workflow orchestrator
+   */
+  async resolveToolName(toolName: string): Promise<string> {
+    if (!this.toolResolver) {
+      console.warn('[McpWorkflowTemplates] Tool resolver not initialized, returning original name');
+      return toolName;
+    }
+
+    // Handle semantic tool names (@resolve:category.action.provider)
+    if (toolName.startsWith('@resolve:')) {
+      const semanticPart = toolName.replace('@resolve:', '');
+      const [category, action, provider] = semanticPart.split('.');
+
+      try {
+        const tool = await this.toolResolver.resolveByCapability(
+          category as any,
+          action as any,
+          provider
+        );
+
+        if (tool) {
+          console.log(`[McpWorkflowTemplates] Resolved semantic ${semanticPart} to: ${tool.fullName}`);
+          return tool.fullName;
+        }
+      } catch (error) {
+        console.warn(`[McpWorkflowTemplates] Failed to resolve semantic tool ${semanticPart}:`, error);
+      }
+    }
+
+    // Handle fallback tool names (@fallback:semantic|hardcoded)
+    if (toolName.startsWith('@fallback:')) {
+      const parts = toolName.replace('@fallback:', '').split('|');
+      const semanticPart = parts[0];
+      const fallbackName = parts[1];
+
+      // Try semantic resolution first
+      try {
+        const resolvedSemantic = await this.resolveToolName(`@resolve:${semanticPart}`);
+        if (resolvedSemantic && !resolvedSemantic.startsWith('@resolve:')) {
+          return resolvedSemantic;
+        }
+      } catch (error) {
+        console.warn(`[McpWorkflowTemplates] Semantic resolution failed for ${semanticPart}, using fallback`);
+      }
+
+      // Fall back to direct tool resolution
+      try {
+        const tool = await this.toolResolver.resolveByName(fallbackName);
+        if (tool) {
+          console.log(`[McpWorkflowTemplates] Resolved fallback ${fallbackName} to: ${tool.fullName}`);
+          return tool.fullName;
+        }
+      } catch (error) {
+        console.warn(`[McpWorkflowTemplates] Failed to resolve fallback ${fallbackName}:`, error);
+      }
+
+      return fallbackName; // Final fallback
+    }
+
+
+    // For any other tool names, try direct resolution
+    try {
+      const tool = await this.toolResolver.resolveByName(toolName);
+      if (tool) {
+        console.log(`[McpWorkflowTemplates] Direct resolution of ${toolName} to: ${tool.fullName}`);
+        return tool.fullName;
+      }
+    } catch (error) {
+      console.warn(`[McpWorkflowTemplates] Direct resolution failed for ${toolName}:`, error);
+    }
+
+    // Return original name if nothing worked
+    console.warn(`[McpWorkflowTemplates] Could not resolve ${toolName}, returning original name`);
+    return toolName;
+  }
+
+  /**
    * Generate email-schedule-conditional workflow
    * "Read email from user and setup meeting. If no convenient time, reply asking for slots"
    */
-  private generateEmailScheduleConditionalWorkflow(query: string, matches: RegExpMatchArray): ConditionalWorkflow {
+  private generateEmailScheduleConditionalWorkflow(): ConditionalWorkflow {
     const workflowId = `email_schedule_conditional_${Date.now()}`;
 
     const steps: WorkflowStep[] = [
@@ -184,7 +297,7 @@ export class McpWorkflowTemplates {
       {
         stepId: 'read_email',
         stepType: 'execute',
-        toolName: 'zap2.gmail_find_email',
+        toolName: this.getSemanticToolName({ category: 'email', action: 'read', provider: 'gmail' }),
         query: 'get latest email',
         parameters: { searchQuery: 'in:inbox', maxResults: 1 }
       },
@@ -193,7 +306,7 @@ export class McpWorkflowTemplates {
       {
         stepId: 'check_calendar',
         stepType: 'execute',
-        toolName: 'zap2.google_calendar_find_events',
+        toolName: this.getSemanticToolName({ category: 'calendar', action: 'read', provider: 'google' }),
         query: 'check calendar availability today',
         parameters: { timeMin: new Date().toISOString() }
       },
@@ -209,14 +322,14 @@ export class McpWorkflowTemplates {
           trueSteps: [{
             stepId: 'schedule_meeting',
             stepType: 'execute',
-            toolName: 'zap2.google_calendar_quick_add_event',
+            toolName: this.getSemanticToolName({ category: 'calendar', action: 'create', provider: 'google' }),
             query: 'schedule meeting',
             parameters: { summary: 'Meeting from email', duration: 60 }
           }],
           falseSteps: [{
             stepId: 'reply_for_slots',
             stepType: 'execute',
-            toolName: 'zap2.gmail_send_email',
+            toolName: this.getSemanticToolName({ category: 'email', action: 'create', provider: 'gmail' }),
             query: 'reply asking for available time slots',
             parameters: {
               subject: 'Re: Meeting Request - Need Alternative Times',
@@ -240,7 +353,7 @@ export class McpWorkflowTemplates {
    * Generate JIRA board-tickets workflow
    * "Get list of open tickets on JIRA XYZ board"
    */
-  private generateJiraBoardTicketsWorkflow(query: string, matches: RegExpMatchArray): ConditionalWorkflow {
+  private generateJiraBoardTicketsWorkflow(): ConditionalWorkflow {
     const workflowId = `jira_board_tickets_${Date.now()}`;
 
     const steps: WorkflowStep[] = [
@@ -248,16 +361,16 @@ export class McpWorkflowTemplates {
       {
         stepId: 'get_board_id',
         stepType: 'execute',
-        toolName: 'jira.get_boards',
+        toolName: this.getSemanticToolName({ category: 'project', action: 'read' }),
         query: 'find board by name',
-        parameters: { name: matches[1] || 'XYZ' }
+        parameters: { name: 'XYZ' }
       },
 
       // Step 2: Get tickets from board
       {
         stepId: 'get_board_tickets',
         stepType: 'execute',
-        toolName: 'jira.get_board_issues',
+        toolName: this.getSemanticToolName({ category: 'project', action: 'read' }),
         query: 'get all open tickets from board ${board_id}',
         parameters: { status: 'open', dependsOn: ['get_board_id'] }
       }
@@ -275,28 +388,28 @@ export class McpWorkflowTemplates {
   /**
    * Generate email-calendar sync workflow
    */
-  private generateEmailCalendarSyncWorkflow(query: string, matches: RegExpMatchArray): ConditionalWorkflow {
+  private generateEmailCalendarSyncWorkflow(): ConditionalWorkflow {
     const workflowId = `email_calendar_sync_${Date.now()}`;
 
     const steps: WorkflowStep[] = [
       {
         stepId: 'read_email',
         stepType: 'execute',
-        toolName: 'zap2.gmail_find_email',
+        toolName: this.getSemanticToolName({ category: 'email', action: 'read', provider: 'gmail' }),
         query: 'get email with meeting details',
         parameters: { searchQuery: 'meeting OR calendar OR schedule' }
       },
       {
         stepId: 'create_calendar_event',
         stepType: 'execute',
-        toolName: 'zap2.google_calendar_quick_add_event',
+        toolName: this.getSemanticToolName({ category: 'calendar', action: 'create', provider: 'google' }),
         query: 'create calendar event from email ${emails_1}',
         parameters: { dependsOn: ['read_email'] }
       },
       {
         stepId: 'notify_participants',
         stepType: 'execute',
-        toolName: 'zap2.gmail_send_email',
+        toolName: this.getSemanticToolName({ category: 'email', action: 'create', provider: 'gmail' }),
         query: 'notify participants about calendar event',
         parameters: { dependsOn: ['create_calendar_event'] }
       }
@@ -314,17 +427,17 @@ export class McpWorkflowTemplates {
   /**
    * Generate Trello card creation workflow
    */
-  private generateTrelloCardCreationWorkflow(query: string, matches: RegExpMatchArray): ConditionalWorkflow {
+  private generateTrelloCardCreationWorkflow(): ConditionalWorkflow {
     const workflowId = `trello_card_creation_${Date.now()}`;
 
     const steps: WorkflowStep[] = [
       {
         stepId: 'create_trello_card',
         stepType: 'execute',
-        toolName: 'trello.create_card',
+        toolName: this.getSemanticToolName({ category: 'project', action: 'create', provider: 'trello' }),
         query: 'create new Trello card',
         parameters: {
-          name: matches[1] || 'New Task',
+          name: 'New Task',
           description: 'Created from "Get it done" mode'
         }
       }
@@ -342,16 +455,16 @@ export class McpWorkflowTemplates {
   /**
    * Generate Slack notification workflow
    */
-  private generateSlackNotificationWorkflow(query: string, matches: RegExpMatchArray): ConditionalWorkflow {
+  private generateSlackNotificationWorkflow(): ConditionalWorkflow {
     const workflowId = `slack_notification_${Date.now()}`;
 
     const steps: WorkflowStep[] = [
       {
         stepId: 'send_slack_message',
         stepType: 'execute',
-        toolName: 'slack.send_message',
+        toolName: this.getSemanticToolName({ category: 'communication', action: 'create', provider: 'slack' }),
         query: 'send Slack message',
-        parameters: { channel: '#general', text: matches[1] || 'Notification' }
+        parameters: { channel: '#general', text: 'Notification' }
       },
       {
         stepId: 'check_response',
@@ -363,7 +476,7 @@ export class McpWorkflowTemplates {
           trueSteps: [{
             stepId: 'follow_up_email',
             stepType: 'execute',
-            toolName: 'zap2.gmail_send_email',
+            toolName: this.getSemanticToolName({ category: 'email', action: 'create', provider: 'gmail' }),
             query: 'send follow-up email',
             parameters: { subject: 'Follow-up: Slack Message' }
           }],
@@ -384,21 +497,21 @@ export class McpWorkflowTemplates {
   /**
    * Generate multi-platform announcement workflow
    */
-  private generateMultiPlatformAnnouncementWorkflow(query: string, matches: RegExpMatchArray): ConditionalWorkflow {
+  private generateMultiPlatformAnnouncementWorkflow(): ConditionalWorkflow {
     const workflowId = `multi_platform_announcement_${Date.now()}`;
 
     const steps: WorkflowStep[] = [
       {
         stepId: 'post_to_slack',
         stepType: 'execute',
-        toolName: 'slack.send_message',
+        toolName: this.getSemanticToolName({ category: 'communication', action: 'create', provider: 'slack' }),
         query: 'post announcement to Slack',
         parameters: { channel: '#announcements' }
       },
       {
         stepId: 'send_email_announcement',
         stepType: 'execute',
-        toolName: 'zap2.gmail_send_email',
+        toolName: this.getSemanticToolName({ category: 'email', action: 'create', provider: 'gmail' }),
         query: 'send email announcement to team',
         parameters: { subject: 'Team Announcement' }
       }
@@ -416,28 +529,28 @@ export class McpWorkflowTemplates {
   /**
    * Generate Notion-docs sync workflow
    */
-  private generateNotionDocsSyncWorkflow(query: string, matches: RegExpMatchArray): ConditionalWorkflow {
+  private generateNotionDocsSyncWorkflow(): ConditionalWorkflow {
     const workflowId = `notion_docs_sync_${Date.now()}`;
 
     const steps: WorkflowStep[] = [
       {
         stepId: 'read_document',
         stepType: 'execute',
-        toolName: 'filesystem.read_file',
+        toolName: this.getSemanticToolName({ category: 'docs', action: 'read' }),
         query: 'read document content',
         parameters: {}
       },
       {
         stepId: 'create_notion_page',
         stepType: 'execute',
-        toolName: 'notion.create_page',
+        toolName: this.getSemanticToolName({ category: 'docs', action: 'create', provider: 'notion' }),
         query: 'create Notion page from document ${document_content}',
         parameters: { dependsOn: ['read_document'] }
       },
       {
         stepId: 'share_with_team',
         stepType: 'execute',
-        toolName: 'slack.send_message',
+        toolName: this.getSemanticToolName({ category: 'communication', action: 'create', provider: 'slack' }),
         query: 'share Notion page link with team',
         parameters: { dependsOn: ['create_notion_page'] }
       }
@@ -455,28 +568,28 @@ export class McpWorkflowTemplates {
   /**
    * Generate email-document workflow
    */
-  private generateEmailDocumentWorkflow(query: string, matches: RegExpMatchArray): ConditionalWorkflow {
+  private generateEmailDocumentWorkflow(): ConditionalWorkflow {
     const workflowId = `email_document_${Date.now()}`;
 
     const steps: WorkflowStep[] = [
       {
         stepId: 'extract_from_email',
         stepType: 'execute',
-        toolName: 'zap2.gmail_find_email',
+        toolName: this.getSemanticToolName({ category: 'email', action: 'read', provider: 'gmail' }),
         query: 'extract information from email',
         parameters: {}
       },
       {
         stepId: 'create_document',
         stepType: 'execute',
-        toolName: 'gdocs.create_document',
+        toolName: this.getSemanticToolName({ category: 'docs', action: 'create', provider: 'google' }),
         query: 'create document from email content ${email_content}',
         parameters: { dependsOn: ['extract_from_email'] }
       },
       {
         stepId: 'send_document_back',
         stepType: 'execute',
-        toolName: 'zap2.gmail_send_email',
+        toolName: this.getSemanticToolName({ category: 'email', action: 'create', provider: 'gmail' }),
         query: 'send document back to sender',
         parameters: { dependsOn: ['create_document'] }
       }
