@@ -72,6 +72,9 @@ export class McpExecutor {
     this.toolResolver = new McpToolResolver(this.mcpManager);
 
     this.startPerformanceMonitoring();
+
+    // Initialize Universal MCP System - clear any corrupted preferences
+    this.initializeUniversalSystem();
   }
 
   /**
@@ -386,16 +389,8 @@ export class McpExecutor {
 
       let result;
 
-      if (toolName.includes('gmail_find_email')) {
-        result = await this.executeGmailFind(query);
-      } else if (toolName.includes('gmail_send_email')) {
-        result = await this.executeGmailSend(query);
-      } else if (toolName.includes('gmail_reply_to_email')) {
-        result = await this.executeGmailReply(query);
-      } else {
-        // Generic MCP tool execution
-        result = await this.executeGenericTool(toolName, query);
-      }
+      // Universal MCP tool execution - no hardcoded tool-specific logic
+      result = await this.executeGenericTool(toolName, query);
 
       console.log(`[McpExecutor] Tool ${toolName} succeeded`);
       return {
@@ -454,27 +449,8 @@ export class McpExecutor {
       let result;
 
       // Route to appropriate execution method based on query type and tool name
-      switch (queryType) {
-        case 'email':
-          result = await this.executeEmailTool(toolName, query);
-          break;
-        case 'file':
-          result = await this.executeFileTool(toolName, query);
-          break;
-        case 'slack':
-          result = await this.executeSlackTool(toolName, query);
-          break;
-        case 'web':
-          result = await this.executeWebTool(toolName, query);
-          break;
-        case 'calendar':
-          result = await this.executeCalendarTool(toolName, query);
-          break;
-        default:
-          // Generic tool execution for unrecognized types
-          result = await this.executeGenericTool(toolName, query);
-          break;
-      }
+      // Universal MCP tool execution regardless of query type
+      result = await this.executeGenericTool(toolName, query);
 
       const executionTime = Date.now() - startTime;
       console.log(`[McpExecutor] ${queryType} tool ${toolName} succeeded`);
@@ -507,128 +483,8 @@ export class McpExecutor {
     }
   }
 
-  private async executeGmailFind(query: string): Promise<any> {
-    console.log('[McpExecutor] Executing Gmail find for query:', query);
-
-    // Parse Gmail-specific requirements from query
-    const params = this.parseGmailQuery(query);
-    console.log('[McpExecutor] Parsed Gmail params:', params);
-
-    // Generate natural language instructions for Gmail tool
-    let instructions = `Find emails from Gmail`;
-
-    // Add limit information
-    if (params.limit && params.limit !== 10) {
-      instructions = `Find the first ${params.limit} emails from Gmail`;
-    }
-
-    // Add search criteria to instructions
-    if (query.includes('recent') || query.includes('latest')) {
-      instructions += ' (most recent first)';
-    }
-    if (query.includes('unread')) {
-      instructions += ' that are unread';
-    }
-    if (query.includes('from')) {
-      const fromMatch = query.match(/from\s+([^\s]+)/i);
-      if (fromMatch) instructions += ` from ${fromMatch[1]}`;
-    }
-    if (query.includes('subject')) {
-      const subjectMatch = query.match(/subject[:\s]+([^,]+)/i);
-      if (subjectMatch) instructions += ` with subject containing "${subjectMatch[1].trim()}"`;
-    }
-
-    // Add query context to instructions
-    instructions += `. Original request: "${query}". Include email content/body in the results.`;
-
-    // Use Gmail search query syntax
-    const searchQuery = params.searchQuery.trim() || 'in:inbox';
-
-    const toolParams = {
-      instructions: instructions,
-      query: searchQuery
-    };
-
-    console.log('[McpExecutor] Calling gmail_find_email with params:', toolParams);
-
-    try {
-  
-      const tool = await this.toolResolver.resolveGmailFindEmail();
-      if (!tool) {
-        throw new Error('Gmail find email tool not found - please check your MCP server configuration');
-      }
-
-      console.log(`[McpExecutor] Using resolved tool: ${tool.fullName} from server: ${tool.serverName}`);
-      const result = await this.toolResolver.callResolvedTool(tool, toolParams);
-      console.log('[McpExecutor] Gmail find successful, result type:', typeof result);
-      return result;
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      console.error('[McpExecutor] Gmail find failed:', errorMessage);
-      throw error;
-    }
-  }
-
-  private async executeGmailSend(query: string): Promise<any> {
-    console.log('[McpExecutor] Executing Gmail send for query:', query);
-
-    // Extract email details from query
-    const emailDetails = this.parseEmailSendQuery(query);
-
-    // Generate instructions for Gmail send
-    const instructions = `Send email as requested: "${query}". ${emailDetails.to ? `Send to: ${emailDetails.to}` : 'Recipient needs to be specified'}`;
-
-    const toolParams: any = {
-      instructions: instructions
-    };
-
-    // Add other parameters if available
-    if (emailDetails.to) toolParams.to = emailDetails.to;
-    if (emailDetails.subject) toolParams.subject = emailDetails.subject;
-    if (emailDetails.body) toolParams.body = emailDetails.body;
-
-    console.log('[McpExecutor] Calling gmail_send_email with params:', toolParams);
 
 
-    const tool = await this.toolResolver.resolveGmailSendEmail();
-    if (!tool) {
-      throw new Error('Gmail send email tool not found - please check your MCP server configuration');
-    }
-
-    console.log(`[McpExecutor] Using resolved tool: ${tool.fullName} from server: ${tool.serverName}`);
-    return await this.toolResolver.callResolvedTool(tool, toolParams);
-  }
-
-  private async executeGmailReply(query: string): Promise<any> {
-    console.log('[McpExecutor] Executing Gmail reply for query:', query);
-
-    // Extract reply details from query
-    const replyDetails = this.parseEmailReplyQuery(query);
-
-    // Generate instructions for Gmail reply
-    const instructions = `Reply to email as requested: "${query}". Reply message: ${replyDetails.body}`;
-
-    const toolParams: any = {
-      instructions: instructions
-    };
-
-    // Add other parameters if available
-    if (replyDetails.messageId && replyDetails.messageId !== 'latest') {
-      toolParams.thread_id = replyDetails.messageId;
-    }
-    if (replyDetails.body) toolParams.body = replyDetails.body;
-
-    console.log('[McpExecutor] Calling gmail_reply_to_email with params:', toolParams);
-
-
-    const tool = await this.toolResolver.resolveGmailReply();
-    if (!tool) {
-      throw new Error('Gmail reply email tool not found - please check your MCP server configuration');
-    }
-
-    console.log(`[McpExecutor] Using resolved tool: ${tool.fullName} from server: ${tool.serverName}`);
-    return await this.toolResolver.callResolvedTool(tool, toolParams);
-  }
 
   private async executeGenericTool(toolName: string, query: string): Promise<any> {
     console.log(`[McpExecutor] Executing generic tool ${toolName} for query:`, query);
@@ -640,148 +496,8 @@ export class McpExecutor {
     });
   }
 
-  private parseGmailQuery(query: string): { searchQuery: string; limit: number } {
-    let limit = 10; // default
-    let searchQuery = '';
 
-    console.log('[DEBUG] parseGmailQuery input:', query);
 
-    // Extract number from query (e.g., "first 3 emails" -> 3)
-    const numberMatch = query.match(/(\d+)/);
-    if (numberMatch) {
-      limit = parseInt(numberMatch[1]);
-      console.log('[DEBUG] Extracted limit:', limit);
-    }
-
-    // Extract search terms
-    if (query.includes('from')) {
-      const fromMatch = query.match(/from\s+([^\s]+)/i);
-      if (fromMatch) {
-        searchQuery += `from:${fromMatch[1]} `;
-      }
-    }
-
-    if (query.includes('subject')) {
-      const subjectMatch = query.match(/subject[:\s]+([^,]+)/i);
-      if (subjectMatch) {
-        searchQuery += `subject:"${subjectMatch[1].trim()}" `;
-      }
-    }
-
-    // Handle temporal queries (removed 'first' as it's too generic)
-    if (query.includes('recent') || query.includes('latest')) {
-      searchQuery += 'newer_than:7d ';
-      console.log('[DEBUG] Added temporal filter: newer_than:7d');
-    }
-
-    if (query.includes('today')) {
-      searchQuery += 'newer_than:1d ';
-    }
-
-    if (query.includes('unread')) {
-      searchQuery += 'is:unread ';
-    }
-
-    // Default search if nothing specific
-    if (!searchQuery.trim()) {
-      searchQuery = 'in:inbox';
-      console.log('[DEBUG] Applied default search query: in:inbox');
-    }
-
-    const result = {
-      searchQuery: searchQuery.trim(),
-      limit: Math.min(limit, 20) // Cap at 20 emails max
-    };
-
-    console.log('[DEBUG] parseGmailQuery result:', result);
-    return result;
-  }
-
-  private parseEmailSendQuery(query: string): { to: string; subject: string; body: string } {
-    console.log('[DEBUG] parseEmailSendQuery input:', query);
-
-    // First check for "send [message] to [email]" pattern
-    const sendMessageToPattern = query.match(/^send\s+(.+?)\s+to\s+([^\s@]+@[^\s]+)/i);
-
-    if (sendMessageToPattern) {
-      const message = sendMessageToPattern[1].trim();
-      const email = sendMessageToPattern[2].trim();
-
-      const result = {
-        to: email,
-        subject: 'Message from Browzer',
-        body: message
-      };
-
-      console.log('[DEBUG] parseEmailSendQuery result (send-message-to pattern):', result);
-      return result;
-    }
-
-    // Extract recipient - improved patterns
-    const toMatch = query.match(/(?:send|email)\s+(?:to\s+)?([^\s@]+@[^\s]+)/i) ||
-      query.match(/to\s+([^\s@]+@[^\s]+)/i) ||
-      query.match(/([^\s@]+@[^\s]+)/i);
-
-    const recipientEmail = toMatch?.[1] || '';
-
-    // Extract subject - look for explicit "subject:" or infer from "about"
-    let subject = '';
-    const subjectMatch = query.match(/(?:subject|title)[:\s]+([^,\n]+)/i);
-    const aboutMatch = query.match(/about\s+(.+?)(?:\s+saying|\s+with\s+message|\s*$)/i);
-
-    if (subjectMatch) {
-      subject = subjectMatch[1].trim();
-    } else if (aboutMatch) {
-      subject = aboutMatch[1].trim();
-    } else {
-      subject = 'Message from Browzer';
-    }
-
-    // Extract body/message - improved patterns
-    let body = '';
-    const sayingMatch = query.match(/saying\s+(.+)$/i);
-    const messageMatch = query.match(/(?:with\s+message|message)[:\s]+(.+)$/i);
-    const bodyMatch = query.match(/(?:body)[:\s]+(.+)$/i);
-
-    if (sayingMatch) {
-      body = sayingMatch[1].trim();
-    } else if (messageMatch) {
-      body = messageMatch[1].trim();
-    } else if (bodyMatch) {
-      body = bodyMatch[1].trim();
-    } else {
-      // For "about X" queries, use the subject as body if no explicit body found
-      if (aboutMatch) {
-        body = aboutMatch[1].trim();
-      } else {
-        // Last resort - extract everything after email address
-        const afterEmailMatch = query.match(new RegExp(`${recipientEmail.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s+(.+)$`, 'i'));
-        body = afterEmailMatch?.[1]?.trim() || 'Hello!';
-      }
-    }
-
-    const result = {
-      to: recipientEmail,
-      subject: subject,
-      body: body
-    };
-
-    console.log('[DEBUG] parseEmailSendQuery result:', result);
-    return result;
-  }
-
-  private parseEmailReplyQuery(query: string): { messageId: string; body: string } {
-    // Extract message ID if provided
-    const messageIdMatch = query.match(/message[:\s]+([^\s]+)/i);
-
-    // Extract reply body
-    const bodyMatch = query.match(/(?:reply|saying|message)[:\s]+(.+)/i);
-
-    return {
-      messageId: messageIdMatch?.[1] || 'latest', // Default to latest email
-      body: bodyMatch?.[1]?.trim() || 'Reply from Browzer'
-    };
-  }
 
   private extractNumberFromQuery(query: string): number | null {
     const numberMatch = query.match(/(\d+)/);
@@ -1232,374 +948,18 @@ export class McpExecutor {
     return 'generic';
   }
 
-  /**
-   * Execute email-related tools (Gmail, Outlook, etc.)
-   */
-  private async executeEmailTool(toolName: string, query: string): Promise<any> {
-    console.log(`[McpExecutor] Executing email tool: ${toolName} with query: ${query}`);
 
-    if (toolName.includes('gmail_find_email')) {
-      return await this.executeGmailFind(query);
-    } else if (toolName.includes('gmail_send_email')) {
-      return await this.executeGmailSend(query);
-    } else if (toolName.includes('gmail_reply_to_email')) {
-      return await this.executeGmailReply(query);
-    } else {
-      // Generic email tool execution with instructions
-      const instructions = this.generateEmailInstructions(toolName, query);
-      return await this.mcpManager.callTool(toolName, {
-        instructions: instructions,
-        query: query
-      });
-    }
-  }
+
+
+
+
+
+
+
+
 
   /**
-   * Generate instructions for email tools
-   */
-  private generateEmailInstructions(toolName: string, query: string): string {
-    const queryLower = query.toLowerCase();
-
-    if (toolName.includes('find') || toolName.includes('gmail_find_email')) {
-      if (queryLower.includes('latest') || queryLower.includes('recent')) {
-        return `Find the most recent email from Gmail inbox. ${query}`;
-      } else if (queryLower.includes('unread')) {
-        return `Find unread emails from Gmail. ${query}`;
-      } else {
-        return `Search Gmail for emails matching: ${query}`;
-      }
-    } else if (toolName.includes('send') || toolName.includes('gmail_send_email')) {
-      return `Send a new email as requested: ${query}`;
-    } else if (toolName.includes('reply') || toolName.includes('gmail_reply_to_email')) {
-      return `Reply to an email as requested: ${query}`;
-    }
-
-    return `Execute email operation: ${query}`;
-  }
-
-  /**
-   * Execute file system tools
-   */
-  private async executeFileTool(toolName: string, query: string): Promise<any> {
-    console.log(`[McpExecutor] Executing file tool: ${toolName}`);
-
-    // Parse file-specific parameters from query
-    const params = this.parseFileQuery(query);
-    console.log('[McpExecutor] Parsed file params:', params);
-
-    return await this.mcpManager.callTool(toolName, params);
-  }
-
-  /**
-   * Execute Slack tools
-   */
-  private async executeSlackTool(toolName: string, query: string): Promise<any> {
-    console.log(`[McpExecutor] Executing Slack tool: ${toolName}`);
-
-    // Parse Slack-specific parameters from query
-    const params = this.parseSlackQuery(query);
-    console.log('[McpExecutor] Parsed Slack params:', params);
-
-    return await this.mcpManager.callTool(toolName, params);
-  }
-
-  /**
-   * Execute web/search tools
-   */
-  private async executeWebTool(toolName: string, query: string): Promise<any> {
-    console.log(`[McpExecutor] Executing web tool: ${toolName}`);
-
-    // Parse web-specific parameters from query
-    const params = this.parseWebQuery(query);
-    console.log('[McpExecutor] Parsed web params:', params);
-
-    return await this.mcpManager.callTool(toolName, params);
-  }
-
-  /**
-   * Execute calendar tools
-   */
-  private async executeCalendarTool(toolName: string, query: string): Promise<any> {
-    console.log(`[McpExecutor] Executing calendar tool: ${toolName} with query: ${query}`);
-
-    if (toolName.includes('google_calendar_find_events')) {
-      return await this.executeGoogleCalendarFind(query);
-    } else if (toolName.includes('google_calendar_quick_add_event')) {
-      return await this.executeGoogleCalendarQuickAdd(query);
-    } else if (toolName.includes('google_calendar_update_event')) {
-      return await this.executeGoogleCalendarUpdate(query);
-    } else {
-      // Generic calendar tool execution with instructions
-      const instructions = this.generateCalendarInstructions(toolName, query);
-      const params = this.parseCalendarQuery(query);
-      return await this.mcpManager.callTool(toolName, {
-        instructions: instructions,
-        ...params
-      });
-    }
-  }
-
-  /**
-   * Execute Google Calendar find events
-   */
-  private async executeGoogleCalendarFind(query: string): Promise<any> {
-    console.log('[McpExecutor] Executing Google Calendar find for query:', query);
-
-    const params = this.parseCalendarQuery(query);
-
-    // Generate instructions
-    let instructions = `Find events in Google Calendar`;
-    if (query.includes('today')) {
-      instructions += ' for today';
-    } else if (query.includes('tomorrow')) {
-      instructions += ' for tomorrow';
-    } else if (query.includes('this week')) {
-      instructions += ' for this week';
-    }
-    instructions += `. Original request: "${query}"`;
-
-    const toolParams: any = {
-      instructions: instructions
-    };
-
-    // Add time parameters based on query
-    if (query.includes('today')) {
-      toolParams.end_time = 'today at 12:00am';
-      toolParams.start_time = 'today at 11:59pm';
-    } else if (query.includes('tomorrow')) {
-      toolParams.end_time = 'tomorrow at 12:00am';
-      toolParams.start_time = 'tomorrow at 11:59pm';
-    } else if (query.includes('this week')) {
-      toolParams.end_time = 'this week first day at 12:00am';
-      toolParams.start_time = 'this week last day at 11:59pm';
-    }
-
-    // Add search term if looking for specific events
-    if (query.includes('meeting')) {
-      toolParams.search_term = 'meeting';
-    }
-
-    console.log('[McpExecutor] Calling google_calendar_find_events with params:', toolParams);
-
-    try {
-  
-      const tool = await this.toolResolver.resolveCalendarFindEvents();
-      if (!tool) {
-        throw new Error('Google Calendar find events tool not found - please check your MCP server configuration');
-      }
-
-      console.log(`[McpExecutor] Using resolved tool: ${tool.fullName} from server: ${tool.serverName}`);
-      const result = await this.toolResolver.callResolvedTool(tool, toolParams);
-      console.log('[McpExecutor] Google Calendar find successful');
-      return result;
-    } catch (error) {
-      console.error('[McpExecutor] Google Calendar find failed:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Execute Google Calendar quick add event
-   */
-  private async executeGoogleCalendarQuickAdd(query: string): Promise<any> {
-    console.log('[McpExecutor] Executing Google Calendar quick add for query:', query);
-
-    // Generate instructions
-    const instructions = `Create a calendar event based on the request: "${query}". Parse the text to extract date, time, and event details.`;
-
-    const toolParams: any = {
-      instructions: instructions,
-      text: query
-    };
-
-    console.log('[McpExecutor] Calling google_calendar_quick_add_event with params:', toolParams);
-
-    try {
-  
-      const tool = await this.toolResolver.resolveCalendarQuickAddEvent();
-      if (!tool) {
-        throw new Error('Google Calendar quick add event tool not found - please check your MCP server configuration');
-      }
-
-      console.log(`[McpExecutor] Using resolved tool: ${tool.fullName} from server: ${tool.serverName}`);
-      const result = await this.toolResolver.callResolvedTool(tool, toolParams);
-      console.log('[McpExecutor] Google Calendar quick add successful');
-      return result;
-    } catch (error) {
-      console.error('[McpExecutor] Google Calendar quick add failed:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Execute Google Calendar update event
-   */
-  private async executeGoogleCalendarUpdate(query: string): Promise<any> {
-    console.log('[McpExecutor] Executing Google Calendar update for query:', query);
-
-    const instructions = `Update a calendar event as requested: "${query}"`;
-
-    const toolParams: any = {
-      instructions: instructions
-    };
-
-    // Extract event details if mentioned in query
-    const eventIdMatch = query.match(/event[:\s]+([^\s]+)/i);
-    if (eventIdMatch) {
-      toolParams.eventid = eventIdMatch[1];
-    }
-
-    console.log('[McpExecutor] Calling google_calendar_update_event with params:', toolParams);
-
-    try {
-  
-      const tool = await this.toolResolver.resolveCalendarUpdateEvent();
-      if (!tool) {
-        throw new Error('Google Calendar update event tool not found - please check your MCP server configuration');
-      }
-
-      console.log(`[McpExecutor] Using resolved tool: ${tool.fullName} from server: ${tool.serverName}`);
-      const result = await this.toolResolver.callResolvedTool(tool, toolParams);
-      console.log('[McpExecutor] Google Calendar update successful');
-      return result;
-    } catch (error) {
-      console.error('[McpExecutor] Google Calendar update failed:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Generate instructions for calendar tools
-   */
-  private generateCalendarInstructions(toolName: string, query: string): string {
-    const queryLower = query.toLowerCase();
-
-    if (toolName.includes('find')) {
-      if (queryLower.includes('today')) {
-        return `Find calendar events for today. ${query}`;
-      } else if (queryLower.includes('meeting')) {
-        return `Find meetings in calendar. ${query}`;
-      } else {
-        return `Search calendar for events matching: ${query}`;
-      }
-    } else if (toolName.includes('add') || toolName.includes('create')) {
-      return `Create a calendar event: ${query}`;
-    } else if (toolName.includes('update')) {
-      return `Update calendar event: ${query}`;
-    }
-
-    return `Execute calendar operation: ${query}`;
-  }
-
-  /**
-   * Parse file-related queries into parameters
-   */
-  private parseFileQuery(query: string): any {
-    const queryLower = query.toLowerCase();
-
-    // Extract path if mentioned
-    const pathMatch = query.match(/(?:path|directory|folder)\s+([^\s]+)/i) ||
-      query.match(/in\s+([^\s]+)/i);
-
-    // Determine operation type
-    if (queryLower.includes('list') || queryLower.includes('show')) {
-      return {
-        operation: 'list',
-        path: pathMatch?.[1] || '.',
-        query: query
-      };
-    } else if (queryLower.includes('read') || queryLower.includes('open')) {
-      return {
-        operation: 'read',
-        path: pathMatch?.[1] || query.split(' ').pop(),
-        query: query
-      };
-    } else if (queryLower.includes('write') || queryLower.includes('create')) {
-      return {
-        operation: 'write',
-        path: pathMatch?.[1],
-        content: query,
-        query: query
-      };
-    }
-
-    return {
-      operation: 'generic',
-      query: query,
-      path: pathMatch?.[1]
-    };
-  }
-
-  /**
-   * Parse Slack-related queries into parameters
-   */
-  private parseSlackQuery(query: string): any {
-    // Extract channel if mentioned
-    const channelMatch = query.match(/(?:channel|to)\s+([#@]?\w+)/i);
-
-    // Extract message content
-    const messageMatch = query.match(/(?:saying|message|send)\s+["']?([^"']+)["']?/i) ||
-      query.match(/["']([^"']+)["']/);
-
-    return {
-      channel: channelMatch?.[1] || 'general',
-      message: messageMatch?.[1] || query,
-      query: query
-    };
-  }
-
-  /**
-   * Parse web/search queries into parameters
-   */
-  private parseWebQuery(query: string): any {
-    // Extract search terms
-    const searchMatch = query.match(/(?:search|find|lookup)\s+(?:for\s+)?(.+)/i) ||
-      query.match(/(.+)/);
-
-    // Extract URL if mentioned
-    const urlMatch = query.match(/(https?:\/\/[^\s]+)/i);
-
-    return {
-      query: searchMatch?.[1] || query,
-      url: urlMatch?.[1],
-      limit: this.extractNumberFromQuery(query) || 10
-    };
-  }
-
-  /**
-   * Parse calendar-related queries into parameters
-   */
-  private parseCalendarQuery(query: string): any {
-    const queryLower = query.toLowerCase();
-
-    // Extract date/time if mentioned
-    const dateMatch = query.match(/(?:on|at|for)\s+([^,\n]+)/i);
-
-    // Determine operation type
-    if (queryLower.includes('list') || queryLower.includes('show') || queryLower.includes('check')) {
-      return {
-        operation: 'list',
-        date: dateMatch?.[1] || 'today',
-        query: query
-      };
-    } else if (queryLower.includes('create') || queryLower.includes('schedule') || queryLower.includes('book')) {
-      return {
-        operation: 'create',
-        title: query,
-        date: dateMatch?.[1],
-        query: query
-      };
-    }
-
-    return {
-      operation: 'generic',
-      query: query,
-      date: dateMatch?.[1]
-    };
-  }
-
-  /**
-   * g and Performance Optimization Methods
+   * Caching and Performance Optimization Methods
    */
 
   /**
@@ -1664,44 +1024,312 @@ export class McpExecutor {
   }
 
   /**
-   * Resolve tool name from Claude's recommendation to full MCP registry format
-   * Now uses dynamic tool resolver instead of hardcoded fallbacks
+   * Enhanced hybrid tool resolution with semantic matching, keywords, and fuzzy matching
+   * Implements Option 7: Comprehensive resolution strategy with confidence scoring
    */
-  private async resolveFullToolName(toolName: string): Promise<string> {
-    // If already in full format (server.toolName), return as-is
+  private async resolveFullToolName(toolName: string): Promise<{
+    toolName: string;
+    confidence: number;
+    matchType: 'exact' | 'semantic' | 'keyword' | 'fuzzy';
+    alternatives?: string[];
+  }> {
+    // If already in full format (server.toolName), return as-is with high confidence
     if (toolName.includes('.')) {
-      return toolName;
+      return {
+        toolName: toolName,
+        confidence: 1.0,
+        matchType: 'exact'
+      };
     }
 
+    console.log(`[McpExecutor] Starting hybrid resolution for tool: ${toolName}`);
+
     try {
-      console.log(`[McpExecutor] Resolving tool name: ${toolName}`);
-
-      // Use dynamic tool resolver to find the tool
-      const tool = await this.toolResolver.resolveByName(toolName);
-
-      if (tool) {
-        console.log(`[McpExecutor] Resolved ${toolName} to: ${tool.fullName} from server: ${tool.serverName}`);
-        return tool.fullName;
+      // Strategy 1: Exact semantic matching using existing tool resolver
+      const semanticMatch = await this.performSemanticMatching(toolName);
+      if (semanticMatch.toolName && semanticMatch.confidence >= 0.8) {
+        console.log(`[McpExecutor] Semantic match found: ${semanticMatch.toolName} (confidence: ${semanticMatch.confidence})`);
+        return semanticMatch;
       }
 
-      // Try getting all tools and match by name (fallback for legacy compatibility)
-      const allTools = await this.mcpManager.listAllTools();
-      const matchingTool = allTools.find((fullName: string) => {
-        const shortName = fullName.split('.').pop();
-        return shortName === toolName;
-      });
+      // Strategy 2: Keyword-based matching with scoring
+      const keywordMatch = await this.performKeywordMatching(toolName);
+      if (keywordMatch.toolName && keywordMatch.confidence >= 0.7) {
+        console.log(`[McpExecutor] Keyword match found: ${keywordMatch.toolName} (confidence: ${keywordMatch.confidence})`);
+        return keywordMatch;
+      }
 
-      if (matchingTool) {
-        console.log('[McpExecutor] Found matching tool in registry:', matchingTool);
-        return matchingTool;
+      // Strategy 3: Fuzzy string matching as final fallback
+      const fuzzyMatch = await this.performFuzzyMatching(toolName);
+      if (fuzzyMatch.toolName && fuzzyMatch.confidence >= 0.6) {
+        console.log(`[McpExecutor] Fuzzy match found: ${fuzzyMatch.toolName} (confidence: ${fuzzyMatch.confidence})`);
+        return fuzzyMatch;
+      }
+
+      // REMOVED: Strategy 4 (User preference-based matching) - No hardcoded tool mappings in universal system
+
+      // If no matches found, return the best available alternative with low confidence
+      const bestAlternative = semanticMatch.toolName || keywordMatch.toolName || fuzzyMatch.toolName;
+      if (bestAlternative) {
+        const alternatives = [semanticMatch.toolName, keywordMatch.toolName, fuzzyMatch.toolName]
+          .filter(Boolean)
+          .filter(name => name !== bestAlternative);
+
+        return {
+          toolName: bestAlternative,
+          confidence: Math.max(semanticMatch.confidence, keywordMatch.confidence, fuzzyMatch.confidence),
+          matchType: semanticMatch.confidence >= keywordMatch.confidence ? 'semantic' :
+                    keywordMatch.confidence >= fuzzyMatch.confidence ? 'keyword' : 'fuzzy',
+          alternatives: alternatives
+        };
       }
 
     } catch (error) {
-      console.warn('[McpExecutor] Failed to resolve tool name:', error);
+      console.warn(`[McpExecutor] Hybrid resolution failed for ${toolName}:`, error);
     }
 
-    throw new Error(`Tool "${toolName}" not found in any connected MCP server. Please check your MCP server configuration and ensure the tool is available.`);
+    // Ultimate fallback: throw error with helpful message and available tools
+    const allTools = await this.mcpManager.listAllTools();
+    const toolSuggestions = allTools.slice(0, 3).join(', ');
+
+    throw new Error(`Tool "${toolName}" could not be resolved to any available MCP tool. Available tools include: ${toolSuggestions}. Please check your MCP server configuration.`);
   }
+
+  /**
+   * Strategy 1: Semantic matching using existing tool resolver with capability mapping
+   */
+  private async performSemanticMatching(toolName: string): Promise<{
+    toolName: string;
+    confidence: number;
+    matchType: 'semantic';
+  }> {
+    try {
+      // Use existing dynamic tool resolver for semantic matching
+      const tool = await this.toolResolver.resolveByName(toolName);
+
+      if (tool) {
+        return {
+          toolName: tool.fullName,
+          confidence: 0.9, // High confidence for semantic matches
+          matchType: 'semantic'
+        };
+      }
+
+      // Try capability-based matching for common Claude tool names
+      const capabilityMatch = await this.resolveByCapability(toolName);
+      if (capabilityMatch) {
+        return {
+          toolName: capabilityMatch,
+          confidence: 0.8,
+          matchType: 'semantic'
+        };
+      }
+
+    } catch (error) {
+      console.warn(`[McpExecutor] Semantic matching failed for ${toolName}:`, error);
+    }
+
+    return { toolName: '', confidence: 0, matchType: 'semantic' };
+  }
+
+  /**
+   * Strategy 2: Keyword matching with weighted scoring
+   */
+  private async performKeywordMatching(toolName: string): Promise<{
+    toolName: string;
+    confidence: number;
+    matchType: 'keyword';
+  }> {
+    try {
+      const allTools = await this.mcpManager.listAllTools();
+      const keywords = toolName.toLowerCase().split('_');
+
+      let bestMatch = '';
+      let bestScore = 0;
+
+      for (const fullToolName of allTools) {
+        const score = this.calculateKeywordScore(keywords, fullToolName);
+        if (score > bestScore) {
+          bestScore = score;
+          bestMatch = fullToolName;
+        }
+      }
+
+      // Convert score to confidence (normalize between 0.3 and 0.8)
+      const confidence = bestScore > 0 ? Math.min(0.3 + (bestScore / keywords.length) * 0.5, 0.8) : 0;
+
+      return {
+        toolName: confidence >= 0.5 ? bestMatch : '',
+        confidence,
+        matchType: 'keyword'
+      };
+
+    } catch (error) {
+      console.warn(`[McpExecutor] Keyword matching failed for ${toolName}:`, error);
+    }
+
+    return { toolName: '', confidence: 0, matchType: 'keyword' };
+  }
+
+  /**
+   * Strategy 3: Fuzzy string matching using Levenshtein distance
+   */
+  private async performFuzzyMatching(toolName: string): Promise<{
+    toolName: string;
+    confidence: number;
+    matchType: 'fuzzy';
+  }> {
+    try {
+      const allTools = await this.mcpManager.listAllTools();
+
+      let bestMatch = '';
+      let bestSimilarity = 0;
+
+      for (const fullToolName of allTools) {
+        const shortName = fullToolName.split('.').pop() || fullToolName;
+        const similarity = this.calculateStringSimilarity(toolName, shortName);
+
+        if (similarity > bestSimilarity) {
+          bestSimilarity = similarity;
+          bestMatch = fullToolName;
+        }
+      }
+
+      // Convert similarity to confidence (scale 0.1 to 0.7)
+      const confidence = bestSimilarity > 0.3 ? 0.1 + (bestSimilarity * 0.6) : 0;
+
+      return {
+        toolName: confidence >= 0.4 ? bestMatch : '',
+        confidence,
+        matchType: 'fuzzy'
+      };
+
+    } catch (error) {
+      console.warn(`[McpExecutor] Fuzzy matching failed for ${toolName}:`, error);
+    }
+
+    return { toolName: '', confidence: 0, matchType: 'fuzzy' };
+  }
+
+  // REMOVED: Strategy 4 (User preference-based matching) - Universal MCP system uses no hardcoded tool mappings
+
+  /**
+   * Map Claude's generic tool names to MCP capabilities
+   */
+  private async resolveByCapability(toolName: string): Promise<string | null> {
+    const capabilityMappings: Record<string, { category: string; action: string; provider?: string }> = {
+      'send_email': { category: 'email', action: 'create', provider: 'gmail' },
+      'find_email': { category: 'email', action: 'read', provider: 'gmail' },
+      'reply_to_email': { category: 'email', action: 'create', provider: 'gmail' },
+      'get_events': { category: 'calendar', action: 'read', provider: 'google' },
+      'create_event': { category: 'calendar', action: 'create', provider: 'google' },
+      'quick_add_event': { category: 'calendar', action: 'create', provider: 'google' },
+      'update_event': { category: 'calendar', action: 'update', provider: 'google' },
+      'list_emails': { category: 'email', action: 'read', provider: 'gmail' },
+      'search_emails': { category: 'email', action: 'read', provider: 'gmail' }
+    };
+
+    const capability = capabilityMappings[toolName];
+    if (!capability) return null;
+
+    try {
+      // Use tool discovery service to find matching tools
+      const toolRegistry = await this.toolDiscoveryService.discoverAllTools();
+      const capabilityKey = `${capability.category}.${capability.action}${capability.provider ? '.' + capability.provider : ''}`;
+      const matchingTools = toolRegistry.capabilityIndex.get(capabilityKey);
+
+      if (matchingTools && matchingTools.length > 0) {
+        // Return the highest priority tool
+        const bestTool = matchingTools.sort((a, b) => b.priority - a.priority)[0];
+        return bestTool.fullName;
+      }
+    } catch (error) {
+      console.warn(`[McpExecutor] Capability resolution failed for ${toolName}:`, error);
+    }
+
+    return null;
+  }
+
+  /**
+   * Calculate keyword match score
+   */
+  private calculateKeywordScore(keywords: string[], toolName: string): number {
+    const toolNameLower = toolName.toLowerCase();
+    let score = 0;
+
+    for (const keyword of keywords) {
+      if (toolNameLower.includes(keyword)) {
+        // Exact match gets full score
+        score += 1;
+      } else {
+        // Check for synonyms
+        const synonyms = this.getKeywordSynonyms(keyword);
+        for (const synonym of synonyms) {
+          if (toolNameLower.includes(synonym)) {
+            score += 0.8; // Partial score for synonym match
+            break;
+          }
+        }
+      }
+    }
+
+    return score;
+  }
+
+  /**
+   * Get synonyms for common action keywords
+   */
+  private getKeywordSynonyms(keyword: string): string[] {
+    const synonymMap: Record<string, string[]> = {
+      'send': ['create', 'compose', 'write'],
+      'find': ['get', 'search', 'list', 'read', 'fetch', 'retrieve'],
+      'create': ['add', 'new', 'make', 'compose'],
+      'update': ['edit', 'modify', 'change'],
+      'delete': ['remove', 'trash'],
+      'email': ['mail', 'message'],
+      'event': ['appointment', 'meeting'],
+      'calendar': ['cal', 'schedule']
+    };
+
+    return synonymMap[keyword] || [];
+  }
+
+  /**
+   * Calculate string similarity using simplified Levenshtein distance
+   */
+  private calculateStringSimilarity(str1: string, str2: string): number {
+    const len1 = str1.length;
+    const len2 = str2.length;
+
+    if (len1 === 0) return len2 === 0 ? 1 : 0;
+    if (len2 === 0) return 0;
+
+    // Create matrix
+    const matrix = Array(len1 + 1).fill(null).map(() => Array(len2 + 1).fill(null));
+
+    // Initialize first row and column
+    for (let i = 0; i <= len1; i++) matrix[i][0] = i;
+    for (let j = 0; j <= len2; j++) matrix[0][j] = j;
+
+    // Calculate distances
+    for (let i = 1; i <= len1; i++) {
+      for (let j = 1; j <= len2; j++) {
+        const cost = str1[i - 1].toLowerCase() === str2[j - 1].toLowerCase() ? 0 : 1;
+        matrix[i][j] = Math.min(
+          matrix[i - 1][j] + 1,      // deletion
+          matrix[i][j - 1] + 1,      // insertion
+          matrix[i - 1][j - 1] + cost // substitution
+        );
+      }
+    }
+
+    // Convert distance to similarity (0-1)
+    const distance = matrix[len1][len2];
+    const maxLen = Math.max(len1, len2);
+    return maxLen === 0 ? 1 : 1 - (distance / maxLen);
+  }
+
+  // REMOVED: All preference storage methods - Universal MCP system uses no hardcoded tool mappings
 
   /**
    * Apply result limiting if MCP tool ignored the limit parameter
@@ -1831,16 +1459,75 @@ export class McpExecutor {
     });
 
     try {
+      // PHASE 1: Enhanced logging for parameter building diagnostics
+      console.log('🔧 [McpExecutor] UNIVERSAL PARAMETER BUILDING - Starting comprehensive process');
+      console.log('📊 [McpExecutor] Input Analysis:', {
+        toolName: toolMatch.toolName,
+        claudeParamsCount: Object.keys(claudeParams).length,
+        claudeParamsKeys: Object.keys(claudeParams),
+        intentLength: intent.length,
+        intentSnippet: intent.substring(0, 100) + (intent.length > 100 ? '...' : '')
+      });
+
       // Build parameters for MCP tool using Claude's analysis
       const mcpParameters = this.buildMcpParameters(toolMatch.toolName, claudeParams, intent);
-      console.log('[McpExecutor] Built MCP parameters:', mcpParameters);
 
-      // Resolve the tool name to full MCP registry format (server.toolName)
-      const fullToolName = await this.resolveFullToolName(toolMatch.toolName);
-      console.log('[McpExecutor] Resolved tool name:', toolMatch.toolName, '→', fullToolName);
+      // PHASE 2: Comprehensive parameter building diagnostics
+      console.log('🎯 [McpExecutor] PARAMETER BUILD RESULT:', {
+        success: true,
+        finalParameterCount: Object.keys(mcpParameters).length,
+        finalParameterKeys: Object.keys(mcpParameters),
+        hasInstructions: 'instructions' in mcpParameters,
+        hasLimitParams: this.hasAnyLimitParameter(mcpParameters),
+        parameterSizes: Object.fromEntries(
+          Object.entries(mcpParameters).map(([key, value]) => [
+            key,
+            typeof value === 'string' ? `${value.length} chars` : typeof value
+          ])
+        )
+      });
+
+      // Resolve the tool name using hybrid strategy
+      const toolResolution = await this.resolveFullToolName(toolMatch.toolName);
+      console.log('[McpExecutor] Hybrid resolution result:', {
+        originalTool: toolMatch.toolName,
+        resolvedTool: toolResolution.toolName,
+        matchType: toolResolution.matchType,
+        confidence: toolResolution.confidence,
+        alternatives: toolResolution.alternatives
+      });
+
+      // Enhanced user feedback for low confidence matches
+      if (toolResolution.confidence < 0.7) {
+        console.warn(`[McpExecutor] Low confidence match (${toolResolution.confidence}) for ${toolMatch.toolName} → ${toolResolution.toolName}`);
+        if (toolResolution.alternatives && toolResolution.alternatives.length > 0) {
+          console.log(`[McpExecutor] Alternative tools available: ${toolResolution.alternatives.join(', ')}`);
+        }
+      }
+
+      // PHASE 3: Pre-execution diagnostics
+      console.log('🚀 [McpExecutor] PRE-EXECUTION ANALYSIS:', {
+        toolName: toolResolution.toolName,
+        confidence: toolResolution.confidence,
+        parametersReady: Object.keys(mcpParameters).length > 0,
+        timeToExecution: Date.now()
+      });
 
       // Execute the tool with proper parameters
-      const result = await this.mcpManager.callTool(fullToolName, mcpParameters);
+      const executionStartTime = Date.now();
+      const result = await this.mcpManager.callTool(toolResolution.toolName, mcpParameters);
+      const executionTime = Date.now() - executionStartTime;
+
+      // PHASE 4: Post-execution diagnostics
+      console.log('✅ [McpExecutor] EXECUTION COMPLETED:', {
+        success: true,
+        executionTimeMs: executionTime,
+        resultType: typeof result,
+        hasContent: result && (result.content || result.result || result.data),
+        resultSize: result ? JSON.stringify(result).length : 0
+      });
+
+      // REMOVED: User preferences learning system - No hardcoded tool mappings in universal system
 
       // Post-process result to apply limit if MCP tool ignored it
       const processedResult = this.applyResultLimiting(result, claudeParams, intent, toolMatch.toolName);
@@ -1854,22 +1541,64 @@ export class McpExecutor {
         data: processedResult,
         toolName: toolMatch.toolName,
         executionTime: 0,
-        stepDescription: `Claude AI recommended: ${toolMatch.description}`
+        stepDescription: `${toolResolution.matchType.toUpperCase()} match (${Math.round(toolResolution.confidence * 100)}%): ${toolMatch.toolName} → ${toolResolution.toolName}. ${toolMatch.description}`
       };
 
-      console.log('[McpExecutor] Claude-enhanced tool execution successful');
+      console.log('[McpExecutor] Hybrid tool resolution successful');
       return executionResult;
 
     } catch (error) {
-      console.error('[McpExecutor] Claude-enhanced tool execution failed:', error);
+      // PHASE 5: Comprehensive error diagnostics
+      const errorDetails = {
+        errorType: error instanceof Error ? error.name : 'Unknown',
+        errorMessage: error instanceof Error ? error.message : String(error),
+        hasStack: error instanceof Error && error.stack,
+        toolName: toolMatch.toolName,
+        parameterCount: Object.keys(claudeParams).length,
+        intentLength: intent.length,
+        timestamp: new Date().toISOString()
+      };
+
+      console.error('❌ [McpExecutor] EXECUTION FAILED - Comprehensive error analysis:', errorDetails);
+
+      // Additional diagnostics for schema validation errors
+      if (error instanceof Error && (
+        error.message.includes('parameter') ||
+        error.message.includes('schema') ||
+        error.message.includes('validation')
+      )) {
+        console.error('🔍 [McpExecutor] SCHEMA VALIDATION ERROR - Additional context:', {
+          providedParameters: Object.keys(claudeParams),
+          parameterValues: Object.fromEntries(
+            Object.entries(claudeParams).map(([key, value]) => [
+              key,
+              typeof value === 'string' ? `"${value.substring(0, 50)}${value.length > 50 ? '...' : ''}"` : typeof value
+            ])
+          ),
+          toolSchemaAvailable: !!this.mcpManager.getCachedToolSchema(toolMatch.toolName),
+          errorStack: error.stack?.split('\n').slice(0, 3).join('\n')
+        });
+      }
+
+      console.error('[McpExecutor] Hybrid tool execution failed:', error);
+
+      // REMOVED: User preferences learning system - No hardcoded tool mappings in universal system
+
+      // Provide enhanced error message with resolution context
+      let errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      if (error instanceof Error && error.message.includes('Available tools include:')) {
+        errorMessage = `Tool resolution failed: ${errorMessage}`;
+      } else {
+        errorMessage = `Tool execution failed: ${errorMessage}`;
+      }
 
       return {
         success: false,
         data: null,
-        error: error instanceof Error ? error.message : 'Unknown error',
+        error: errorMessage,
         toolName: toolMatch.toolName,
         executionTime: 0,
-        stepDescription: `Claude AI execution failed: ${toolMatch.toolName}`
+        stepDescription: `FAILED: ${toolMatch.toolName} resolution/execution failed`
       };
     }
   }
@@ -2095,34 +1824,380 @@ export class McpExecutor {
    * NEW: Build MCP tool parameters dynamically (no hardcoded tool logic)
    */
   private buildMcpParameters(toolName: string, claudeParams: Record<string, any>, intent: string): Record<string, any> {
-    console.log('[McpExecutor] Building dynamic MCP parameters for tool:', toolName, 'with Claude params:', claudeParams);
+    console.log('[McpExecutor] 🔧 Building universal MCP parameters for tool:', toolName, 'with Claude params:', claudeParams);
 
-    // NEW APPROACH: Use Claude's parameters directly - no hardcoded tool logic
-    const mcpParams: Record<string, any> = {};
+    // PHASE 1: Schema Discovery and Pre-filtering
+    const toolSchema = this.mcpManager.getCachedToolSchema(toolName);
+    let mcpParams: Record<string, any> = {};
 
-    // Copy all Claude parameters as they should be tool-agnostic
-    Object.assign(mcpParams, claudeParams);
+    if (toolSchema) {
+      console.log(`[McpExecutor] 📋 Schema found for ${toolName} - using schema-aware parameter building`);
 
-    // CRITICAL FIX: Ensure 'instructions' parameter is always provided
-    if (!mcpParams.instructions) {
-      mcpParams.instructions = this.generateInstructionsFromIntent(toolName, intent, claudeParams);
-      console.log(`[McpExecutor] Added missing instructions parameter:`, mcpParams.instructions);
+      // UNIVERSAL PHASE 1A: Schema-Aware Parameter Pre-filtering
+      // Only include parameters that exist in the tool's schema to prevent validation failures
+      mcpParams = this.buildSchemaAwareParameters(toolName, claudeParams, toolSchema);
+      console.log(`[McpExecutor] ✅ Schema-aware parameters built:`, Object.keys(mcpParams));
+
+      // UNIVERSAL PHASE 1B: Infer missing required parameters before validation
+      const requiredParams = this.extractRequiredParametersFromSchema(toolSchema);
+      console.log(`[McpExecutor] 📝 Required parameters for ${toolName}:`, requiredParams);
+
+      for (const requiredParam of requiredParams) {
+        if (!(requiredParam in mcpParams)) {
+          console.log(`[McpExecutor] 🔍 Missing required parameter "${requiredParam}" - attempting inference`);
+          const inferredValue = this.inferParameterFromIntent(requiredParam, intent, toolName);
+          if (inferredValue !== null && inferredValue !== undefined) {
+            mcpParams[requiredParam] = inferredValue;
+            console.log(`[McpExecutor] ✨ Inferred required parameter ${requiredParam}:`, inferredValue);
+          }
+        }
+      }
+
+      // UNIVERSAL PHASE 1C: Apply smart type coercion before validation
+      mcpParams = this.applySchemaBasedTypeCoercion(mcpParams, toolSchema);
+
+    } else {
+      console.log(`[McpExecutor] ⚠️  No schema found for ${toolName} - using universal fallback parameter building`);
+
+      // UNIVERSAL FALLBACK: Copy all parameters for tools without schemas
+      Object.assign(mcpParams, claudeParams);
     }
 
-    // ENHANCEMENT: Ensure limit parameter is included for tools that need it
-    const requestedLimit = this.extractRequestedLimit(intent, claudeParams);
-    if (requestedLimit && !mcpParams.limit && !mcpParams.max_results && !mcpParams.count) {
-      // Add multiple parameter variations since different tools use different names
-      mcpParams.limit = requestedLimit;
-      mcpParams.max_results = requestedLimit;
-      mcpParams.count = requestedLimit;
-      console.log(`[McpExecutor] Added limit parameters: ${requestedLimit}`);
+    // PHASE 2: Universal Parameter Validation (now with pre-filtered & coerced parameters)
+    if (toolSchema) {
+      const validation = this.mcpManager.validateToolParameters(toolName, mcpParams);
+
+      if (!validation.valid) {
+        console.log(`[McpExecutor] ⚠️  Parameter validation failed after schema-aware building:`, validation);
+
+        // This should rarely happen now due to pre-filtering, but handle edge cases
+        if (validation.missingRequired.length > 0) {
+          console.log(`[McpExecutor] 🚨 Still missing required after inference:`, validation.missingRequired);
+          // Store for error handling but continue with available parameters
+          (mcpParams as any)._missingRequired = validation.missingRequired;
+        }
+
+        // Use filtered parameters (removing invalid ones)
+        if (validation.filteredParams && Object.keys(validation.filteredParams).length > 0) {
+          console.log(`[McpExecutor] 🔄 Using filtered parameters:`, Object.keys(validation.filteredParams));
+          mcpParams = validation.filteredParams;
+        }
+      } else {
+        console.log(`[McpExecutor] ✅ All parameters validated successfully for ${toolName}`);
+      }
     }
 
-    // Log the enhanced parameter mapping
-    console.log('[McpExecutor] Enhanced parameter mapping (with limits and instructions):', mcpParams);
+    // PHASE 3: Universal Parameter Enhancements (apply to all tools)
+    mcpParams = this.applyUniversalParameterEnhancements(mcpParams, toolName, intent, claudeParams);
+
+    // Final validation log
+    console.log('[McpExecutor] 🎯 Final universal parameter mapping:', mcpParams);
 
     return mcpParams;
+  }
+
+  /**
+   * Infer missing parameter values from user intent using semantic analysis
+   */
+  private inferParameterFromIntent(parameterName: string, intent: string, _toolName?: string): any {
+    const intentLower = intent.toLowerCase();
+    const paramLower = parameterName.toLowerCase();
+
+    console.log(`[McpExecutor] Attempting to infer parameter "${parameterName}" from intent: "${intent}"`);
+
+    // Common parameter inference patterns
+    try {
+      // Board/Board ID parameter inference
+      if (paramLower.includes('board') || parameterName === 'board') {
+        // Look for board names in the intent
+        const boardPatterns = [
+          /(?:board|in|from|on)\s+["']?([^"'\s,]+)["']?/i,
+          /["']([^"']+)["']\s+board/i,
+          /board\s*:\s*["']?([^"'\s,]+)["']?/i
+        ];
+
+        for (const pattern of boardPatterns) {
+          const match = intentLower.match(pattern);
+          if (match && match[1]) {
+            console.log(`[McpExecutor] Inferred board parameter: "${match[1]}"`);
+            return match[1];
+          }
+        }
+
+        // For project management tools, use common default patterns
+        if (paramLower === 'board') {
+          // Check if this is a search/find operation
+          const isSearchOperation = intent.toLowerCase().includes('find') ||
+                                  intent.toLowerCase().includes('search') ||
+                                  intent.toLowerCase().includes('get');
+          if (isSearchOperation) {
+            console.log(`[McpExecutor] Using default "all" for board search parameter`);
+            return 'all';
+          }
+        }
+      }
+
+      // Query/Search parameter inference
+      if (paramLower.includes('query') || paramLower.includes('search') || parameterName === 'q') {
+        // Extract search terms from intent
+        const searchPatterns = [
+          /(?:find|search for|looking for|get|show)\s+["']?([^"']+)["']?/i,
+          /["']([^"']+)["']\s+(?:card|ticket|item|task)/i,
+          /(?:card|ticket|item|task)\s+["']?([^"']+)["']?/i
+        ];
+
+        for (const pattern of searchPatterns) {
+          const match = intent.match(pattern);
+          if (match && match[1]) {
+            console.log(`[McpExecutor] Inferred query parameter: "${match[1]}"`);
+            return match[1].trim();
+          }
+        }
+
+        // Fallback: use the entire intent as the query
+        console.log(`[McpExecutor] Using full intent as query parameter`);
+        return intent;
+      }
+
+      // Subject parameter for emails
+      if (paramLower.includes('subject')) {
+        const subjectMatch = intent.match(/(?:subject|title)\s*["']([^"']+)["']/i);
+        if (subjectMatch) {
+          console.log(`[McpExecutor] Inferred subject parameter: "${subjectMatch[1]}"`);
+          return subjectMatch[1];
+        }
+      }
+
+      // To/Recipient parameter for emails
+      if (paramLower.includes('to') || paramLower.includes('recipient')) {
+        const emailMatch = intent.match(/(?:to|send to)\s+([^\s,]+@[^\s,]+)/i);
+        if (emailMatch) {
+          console.log(`[McpExecutor] Inferred recipient parameter: "${emailMatch[1]}"`);
+          return emailMatch[1];
+        }
+      }
+
+      // Date parameter inference
+      if (paramLower.includes('date') || paramLower.includes('when')) {
+        const datePatterns = [
+          /\b(today|tomorrow|yesterday)\b/i,
+          /\b(\d{1,2}\/\d{1,2}\/\d{4}|\d{4}-\d{2}-\d{2})\b/,
+          /\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/i,
+          /\b(next week|this week|last week)\b/i
+        ];
+
+        for (const pattern of datePatterns) {
+          const match = intent.match(pattern);
+          if (match && match[1]) {
+            console.log(`[McpExecutor] Inferred date parameter: "${match[1]}"`);
+            return match[1];
+          }
+        }
+      }
+
+      // Limit/Count parameter inference
+      if (paramLower.includes('limit') || paramLower.includes('count') || paramLower.includes('max')) {
+        const limitMatch = intent.match(/(?:first|last|top|show|limit|max)\s+(\d+)/i);
+        if (limitMatch) {
+          console.log(`[McpExecutor] Inferred limit parameter: ${limitMatch[1]}`);
+          return parseInt(limitMatch[1]);
+        }
+      }
+
+      console.log(`[McpExecutor] Could not infer parameter "${parameterName}" from intent`);
+      return null;
+
+    } catch (error) {
+      console.error(`[McpExecutor] Error inferring parameter "${parameterName}":`, error);
+      return null;
+    }
+  }
+
+  /**
+   * UNIVERSAL: Build schema-aware parameters - only include parameters that exist in tool schema
+   */
+  private buildSchemaAwareParameters(toolName: string, inputParams: Record<string, any>, toolSchema: any): Record<string, any> {
+    console.log(`[McpExecutor] 🔍 Building schema-aware parameters for ${toolName}`);
+
+    const schemaAwareParams: Record<string, any> = {};
+
+    if (!toolSchema || !toolSchema.inputSchema || !toolSchema.inputSchema.properties) {
+      console.log(`[McpExecutor] ⚠️  No input schema properties found for ${toolName}, copying all parameters`);
+      return { ...inputParams };
+    }
+
+    const schemaProperties = toolSchema.inputSchema.properties;
+    console.log(`[McpExecutor] 📋 Schema properties for ${toolName}:`, Object.keys(schemaProperties));
+
+    // Only include parameters that exist in the schema
+    for (const [paramName, paramValue] of Object.entries(inputParams)) {
+      if (paramName in schemaProperties) {
+        schemaAwareParams[paramName] = paramValue;
+        console.log(`[McpExecutor] ✅ Included schema-valid parameter: ${paramName}`);
+      } else {
+        console.log(`[McpExecutor] ❌ Filtered out invalid parameter: ${paramName} (not in schema)`);
+      }
+    }
+
+    return schemaAwareParams;
+  }
+
+  /**
+   * UNIVERSAL: Extract required parameters from tool schema
+   */
+  private extractRequiredParametersFromSchema(toolSchema: any): string[] {
+    if (!toolSchema || !toolSchema.inputSchema) {
+      console.log(`[McpExecutor] ⚠️  No input schema available, no required parameters`);
+      return [];
+    }
+
+    const required = toolSchema.inputSchema.required || [];
+    console.log(`[McpExecutor] 📝 Found ${required.length} required parameters:`, required);
+    return required;
+  }
+
+  /**
+   * UNIVERSAL: Apply smart type coercion based on schema types
+   */
+  private applySchemaBasedTypeCoercion(params: Record<string, any>, toolSchema: any): Record<string, any> {
+    console.log(`[McpExecutor] 🔄 Applying schema-based type coercion`);
+
+    if (!toolSchema || !toolSchema.inputSchema || !toolSchema.inputSchema.properties) {
+      return params;
+    }
+
+    const coercedParams = { ...params };
+    const schemaProperties = toolSchema.inputSchema.properties;
+
+    for (const [paramName, paramValue] of Object.entries(params)) {
+      const schemaProperty = schemaProperties[paramName];
+      if (!schemaProperty) continue;
+
+      const expectedType = schemaProperty.type;
+      const currentValue = paramValue;
+
+      try {
+        switch (expectedType) {
+          case 'boolean':
+            if (typeof currentValue === 'string') {
+              if (currentValue.toLowerCase() === 'true' || currentValue === '1') {
+                coercedParams[paramName] = true;
+                console.log(`[McpExecutor] 🔄 Coerced ${paramName}: "${currentValue}" -> true`);
+              } else if (currentValue.toLowerCase() === 'false' || currentValue === '0') {
+                coercedParams[paramName] = false;
+                console.log(`[McpExecutor] 🔄 Coerced ${paramName}: "${currentValue}" -> false`);
+              }
+            }
+            break;
+
+          case 'integer':
+          case 'number':
+            if (typeof currentValue === 'string' && !isNaN(Number(currentValue))) {
+              const numValue = expectedType === 'integer' ? parseInt(currentValue) : parseFloat(currentValue);
+              coercedParams[paramName] = numValue;
+              console.log(`[McpExecutor] 🔄 Coerced ${paramName}: "${currentValue}" -> ${numValue}`);
+            }
+            break;
+
+          case 'string':
+            if (Array.isArray(currentValue)) {
+              // Convert arrays to comma-separated strings
+              coercedParams[paramName] = currentValue.join(', ');
+              console.log(`[McpExecutor] 🔄 Coerced ${paramName}: array -> "${coercedParams[paramName]}"`);
+            } else if (typeof currentValue !== 'string') {
+              // Convert other types to string
+              coercedParams[paramName] = String(currentValue);
+              console.log(`[McpExecutor] 🔄 Coerced ${paramName}: ${typeof currentValue} -> "${coercedParams[paramName]}"`);
+            }
+            break;
+
+          case 'array':
+            if (typeof currentValue === 'string' && currentValue.includes(',')) {
+              // Convert comma-separated strings to arrays
+              coercedParams[paramName] = currentValue.split(',').map(item => item.trim());
+              console.log(`[McpExecutor] 🔄 Coerced ${paramName}: "${currentValue}" -> array`);
+            }
+            break;
+        }
+      } catch (error) {
+        console.warn(`[McpExecutor] ⚠️  Failed to coerce ${paramName}:`, error);
+        // Keep original value if coercion fails
+      }
+    }
+
+    return coercedParams;
+  }
+
+  /**
+   * UNIVERSAL: Apply universal parameter enhancements that work for all tools
+   */
+  private applyUniversalParameterEnhancements(params: Record<string, any>, toolName: string, intent: string, originalParams: Record<string, any>): Record<string, any> {
+    console.log(`[McpExecutor] 🚀 Applying universal parameter enhancements for ${toolName}`);
+
+    const enhancedParams = { ...params };
+
+    // UNIVERSAL ENHANCEMENT 1: Always ensure instructions parameter
+    if (!enhancedParams.instructions) {
+      enhancedParams.instructions = this.generateInstructionsFromIntent(toolName, intent, originalParams);
+      console.log(`[McpExecutor] 📝 Added instructions parameter`);
+    }
+
+    // UNIVERSAL ENHANCEMENT 2: Apply limit parameters for any tool that might need them
+    const requestedLimit = this.extractRequestedLimit(intent, originalParams);
+    if (requestedLimit && !this.hasAnyLimitParameter(enhancedParams)) {
+      // Add multiple limit parameter variations - tools use different names
+      const limitVariations = ['limit', 'max_results', 'count', 'maxResults', 'size'];
+
+      // Only add if none of these exist and they're not filtered out by schema
+      for (const limitParam of limitVariations) {
+        if (!(limitParam in enhancedParams)) {
+          enhancedParams[limitParam] = requestedLimit;
+        }
+      }
+      console.log(`[McpExecutor] 📊 Added limit parameter variations: ${requestedLimit}`);
+    }
+
+    // UNIVERSAL ENHANCEMENT 3: Apply semantic defaults based on tool type
+    this.applySemanticDefaults(enhancedParams, toolName, intent);
+
+    return enhancedParams;
+  }
+
+  /**
+   * Check if parameters already contain any limit-related parameter
+   */
+  private hasAnyLimitParameter(params: Record<string, any>): boolean {
+    const limitParams = ['limit', 'max_results', 'count', 'maxResults', 'size', 'per_page', 'page_size'];
+    return limitParams.some(param => param in params);
+  }
+
+  /**
+   * Apply semantic defaults based on tool type and intent
+   */
+  private applySemanticDefaults(params: Record<string, any>, toolName: string, intent: string): void {
+    const toolNameLower = toolName.toLowerCase();
+    const intentLower = intent.toLowerCase();
+
+    // For search/find operations, apply smart defaults
+    if (intentLower.includes('find') || intentLower.includes('search') || intentLower.includes('get')) {
+
+      // For Trello and similar project tools
+      if (toolNameLower.includes('trello') || toolNameLower.includes('board')) {
+        if (!params.board && !params.board_id) {
+          // Default to searching all accessible boards for find operations
+          params.board = 'all';
+          console.log(`[McpExecutor] 🎯 Applied semantic default: board = "all" for search operation`);
+        }
+      }
+
+      // For email tools, apply common search defaults
+      if (toolNameLower.includes('gmail') || toolNameLower.includes('email')) {
+        if (!params.maxResults && !params.limit) {
+          params.maxResults = 10; // Reasonable default for email searches
+          console.log(`[McpExecutor] 📧 Applied semantic default: maxResults = 10 for email search`);
+        }
+      }
+    }
   }
 
   /**
@@ -2520,6 +2595,119 @@ export class McpExecutor {
       intelligentParser: this.intelligentParser.getIntelligenceStats(),
       workflowOptimizer: this.workflowOptimizer.getOptimizationStats(),
       selfHealingSystem: this.selfHealingSystem.getSystemState()
+    };
+  }
+
+  /**
+   * Get universal tool resolution statistics for monitoring
+   */
+  getToolResolutionStats(): {
+    systemType: string;
+    availableStrategies: string[];
+  } {
+    return {
+      systemType: 'Universal MCP - No hardcoded tool mappings',
+      availableStrategies: ['semantic', 'keyword', 'fuzzy'] // Removed 'preference'
+    };
+  }
+
+  /**
+   * Test the hybrid resolution system with a specific tool name
+   * Useful for debugging and monitoring
+   */
+  async testToolResolution(toolName: string): Promise<{
+    originalTool: string;
+    semantic: { toolName: string; confidence: number };
+    keyword: { toolName: string; confidence: number };
+    fuzzy: { toolName: string; confidence: number };
+    // REMOVED: preference - Universal system uses no hardcoded tool mappings
+    finalResolution: {
+      toolName: string;
+      confidence: number;
+      matchType: string;
+      alternatives?: string[];
+    };
+  }> {
+    console.log(`[McpExecutor] Testing hybrid resolution for: ${toolName}`);
+
+    // Test all strategies individually
+    const semanticResult = await this.performSemanticMatching(toolName);
+    const keywordResult = await this.performKeywordMatching(toolName);
+    const fuzzyResult = await this.performFuzzyMatching(toolName);
+    // REMOVED: Preference matching - Universal system uses no hardcoded tool mappings
+    const finalResult = await this.resolveFullToolName(toolName);
+
+    return {
+      originalTool: toolName,
+      semantic: {
+        toolName: semanticResult.toolName || 'none',
+        confidence: semanticResult.confidence
+      },
+      keyword: {
+        toolName: keywordResult.toolName || 'none',
+        confidence: keywordResult.confidence
+      },
+      fuzzy: {
+        toolName: fuzzyResult.toolName || 'none',
+        confidence: fuzzyResult.confidence
+      },
+      // REMOVED: Preference results - Universal system uses no hardcoded tool mappings
+      finalResolution: {
+        toolName: finalResult.toolName,
+        confidence: finalResult.confidence,
+        matchType: finalResult.matchType,
+        alternatives: finalResult.alternatives
+      }
+    };
+  }
+
+  /**
+   * Clear corrupted MCP tool preferences from localStorage
+   * Universal MCP system should not store any tool mappings
+   */
+  clearCorruptedPreferences(): void {
+    try {
+      const existingPrefs = localStorage.getItem('mcp_tool_preferences');
+      if (existingPrefs) {
+        console.log('🧹 [McpExecutor] Clearing corrupted MCP preferences:', existingPrefs.substring(0, 200) + '...');
+        localStorage.removeItem('mcp_tool_preferences');
+        console.log('✅ [McpExecutor] Successfully cleared corrupted MCP tool preferences - Universal system uses no hardcoded mappings');
+      } else {
+        console.log('✅ [McpExecutor] No corrupted preferences found - system is clean');
+      }
+    } catch (error) {
+      console.warn('⚠️ [McpExecutor] Failed to clear corrupted preferences:', error);
+    }
+  }
+
+  /**
+   * Initialize universal MCP executor - clear any corrupted preferences on startup
+   */
+  initializeUniversalSystem(): void {
+    console.log('🚀 [McpExecutor] Initializing Universal MCP System - No hardcoded tool mappings');
+    this.clearCorruptedPreferences();
+  }
+
+  /**
+   * Get comprehensive system diagnostics
+   */
+  async getSystemDiagnostics(): Promise<{
+    toolResolution: any;
+    performance: any;
+    cacheStats: any;
+    serverStats: any;
+    aiStats: any;
+    availableTools: string[];
+  }> {
+    const allTools = await this.mcpManager.listAllTools();
+
+    return {
+      toolResolution: this.getToolResolutionStats(),
+      performance: Object.fromEntries(this.getPerformanceStats()),
+      cacheStats: this.getCacheStats(),
+      serverStats: Object.fromEntries(this.getServerStats()),
+      aiStats: this.getAISystemStats(),
+      availableTools: allTools
     };
   }
 }

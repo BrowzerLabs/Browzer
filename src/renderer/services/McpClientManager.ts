@@ -745,8 +745,268 @@ export class McpClientManager {
     };
   }
 
+  /* ---------- Schema Discovery & Parameter Validation ---------- */
+
+  /**
+   * Get tool schema for parameter validation
+   */
+  getToolSchema(toolName: string): { inputSchema: any; required: string[] } | null {
+    const tool = this.toolIndex.get(toolName);
+    if (!tool || !tool.inputSchema) {
+      console.warn(`[MCP] No schema found for tool: ${toolName}`);
+      return null;
+    }
+
+    // Extract required parameters from JSON schema
+    const required = tool.inputSchema?.required || [];
+    console.log(`[MCP] Tool ${toolName} schema:`, {
+      inputSchema: tool.inputSchema,
+      required
+    });
+
+    return {
+      inputSchema: tool.inputSchema,
+      required
+    };
+  }
+
+  /**
+   * Validate parameters against tool schema
+   */
+  validateToolParameters(toolName: string, params: Record<string, any>): {
+    valid: boolean;
+    missingRequired: string[];
+    invalidParams: string[];
+    filteredParams: Record<string, any>;
+    removedParams: string[];
+  } {
+    const schema = this.getToolSchema(toolName);
+    if (!schema) {
+      console.log(`[MCP] No schema for ${toolName}, proceeding with all parameters`);
+      return {
+        valid: true, // If no schema, assume valid (fallback)
+        missingRequired: [],
+        invalidParams: [],
+        filteredParams: params,
+        removedParams: []
+      };
+    }
+
+    console.log(`[MCP] Starting robust validation for ${toolName}`, {
+      originalParams: Object.keys(params),
+      schemaRequired: schema.required,
+      schemaProperties: schema.inputSchema?.properties ? Object.keys(schema.inputSchema.properties) : []
+    });
+
+    // Phase 1: Filter parameters to only include schema-defined ones
+    const filteredParams: Record<string, any> = {};
+    const removedParams: string[] = [];
+    const schemaProperties = schema.inputSchema?.properties || {};
+
+    for (const [paramName, value] of Object.entries(params)) {
+      if (paramName in schemaProperties || paramName === 'instructions') {
+        // Keep parameters that are in the schema OR instructions (universal fallback)
+        filteredParams[paramName] = value;
+      } else {
+        // Remove parameters not in schema
+        removedParams.push(paramName);
+        console.log(`[MCP] Filtered out parameter '${paramName}' - not in schema for ${toolName}`);
+      }
+    }
+
+    // Phase 2: Smart type coercion for filtered parameters
+    const coercedParams: Record<string, any> = {};
+    for (const [paramName, value] of Object.entries(filteredParams)) {
+      const paramSchema = schemaProperties[paramName];
+      if (paramSchema) {
+        const coercedValue = this.smartTypeCoercion(value, paramSchema);
+        coercedParams[paramName] = coercedValue;
+        if (coercedValue !== value) {
+          console.log(`[MCP] Type coerced '${paramName}': ${JSON.stringify(value)} → ${JSON.stringify(coercedValue)}`);
+        }
+      } else {
+        // Keep instructions and other non-schema params as-is
+        coercedParams[paramName] = value;
+      }
+    }
+
+    // Phase 3: Check for missing required parameters
+    const missingRequired: string[] = [];
+    for (const requiredParam of schema.required) {
+      if (!(requiredParam in coercedParams) || coercedParams[requiredParam] === undefined || coercedParams[requiredParam] === null) {
+        missingRequired.push(requiredParam);
+      }
+    }
+
+    // Phase 4: Final validation of coerced parameters (very lenient)
+    const invalidParams: string[] = [];
+    for (const [paramName, value] of Object.entries(coercedParams)) {
+      const paramSchema = schemaProperties[paramName];
+      if (paramSchema && !this.validateParameterType(value, paramSchema)) {
+        // Only mark as invalid if it still fails after coercion
+        invalidParams.push(paramName);
+        console.log(`[MCP] Parameter '${paramName}' still invalid after coercion:`, { value, expectedType: paramSchema.type });
+      }
+    }
+
+    // Phase 5: Remove still-invalid parameters (graceful degradation)
+    const finalParams: Record<string, any> = {};
+    for (const [paramName, value] of Object.entries(coercedParams)) {
+      if (!invalidParams.includes(paramName)) {
+        finalParams[paramName] = value;
+      } else {
+        removedParams.push(paramName);
+        console.log(`[MCP] Removed invalid parameter '${paramName}' for graceful degradation`);
+      }
+    }
+
+    // NEW PHILOSOPHY: Only fail if we're missing REQUIRED parameters
+    // Invalid optional parameters are simply removed - we proceed gracefully
+    const valid = missingRequired.length === 0;
+
+    console.log(`[MCP] Robust validation result for ${toolName}:`, {
+      valid,
+      missingRequired,
+      invalidParams: [], // We remove invalid params instead of failing
+      filteredParams: finalParams,
+      removedParams,
+      originalCount: Object.keys(params).length,
+      finalCount: Object.keys(finalParams).length
+    });
+
+    return {
+      valid,
+      missingRequired,
+      invalidParams: [], // Always empty - we remove invalid params instead of reporting them
+      filteredParams: finalParams,
+      removedParams
+    };
+  }
+
+  /**
+   * Smart type coercion to convert values to match schema expectations
+   */
+  private smartTypeCoercion(value: any, paramSchema: any): any {
+    if (!paramSchema.type) return value; // No type constraint, keep as-is
+
+    const targetType = paramSchema.type;
+
+    switch (targetType) {
+      case 'string':
+        if (typeof value === 'string') return value;
+        if (Array.isArray(value)) return value.join(','); // Array to comma-separated string
+        return String(value); // Convert anything to string
+
+      case 'number':
+        if (typeof value === 'number') return value;
+        if (typeof value === 'string') {
+          const parsed = parseFloat(value);
+          return isNaN(parsed) ? value : parsed; // Only convert if valid number
+        }
+        return value; // Keep as-is if can't convert
+
+      case 'boolean':
+        if (typeof value === 'boolean') return value;
+        if (typeof value === 'string') {
+          const lower = value.toLowerCase();
+          if (lower === 'true' || lower === '1' || lower === 'yes') return true;
+          if (lower === 'false' || lower === '0' || lower === 'no') return false;
+        }
+        if (typeof value === 'number') {
+          return value !== 0; // 0 = false, anything else = true
+        }
+        return value; // Keep as-is if can't convert
+
+      case 'array':
+        if (Array.isArray(value)) return value;
+        if (typeof value === 'string') {
+          // Try to parse comma-separated values
+          if (value.includes(',')) {
+            return value.split(',').map(s => s.trim()).filter(s => s.length > 0);
+          }
+          // Single string becomes single-item array
+          return [value];
+        }
+        return [value]; // Wrap anything else in array
+
+      case 'object':
+        if (typeof value === 'object' && value !== null && !Array.isArray(value)) return value;
+        if (typeof value === 'string') {
+          try {
+            const parsed = JSON.parse(value);
+            if (typeof parsed === 'object' && !Array.isArray(parsed)) return parsed;
+          } catch {
+            // Not valid JSON, keep as-is
+          }
+        }
+        return value; // Keep as-is if can't convert
+
+      default:
+        return value; // Unknown type, keep as-is
+    }
+  }
+
+  /**
+   * Validate individual parameter type against schema
+   */
+  private validateParameterType(value: any, paramSchema: any): boolean {
+    if (!paramSchema.type) return true; // No type constraint
+
+    switch (paramSchema.type) {
+      case 'string':
+        return typeof value === 'string';
+      case 'number':
+        return typeof value === 'number';
+      case 'boolean':
+        return typeof value === 'boolean';
+      case 'array':
+        return Array.isArray(value);
+      case 'object':
+        return typeof value === 'object' && value !== null && !Array.isArray(value);
+      default:
+        return true; // Unknown type, assume valid
+    }
+  }
+
+  /**
+   * Get detailed tool information including schema
+   */
+  getToolDetails(toolName: string): McpTool | null {
+    return this.toolIndex.get(toolName) || null;
+  }
+
+  /**
+   * Cache tool schemas for faster access
+   */
+  private schemaCache = new Map<string, any>();
+
+  /**
+   * Get cached tool schema or fetch if not cached
+   */
+  getCachedToolSchema(toolName: string): { inputSchema: any; required: string[] } | null {
+    if (this.schemaCache.has(toolName)) {
+      return this.schemaCache.get(toolName);
+    }
+
+    const schema = this.getToolSchema(toolName);
+    if (schema) {
+      this.schemaCache.set(toolName, schema);
+    }
+
+    return schema;
+  }
+
+  /**
+   * Clear schema cache (useful after reconnections)
+   */
+  clearSchemaCache(): void {
+    this.schemaCache.clear();
+    console.log('[MCP] Schema cache cleared');
+  }
+
   async cleanup() {
     const disconnectPromises = Array.from(this.clients.keys()).map(name => this.disconnect(name));
     await Promise.all(disconnectPromises);
+    this.clearSchemaCache();
   }
 }

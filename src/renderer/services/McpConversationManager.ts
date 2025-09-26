@@ -53,6 +53,9 @@ export interface ClarificationResponse {
   expectedFormat?: string;
   suggestions?: any[];
   autoResponse?: string; // The automatic response to use instead of asking user
+  needsClarification: boolean; // Whether this response requires user clarification
+  suggestedAnswers?: string[]; // Alternative suggested answers for the user
+  context?: string; // Context information for the clarification
 }
 
 export class McpConversationManager {
@@ -233,7 +236,8 @@ export class McpConversationManager {
    * Detect if MCP response contains clarification question
    */
   detectMcpClarification(mcpResponse: any): ClarificationResponse | null {
-    if (!mcpResponse) return null;
+    try {
+      if (!mcpResponse) return null;
 
     // Check for error responses that are actually questions
     const errorPatterns = [
@@ -245,23 +249,60 @@ export class McpConversationManager {
 
     let errorMessage = '';
 
-    // Extract error message from various response formats
+    // Helper function to safely convert any value to string
+    const safeToString = (value: any): string => {
+      if (typeof value === 'string') {
+        return value;
+      }
+      if (value === null || value === undefined) {
+        return '';
+      }
+      if (typeof value === 'object') {
+        try {
+          // If it's an object, try to extract a meaningful message
+          if (value.message && typeof value.message === 'string') {
+            return value.message;
+          }
+          if (value.error && typeof value.error === 'string') {
+            return value.error;
+          }
+          if (value.text && typeof value.text === 'string') {
+            return value.text;
+          }
+          // Fall back to JSON stringify for objects
+          return JSON.stringify(value);
+        } catch {
+          return String(value);
+        }
+      }
+      return String(value);
+    };
+
+    // Extract error message from various response formats with type safety
     if (mcpResponse.isError && mcpResponse.error) {
-      errorMessage = mcpResponse.error;
+      errorMessage = safeToString(mcpResponse.error);
     } else if (mcpResponse.error) {
-      errorMessage = mcpResponse.error;
+      errorMessage = safeToString(mcpResponse.error);
     } else if (mcpResponse.content && Array.isArray(mcpResponse.content)) {
       try {
         const parsed = JSON.parse(mcpResponse.content[0]?.text || '{}');
         if (parsed.isError && parsed.error) {
-          errorMessage = parsed.error;
+          errorMessage = safeToString(parsed.error);
         }
       } catch {
         // Not JSON, continue
       }
     }
 
-    if (!errorMessage) return null;
+    // Ensure errorMessage is a valid string
+    errorMessage = safeToString(errorMessage).trim();
+
+    if (!errorMessage) {
+      console.log('[McpConversationManager] No valid error message found in response:', mcpResponse);
+      return null;
+    }
+
+    console.log('[McpConversationManager] Extracted error message:', typeof errorMessage, errorMessage);
 
     // CRITICAL: Before showing clarification, check if we can auto-resolve with smart defaults
     const autoResolution = this.attemptAutoClarificationResolution(errorMessage);
@@ -276,7 +317,10 @@ export class McpConversationManager {
       if (match) {
         const clarification: ClarificationResponse = {
           type: 'mcp_question',
-          question: this.cleanupQuestionText(errorMessage)
+          question: this.cleanupQuestionText(errorMessage),
+          needsClarification: true,
+          suggestedAnswers: [],
+          context: 'MCP Error Response'
         };
 
         // Extract options if present
@@ -291,6 +335,14 @@ export class McpConversationManager {
     }
 
     return null;
+
+    } catch (error) {
+      console.error('[McpConversationManager] Error in detectMcpClarification:', error);
+      console.error('[McpConversationManager] Failed response object:', mcpResponse);
+
+      // Return null to prevent cascading errors
+      return null;
+    }
   }
 
   /**
@@ -349,7 +401,10 @@ export class McpConversationManager {
     const clarification: ClarificationResponse = {
       type: 'parameter_missing',
       question,
-      parameterName
+      parameterName,
+      needsClarification: true,
+      suggestedAnswers: [],
+      context: 'Missing Parameter'
     };
 
     if (suggestion) {
@@ -492,7 +547,10 @@ export class McpConversationManager {
           type: 'auto_resolved',
           question: `Auto-resolved: Using empty search to list all items`,
           autoResponse: '',
-          parameterName
+          parameterName,
+          needsClarification: false,
+          suggestedAnswers: [],
+          context: 'Auto-resolved Search'
         };
       }
 
@@ -503,7 +561,10 @@ export class McpConversationManager {
           type: 'auto_resolved',
           question: `Auto-resolved: Using empty title to list all pages`,
           autoResponse: '',
-          parameterName
+          parameterName,
+          needsClarification: false,
+          suggestedAnswers: [],
+          context: 'Auto-resolved Title'
         };
       }
 
@@ -514,7 +575,10 @@ export class McpConversationManager {
           type: 'auto_resolved',
           question: `Auto-resolved: Using empty query to list all documents`,
           autoResponse: '',
-          parameterName
+          parameterName,
+          needsClarification: false,
+          suggestedAnswers: [],
+          context: 'Auto-resolved Document Query'
         };
       }
     }
@@ -529,7 +593,10 @@ export class McpConversationManager {
           type: 'auto_resolved',
           question: `Auto-resolved: Using extracted limit of ${limit}`,
           autoResponse: limit.toString(),
-          parameterName
+          parameterName,
+          needsClarification: false,
+          suggestedAnswers: [],
+          context: 'Auto-resolved Extracted Limit'
         };
       }
     }
@@ -542,7 +609,10 @@ export class McpConversationManager {
           type: 'auto_resolved',
           question: `Auto-resolved: Using today's date`,
           autoResponse: new Date().toISOString().split('T')[0],
-          parameterName
+          parameterName,
+          needsClarification: false,
+          suggestedAnswers: [],
+          context: 'Auto-resolved Date'
         };
       }
     }
@@ -605,7 +675,10 @@ export class McpConversationManager {
         options: [
           'Yes, that\'s correct',
           'No, let me clarify'
-        ]
+        ],
+        needsClarification: true,
+        suggestedAnswers: ['Yes, that\'s correct', 'No, let me clarify'],
+        context: 'Ambiguous Intent'
       };
     }
 
@@ -977,32 +1050,68 @@ export class McpConversationManager {
   }
 
   private extractOptions(text: string): string[] {
-    const options: string[] = [];
+    try {
+      // Type guard and sanitization
+      if (typeof text !== 'string' || !text.trim()) {
+        console.warn('[McpConversationManager] extractOptions: Invalid text input, returning empty array');
+        return [];
+      }
 
-    // Look for quoted options
-    const quotedOptions = text.match(/'([^']+)'/g);
-    if (quotedOptions) {
-      options.push(...quotedOptions.map(opt => opt.slice(1, -1)));
-    }
+      const options: string[] = [];
 
-    // Look for options separated by "or"
-    const orPattern = /(?:are:?\s*)?([^,]+?)(?:\s*,\s*([^,]+?))*(?:\s*or\s+([^.]+?))?[.?]/i;
-    const orMatch = text.match(orPattern);
-    if (orMatch && options.length === 0) {
-      for (let i = 1; i < orMatch.length; i++) {
-        if (orMatch[i]) {
-          options.push(orMatch[i].replace(/['"]/g, '').trim());
+      // Look for quoted options
+      const quotedOptions = text.match(/'([^']+)'/g);
+      if (quotedOptions && Array.isArray(quotedOptions)) {
+        options.push(...quotedOptions.map(opt => opt.slice(1, -1)).filter(opt => opt && opt.trim()));
+      }
+
+      // Look for options separated by "or"
+      const orPattern = /(?:are:?\s*)?([^,]+?)(?:\s*,\s*([^,]+?))*(?:\s*or\s+([^.]+?))?[.?]/i;
+      const orMatch = text.match(orPattern);
+      if (orMatch && Array.isArray(orMatch) && options.length === 0) {
+        for (let i = 1; i < orMatch.length; i++) {
+          if (orMatch[i] && typeof orMatch[i] === 'string') {
+            const cleanOption = orMatch[i].replace(/['"]/g, '').trim();
+            if (cleanOption) {
+              options.push(cleanOption);
+            }
+          }
         }
       }
-    }
 
-    return options;
+      return options;
+    } catch (error) {
+      console.error('[McpConversationManager] extractOptions: Error extracting options:', error);
+      return [];
+    }
   }
 
   /**
    * Attempt to automatically resolve common clarifications with smart defaults
    */
   private attemptAutoClarificationResolution(errorMessage: string): ClarificationResponse | null {
+    // Defensive programming: ensure errorMessage is a string
+    if (typeof errorMessage !== 'string') {
+      console.warn('[McpConversationManager] attemptAutoClarificationResolution received non-string input:', typeof errorMessage, errorMessage);
+
+      // Convert to string safely
+      try {
+        if (errorMessage === null || errorMessage === undefined) {
+          return null;
+        }
+        errorMessage = String(errorMessage);
+      } catch (error) {
+        console.error('[McpConversationManager] Failed to convert errorMessage to string:', error);
+        return null;
+      }
+    }
+
+    // Additional safety check for empty strings
+    if (!errorMessage || errorMessage.trim().length === 0) {
+      console.log('[McpConversationManager] Empty or invalid error message, skipping auto-resolution');
+      return null;
+    }
+
     const messageLower = errorMessage.toLowerCase();
 
     console.log('[McpConversationManager] Attempting auto-resolution for:', errorMessage);
@@ -1017,7 +1126,10 @@ export class McpConversationManager {
           type: 'auto_resolved',
           question: 'Auto-resolved: Using empty search to list all pages',
           autoResponse: '',
-          parameterName: 'title'
+          parameterName: 'title',
+          needsClarification: false,
+          suggestedAnswers: [],
+          context: 'Auto-resolved Title Search'
         };
       }
 
@@ -1028,7 +1140,10 @@ export class McpConversationManager {
           type: 'auto_resolved',
           question: 'Auto-resolved: Using empty search to list all documents',
           autoResponse: '',
-          parameterName: 'q'
+          parameterName: 'q',
+          needsClarification: false,
+          suggestedAnswers: [],
+          context: 'Auto-resolved Document Search'
         };
       }
 
@@ -1039,7 +1154,10 @@ export class McpConversationManager {
           type: 'auto_resolved',
           question: 'Auto-resolved: Using empty search to list all items',
           autoResponse: '',
-          parameterName: 'query'
+          parameterName: 'query',
+          needsClarification: false,
+          suggestedAnswers: [],
+          context: 'Auto-resolved Query Search'
         };
       }
 
@@ -1050,7 +1168,10 @@ export class McpConversationManager {
           type: 'auto_resolved',
           question: 'Auto-resolved: Selecting all items',
           autoResponse: 'all',
-          parameterName: 'selection'
+          parameterName: 'selection',
+          needsClarification: false,
+          suggestedAnswers: [],
+          context: 'Auto-resolved Selection'
         };
       }
 
@@ -1061,7 +1182,10 @@ export class McpConversationManager {
           type: 'auto_resolved',
           question: 'Auto-resolved: Using empty parameter to list all items',
           autoResponse: '',
-          parameterName: 'search'
+          parameterName: 'search',
+          needsClarification: false,
+          suggestedAnswers: [],
+          context: 'Auto-resolved Search'
         };
       }
 
@@ -1072,7 +1196,10 @@ export class McpConversationManager {
           type: 'auto_resolved',
           question: 'Auto-resolved: Using wildcard to find all items',
           autoResponse: '*',
-          parameterName: 'search'
+          parameterName: 'search',
+          needsClarification: false,
+          suggestedAnswers: [],
+          context: 'Auto-resolved Wildcard Search'
         };
       }
     }
@@ -1084,6 +1211,12 @@ export class McpConversationManager {
    * Check if the current context suggests a "list all" pattern
    */
   private isListAllContext(errorMessage: string): boolean {
+    // Defensive programming: ensure errorMessage is a string
+    if (typeof errorMessage !== 'string' || !errorMessage || errorMessage.trim().length === 0) {
+      console.warn('[McpConversationManager] isListAllContext received invalid input:', typeof errorMessage, errorMessage);
+      return false;
+    }
+
     // Check the clarification message for indicators that this was a "list all" request
 
     const listAllIndicators = [
@@ -1121,5 +1254,270 @@ export class McpConversationManager {
     });
 
     return messageMatches || isGenericSearch;
+  }
+
+  /* ---------- Error Parsing & Missing Parameter Extraction ---------- */
+
+  /**
+   * Parse MCP error message to extract missing parameter information
+   */
+  parseErrorForMissingParameters(mcpError: any): {
+    hasMissingParameters: boolean;
+    missingParameters: string[];
+    errorType: 'missing_param' | 'invalid_param' | 'auth_error' | 'generic';
+    originalError: string;
+  } {
+    const result = {
+      hasMissingParameters: false,
+      missingParameters: [] as string[],
+      errorType: 'generic' as 'missing_param' | 'invalid_param' | 'auth_error' | 'generic',
+      originalError: ''
+    };
+
+    try {
+      // Convert error to string safely
+      let errorMessage = '';
+      if (typeof mcpError === 'string') {
+        errorMessage = mcpError;
+      } else if (mcpError && typeof mcpError === 'object') {
+        if (mcpError.content && Array.isArray(mcpError.content)) {
+          const textContent = mcpError.content.find((c: any) => c.type === 'text');
+          if (textContent && textContent.text) {
+            try {
+              const parsed = JSON.parse(textContent.text);
+              if (parsed.error && Array.isArray(parsed.error)) {
+                errorMessage = parsed.error.join(' ');
+              } else if (parsed.error) {
+                errorMessage = String(parsed.error);
+              }
+            } catch {
+              errorMessage = String(textContent.text);
+            }
+          }
+        } else if (mcpError.error) {
+          if (Array.isArray(mcpError.error)) {
+            errorMessage = mcpError.error.join(' ');
+          } else {
+            errorMessage = String(mcpError.error);
+          }
+        } else {
+          errorMessage = JSON.stringify(mcpError);
+        }
+      }
+
+      result.originalError = errorMessage;
+
+      // Missing parameter patterns - more comprehensive
+      const missingParamPatterns = [
+        /Required field\s*["']([^"']+)["']\s*\(([^)]+)\)\s*is missing/gi,
+        /Missing required parameter[:\s]+["']?([^"'\s,]+)["']?/gi,
+        /Parameter\s*["']([^"']+)["']\s*is required/gi,
+        /Missing required field[:\s]+["']?([^"'\s,]+)["']?/gi,
+        /Required\s+["']?([^"'\s,]+)["']?\s+parameter\s+not\s+provided/gi,
+        /Field\s*["']([^"']+)["']\s*is required/gi
+      ];
+
+      console.log(`[McpConversationManager] Parsing error message: "${errorMessage}"`);
+
+      // ENHANCED: Handle empty, minimal, or generic error messages
+      if (!errorMessage || errorMessage.trim() === '' || errorMessage === '{}' || errorMessage === 'null' || errorMessage === 'undefined') {
+        console.log(`[McpConversationManager] ⚠️  Empty/minimal error detected - treating as generic validation failure`);
+        result.errorType = 'generic';
+        result.originalError = errorMessage || '(empty error)';
+        return result; // Don't try to extract parameters from empty errors
+      }
+
+      // Try to extract missing parameters from error message
+      for (const pattern of missingParamPatterns) {
+        let match;
+        while ((match = pattern.exec(errorMessage)) !== null) {
+          const paramName = match[2] || match[1]; // Use the parameter name from parentheses if available, otherwise the field name
+          if (paramName && !result.missingParameters.includes(paramName)) {
+            result.missingParameters.push(paramName);
+            result.hasMissingParameters = true;
+            result.errorType = 'missing_param' as 'missing_param';
+            console.log(`[McpConversationManager] Found missing parameter: "${paramName}"`);
+          }
+        }
+      }
+
+      // ENHANCED: Check for specific error types
+      const errorLower = errorMessage.toLowerCase();
+
+      // Check for authentication errors
+      if (errorLower.includes('auth') || errorLower.includes('permission') || errorLower.includes('unauthorized')) {
+        result.errorType = 'auth_error' as 'auth_error';
+      }
+
+      // Check for invalid parameter errors
+      else if (errorLower.includes('invalid') && errorLower.includes('parameter')) {
+        result.errorType = 'invalid_param' as 'invalid_param';
+      }
+
+      // Check for schema validation errors (these are often empty/generic)
+      else if (errorLower.includes('validation') || errorLower.includes('schema')) {
+        result.errorType = 'generic'; // These are often not recoverable through parameter changes
+        console.log(`[McpConversationManager] Schema/validation error detected - likely not recoverable through parameters`);
+      }
+
+      // ENHANCED: Provide more context for empty results
+      if (!result.hasMissingParameters && result.errorType === 'generic') {
+        if (errorMessage.length > 0) {
+          console.log(`[McpConversationManager] ℹ️  Generic error with message: "${errorMessage}" - not recoverable through parameter changes`);
+        } else {
+          console.log(`[McpConversationManager] ℹ️  Empty error - tool may have failed silently or have internal issues`);
+        }
+      }
+
+      console.log(`[McpConversationManager] Error parsing result:`, result);
+      return result;
+
+    } catch (error) {
+      console.error('[McpConversationManager] Error parsing MCP error:', error);
+      return result; // Return default empty result
+    }
+  }
+
+  /**
+   * Generate clarification request for missing parameters
+   */
+  generateMissingParameterClarification(
+    missingParams: string[],
+    toolName: string,
+    originalIntent: string
+  ): ClarificationResponse {
+    try {
+      if (missingParams.length === 0) {
+        return {
+          type: 'auto_resolved',
+          needsClarification: false,
+          question: '',
+          suggestedAnswers: [],
+          context: 'no_missing_params',
+          autoResponse: '',
+          parameterName: ''
+        };
+      }
+
+      const toolNameClean = toolName.split('.').pop() || toolName;
+      let question = '';
+      let suggestedAnswers: string[] = [];
+      let context = 'missing_parameters';
+
+      if (missingParams.length === 1) {
+        const param = missingParams[0];
+        question = this.generateSingleParameterQuestion(param, toolNameClean, originalIntent);
+        suggestedAnswers = this.generateParameterSuggestions(param, toolNameClean, originalIntent);
+      } else {
+        question = this.generateMultiParameterQuestion(missingParams, toolNameClean, originalIntent);
+        context = 'multiple_missing_parameters';
+      }
+
+      console.log(`[McpConversationManager] Generated missing parameter clarification:`, {
+        question,
+        suggestedAnswers,
+        context,
+        missingParams
+      });
+
+      return {
+        type: 'parameter_missing',
+        needsClarification: true,
+        question,
+        suggestedAnswers,
+        context,
+        parameterName: missingParams[0] || ''
+      };
+
+    } catch (error) {
+      console.error('[McpConversationManager] Error generating missing parameter clarification:', error);
+      return {
+        type: 'validation_error',
+        needsClarification: true,
+        question: `I need more information to use the ${toolName} tool. Could you provide the missing details?`,
+        suggestedAnswers: [],
+        context: 'error_fallback'
+      };
+    }
+  }
+
+  /**
+   * Generate question for single missing parameter
+   */
+  private generateSingleParameterQuestion(param: string, toolName: string, intent: string): string {
+    const paramLower = param.toLowerCase();
+
+    // Board parameter
+    if (paramLower.includes('board')) {
+      return `Which board would you like me to search? Please specify the board name or say "all" to search all boards.`;
+    }
+
+    // Query/Search parameter
+    if (paramLower.includes('query') || paramLower.includes('search')) {
+      return `What would you like me to search for? Please provide search terms or keywords.`;
+    }
+
+    // Email recipient
+    if (paramLower.includes('to') || paramLower.includes('recipient')) {
+      return `Who should I send this email to? Please provide the email address.`;
+    }
+
+    // Subject
+    if (paramLower.includes('subject')) {
+      return `What should be the subject of the email?`;
+    }
+
+    // Date/Time
+    if (paramLower.includes('date') || paramLower.includes('time')) {
+      return `What date or time are you referring to? (e.g., "today", "tomorrow", "2024-01-15")`;
+    }
+
+    // Generic fallback
+    return `The ${toolName} tool needs a "${param}" parameter. Could you provide this information?`;
+  }
+
+  /**
+   * Generate question for multiple missing parameters
+   */
+  private generateMultiParameterQuestion(params: string[], toolName: string, intent: string): string {
+    const paramList = params.map(p => `"${p}"`).join(', ');
+    return `To use the ${toolName} tool, I need the following information: ${paramList}. Could you provide these details?`;
+  }
+
+  /**
+   * Generate parameter suggestions based on parameter type and context
+   */
+  private generateParameterSuggestions(param: string, toolName: string, intent: string): string[] {
+    const paramLower = param.toLowerCase();
+    const suggestions: string[] = [];
+
+    // Board parameter suggestions
+    if (paramLower.includes('board')) {
+      suggestions.push('all', 'main', 'project', 'todo', 'work');
+    }
+
+    // Date parameter suggestions
+    if (paramLower.includes('date') || paramLower.includes('time')) {
+      suggestions.push('today', 'tomorrow', 'this week', 'next week');
+    }
+
+    // Query parameter suggestions
+    if (paramLower.includes('query') || paramLower.includes('search')) {
+      // Try to extract potential search terms from the original intent
+      const words = intent.split(' ').filter(w => w.length > 3);
+      suggestions.push(...words.slice(0, 3));
+    }
+
+    return suggestions;
+  }
+
+  /**
+   * Check if error is recoverable through parameter collection
+   */
+  isRecoverableParameterError(errorAnalysis: ReturnType<typeof this.parseErrorForMissingParameters>): boolean {
+    return errorAnalysis.errorType === 'missing_param' &&
+           errorAnalysis.hasMissingParameters &&
+           errorAnalysis.missingParameters.length > 0 &&
+           errorAnalysis.missingParameters.length <= 3; // Don't try to recover if too many missing params
   }
 }

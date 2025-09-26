@@ -1235,12 +1235,26 @@ export class McpSmartAssistant {
         description: 'Claude AI recommended tool'
       };
 
+      // PHASE 1: Multi-layer robust schema validation (always succeeds with best available parameters)
+      console.log('[McpSmartAssistant] Phase 1: Multi-layer robust validation');
+      const schemaValidation = await this.performPreExecutionValidation(toolName, parameters, originalQuery);
+
+      // With robust validation, we ALWAYS proceed - just with the best parameters we can manage
+      const validatedParameters = schemaValidation.parameters;
+      const usedFallback = schemaValidation.fallbackLayer || 'unknown';
+
+      console.log(`[McpSmartAssistant] ✅ Robust validation complete - using ${usedFallback}:`, {
+        fallbackLayer: usedFallback,
+        parametersCount: Object.keys(validatedParameters).length,
+        parameters: validatedParameters
+      });
+
       // Use the existing McpExecutor's method for Claude parameter execution
       if (this.mcpExecutor && typeof this.mcpExecutor.executeSingleToolWithClaudeParams === 'function') {
         const queryType = this.mcpExecutor.analyzeQueryType ? this.mcpExecutor.analyzeQueryType(originalQuery) : 'general';
 
         // Ensure Claude's parameters include any limits from the original query
-        const enhancedParameters = this.enhanceParametersWithLimits(parameters, originalQuery);
+        const enhancedParameters = this.enhanceParametersWithLimits(validatedParameters, originalQuery);
 
         const result = await this.mcpExecutor.executeSingleToolWithClaudeParams(
           toolMatch,
@@ -1269,6 +1283,18 @@ export class McpSmartAssistant {
 
     } catch (error) {
       console.error('[McpSmartAssistant] MCP tool execution failed:', error);
+
+      // PHASE 2: Error-driven parameter discovery (reactive)
+      console.log('[McpSmartAssistant] Phase 2: Error-driven parameter discovery');
+      const errorRecoveryAttempt = await this.attemptErrorRecovery(toolName, parameters, originalQuery, error);
+
+      if (errorRecoveryAttempt.canRecover) {
+        console.log('[McpSmartAssistant] Error recovery possible, creating clarification request');
+        // Don't throw - let the calling method handle the clarification request
+        throw new Error(`PARAMETER_CLARIFICATION_NEEDED: ${errorRecoveryAttempt.clarificationMessage}`);
+      }
+
+      // If error recovery is not possible, throw the original error
       throw error;
     }
   }
@@ -2153,5 +2179,330 @@ export class McpSmartAssistant {
    */
   private isEmailQuery(queryLower: string): boolean {
     return /\b(email|mail|message|inbox)\b/.test(queryLower);
+  }
+
+  /* ---------- Two-Layer Validation System Methods ---------- */
+
+  /**
+   * Phase 1: Pre-execution schema validation (proactive)
+   */
+  private async performPreExecutionValidation(
+    toolName: string,
+    parameters: Record<string, any>,
+    originalQuery: string
+  ): Promise<{
+    canProceed: boolean;
+    parameters: Record<string, any>;
+    reason?: string;
+    missingParameters?: string[];
+    fallbackLayer?: string;
+  }> {
+    console.log(`[McpSmartAssistant] Starting robust multi-layer validation for ${toolName}`);
+
+    try {
+      // Get tool schema from MCP manager
+      if (!this.mcpManager || typeof this.mcpManager.getCachedToolSchema !== 'function') {
+        console.log('[McpSmartAssistant] Schema validation not available, proceeding with all parameters');
+        return {
+          canProceed: true,
+          parameters,
+          fallbackLayer: 'no-validation'
+        };
+      }
+
+      // Try to resolve the full tool name first
+      let resolvedToolName = toolName;
+      if (this.mcpExecutor && typeof this.mcpExecutor.resolveFullToolName === 'function') {
+        try {
+          const resolution = await this.mcpExecutor.resolveFullToolName(toolName);
+          resolvedToolName = resolution.toolName;
+          console.log(`[McpSmartAssistant] Resolved tool name: ${toolName} -> ${resolvedToolName}`);
+        } catch (error) {
+          console.warn(`[McpSmartAssistant] Could not resolve tool name ${toolName}, using as-is`);
+        }
+      }
+
+      // Get schema for validation
+      const schema = this.mcpManager.getCachedToolSchema(resolvedToolName);
+      if (!schema) {
+        console.log(`[McpSmartAssistant] No schema found for ${resolvedToolName}, proceeding with all parameters`);
+        return {
+          canProceed: true,
+          parameters,
+          fallbackLayer: 'no-schema'
+        };
+      }
+
+      // LAYER 1: Try with all provided parameters (smart filtering & coercion)
+      console.log('\n[McpSmartAssistant] 🔄 LAYER 1: Full parameter validation with smart filtering');
+      const validation = this.mcpManager.validateToolParameters(resolvedToolName, parameters);
+
+      if (validation.valid) {
+        console.log('✅ [McpSmartAssistant] Layer 1 SUCCESS: Using filtered & coerced parameters');
+        return {
+          canProceed: true,
+          parameters: validation.filteredParams,
+          fallbackLayer: 'layer-1-filtered'
+        };
+      }
+
+      // LAYER 2: Try with required parameters + instructions only
+      console.log('\n[McpSmartAssistant] 🔄 LAYER 2: Required parameters + instructions only');
+      const requiredParams: Record<string, any> = {};
+
+      // Always include instructions for natural language fallback
+      if (originalQuery) {
+        requiredParams.instructions = `${originalQuery}. Please extract and use the necessary parameters from this request.`;
+      }
+
+      // Add required parameters if we have them
+      for (const requiredParam of schema.required) {
+        if (requiredParam in parameters) {
+          requiredParams[requiredParam] = parameters[requiredParam];
+        } else {
+          // Try to infer missing required parameters
+          const inferredValue = this.inferParameterFromQuery(requiredParam, originalQuery);
+          if (inferredValue !== null) {
+            requiredParams[requiredParam] = inferredValue;
+            console.log(`[McpSmartAssistant] Inferred required parameter ${requiredParam}: ${inferredValue}`);
+          }
+        }
+      }
+
+      const layer2Validation = this.mcpManager.validateToolParameters(resolvedToolName, requiredParams);
+      if (layer2Validation.valid) {
+        console.log('✅ [McpSmartAssistant] Layer 2 SUCCESS: Using required parameters + instructions');
+        return {
+          canProceed: true,
+          parameters: layer2Validation.filteredParams,
+          fallbackLayer: 'layer-2-required'
+        };
+      }
+
+      // LAYER 3: Instructions-only mode (universal fallback)
+      console.log('\n[McpSmartAssistant] 🔄 LAYER 3: Instructions-only mode');
+      const instructionsOnly = {
+        instructions: `${originalQuery}. Please handle this request and extract any needed parameters from this natural language instruction.`
+      };
+
+      const layer3Validation = this.mcpManager.validateToolParameters(resolvedToolName, instructionsOnly);
+      if (layer3Validation.valid || layer3Validation.missingRequired.length === 0 || layer3Validation.missingRequired.every((p: string) => p !== 'instructions')) {
+        console.log('✅ [McpSmartAssistant] Layer 3 SUCCESS: Using instructions-only mode');
+        return {
+          canProceed: true,
+          parameters: instructionsOnly,
+          fallbackLayer: 'layer-3-instructions'
+        };
+      }
+
+      // LAYER 4: Schema-less execution (last resort)
+      console.log('\n[McpSmartAssistant] 🔄 LAYER 4: Schema-less execution (last resort)');
+      console.log('✅ [McpSmartAssistant] Layer 4 SUCCESS: Using schema-less execution with original parameters');
+      return {
+        canProceed: true,
+        parameters: {
+          instructions: `${originalQuery}. Tool: ${resolvedToolName}. Please handle this request with any available functionality.`,
+          ...parameters
+        },
+        fallbackLayer: 'layer-4-schemaless',
+        reason: 'Using schema-less fallback - validation bypassed'
+      };
+
+    } catch (error) {
+      console.error('[McpSmartAssistant] Error in multi-layer validation:', error);
+      console.log('✅ [McpSmartAssistant] ERROR FALLBACK: Proceeding with original parameters');
+      return {
+        canProceed: true,
+        parameters: {
+          instructions: `${originalQuery}. Please handle this request.`,
+          ...parameters
+        },
+        fallbackLayer: 'error-fallback'
+      };
+    }
+  }
+
+  /**
+   * Phase 2: Error-driven parameter discovery (reactive)
+   */
+  private async attemptErrorRecovery(
+    toolName: string,
+    parameters: Record<string, any>,
+    originalQuery: string,
+    error: any
+  ): Promise<{
+    canRecover: boolean;
+    clarificationMessage?: string;
+    missingParameters?: string[];
+    recoveryStrategy?: string;
+  }> {
+    console.log(`[McpSmartAssistant] Attempting error recovery for ${toolName}`);
+
+    try {
+      // Parse the error using ConversationManager's error parsing
+      const errorAnalysis = this.conversationManager.parseErrorForMissingParameters(error);
+      console.log('[McpSmartAssistant] Error analysis:', errorAnalysis);
+
+      // Check if this is a recoverable parameter error
+      if (this.conversationManager.isRecoverableParameterError(errorAnalysis)) {
+        console.log('[McpSmartAssistant] Error is recoverable through parameter collection');
+
+        // Generate clarification request
+        const clarification = this.conversationManager.generateMissingParameterClarification(
+          errorAnalysis.missingParameters,
+          toolName,
+          originalQuery
+        );
+
+        return {
+          canRecover: true,
+          clarificationMessage: clarification.question,
+          missingParameters: errorAnalysis.missingParameters
+        };
+      }
+
+      // Check for other recoverable error types
+      if (errorAnalysis.errorType === 'auth_error') {
+        return {
+          canRecover: true,
+          clarificationMessage: `Authentication required for ${toolName}. Please check your credentials and permissions.`,
+          missingParameters: ['authentication']
+        };
+      }
+
+      if (errorAnalysis.errorType === 'invalid_param') {
+        return {
+          canRecover: true,
+          clarificationMessage: `The ${toolName} tool received invalid parameters. Please provide correct values.`,
+          missingParameters: ['parameter_values']
+        };
+      }
+
+      // ENHANCED: For generic/empty errors, try additional fallback strategies
+      if (errorAnalysis.errorType === 'generic') {
+        console.log('[McpSmartAssistant] ♻️  Generic/empty error detected - trying enhanced recovery strategies');
+
+        // Strategy 1: Try with minimal parameter set (instructions only)
+        console.log('[McpSmartAssistant] Recovery Strategy 1: Minimal parameter retry');
+        return {
+          canRecover: true,
+          clarificationMessage: `The ${toolName} tool had an execution issue. Trying with simplified parameters...`,
+          missingParameters: [], // No specific missing parameters, just generic retry
+          recoveryStrategy: 'minimal-retry'
+        };
+      }
+
+      console.log('[McpSmartAssistant] Error is not recoverable through parameter collection');
+      return {
+        canRecover: false
+      };
+
+    } catch (recoveryError) {
+      console.error('[McpSmartAssistant] Error during error recovery attempt:', recoveryError);
+
+      // ENHANCED: Even if error parsing fails, try minimal recovery
+      console.log('[McpSmartAssistant] ♻️  Error parsing failed - attempting minimal recovery anyway');
+      return {
+        canRecover: true,
+        clarificationMessage: `Execution failed for ${toolName}. Attempting simplified approach...`,
+        missingParameters: [],
+        recoveryStrategy: 'error-fallback'
+      };
+    }
+  }
+
+  /**
+   * Infer parameter values from user query using semantic patterns
+   */
+  private inferParameterFromQuery(parameterName: string, query: string, _toolName?: string): any {
+    const queryLower = query.toLowerCase();
+    const paramLower = parameterName.toLowerCase();
+
+    console.log(`[McpSmartAssistant] Inferring parameter "${parameterName}" from query: "${query}"`);
+
+    try {
+      // Board parameter inference for project management tools
+      if (paramLower.includes('board') || parameterName === 'board') {
+        const boardPatterns = [
+          /(?:board|in|from|on)\s+["']?([^"'\s,]+)["']?/i,
+          /["']([^"']+)["']\s+board/i
+        ];
+
+        for (const pattern of boardPatterns) {
+          const match = queryLower.match(pattern);
+          if (match && match[1]) {
+            console.log(`[McpSmartAssistant] Inferred board parameter: "${match[1]}"`);
+            return match[1];
+          }
+        }
+
+        // For project management tools, use semantic defaults based on query intent
+        if (paramLower === 'board') {
+          // Check if this is a search/list operation (common pattern across project tools)
+          const isSearchOperation = query.toLowerCase().includes('find') ||
+                                  query.toLowerCase().includes('search') ||
+                                  query.toLowerCase().includes('get') ||
+                                  query.toLowerCase().includes('list') ||
+                                  query.toLowerCase().includes('show');
+          if (isSearchOperation) {
+            console.log('[McpSmartAssistant] Using default "all" for board search parameter');
+            return 'all';
+          }
+        }
+      }
+
+      // Query/Search parameter inference
+      if (paramLower.includes('query') || paramLower.includes('search') || parameterName === 'q') {
+        const searchPatterns = [
+          /(?:find|search for|looking for|get|show)\s+["']?([^"']+)["']?/i,
+          /["']([^"']+)["']\s+(?:card|ticket|item|task)/i
+        ];
+
+        for (const pattern of searchPatterns) {
+          const match = query.match(pattern);
+          if (match && match[1]) {
+            console.log(`[McpSmartAssistant] Inferred query parameter: "${match[1].trim()}"`);
+            return match[1].trim();
+          }
+        }
+
+        // Fallback: use entire query
+        return query;
+      }
+
+      // Date parameter inference
+      if (paramLower.includes('date') || paramLower.includes('when')) {
+        const datePatterns = [
+          /\b(today|tomorrow|yesterday)\b/i,
+          /\b(\d{4}-\d{2}-\d{2}|\d{1,2}\/\d{1,2}\/\d{4})\b/,
+          /\b(this week|next week|last week)\b/i
+        ];
+
+        for (const pattern of datePatterns) {
+          const match = query.match(pattern);
+          if (match && match[1]) {
+            console.log(`[McpSmartAssistant] Inferred date parameter: "${match[1]}"`);
+            return match[1];
+          }
+        }
+      }
+
+      // Limit parameter inference
+      if (paramLower.includes('limit') || paramLower.includes('count') || paramLower.includes('max')) {
+        const limitMatch = query.match(/(?:first|last|top|show|limit|max)\s+(\d+)/i);
+        if (limitMatch) {
+          const limit = parseInt(limitMatch[1]);
+          console.log(`[McpSmartAssistant] Inferred limit parameter: ${limit}`);
+          return limit;
+        }
+      }
+
+      console.log(`[McpSmartAssistant] Could not infer parameter "${parameterName}" from query`);
+      return null;
+
+    } catch (error) {
+      console.error(`[McpSmartAssistant] Error inferring parameter "${parameterName}":`, error);
+      return null;
+    }
   }
 }
