@@ -1677,22 +1677,26 @@ async function handleSettingsRequest(webview: any, action: string, data: any): P
       showToast(`${provider.charAt(0).toUpperCase() + provider.slice(1)} API key saved!`, 'success');
       break;
 
-    case 'save-mcp-server':
-      const { name, url, enabled } = data;
-      const mcpConfigs = JSON.parse(localStorage.getItem('mcp_servers') || '[]');
-      console.log(data,'harsh',mcpConfigs,'where are you');
-      const existingIndex = mcpConfigs.findIndex((c: any) => c.name === name);
+    case 'save-mcp-server': {
+      if (data && data.name && data.url) {
+        const { name, url, enabled } = data;
 
-      if (existingIndex >= 0) {
-        mcpConfigs[existingIndex] = { name, url, enabled };
+        // Always overwrite with a single-element array
+        const mcpConfigs = [{ name, url, enabled }];
+
+        localStorage.setItem('mcp_servers', JSON.stringify(mcpConfigs));
+
+        showToast(`MCP server "${name}" saved!`, 'success');
+        console.log('[MCP] Saved MCP server to localStorage:', mcpConfigs[0]);
       } else {
-        mcpConfigs.push({ name, url, enabled });
-      }
+        // If no data provided → clear configs
+        localStorage.setItem('mcp_servers', JSON.stringify([]));
 
-      localStorage.setItem('mcp_servers', JSON.stringify(mcpConfigs));
-      showToast(`MCP server ${name} saved!`, 'success');
-      console.log(`[MCP] Saved ${mcpConfigs.length} MCP servers to localStorage`);
+        showToast('MCP server config cleared', 'info');
+        console.log('[MCP] Cleared MCP server configs');
+      }
       break;
+    }
 
     case 'toggle-sidebar':
       localStorage.setItem('sidebarEnabled', data.enabled.toString());
@@ -6962,6 +6966,17 @@ function enhancedRestoreTabs(): void {
       }
 
       if (savedSession && savedSession.tabs && savedSession.tabs.length > 0) {
+        // Filter out settings tabs to prevent communication issues during restoration
+        const filteredTabs = savedSession.tabs.filter((tab: any) =>
+          !tab.url || !tab.url.startsWith('file://')
+        );
+
+        if (filteredTabs.length === 0) {
+          // If all tabs were settings tabs, create a new tab instead
+          createNewTab();
+          return;
+        }
+
         // Clear current state
         tabs = [];
         tabsContainer.innerHTML = '';
@@ -6972,8 +6987,8 @@ function enhancedRestoreTabs(): void {
         const restoredTabIds: string[] = [];
 
         // Create tabs without selecting them immediately
-        for (let i = 0; i < savedSession.tabs.length; i++) {
-          const tabData = savedSession.tabs[i];
+        for (let i = 0; i < filteredTabs.length; i++) {
+          const tabData = filteredTabs[i];
           try {
             if (tabData.url && tabData.url !== 'about:blank') {
               const newTabId = createNewTabWithoutSelection(tabData.url);

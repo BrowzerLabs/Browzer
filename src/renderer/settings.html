@@ -518,54 +518,46 @@
             function renderPanel(configsArray = null) {
                 const cfgs = configsArray || loadConfigs();
                 console.log('🎨 Rendering MCP panel with configs:', cfgs);
+
                 root.innerHTML = `
-                    <h3 class="settings-card-title">
-                        <span class="settings-icon">🔌</span> MCP Servers
-                    </h3>
-                    <p class="settings-card-description">Connect Browzer to external tool servers (Model Context Protocol)</p>
-                    <div class="mcp-server-list">
-                        ${cfgs.map((c, i) => `
-                            <div class="mcp-row">
-                                <span class="mcp-name">${c.name}</span>
-                                <span class="mcp-url">${c.url}</span>
-                                <label class="mcp-toggle">
-                                    <input type="checkbox" data-index="${i}" ${c.enabled ? 'checked' : ''}>
-                                    <span>Enabled</span>
-                                </label>
-                                <button class="chrome-btn chrome-btn-secondary chrome-btn-small mcp-test" data-index="${i}" ${!c.enabled ? 'disabled' : ''}>Test Tools</button>
-                                <button class="chrome-btn chrome-btn-danger chrome-btn-small mcp-remove" data-index="${i}">Remove</button>
-                            </div>
-                            <div id="tools-list-${i}" class="mcp-tools-list" style="display: none;"></div>
-                        `).join('')}
-                    </div>
-                    <button id="mcp-add-btn" class="chrome-btn chrome-btn-primary" onclick="window.mcpAddServer && window.mcpAddServer()">Add Server</button>
-                `;
+        <h3 class="settings-card-title">
+            <span class="settings-icon">🔌</span> MCP Servers
+        </h3>
+        <p class="settings-card-description">Connect Browzer to external tool servers (Model Context Protocol)</p>
+        <div class="mcp-server-list">
+            ${cfgs.map((c, i) => `
+                <div class="mcp-row">
+                    <span class="mcp-name">${c.name}</span>
+                    <span class="mcp-url">${c.url}</span>
+                    <label class="mcp-toggle">
+                        <input type="checkbox" data-index="${i}" ${c.enabled ? 'checked' : ''}>
+                        <span>Enabled</span>
+                    </label>
+                    <button class="chrome-btn chrome-btn-secondary chrome-btn-small mcp-test" data-index="${i}" ${!c.enabled ? 'disabled' : ''}>Test Tools</button>
+                    <button class="chrome-btn chrome-btn-danger chrome-btn-small mcp-remove" data-index="${i}">Remove</button>
+                </div>
+                <div id="tools-list-${i}" class="mcp-tools-list" style="display: none;"></div>
+            `).join('')}
+        </div>
+        <button id="mcp-add-btn" class="chrome-btn chrome-btn-primary" onclick="window.mcpAddServer && window.mcpAddServer()">Add Server</button>
+    `;
 
-                // Add event listeners with error handling
+                // 🔘 Add button
                 const addBtn = root.querySelector('#mcp-add-btn');
-                console.log('🔘 Add button found:', addBtn);
-
                 if (addBtn) {
-                    // Remove any existing listeners first
                     addBtn.replaceWith(addBtn.cloneNode(true));
                     const newAddBtn = root.querySelector('#mcp-add-btn');
-
                     newAddBtn.addEventListener('click', function (e) {
                         e.preventDefault();
                         e.stopPropagation();
-
                         console.log('🚀 Add server button clicked!');
                         showAddServerModal();
                     });
-
-                    console.log('✅ Event listener attached successfully');
-                } else {
-                    console.error('❌ Add button not found in DOM!');
                 }
 
+                // 🔄 Checkbox toggle (Enable/Disable)
                 root.querySelectorAll('input[type="checkbox"]').forEach(checkbox => {
-                    checkbox.addEventListener('change', (e) => {
-                        // Prevent default checkbox behavior to avoid visual conflicts
+                    checkbox.addEventListener('change', async (e) => {
                         e.preventDefault();
                         e.stopPropagation();
 
@@ -573,24 +565,25 @@
                         const list = loadConfigs();
                         const currentServer = list[index];
 
-                        // Toggle based on current configuration state, not DOM state
                         if (!currentServer.enabled) {
-                            // Enable this server and disable all others
+                            // Enable this server, disable all others
                             list.forEach((server, i) => {
                                 server.enabled = (i === index);
                             });
                         } else {
-                            // Disable this server (allow no servers to be enabled)
+                            // Disable this server
                             currentServer.enabled = false;
                         }
 
                         saveConfigs(list);
-
-                        // Re-render the panel to ensure UI consistency and re-attach event listeners
                         renderPanel();
+
+                        // ✅ Run MCP integration test after toggle
+                        await testMcpIntegration();
                     });
                 });
 
+                // 🧪 Test button (manual test)
                 root.querySelectorAll('.mcp-test').forEach(button => {
                     button.addEventListener('click', async (e) => {
                         const index = parseInt(e.target.dataset.index);
@@ -599,13 +592,17 @@
                     });
                 });
 
+                // ❌ Remove button
                 root.querySelectorAll('.mcp-remove').forEach(button => {
-                    button.addEventListener('click', (e) => {
+                    button.addEventListener('click', async (e) => {
                         const index = parseInt(e.target.dataset.index);
                         const list = loadConfigs();
                         list.splice(index, 1);
                         saveConfigs(list);
                         renderPanel();
+
+                        // ✅ Run MCP integration test after removal
+                        await testMcpIntegration();
                     });
                 });
             }
@@ -1346,7 +1343,7 @@
             try {
                 log('🚀 Starting MCP Integration Test in Browzer Electron...');
 
-                // Test 1: Environment Check
+                // 1️⃣ Environment Check
                 log('\n1️⃣ Testing Electron Environment:');
                 const envTests = [
                     { name: 'fetch API', test: () => typeof fetch !== 'undefined' },
@@ -1363,19 +1360,15 @@
                     log(`   ${passed ? '✅' : '❌'} ${name}: ${passed ? 'Available' : 'Missing'}`);
                 });
 
-                if (!envOk) {
-                    throw new Error('Environment check failed - missing required APIs');
-                }
+                if (!envOk) throw new Error('Environment check failed - missing required APIs');
 
-                // Test 2: MCP Connection
+                // 2️⃣ MCP Connection
                 log('\n2️⃣ Testing MCP Server Connection:');
                 const serversAll = JSON.parse(localStorage.getItem('mcp_servers') || '[]');
                 const enabledServer = serversAll.find(s => s.enabled === true) || null;
                 const zapierUrl = enabledServer?.url || null;
 
-                if (!zapierUrl) {
-                    throw new Error('No enabled MCP server found in settings. Please add and enable a server to test.');
-                }
+                if (!zapierUrl) throw new Error('No enabled MCP server found. Please add and enable a server.');
 
                 const initPayload = {
                     jsonrpc: '2.0',
@@ -1399,16 +1392,12 @@
                 });
 
                 log(`   📥 Response: ${response.status} ${response.statusText}`);
+                if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`);
 
-                if (!response.ok) {
-                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-                }
-
-                // Handle SSE response
+                // Handle SSE connection
                 let serverConnected = false;
                 if (response.headers.get('content-type')?.includes('text/event-stream')) {
                     log('   📡 Processing SSE stream...');
-
                     const reader = response.body.getReader();
                     const decoder = new TextDecoder();
                     let buffer = '';
@@ -1422,45 +1411,32 @@
                         buffer = lines.pop() || '';
 
                         let currentEvent = {};
-
                         for (const line of lines) {
-                            if (line.startsWith('data:')) {
-                                currentEvent.data = line.substring(5).trim();
-                            } else if (line === '') {
+                            if (line.startsWith('data:')) currentEvent.data = line.substring(5).trim();
+                            else if (line === '') {
                                 if (currentEvent.data) {
                                     try {
                                         const eventData = JSON.parse(currentEvent.data);
-                                        if (eventData.result && eventData.result.serverInfo) {
+                                        if (eventData.result?.serverInfo) {
                                             const server = eventData.result.serverInfo;
                                             log(`   ✅ Connected to: ${server.name} v${server.version}`);
                                             serverConnected = true;
                                             break;
                                         }
-                                    } catch (parseError) {
-                                        // Continue processing
-                                    }
+                                    } catch { }
                                 }
                                 currentEvent = {};
                             }
                         }
-
                         if (serverConnected) break;
                     }
                 }
 
-                if (!serverConnected) {
-                    throw new Error('Failed to establish MCP connection');
-                }
+                if (!serverConnected) throw new Error('Failed to establish MCP connection');
 
-                // Test 3: Tools List
+                // 3️⃣ Tools List
                 log('\n3️⃣ Testing Tools Discovery:');
-                const toolsPayload = {
-                    jsonrpc: '2.0',
-                    id: 2,
-                    method: 'tools/list',
-                    params: {}
-                };
-
+                const toolsPayload = { jsonrpc: '2.0', id: 2, method: 'tools/list', params: {} };
                 const toolsResponse = await fetch(zapierUrl, {
                     method: 'POST',
                     headers: {
@@ -1485,69 +1461,49 @@
                         buffer = lines.pop() || '';
 
                         let currentEvent = {};
-
                         for (const line of lines) {
-                            if (line.startsWith('data:')) {
-                                currentEvent.data = line.substring(5).trim();
-                            } else if (line === '') {
+                            if (line.startsWith('data:')) currentEvent.data = line.substring(5).trim();
+                            else if (line === '') {
                                 if (currentEvent.data) {
                                     try {
                                         const eventData = JSON.parse(currentEvent.data);
-                                        if (eventData.result && eventData.result.tools) {
+                                        if (eventData.result?.tools) {
                                             const tools = eventData.result.tools;
                                             toolsFound = tools.length;
                                             log(`   ✅ Discovered ${tools.length} tools!`);
 
-                                            // Show sample tools
                                             log('   📋 Sample tools:');
                                             tools.slice(0, 3).forEach((tool, i) => {
                                                 log(`      ${i + 1}. ${tool.name} - ${tool.description?.substring(0, 60) || 'No description'}...`);
                                             });
-
-                                            if (tools.length > 3) {
-                                                log(`      ... and ${tools.length - 3} more tools`);
-                                            }
+                                            if (tools.length > 3) log(`      ... and ${tools.length - 3} more tools`);
                                             break;
                                         }
-                                    } catch (parseError) {
-                                        // Continue processing
-                                    }
+                                    } catch { }
                                 }
                                 currentEvent = {};
                             }
                         }
-
                         if (toolsFound > 0) break;
                     }
                 }
 
-                // Test 4: McpClientManager
+                // 4️⃣ McpClientManager storage test
                 log('\n4️⃣ Testing McpClientManager Class:');
                 try {
                     log('   🔧 Testing manager functionality...');
-
-                    const testConfig = {
-                        name: 'zapier-electron-test',
-                        url: zapierUrl,
-                        enabled: false,
-                        transport: 'sse'
-                    };
-
+                    const testConfig = { name: 'zapier-electron-test', url: zapierUrl, enabled: false, transport: 'sse' };
                     localStorage.setItem('mcp_test_electron', JSON.stringify([testConfig]));
                     const retrieved = JSON.parse(localStorage.getItem('mcp_test_electron'));
                     localStorage.removeItem('mcp_test_electron');
-
-                    if (retrieved && retrieved[0].name === 'zapier-electron-test') {
+                    if (retrieved?.[0]?.name === 'zapier-electron-test') {
                         log('   ✅ McpClientManager storage compatibility verified');
-                    } else {
-                        throw new Error('Storage test failed');
-                    }
-
-                } catch (error) {
-                    log(`   ⚠️ McpClientManager test: ${error.message}`);
+                    } else throw new Error('Storage test failed');
+                } catch (err) {
+                    log(`   ⚠️ McpClientManager test: ${err.message}`);
                 }
 
-                // Summary
+                // ✅ Summary
                 log('\n📊 Test Results:');
                 log(`   Environment: ✅ Pass`);
                 log(`   Connection: ✅ Pass`);
@@ -1556,12 +1512,9 @@
 
                 if (toolsFound > 0) {
                     log('\n🎉 MCP Integration Test PASSED!');
-                    log('💡 MCP is fully functional in Browzer Electron');
-                    log('💡 You can now add MCP servers in the settings above');
-
                     statusElement.innerHTML = '<div style="padding: 10px; background: #d4edda; color: #155724; border-radius: 4px;">✅ All tests passed! MCP is working in Browzer.</div>';
 
-                    // ✅ Save MCP server to main process
+                    // Save server to main process
                     window.sendToMainRenderer('save-mcp-server', {
                         name: enabledServer?.name || 'zapier-electron-test',
                         url: zapierUrl,
@@ -1574,6 +1527,10 @@
             } catch (error) {
                 log(`\n❌ Test failed: ${error.message}`);
                 statusElement.innerHTML = `<div style="padding: 10px; background: #f8d7da; color: #721c24; border-radius: 4px;">❌ Test failed: ${error.message}</div>`;
+
+                // ❌ Remove MCP server if test failed
+                window.sendToMainRenderer('save-mcp-server', null);
+                console.warn('[MCP] Integration failed, MCP server not saved.');
             }
         }
 
