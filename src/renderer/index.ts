@@ -1516,8 +1516,17 @@ async function injectSettingsDataAndHandlers(webview: any, retryCount: number = 
         
         // Create communication function
         window.sendToBrowser = function(action, data) {
-          console.log('Queuing action:', action, data);
+          console.log('Processing settings action:', action, data);
           window.settingsActions.push({ action, data });
+
+          // Try to immediately notify the main renderer if possible
+          if (window.parent && window.parent !== window) {
+            try {
+              window.parent.postMessage({ type: 'settings-action', action, data }, '*');
+            } catch (e) {
+              console.log('Could not immediately notify parent, action queued for polling');
+            }
+          }
         };
         
         // Update UI with current settings
@@ -1671,6 +1680,7 @@ async function handleSettingsRequest(webview: any, action: string, data: any): P
     case 'save-mcp-server':
       const { name, url, enabled } = data;
       const mcpConfigs = JSON.parse(localStorage.getItem('mcp_servers') || '[]');
+      console.log(data,'harsh',mcpConfigs,'where are you');
       const existingIndex = mcpConfigs.findIndex((c: any) => c.name === name);
 
       if (existingIndex >= 0) {

@@ -416,16 +416,6 @@
             }, 3000);
         }
 
-        // Communication functions will be injected by the main renderer
-        window.sendToMainRenderer = window.sendToBrowser || function (action, data) {
-            console.warn('Settings communication not ready yet, queuing action:', action);
-            // Queue actions until communication is ready
-            if (!window.pendingSettingsActions) {
-                window.pendingSettingsActions = [];
-            }
-            window.pendingSettingsActions.push({ action, data });
-        };
-
         // Navigation functionality
         function showSection(sectionId) {
             console.log('Showing section:', sectionId);
@@ -523,19 +513,11 @@
 
             function saveConfigs(cfgs) {
                 localStorage.setItem(STORAGE_KEY, JSON.stringify(cfgs));
-
-                // Sync all MCP servers to main process (like API keys)
-                cfgs.forEach(cfg => {
-                    window.sendToMainRenderer('save-mcp-server', {
-                        name: cfg.name,
-                        url: cfg.url,
-                        enabled: cfg.enabled
-                    });
-                });
             }
 
-            function renderPanel() {
-                const cfgs = loadConfigs();
+            function renderPanel(configsArray = null) {
+                const cfgs = configsArray || loadConfigs();
+                console.log('🎨 Rendering MCP panel with configs:', cfgs);
                 root.innerHTML = `
                     <h3 class="settings-card-title">
                         <span class="settings-icon">🔌</span> MCP Servers
@@ -583,16 +565,29 @@
 
                 root.querySelectorAll('input[type="checkbox"]').forEach(checkbox => {
                     checkbox.addEventListener('change', (e) => {
+                        // Prevent default checkbox behavior to avoid visual conflicts
+                        e.preventDefault();
+                        e.stopPropagation();
+
                         const index = parseInt(e.target.dataset.index);
                         const list = loadConfigs();
-                        list[index].enabled = e.target.checked;
+                        const currentServer = list[index];
+
+                        // Toggle based on current configuration state, not DOM state
+                        if (!currentServer.enabled) {
+                            // Enable this server and disable all others
+                            list.forEach((server, i) => {
+                                server.enabled = (i === index);
+                            });
+                        } else {
+                            // Disable this server (allow no servers to be enabled)
+                            currentServer.enabled = false;
+                        }
+
                         saveConfigs(list);
 
-                        // Update test button state
-                        const testBtn = root.querySelector(`.mcp-test[data-index="${index}"]`);
-                        if (testBtn) {
-                            testBtn.disabled = !list[index].enabled;
-                        }
+                        // Re-render the panel to ensure UI consistency and re-attach event listeners
+                        renderPanel();
                     });
                 });
 
@@ -1334,7 +1329,6 @@
             }
         }
 
-        // MCP Testing Functions
         async function testMcpIntegration() {
             const logElement = document.getElementById('mcp-test-log');
             const statusElement = document.getElementById('mcp-test-status');
@@ -1375,7 +1369,13 @@
 
                 // Test 2: MCP Connection
                 log('\n2️⃣ Testing MCP Server Connection:');
-                const zapierUrl = localStorage.getItem('mcp_servers') ? JSON.parse(localStorage.getItem('mcp_servers'))[0]?.url : null;
+                const serversAll = JSON.parse(localStorage.getItem('mcp_servers') || '[]');
+                const enabledServer = serversAll.find(s => s.enabled === true) || null;
+                const zapierUrl = enabledServer?.url || null;
+
+                if (!zapierUrl) {
+                    throw new Error('No enabled MCP server found in settings. Please add and enable a server to test.');
+                }
 
                 const initPayload = {
                     jsonrpc: '2.0',
@@ -1524,10 +1524,8 @@
                 // Test 4: McpClientManager
                 log('\n4️⃣ Testing McpClientManager Class:');
                 try {
-                    // Try to import and test the actual manager
                     log('   🔧 Testing manager functionality...');
 
-                    // Test localStorage for MCP configs
                     const testConfig = {
                         name: 'zapier-electron-test',
                         url: zapierUrl,
@@ -1556,11 +1554,22 @@
                 log(`   Tools Discovery: ${toolsFound > 0 ? '✅ Pass' : '❌ Fail'} (${toolsFound} tools)`);
                 log(`   Manager Compatibility: ✅ Pass`);
 
-                log('\n🎉 MCP Integration Test PASSED!');
-                log('💡 MCP is fully functional in Browzer Electron');
-                log('💡 You can now add MCP servers in the settings above');
+                if (toolsFound > 0) {
+                    log('\n🎉 MCP Integration Test PASSED!');
+                    log('💡 MCP is fully functional in Browzer Electron');
+                    log('💡 You can now add MCP servers in the settings above');
 
-                statusElement.innerHTML = '<div style="padding: 10px; background: #d4edda; color: #155724; border-radius: 4px;">✅ All tests passed! MCP is working in Browzer.</div>';
+                    statusElement.innerHTML = '<div style="padding: 10px; background: #d4edda; color: #155724; border-radius: 4px;">✅ All tests passed! MCP is working in Browzer.</div>';
+
+                    // ✅ Save MCP server to main process
+                    window.sendToMainRenderer('save-mcp-server', {
+                        name: enabledServer?.name || 'zapier-electron-test',
+                        url: zapierUrl,
+                        enabled: true
+                    });
+                } else {
+                    throw new Error('Tools discovery failed, MCP integration incomplete');
+                }
 
             } catch (error) {
                 log(`\n❌ Test failed: ${error.message}`);
@@ -1576,16 +1585,6 @@
             logElement.style.display = 'none';
             statusElement.innerHTML = '';
         }
-
-        // Debug function for troubleshooting MCP panel
-        window.debugMcpPanel = function () {
-            console.log('🐛 DEBUG MCP PANEL:');
-            console.log('- Root element:', document.getElementById('mcp-servers-root'));
-            console.log('- Add button:', document.querySelector('#mcp-add-btn'));
-            console.log('- Current configs:', localStorage.getItem('mcp_servers'));
-            console.log('- Re-initializing...');
-            initializeMcpPanel();
-        };
 
         // Global add server function (backup for onclick)
         window.mcpAddServer = function () {
@@ -1708,7 +1707,7 @@
                 }
 
                 try {
-                    const cfg = { name, url, enabled: true };
+                    const cfg = { name, url, enabled: false };
                     const configs = JSON.parse(localStorage.getItem('mcp_servers') || '[]');
 
                     // Check for duplicate names
@@ -1721,13 +1720,6 @@
 
                     configs.push(cfg);
                     localStorage.setItem('mcp_servers', JSON.stringify(configs));
-
-                    // Sync MCP servers to main process (like API keys)
-                    window.sendToMainRenderer('save-mcp-server', {
-                        name: cfg.name,
-                        url: cfg.url,
-                        enabled: cfg.enabled
-                    });
 
                     console.log('✅ Server added:', cfg);
                     modal.remove();
@@ -1772,29 +1764,6 @@
                 });
             });
         }
-
-        // Quick add server function for testing
-        window.addTestServer = function () {
-            const cfg = {
-                name: 'zapier',
-                url: 'https://mcp.zapier.com/api/mcp/s/.../mcp',
-                enabled: true
-            };
-
-            const configs = JSON.parse(localStorage.getItem('mcp_servers') || '[]');
-            configs.push(cfg);
-            localStorage.setItem('mcp_servers', JSON.stringify(configs));
-
-            // Sync MCP servers to main process (like API keys)
-            window.sendToMainRenderer('save-mcp-server', {
-                name: cfg.name,
-                url: cfg.url,
-                enabled: cfg.enabled
-            });
-
-            console.log('✅ Test server added:', cfg);
-            initializeMcpPanel();
-        };
     </script>
 </body>
 
