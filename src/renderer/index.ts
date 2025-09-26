@@ -21,8 +21,8 @@ const ipcRenderer = {
   removeAllListeners: (channel: string) => window.electronAPI.removeAllListeners(channel)
 };
 
-const shell = { 
-  openExternal: (url: string) => window.electronAPI.openExternal(url) 
+const shell = {
+  openExternal: (url: string) => window.electronAPI.openExternal(url)
 };
 
 // Path utilities from preload
@@ -67,20 +67,20 @@ function initializeMcpManager(): void {
 }
 
 // Test MCP integration (global function for debugging)
-(window as any).testMcpIntegration = async function() {
+(window as any).testMcpIntegration = async function () {
   console.log('🧪 Testing MCP Integration in Ask Pipeline...');
-  
+
   try {
     const tools = await getMcpToolsForAsk();
     console.log('✅ MCP Tools Retrieved:', tools.length);
-    
+
     if (tools.length > 0) {
       console.log('📋 Available MCP Tools:');
       tools.forEach((tool, i) => {
         console.log(`   ${i + 1}. ${tool.name} (${tool.serverName})`);
         console.log(`      Description: ${tool.description || 'No description'}`);
       });
-      
+
       console.log('\n💡 To test: Ask a question that could use these tools');
       console.log('   Example: "Find my latest email" (if gmail tools available)');
       console.log('   Example: "Create a Trello card" (if trello tools available)');
@@ -90,7 +90,7 @@ function initializeMcpManager(): void {
       console.log('   2. Enabled the servers');
       console.log('   3. Servers are connected successfully');
     }
-    
+
     return tools;
   } catch (error) {
     console.error('❌ MCP Integration test failed:', error);
@@ -108,7 +108,7 @@ async function getMcpToolsForAsk(): Promise<any[]> {
   try {
     const toolNames = await mcpManager.listAllTools();
     const tools = [];
-    
+
     for (const toolName of toolNames) {
       const toolInfo = mcpManager.getToolInfo(toolName);
       if (toolInfo) {
@@ -120,7 +120,7 @@ async function getMcpToolsForAsk(): Promise<any[]> {
         });
       }
     }
-    
+
     console.log(`[MCP] Retrieved ${tools.length} tools for Ask query`);
     if (tools.length > 0) {
       console.log('[MCP] Available tools:', tools.map(t => t.name).join(', '));
@@ -158,14 +158,14 @@ function isQueryRecentlyProcessed(query: string, windowMs: number = 3000): boole
   const normalizedQuery = query.toLowerCase().trim();
   const currentTime = Date.now();
   const lastProcessedTime = globalQueryTracker.get(normalizedQuery) || 0;
-  
+
   if (currentTime - lastProcessedTime < windowMs) {
     console.log('🚨 [GLOBAL DUPLICATE FIX] Query recently processed, skipping:', normalizedQuery.substring(0, 50));
     return true;
   }
-  
+
   globalQueryTracker.set(normalizedQuery, currentTime);
-  
+
   // Clean up old entries to prevent memory leaks
   if (globalQueryTracker.size > 100) {
     const cutoffTime = currentTime - (windowMs * 10);
@@ -175,16 +175,16 @@ function isQueryRecentlyProcessed(query: string, windowMs: number = 3000): boole
       }
     }
   }
-  
+
   return false;
 }
 
 // Add global call tracking for debugging duplicates
 let displayAgentResultsCallCount = 0;
-const displayAgentResultsCalls: Array<{callNumber: number, timestamp: number, stackTrace: string, data: any}> = [];
+const displayAgentResultsCalls: Array<{ callNumber: number, timestamp: number, stackTrace: string, data: any }> = [];
 
 // Add global execution flow tracking
-const executionFlow: Array<{timestamp: number, function: string, details: any}> = [];
+const executionFlow: Array<{ timestamp: number, function: string, details: any }> = [];
 
 // Webpage context management for @ mentions
 interface WebpageContext {
@@ -211,9 +211,9 @@ function logExecutionFlow(functionName: string, details: any = {}): void {
     details
   };
   executionFlow.push(entry);
-  
+
   console.log(`🔄 [FLOW] ${functionName}:`, details);
-  
+
   // Keep only last 50 entries to avoid memory issues
   if (executionFlow.length > 50) {
     executionFlow.splice(0, executionFlow.length - 50);
@@ -233,7 +233,7 @@ function trackDisplayAgentResultsCall(data: any): void {
     data: data
   };
   displayAgentResultsCalls.push(callInfo);
-  
+
   console.log(`🔍 [DUPLICATE DEBUG] displayAgentResults called #${displayAgentResultsCallCount}`);
   console.log(`🔍 [DUPLICATE DEBUG] Call timestamp: ${new Date(callInfo.timestamp).toISOString()}`);
   console.log(`🔍 [DUPLICATE DEBUG] Data summary:`, {
@@ -246,12 +246,12 @@ function trackDisplayAgentResultsCall(data: any): void {
   });
   console.log(`🔍 [DUPLICATE DEBUG] Stack trace:`);
   console.log(callInfo.stackTrace);
-  
+
   // Check for recent duplicate calls
-  const recentCalls = displayAgentResultsCalls.filter(call => 
+  const recentCalls = displayAgentResultsCalls.filter(call =>
     callInfo.timestamp - call.timestamp < 5000 && call.callNumber !== callInfo.callNumber
   );
-  
+
   if (recentCalls.length > 0) {
     console.warn(`🚨 [DUPLICATE DEBUG] POTENTIAL DUPLICATE DETECTED! Recent calls within 5 seconds:`);
     recentCalls.forEach(call => {
@@ -318,10 +318,10 @@ function applySidebarLayout(enabled: boolean): void {
 // Function to clear any stuck loading states - AGGRESSIVE CLEANUP
 function clearStuckLoadingStates(): void {
   const loadingTabs = document.querySelectorAll('.tab.loading');
-  
+
   if (loadingTabs.length > 0) {
     console.log(`[Loading Cleanup] Found ${loadingTabs.length} tabs in loading state - clearing ALL`);
-    
+
     // FORCE CLEAR all loading states - be aggressive to fix the stuck issue
     loadingTabs.forEach(tab => {
       tab.classList.remove('loading');
@@ -333,25 +333,25 @@ function clearStuckLoadingStates(): void {
 // Function to initialize sidebar layout from saved settings
 function initializeSidebar(): void {
   console.log('[Sidebar] Initializing sidebar from saved settings...');
-  
+
   // Debug localStorage value
   const rawValue = localStorage.getItem('sidebarEnabled');
   console.log('[Sidebar] Raw localStorage value:', rawValue);
-  
+
   // Load saved sidebar preference and apply layout
   const savedSidebarEnabled = rawValue === 'true';
   console.log('[Sidebar] Saved sidebar enabled:', savedSidebarEnabled);
-  
+
   // Debug current browser container classes
   const browserContainer = document.querySelector('.browser-container');
   console.log('[Sidebar] Browser container classes before applying:', browserContainer?.className);
-  
+
   // Apply sidebar layout if enabled
   applySidebarLayout(savedSidebarEnabled);
-  
+
   // Debug classes after applying
   console.log('[Sidebar] Browser container classes after applying:', browserContainer?.className);
-  
+
   // Setup collapse/expand functionality
   setupCollapseExpandButtons();
 }
@@ -359,20 +359,20 @@ function initializeSidebar(): void {
 // Function to setup collapse/expand buttons
 function setupCollapseExpandButtons(): void {
   const browserContainer = document.querySelector('.browser-container');
-  
+
   // Sidebar collapse/expand - single button handles both
   const sidebarCollapseBtn = document.getElementById('sidebarCollapseBtn');
-  
+
   if (sidebarCollapseBtn && browserContainer) {
     // Load saved sidebar collapsed state
     const sidebarCollapsed = localStorage.getItem('sidebarCollapsed') === 'true';
     if (sidebarCollapsed) {
       browserContainer.classList.add('sidebar-collapsed');
     }
-    
+
     sidebarCollapseBtn.addEventListener('click', () => {
       const isCurrentlyCollapsed = browserContainer.classList.contains('sidebar-collapsed');
-      
+
       if (isCurrentlyCollapsed) {
         // Currently collapsed, so expand
         browserContainer.classList.remove('sidebar-collapsed');
@@ -386,8 +386,8 @@ function setupCollapseExpandButtons(): void {
       }
     });
   }
-  
-    // Assistant collapse/expand functionality removed per user request
+
+  // Assistant collapse/expand functionality removed per user request
   // Clear any persisting assistant collapsed state
   localStorage.removeItem('assistantCollapsed');
   if (browserContainer) {
@@ -398,11 +398,11 @@ function setupCollapseExpandButtons(): void {
 // Initialize the application when DOM is ready
 document.addEventListener('DOMContentLoaded', () => {
   console.log('DOM fully loaded, initializing browser...');
-  
+
   initializeUI();
   setupEventListeners();
   setupWorkflowEventListeners();
-  
+
   // Initialize MCP Manager for Ask queries
   initializeMcpManager();
   // setupExtensionsPanel(); // Deprecated - settings now open in new tab
@@ -411,9 +411,9 @@ document.addEventListener('DOMContentLoaded', () => {
   setupGlobalErrorHandler();
   devToolsManager.addDevToolsButton();
   devToolsManager.enableDevToolsForAllWebviews();
-  
+
   memoryService = new MemoryService();
-  
+
   // Expose memory service to window for debugging
   (window as any).memoryService = memoryService;
 
@@ -422,7 +422,7 @@ document.addEventListener('DOMContentLoaded', () => {
   initializeTabSearch();
   initializeAutoSessionManagement();
   initializeTabPreview();
-  
+
   // Restore tabs after initialization is complete
   setTimeout(() => {
     enhancedRestoreTabs();
@@ -433,7 +433,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 function initializeUI(): void {
   console.log('Initializing UI...');
-  
+
   // Get UI elements
   urlBar = document.getElementById('urlBar') as HTMLInputElement;
   backBtn = document.getElementById('backBtn') as HTMLButtonElement;
@@ -451,13 +451,13 @@ function initializeUI(): void {
   extensionsPanel = document.getElementById('extensionsPanel') as HTMLElement;
   closeExtensionsBtn = document.getElementById('closeExtensionsBtn') as HTMLElement;
   workflowProgressContainer = document.getElementById('workflowProgress') as HTMLElement;
-  
+
   // Create workflow progress container if it doesn't exist
   if (!workflowProgressContainer) {
     workflowProgressContainer = document.createElement('div');
     workflowProgressContainer.id = 'workflowProgress';
     workflowProgressContainer.className = 'workflow-progress-container';
-    
+
     // Insert after agent results
     if (agentResults && agentResults.parentNode) {
       agentResults.parentNode.insertBefore(workflowProgressContainer, agentResults);
@@ -465,37 +465,37 @@ function initializeUI(): void {
       document.body.appendChild(workflowProgressContainer);
     }
   }
-  
+
   // NOTE: Tab creation is now handled by the restoration process
   // The restoration timeout will either restore saved tabs or create a fallback tab
   // DO NOT create tabs here - this interferes with restoration!
-  
+
   // Sync API keys with backend
   syncApiKeysWithBackend().catch(error => {
     console.error('Failed to sync API keys during initialization:', error);
   });
-  
+
   console.log('UI initialization complete');
 }
 
 function setupWorkflowEventListeners(): void {
   console.log('Setting up workflow event listeners...');
-  
+
   if (!window.electronAPI) {
     console.error('electronAPI not available, cannot setup workflow listeners');
     return;
   }
-  
+
   console.log('🚨 [CONTEXT ISOLATION] Using secure electronAPI for workflow listeners');
 
   // Set up workflow progress listeners using secure electronAPI
   window.electronAPI.onWorkflowProgress((data: any) => {
     console.log('[WorkflowProgress] workflow-progress event received:', data);
-    
+
     // Handle different types of workflow progress events
     if (data.type === 'workflow_start') {
       console.log('[WorkflowProgress] workflow-start event received:', data);
-      
+
       // Convert snake_case to camelCase for compatibility, including step fields
       const workflowData = {
         workflowId: data.workflow_id || `workflow-${Date.now()}`,
@@ -505,15 +505,15 @@ function setupWorkflowEventListeners(): void {
           extensionName: step.extension_name
         }))
       };
-      
+
       console.log('[WorkflowProgress] Creating new workflow progress in chat:', workflowData);
-      
+
       // Create workflow progress as a chat message instead of using fixed container
       addWorkflowProgressToChat(workflowData);
-      
+
     } else if (data.type === 'step_start') {
       console.log('📡 [IPC DEBUG] step_start event received:', data);
-      
+
       // Find the workflow progress message in chat
       const workflowMessage = findWorkflowProgressInChat(data.workflow_id);
       if (workflowMessage && (workflowMessage as any).progressIndicator) {
@@ -522,7 +522,7 @@ function setupWorkflowEventListeners(): void {
           currentStep: data.current_step,
           stepStatus: 'running'
         });
-        
+
         // Convert snake_case to camelCase
         (workflowMessage as any).progressIndicator.updateProgress({
           workflowId: data.workflow_id,
@@ -532,10 +532,10 @@ function setupWorkflowEventListeners(): void {
       } else {
         console.warn('[WorkflowProgress] Workflow progress message not found for step-start:', data.workflow_id);
       }
-      
+
     } else if (data.type === 'step_complete') {
       console.log('📡 [IPC DEBUG] step_complete event received:', data);
-      
+
       // Find the workflow progress message in chat
       const workflowMessage = findWorkflowProgressInChat(data.workflow_id);
       if (workflowMessage && (workflowMessage as any).progressIndicator) {
@@ -546,7 +546,7 @@ function setupWorkflowEventListeners(): void {
           stepResult: data.step_result,
           stepError: data.step_error
         });
-        
+
         // Convert snake_case to camelCase  
         (workflowMessage as any).progressIndicator.updateProgress({
           workflowId: data.workflow_id,
@@ -566,27 +566,27 @@ function setupWorkflowEventListeners(): void {
     console.log('📡 [IPC DEBUG] workflow-complete data keys:', Object.keys(data));
     console.log('📡 [IPC DEBUG] workflow-complete data.result keys:', data.result ? Object.keys(data.result) : 'no result');
     console.log('📡 [IPC DEBUG] workflow-complete has consolidated_summary:', !!(data.result && data.result.consolidated_summary));
-    
+
     // Add workflow-level deduplication to prevent duplicate processing
     const workflowId = data.workflow_id;
     const currentTime = Date.now();
     const workflowCompleteKey = `workflowComplete_${workflowId}`;
     const lastCompleteTime = parseInt(localStorage.getItem(workflowCompleteKey) || '0');
-    
+
     if (currentTime - lastCompleteTime < 2000) {
       console.log('🚨 [DUPLICATE FIX] Same workflow completed recently, skipping duplicate processing:', workflowId);
       return;
     }
-    
+
     // Store current completion time
     localStorage.setItem(workflowCompleteKey, currentTime.toString());
-    
+
     logExecutionFlow('workflow-complete-event', { workflowId: data.workflow_id, hasResult: !!data.result });
-    
+
     // Clear execution flag
     isWorkflowExecuting = false;
     console.log('[WorkflowProgress] Clearing execution flag on workflow completion');
-    
+
     // Find the workflow progress message in chat
     const workflowMessage = findWorkflowProgressInChat(data.workflow_id);
     if (workflowMessage && (workflowMessage as any).progressIndicator) {
@@ -598,26 +598,26 @@ function setupWorkflowEventListeners(): void {
     } else {
       console.warn('[WorkflowProgress] Workflow progress message not found for completion:', data.workflow_id);
     }
-    
+
     // Display results if available
     if (data.result) {
       console.log('🎯 [WORKFLOW-COMPLETE] About to call displayAgentResults from workflow-complete event');
-      
+
       // For workflow results, extract the inner data to normalize the structure
       let resultData = data.result;
       if (data.result.type === 'workflow' && data.result.data) {
         console.log('🎯 [WORKFLOW-COMPLETE] Extracting inner data from workflow result');
         resultData = data.result.data;
       }
-      
+
       displayAgentResults(resultData);
       console.log('🎯 [WORKFLOW-COMPLETE] displayAgentResults called successfully');
-      
+
       // Store memory if available - try multiple content sources
       if (memoryService && resultData) {
         let summary = '';
         let memoryQuery = data.workflow_id || 'Agent Query';
-        
+
         // Try different content sources in order of preference
         if (resultData.consolidated_summary) {
           summary = resultData.consolidated_summary;
@@ -633,15 +633,15 @@ function setupWorkflowEventListeners(): void {
           // Handle responses with response field
           summary = resultData.response;
         }
-        
+
         if (summary && summary.trim()) {
           console.log('[Memory] Storing agent result in memory from workflow-complete');
-          
+
           // Get current page info for memory context
           const webview = getActiveWebview();
           const url = webview?.src || '';
           const title = webview?.getTitle ? webview.getTitle() : '';
-          
+
           storeInMemory(url, memoryQuery, summary, title);
         } else {
           console.log('[Memory] No suitable content found for memory storage in workflow-complete');
@@ -654,11 +654,11 @@ function setupWorkflowEventListeners(): void {
 
   window.electronAPI.onWorkflowError((data: any) => {
     console.log('📡 [IPC DEBUG] workflow-error event received:', data);
-    
+
     // Clear execution flag
     isWorkflowExecuting = false;
     console.log('[WorkflowProgress] Clearing execution flag on workflow error');
-    
+
     // Find the workflow progress message in chat
     const workflowMessage = findWorkflowProgressInChat(data.workflow_id || 'unknown');
     if (workflowMessage && (workflowMessage as any).progressIndicator) {
@@ -832,17 +832,17 @@ function setupEventListeners(): void {
   ipcRenderer.on('menu-new-tab-with-url', (event, url) => {
     createNewTab(url);
   });
-  
+
   ipcRenderer.on('menu-close-tab', () => {
     if (activeTabId) {
       closeTab(activeTabId);
     }
   });
-  
+
   ipcRenderer.on('menu-show-history', () => {
     showHistoryPage();
   });
-  
+
   ipcRenderer.on('menu-reload', () => {
     const webview = getActiveWebview();
     if (webview && isWebviewReady(webview)) {
@@ -853,7 +853,7 @@ function setupEventListeners(): void {
       }
     }
   });
-  
+
   ipcRenderer.on('menu-go-back', () => {
     const webview = getActiveWebview();
     if (webview && isWebviewReady(webview)) {
@@ -866,7 +866,7 @@ function setupEventListeners(): void {
       }
     }
   });
-  
+
   ipcRenderer.on('menu-go-forward', () => {
     const webview = getActiveWebview();
     if (webview && isWebviewReady(webview)) {
@@ -911,23 +911,23 @@ function setupEventListeners(): void {
 // Function to open settings page and navigate to a specific section
 function openSettingsToSection(sectionId: string): void {
   console.log('[Settings Menu] Opening settings to section:', sectionId);
-  
+
   // Create the settings URL with anchor
   const settingsUrl = `file://browzer-settings#${sectionId}`;
   console.log('[Settings Menu] Settings URL with anchor:', settingsUrl);
-  
+
   // Check if there's already a settings tab open with any URL starting with file://browzer-settings
   const existingSettingsTab = tabs.find(tab => tab.url.startsWith('file://browzer-settings'));
-  
+
   if (existingSettingsTab) {
     console.log('[Settings Menu] Found existing settings tab, updating URL to:', settingsUrl);
-    
+
     // Update the existing tab's URL to include the new anchor
     existingSettingsTab.url = settingsUrl;
-    
+
     // Switch to the existing tab
     selectTab(existingSettingsTab.id);
-    
+
     // Update the webview src to navigate to the anchored URL
     const webview = document.getElementById(existingSettingsTab.id) as any;
     if (webview) {
@@ -936,14 +936,14 @@ function openSettingsToSection(sectionId: string): void {
       console.log('[Settings Menu] Updating webview src from', currentSrc, 'to', newSrc);
       webview.setAttribute('src', newSrc);
     }
-    
+
     return;
   }
-  
+
   // Create a new tab with the anchored settings URL
   console.log('[Settings Menu] Creating new settings tab with URL:', settingsUrl);
   const tabId = createNewTab(settingsUrl);
-  
+
   if (tabId) {
     console.log('[Settings Menu] Successfully created settings tab:', tabId);
   }
@@ -952,11 +952,11 @@ function openSettingsToSection(sectionId: string): void {
 function setupGlobalErrorHandler(): void {
   window.addEventListener('error', (event) => {
     console.error('Global error caught:', event.error);
-    
+
     if (event.error && event.error.stack) {
       console.error('Error stack:', event.error.stack);
     }
-    
+
     try {
       showToast('Error: ' + (event.error ? event.error.message : 'Unknown error'));
     } catch (e) {
@@ -980,7 +980,7 @@ function navigateToUrl(): void {
   // If it looks like a search query rather than a URL, use Google search
   if (!url.includes('.') || url.includes(' ')) {
     url = 'https://www.google.com/search?q=' + encodeURIComponent(url);
-  } 
+  }
   // Add https:// if missing
   else if (!url.startsWith('http://') && !url.startsWith('https://')) {
     url = 'https://' + url;
@@ -1021,11 +1021,11 @@ function updateNavigationButtons(): void {
 function isWebviewReady(webview: any): boolean {
   try {
     // Check if webview is properly attached to DOM and ready
-    return webview && 
-           webview.nodeType === Node.ELEMENT_NODE &&
-           webview.parentNode &&
-           typeof webview.canGoBack === 'function' &&
-           webview.getWebContentsId !== undefined;
+    return webview &&
+      webview.nodeType === Node.ELEMENT_NODE &&
+      webview.parentNode &&
+      typeof webview.canGoBack === 'function' &&
+      webview.getWebContentsId !== undefined;
   } catch (error) {
     return false;
   }
@@ -1040,17 +1040,17 @@ function getActiveWebview(): any {
 
 function cycleTab(direction: number): void {
   if (tabs.length <= 1) return;
-  
+
   const currentIndex = tabs.findIndex(tab => tab.id === activeTabId);
   if (currentIndex === -1) return;
-  
+
   let newIndex = currentIndex + direction;
   if (newIndex >= tabs.length) {
     newIndex = 0;
   } else if (newIndex < 0) {
     newIndex = tabs.length - 1;
   }
-  
+
   selectTab(tabs[newIndex].id);
 }
 
@@ -1061,10 +1061,10 @@ function showToast(message: string, type: string = 'info'): void {
     toast.id = 'toast';
     document.body.appendChild(toast);
   }
-  
+
   toast.textContent = message;
   toast.className = `toast ${type} show`;
-  
+
   setTimeout(() => {
     toast!.className = 'toast';
   }, 3000);
@@ -1074,7 +1074,7 @@ function showToast(message: string, type: string = 'info'): void {
 
 function restoreTabs(): void {
   console.log('Attempting to restore tabs');
-  
+
   if (!tabsContainer || !webviewsContainer) {
     console.error('Cannot restore tabs: containers not found');
     setTimeout(() => {
@@ -1082,7 +1082,7 @@ function restoreTabs(): void {
     }, 100);
     return;
   }
-  
+
   try {
     const savedTabsJSON = localStorage.getItem(SAVED_TABS_KEY);
     if (savedTabsJSON) {
@@ -1096,16 +1096,16 @@ function restoreTabs(): void {
         createNewTab();
         return;
       }
-      
+
       if (savedTabs && savedTabs.length > 0) {
         tabs = [];
         tabsContainer.innerHTML = '';
         webviewsContainer.innerHTML = '';
-        
+
         console.log(`Attempting to restore ${savedTabs.length} tabs`);
-        
+
         let restoredCount = 0;
-        
+
         for (const tab of savedTabs) {
           try {
             if ((tab as any).url) {
@@ -1116,9 +1116,9 @@ function restoreTabs(): void {
             console.error(`Failed to restore tab:`, tabErr);
           }
         }
-        
+
         console.log(`Successfully restored ${restoredCount} out of ${savedTabs.length} tabs`);
-        
+
         if (restoredCount > 0) {
           return;
         }
@@ -1127,7 +1127,7 @@ function restoreTabs(): void {
   } catch (err) {
     console.error('Error in restoreTabs:', err);
   }
-  
+
   console.log('Creating default tab as fallback');
   createNewTab();
 }
@@ -1142,27 +1142,27 @@ function createNewTab(url: string = NEW_TAB_URL): string | null {
     console.error('Cannot create tab: containers not found');
     return null;
   }
-  
+
   const tabId = 'tab-' + Date.now();
   const webviewId = 'webview-' + tabId;
-  
+
   try {
     // Create tab element
     const tab = document.createElement('div');
     tab.className = 'tab';
     tab.id = tabId;
     tab.dataset.webviewId = webviewId;
-    
+
     const initialTitle = url.startsWith('file://browzer-settings') ? '⚙️ Browzer Settings' : 'New Tab';
     tab.innerHTML = `
       <div class="tab-favicon"></div>
       <span class="tab-title">${initialTitle}</span>
       <button class="tab-close">×</button>
     `;
-    
+
     tabsContainer.appendChild(tab);
     console.log('Tab element created:', tabId);
-    
+
     // Create webview
     const webview = document.createElement('webview') as any;
     webview.id = webviewId;
@@ -1170,10 +1170,10 @@ function createNewTab(url: string = NEW_TAB_URL): string | null {
 
     // Configure webview
     configureWebview(webview, url);
-    
+
     webviewsContainer.appendChild(webview);
     console.log('Webview element created:', webviewId);
-    
+
     // Add to tabs array
     const newTab = {
       id: tabId,
@@ -1185,25 +1185,25 @@ function createNewTab(url: string = NEW_TAB_URL): string | null {
       currentHistoryIndex: -1,
       isProblematicSite: isProblematicSite(url)
     };
-    
+
     tabs.push(newTab);
-    
+
     // Setup event listeners
     setupTabEventListeners(tab, tabId);
     setupWebviewEvents(webview);
-    
+
     // Select this tab
     selectTab(tabId);
-    
+
     // Save tab state
     saveTabs();
-    
-      console.log('🚨 [NEW TAB DEBUG] Tab created successfully:', tabId);
-  return tabId;
-} catch (error) {
-  console.error('Error creating tab:', error);
-  return null;
-}
+
+    console.log('🚨 [NEW TAB DEBUG] Tab created successfully:', tabId);
+    return tabId;
+  } catch (error) {
+    console.error('Error creating tab:', error);
+    return null;
+  }
 }
 
 function createNewTabWithoutSelection(url: string = NEW_TAB_URL): string | null {
@@ -1211,26 +1211,26 @@ function createNewTabWithoutSelection(url: string = NEW_TAB_URL): string | null 
     console.error('Cannot create tab: containers not found');
     return null;
   }
-  
+
   const tabId = 'tab-' + Date.now();
   const webviewId = 'webview-' + tabId;
-  
+
   try {
     // Create tab element
     const tab = document.createElement('div');
     tab.className = 'tab';
     tab.id = tabId;
     tab.dataset.webviewId = webviewId;
-    
+
     tab.innerHTML = `
       <div class="tab-favicon"></div>
       <span class="tab-title">New Tab</span>
       <button class="tab-close">×</button>
     `;
-    
+
     tabsContainer.appendChild(tab);
     console.log('Tab element created (no selection):', tabId);
-    
+
     // Create webview
     const webview = document.createElement('webview') as any;
     webview.id = webviewId;
@@ -1238,10 +1238,10 @@ function createNewTabWithoutSelection(url: string = NEW_TAB_URL): string | null 
 
     // Configure webview
     configureWebview(webview, url);
-    
+
     webviewsContainer.appendChild(webview);
     console.log('Webview element created (no selection):', webviewId);
-    
+
     // Add to tabs array
     const newTab = {
       id: tabId,
@@ -1253,18 +1253,18 @@ function createNewTabWithoutSelection(url: string = NEW_TAB_URL): string | null 
       currentHistoryIndex: -1,
       isProblematicSite: isProblematicSite(url)
     };
-    
+
     tabs.push(newTab);
-    
+
     // Setup event listeners
     setupTabEventListeners(tab, tabId);
     setupWebviewEvents(webview);
-    
+
     // DON'T select this tab immediately - that's the key difference
-    
+
     // Save tab state
     saveTabs();
-    
+
     console.log('🚨 [NEW TAB DEBUG] Tab created successfully (no selection):', tabId);
     return tabId;
   } catch (error) {
@@ -1276,13 +1276,13 @@ function createNewTabWithoutSelection(url: string = NEW_TAB_URL): string | null 
 // Get ad blocker CSS rules and inject them into webviews
 function injectAdBlockCSS(webview: any): void {
   if (!webview) return;
-  
+
   // Check if webview is valid and ready
   if (!webview.id || !webview.src || webview.src === 'about:blank') {
     console.log('[AdBlock] Skipping CSS injection - webview not ready');
     return;
   }
-  
+
   try {
     // Request CSS rules from main process
     ipcRenderer.invoke('get-adblock-css').then((cssRules: string) => {
@@ -1290,13 +1290,13 @@ function injectAdBlockCSS(webview: any): void {
         console.log('[AdBlock] No CSS rules to inject');
         return;
       }
-      
+
       // Check if webview is still valid before injection
       if (!webview || !webview.executeJavaScript) {
         console.log('[AdBlock] Webview no longer valid, skipping injection');
         return;
       }
-      
+
       const script = `
         (function() {
           try {
@@ -1325,17 +1325,17 @@ function injectAdBlockCSS(webview: any): void {
           }
         })();
       `;
-      
+
       // Execute with error handling
       webview.executeJavaScript(script).catch((error: any) => {
         // Don't log errors for destroyed webviews or navigation
-        if (!error.message.includes('Object has been destroyed') && 
-            !error.message.includes('navigation') &&
-            !error.message.includes('Script failed to execute')) {
+        if (!error.message.includes('Object has been destroyed') &&
+          !error.message.includes('navigation') &&
+          !error.message.includes('Script failed to execute')) {
           console.warn('[AdBlock] Script execution failed:', error.message);
         }
       });
-      
+
     }).catch((error: any) => {
       console.error('[AdBlock] Error getting CSS rules:', error);
     });
@@ -1347,7 +1347,7 @@ function injectAdBlockCSS(webview: any): void {
 function configureWebview(webview: any, url: string): void {
   const needsSpecialSettings = url && isProblematicSite(url);
   const isLocalSettingsPage = url && url.startsWith('file://') && url.includes('settings-');
-  
+
   // Enhanced user agent that's more likely to be accepted by OAuth providers
   const userAgent = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36 Edg/121.0.0.0';
 
@@ -1389,7 +1389,7 @@ function configureWebview(webview: any, url: string): void {
   webview.setAttribute('plugins', 'true');
   webview.setAttribute('disableguestresize', 'false');
   webview.setAttribute('preload', '');
-  
+
   // Enhanced partition strategy for better authentication support
   if (isLocalSettingsPage) {
     webview.setAttribute('partition', 'persist:settings-session');
@@ -1405,7 +1405,7 @@ function configureWebview(webview: any, url: string): void {
       url.includes('signin') ||
       url.includes('login')
     );
-    
+
     if (isAuthFlow) {
       webview.setAttribute('partition', 'persist:auth-session');
     } else {
@@ -1421,11 +1421,11 @@ function configureWebview(webview: any, url: string): void {
     // For packaged apps, use getResourcePath instead of cwd
     window.electronAPI.getResourcePath('src/renderer/settings.html').then(settingsFilePath => {
       const settingsPath = `file://${settingsFilePath}`;
-      
+
       // If there's an anchor in the URL, append it to the settings path
       const anchorIndex = url.indexOf('#');
       const finalUrl = anchorIndex !== -1 ? settingsPath + url.substring(anchorIndex) : settingsPath;
-      
+
       console.log('[Settings] Resource path:', settingsFilePath);
       console.log('[Settings] Settings URL:', finalUrl);
       webview.setAttribute('src', finalUrl);
@@ -1439,7 +1439,7 @@ function configureWebview(webview: any, url: string): void {
       console.log('[Settings] Fallback to CWD path:', finalUrl);
       webview.setAttribute('src', finalUrl);
     });
-    
+
     // Set up settings page communication after it loads
     webview.addEventListener('dom-ready', () => {
       setupSettingsPageCommunication(webview);
@@ -1451,7 +1451,7 @@ function configureWebview(webview: any, url: string): void {
 
 function setupSettingsPageCommunication(webview: any): void {
   console.log('Setting up settings page communication');
-  
+
   // Send initial settings data after page loads
   setTimeout(async () => {
     await injectSettingsDataAndHandlers(webview);
@@ -1467,7 +1467,7 @@ async function injectSettingsDataAndHandlers(webview: any): Promise<void> {
 
   try {
     console.log('Injecting settings data and handlers');
-    
+
     // Get current settings data
     let adBlockStats = { blockedDomains: 0, cssRules: 0, filterRules: 0 };
     try {
@@ -1626,7 +1626,7 @@ function setupSettingsActionListener(webview: any): void {
           return [];
         })();
       `);
-      
+
       if (result && result.length > 0) {
         for (const { action, data } of result) {
           await handleSettingsRequest(webview, action, data);
@@ -1653,39 +1653,39 @@ async function handleSettingsRequest(webview: any, action: string, data: any): P
       localStorage.setItem(`${provider}_api_key`, apiKey);
       showToast(`${provider.charAt(0).toUpperCase() + provider.slice(1)} API key saved!`, 'success');
       break;
-      
+
     case 'toggle-sidebar':
       localStorage.setItem('sidebarEnabled', data.enabled.toString());
       applySidebarLayout(data.enabled);
       showToast(`Sidebar ${data.enabled ? 'enabled' : 'disabled'}`, 'success');
       break;
-      
+
     case 'toggle-adblock':
       localStorage.setItem('adBlockEnabled', data.enabled.toString());
       showToast(`Ad blocking ${data.enabled ? 'enabled' : 'disabled'}`, 'success');
       break;
-      
+
     case 'save-homepage':
       localStorage.setItem('homepage', data.homepage);
       showToast('Homepage saved!', 'success');
       break;
-      
+
     case 'save-cache-settings':
       localStorage.setItem('maxCacheSize', data.maxCacheSize);
       localStorage.setItem('autoCleanupEnabled', data.autoCleanupEnabled.toString());
       showToast('Cache settings saved!', 'success');
       break;
-      
-        case 'clear-memory':
+
+    case 'clear-memory':
       localStorage.removeItem(MEMORY_KEY);
       showToast('Memory cleared successfully.', 'success');
       await refreshSettingsPage(webview);
       break;
-      
+
     case 'export-memory':
       exportMemory();
       break;
-      
+
     case 'import-memory':
       if (data.memories && Array.isArray(data.memories)) {
         localStorage.setItem(MEMORY_KEY, JSON.stringify(data.memories));
@@ -1695,12 +1695,12 @@ async function handleSettingsRequest(webview: any, action: string, data: any): P
         showToast('Invalid memory file format.', 'error');
       }
       break;
-      
+
     case 'add-blocked-domain':
       // Add blocked domain logic
       showToast(`Domain ${data.domain} blocked`, 'success');
       break;
-      
+
     case 'add-allowed-domain':
       // Add allowed domain logic  
       showToast(`Domain ${data.domain} allowed`, 'success');
@@ -1720,14 +1720,14 @@ function exportMemory(): void {
     const memory = localStorage.getItem(MEMORY_KEY) || '[]';
     const blob = new Blob([memory], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
-    
+
     const a = document.createElement('a');
     a.href = url;
     a.download = `browzer-memory-${new Date().toISOString().split('T')[0]}.json`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
-    
+
     URL.revokeObjectURL(url);
     showToast('Memory exported successfully.', 'success');
   } catch (e) {
@@ -1742,7 +1742,7 @@ function setupTabEventListeners(tab: HTMLElement, tabId: string): void {
       selectTab(tabId);
     }
   });
-  
+
   const closeBtn = tab.querySelector('.tab-close');
   if (closeBtn) {
     closeBtn.addEventListener('click', (e) => {
@@ -1758,7 +1758,7 @@ function setupTabEventListeners(tab: HTMLElement, tabId: string): void {
 
 function setupWebviewEvents(webview: any): void {
   console.log('Setting up webview events for webview:', webview.id);
-  
+
   webview.addEventListener('did-start-loading', () => {
     const webviewId = webview.id;
     if (webviewId) {
@@ -1785,19 +1785,19 @@ function setupWebviewEvents(webview: any): void {
         }
       }
     }
-    
+
     // Update URL bar, title, and navigation buttons
     if (urlBar) {
       urlBar.value = webview.src;
     }
-    
+
     updateTabTitle(webview, webview.getTitle());
     updateNavigationButtons();
-    
+
     // Track page visit in history - THIS IS THE KEY FIX!
     const url = webview.src;
     const webviewTitle = webview.getTitle();
-    
+
     // Debug logging for successful page loads
     console.log('🔍 [HISTORY TRACK] did-finish-load event:', {
       webviewId: webview.id,
@@ -1805,14 +1805,14 @@ function setupWebviewEvents(webview: any): void {
       webviewTitle: webviewTitle,
       isAboutBlank: url === 'about:blank'
     });
-    
+
     if (url && url !== 'about:blank' && !url.startsWith('file://')) {
       console.log('✅ [HISTORY TRACK] Tracking page visit with webview title:', { url, title: webviewTitle });
       trackPageVisit(url, webviewTitle);
     } else {
       console.log('❌ [HISTORY TRACK] Skipping page visit - invalid URL or about:blank');
     }
-    
+
     // Update favicon after loading completes
     setTimeout(() => {
       if (webview && webview.src) {
@@ -1834,17 +1834,17 @@ function setupWebviewEvents(webview: any): void {
         }
       }
     }
-    
+
     // Update URL bar on failed loads (but don't track in history)
     if (urlBar) {
       urlBar.value = webview.src;
     }
-    
+
     updateTabTitle(webview, webview.getTitle());
     updateNavigationButtons();
-    
+
     console.log('❌ [HISTORY TRACK] Page failed to load, not tracking in history:', webview.src);
-    
+
     // DISABLED: Auto-summarize feature commented out
     /*
     // Auto-summarize if enabled
@@ -1897,7 +1897,7 @@ function setupWebviewEvents(webview: any): void {
 
   webview.addEventListener('new-window', (e: any) => {
     console.log('New window requested:', e.url);
-    
+
     // For OAuth flows, open in the same tab to maintain session
     const isAuthFlow = e.url && (
       e.url.includes('accounts.google.com') ||
@@ -1908,7 +1908,7 @@ function setupWebviewEvents(webview: any): void {
       e.url.includes('login') ||
       e.url.includes('authorize')
     );
-    
+
     if (isAuthFlow) {
       console.log('OAuth flow detected, navigating in current tab');
       webview.src = e.url;
@@ -1956,7 +1956,7 @@ function setupWebviewEvents(webview: any): void {
       e.validatedURL.includes('oauth') ||
       e.validatedURL.includes('auth')
     );
-    
+
     if (!isAuthPage && e.errorCode === -105) { // NAME_NOT_RESOLVED
       console.log('DNS resolution failed, this is normal for some sites');
     }
@@ -1972,7 +1972,7 @@ function setupWebviewEvents(webview: any): void {
   // Handle permission requests (important for OAuth flows)
   webview.addEventListener('permission-request', (e: any) => {
     console.log('Permission requested:', e.permission, 'for:', webview.src);
-    
+
     // Allow certain permissions for OAuth flows
     const allowedPermissions = ['geolocation', 'notifications', 'camera', 'microphone'];
     const isAuthSite = webview.src && (
@@ -1981,7 +1981,7 @@ function setupWebviewEvents(webview: any): void {
       webview.src.includes('github.com') ||
       webview.src.includes('oauth')
     );
-    
+
     if (isAuthSite && allowedPermissions.includes(e.permission)) {
       e.request.allow();
     } else if (e.permission === 'notifications') {
@@ -1991,7 +1991,7 @@ function setupWebviewEvents(webview: any): void {
       e.request.deny();
     }
   });
-  
+
   // Listen for IPC messages from webview (for Add to Chat)
   webview.addEventListener('ipc-message', (event: any) => {
     console.log('🔍 [IPC DEBUG] Received ipc-message from webview:', webview.id, 'channel:', event.channel, 'args:', event.args);
@@ -2030,14 +2030,14 @@ function setupWebviewEvents(webview: any): void {
 
 function selectTab(tabId: string): void {
   console.log('Selecting tab:', tabId);
-  
+
   try {
     if (!tabs || tabs.length === 0) {
       console.log('No tabs available, creating a new one');
       createNewTab();
       return;
     }
-    
+
     const tabIndex = tabs.findIndex(tab => tab.id === tabId);
     if (tabIndex === -1) {
       console.error('Tab not found in tabs array:', tabId);
@@ -2048,29 +2048,29 @@ function selectTab(tabId: string): void {
       }
       return;
     }
-    
+
     // Update active tab
     activeTabId = tabId;
     tabs.forEach(tab => tab.isActive = tab.id === tabId);
-    
+
     // Update UI
     document.querySelectorAll('.tab').forEach(tab => {
       tab.classList.remove('active');
     });
-    
+
     const tabElement = document.getElementById(tabId);
     if (tabElement) {
       tabElement.classList.add('active');
     }
-    
+
     // Show corresponding webview or extension store
     document.querySelectorAll('.webview').forEach((view: any) => {
       view.style.display = 'none';
       view.classList.remove('active');
     });
-    
+
     const tab = tabs[tabIndex];
-    
+
     // Check if this tab is showing the extension store
     if (tab.url === 'file://browzer-store') {
       // Show extension store instead of webview
@@ -2079,11 +2079,11 @@ function selectTab(tabId: string): void {
         storeContainer.style.display = 'block';
         storeContainer.classList.add('active');
       }
-      
+
       if (urlBar) {
         urlBar.value = 'file://browzer-store';
       }
-      
+
       // Disable navigation buttons for the store
       if (backBtn) backBtn.disabled = true;
       if (forwardBtn) forwardBtn.disabled = true;
@@ -2094,25 +2094,25 @@ function selectTab(tabId: string): void {
         storeContainer.style.display = 'none';
         storeContainer.classList.remove('active');
       }
-      
+
       // Show regular webview
       const webview = document.getElementById(tab.webviewId) as any;
-      
+
       if (webview) {
         webview.style.display = 'flex';
         webview.classList.add('active');
-        
+
         if (urlBar) {
           urlBar.value = webview.src;
         }
       }
     }
-    
+
     updateNavigationButtons();
-    
+
     // Auto-save when tab selection changes
     autoSaveTabs();
-    
+
     console.log('Tab selection complete:', tabId);
   } catch (error) {
     console.error('Error in selectTab:', error);
@@ -2121,35 +2121,35 @@ function selectTab(tabId: string): void {
 
 function closeTab(tabId: string): void {
   console.log('closeTab called for tab:', tabId);
-  
+
   if (tabs.length <= 1) {
     console.log('Preventing closing the last tab, creating a new one instead');
     createNewTab();
     return;
   }
-  
+
   try {
     const tabIndex = tabs.findIndex(tab => tab.id === tabId);
     if (tabIndex === -1) {
       console.error('Tab not found in tabs array:', tabId);
       return;
     }
-    
+
     const webviewId = tabs[tabIndex].webviewId;
     const webview = document.getElementById(webviewId);
     const tabElement = document.getElementById(tabId);
-    
+
     if (tabElement) tabElement.remove();
     if (webview) webview.remove();
-    
+
     tabs.splice(tabIndex, 1);
     console.log('Tab removed from tabs array, remaining tabs:', tabs.length);
-    
+
     if (activeTabId === tabId) {
       const newTabId = tabs[Math.max(0, tabIndex - 1)].id;
       selectTab(newTabId);
     }
-    
+
     saveTabs();
     console.log('Tab closed successfully:', tabId);
   } catch (error) {
@@ -2164,13 +2164,13 @@ function updateTabTitle(webview: any, title: string): void {
       const tabTitle = document.querySelector(`#${tabId} .tab-title`);
       if (tabTitle) {
         let pageTitle = title || webview.getTitle() || 'New Tab';
-        
+
         // Special handling for settings page
         const tab = tabs.find(t => t.id === tabId);
         if (tab && tab.url.startsWith('file://browzer-settings')) {
           pageTitle = '⚙️ Browzer Settings';
         }
-        
+
         tabTitle.textContent = pageTitle;
         saveTabs();
       }
@@ -2202,29 +2202,29 @@ function getTabIdFromWebview(webviewId: string): string | null {
 
 function trackPageVisit(url: string, title: string): void {
   console.log('📝 [TRACK PAGE] Called with:', { url, title });
-  
+
   if (!url || url === 'about:blank') {
     console.log('❌ [TRACK PAGE] Rejected - empty URL or about:blank');
     return;
   }
-  
+
   // Skip internal pages and invalid URLs
-  if (url.startsWith('file://') || 
-      url.includes('localhost') ||
-      url.startsWith('chrome://') ||
-      url.startsWith('edge://') ||
-      !title ||
-      title.length === 0 ||
-      title === 'New Tab') {
+  if (url.startsWith('file://') ||
+    url.includes('localhost') ||
+    url.startsWith('chrome://') ||
+    url.startsWith('edge://') ||
+    !title ||
+    title.length === 0 ||
+    title === 'New Tab') {
     console.log('❌ [TRACK PAGE] Rejected - internal/invalid page:', { url, title });
     return;
   }
-  
+
   console.log('✅ [TRACK PAGE] Processing valid page visit');
-  
+
   try {
     let history = JSON.parse(localStorage.getItem(HISTORY_STORAGE_KEY) || '[]');
-    
+
     const visit = {
       id: Date.now(),
       url: url,
@@ -2232,29 +2232,29 @@ function trackPageVisit(url: string, title: string): void {
       visitDate: new Date(),
       timestamp: Date.now()
     };
-    
-    console.log('🔍 [HISTORY DEBUG] Tracking page visit:', { 
-      title: visit.title, 
-      url: visit.url.substring(0, 50) + (visit.url.length > 50 ? '...' : '') 
+
+    console.log('🔍 [HISTORY DEBUG] Tracking page visit:', {
+      title: visit.title,
+      url: visit.url.substring(0, 50) + (visit.url.length > 50 ? '...' : '')
     });
-    
+
     // Remove any existing entry for this URL to avoid duplicates
     const beforeLength = history.length;
     history = history.filter((item: any) => item.url !== url);
     const afterLength = history.length;
-    
+
     if (beforeLength !== afterLength) {
       console.log('🔍 [HISTORY DEBUG] Removed duplicate entry for URL');
     }
-    
+
     // Add new visit to the beginning
     history.unshift(visit);
-    
+
     // Keep only the most recent 1000 visits
     if (history.length > 1000) {
       history = history.slice(0, 1000);
     }
-    
+
     localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(history));
     console.log('🔍 [HISTORY DEBUG] Total history items after update:', history.length);
   } catch (error) {
@@ -2294,7 +2294,7 @@ function setupExtensionsPanel(): void {
 
   // Memory management
   updateMemoryCount();
-  
+
   const clearMemoryBtn = document.getElementById('clearMemoryBtn');
   if (clearMemoryBtn) {
     clearMemoryBtn.addEventListener('click', () => {
@@ -2314,12 +2314,12 @@ function setupExtensionsPanel(): void {
         const memory = localStorage.getItem(MEMORY_KEY) || '[]';
         const blob = new Blob([memory], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
-        
+
         const a = document.createElement('a');
         a.href = url;
         a.download = 'ai_memory_export.json';
         a.click();
-        
+
         URL.revokeObjectURL(url);
         showToast('Memory exported successfully.', 'success');
       } catch (e) {
@@ -2336,17 +2336,17 @@ function setupExtensionsPanel(): void {
       const input = document.createElement('input');
       input.type = 'file';
       input.accept = '.json';
-      
+
       input.onchange = (e) => {
         const file = (e.target as HTMLInputElement).files?.[0];
         if (!file) return;
-        
+
         const reader = new FileReader();
         reader.onload = (event) => {
           try {
             const contents = event.target?.result as string;
             const parsed = JSON.parse(contents);
-            
+
             if (Array.isArray(parsed)) {
               localStorage.setItem(MEMORY_KEY, contents);
               updateMemoryCount();
@@ -2358,10 +2358,10 @@ function setupExtensionsPanel(): void {
             showToast('Error parsing memory file: ' + (e as Error).message, 'error');
           }
         };
-        
+
         reader.readAsText(file);
       };
-      
+
       input.click();
     });
   }
@@ -2372,7 +2372,7 @@ function setupExtensionsPanel(): void {
     // Load saved sidebar preference for UI display
     const savedSidebarEnabled = localStorage.getItem('sidebarEnabled') === 'true';
     sidebarEnabledCheckbox.checked = savedSidebarEnabled;
-    
+
     // Handle sidebar toggle (layout is already applied on startup)
     sidebarEnabledCheckbox.addEventListener('change', () => {
       const isEnabled = sidebarEnabledCheckbox.checked;
@@ -2384,7 +2384,7 @@ function setupExtensionsPanel(): void {
 
   // Clear any stuck loading states IMMEDIATELY
   clearStuckLoadingStates();
-  
+
   // Set up periodic cleanup every 5 seconds to prevent stuck states
   setInterval(() => {
     clearStuckLoadingStates();
@@ -2393,11 +2393,11 @@ function setupExtensionsPanel(): void {
   // Homepage setting
   const homepageInput = document.getElementById('homepageInput') as HTMLInputElement;
   const saveHomepageBtn = document.getElementById('saveHomepageBtn');
-  
+
   if (homepageInput) {
     homepageInput.value = homepageUrl;
   }
-  
+
   if (saveHomepageBtn && homepageInput) {
     saveHomepageBtn.addEventListener('click', () => {
       let url = homepageInput.value.trim();
@@ -2458,9 +2458,9 @@ function setupAgentControls(): void {
           <button id="sendMessageBtn" class="chat-send-btn">Send</button>
         </div>
       `;
-      
+
       chatInputContainer.appendChild(chatInputArea);
-      
+
       // Set up chat input handlers
       setupChatInputHandlers();
     } else {
@@ -2474,12 +2474,12 @@ function setupAgentControls(): void {
 // Dedicated function to set up chat input event handlers
 function setupChatInputHandlers(): void {
   console.log('[setupChatInputHandlers] Setting up chat input handlers...');
-  
+
   // Wait a bit for DOM to be ready
   setTimeout(() => {
     const sendButton = document.getElementById('sendMessageBtn');
     const chatInput = document.getElementById('chatInput') as HTMLInputElement;
-    
+
     if (!sendButton || !chatInput) {
       console.error('[setupChatInputHandlers] Chat input elements not found');
       console.log('[setupChatInputHandlers] Available elements:', {
@@ -2490,33 +2490,33 @@ function setupChatInputHandlers(): void {
       });
       return;
     }
-    
+
     console.log('[setupChatInputHandlers] Found chat elements, attaching handlers...');
-    
+
     // Check if handlers are already set up
     if ((sendButton as any).hasHandlers) {
       console.log('[setupChatInputHandlers] Handlers already set up, skipping');
       return;
     }
-    
+
     const sendMessage = () => {
       const message = chatInput.value.trim();
       if (message) {
         console.log('[sendMessage] Sending message:', message);
         console.log('[sendMessage] Selected contexts:', selectedWebpageContexts.length);
-        
+
         // Get selected mode
         const selectedMode = document.querySelector('input[name="chatMode"]:checked') as HTMLInputElement;
         const mode = selectedMode ? selectedMode.value : 'ask';
         console.log('[sendMessage] Selected mode:', mode);
-        
+
         // Update placeholder based on mode
         const placeholderText = mode === 'do' ? 'Enter a task to perform...' : 'Ask a follow-up question...';
         chatInput.placeholder = placeholderText;
-        
+
         // Add user message to chat
         addMessageToChat('user', message);
-        
+
         // Process the message based on mode
         if (mode === 'do') {
           // Use DoAgent for automation tasks
@@ -2532,13 +2532,13 @@ function setupChatInputHandlers(): void {
             processFollowupQuestion(message);
           }
         }
-        
+
         // Clear input and contexts
         chatInput.value = '';
         clearAllWebpageContexts();
       }
     };
-    
+
     // Add click handler to send button
     sendButton.addEventListener('click', (e) => {
       console.log('[setupChatInputHandlers] Send button clicked');
@@ -2546,7 +2546,7 @@ function setupChatInputHandlers(): void {
       hideMentionDropdown(); // Hide dropdown before sending
       sendMessage();
     });
-    
+
     // Enhanced keypress handler for Enter key and @ mentions
     chatInput.addEventListener('keypress', (e) => {
       if (e.key === 'Enter') {
@@ -2556,17 +2556,17 @@ function setupChatInputHandlers(): void {
         sendMessage();
       }
     });
-    
+
     // Add input handler for @ mention detection
     chatInput.addEventListener('input', (e) => {
       const value = chatInput.value;
       const cursorPosition = chatInput.selectionStart || 0;
-      
+
       console.log('🚨 [INPUT HANDLER] Input event triggered');
       console.log('🚨 [INPUT HANDLER] Value:', value);
       console.log('🚨 [INPUT HANDLER] Cursor position:', cursorPosition);
       console.log('🚨 [INPUT HANDLER] Character at cursor-1:', value.charAt(cursorPosition - 1));
-      
+
       // Check if user just typed @
       if (value.charAt(cursorPosition - 1) === '@') {
         console.log('🔍 [MENTION] @ detected, showing dropdown');
@@ -2583,17 +2583,17 @@ function setupChatInputHandlers(): void {
         }
       }
     });
-    
+
     // Hide dropdown when clicking outside
     document.addEventListener('click', (e) => {
       const target = e.target as HTMLElement;
-      if (isShowingMentionDropdown && 
-          !target.closest('#mentionDropdown') && 
-          target !== chatInput) {
+      if (isShowingMentionDropdown &&
+        !target.closest('#mentionDropdown') &&
+        target !== chatInput) {
         hideMentionDropdown();
       }
     });
-    
+
     // Add keyboard navigation for dropdown
     chatInput.addEventListener('keydown', (e) => {
       if (isShowingMentionDropdown) {
@@ -2602,7 +2602,7 @@ function setupChatInputHandlers(): void {
           const items = dropdown.querySelectorAll('.mention-item:not(.empty)');
           const currentActive = dropdown.querySelector('.mention-item.active');
           let activeIndex = currentActive ? Array.from(items).indexOf(currentActive) : -1;
-          
+
           if (e.key === 'ArrowDown') {
             e.preventDefault();
             activeIndex = Math.min(activeIndex + 1, items.length - 1);
@@ -2618,7 +2618,7 @@ function setupChatInputHandlers(): void {
             hideMentionDropdown();
             return;
           }
-          
+
           // Update active state
           items.forEach((item, index) => {
             item.classList.toggle('active', index === activeIndex);
@@ -2626,7 +2626,7 @@ function setupChatInputHandlers(): void {
         }
       }
     });
-    
+
     // Add blur handler to hide dropdown
     chatInput.addEventListener('blur', (e) => {
       // Small delay to allow clicking on dropdown items
@@ -2636,23 +2636,23 @@ function setupChatInputHandlers(): void {
         }
       }, 150);
     });
-    
+
     // Add mode change handler
     const modeRadios = document.querySelectorAll('input[name="chatMode"]');
     modeRadios.forEach(radio => {
       radio.addEventListener('change', (e) => {
         const mode = (e.target as HTMLInputElement).value;
         console.log('[setupChatInputHandlers] Mode changed to:', mode);
-        
+
         // Update placeholder based on mode
         const placeholderText = mode === 'do' ? 'Enter a task to perform...' : 'Ask a follow-up question...';
         chatInput.placeholder = placeholderText;
       });
     });
-    
+
     // Mark as having handlers
     (sendButton as any).hasHandlers = true;
-    
+
     console.log('[setupChatInputHandlers] Enhanced chat input handlers with @ mentions set up successfully');
   }, 100); // Small delay to ensure DOM is ready
 }
@@ -2661,27 +2661,27 @@ function setupChatInputHandlers(): void {
 
 function showHistoryPage(): void {
   console.log('=== SHOW HISTORY PAGE CALLED ===');
-  
+
   try {
     const webview = getActiveWebview();
     console.log('Active webview found:', !!webview);
-    
+
     if (webview) {
       // For packaged apps, use getResourcePath instead of cwd
       window.electronAPI.getResourcePath('src/renderer/history.html').then(historyFilePath => {
         const historyURL = `file://${historyFilePath}`;
         console.log('[History] Resource path:', historyFilePath);
         console.log('[History] Loading history URL:', historyURL);
-        
+
         const historyLoadHandler = () => {
-        console.log('History page loaded, injecting data...');
-        
-        try {
-          const historyData = localStorage.getItem(HISTORY_STORAGE_KEY) || '[]';
-          const parsedHistory = JSON.parse(historyData);
-          console.log('Injecting history data:', parsedHistory.length, 'items');
-          
-          webview.executeJavaScript(`
+          console.log('History page loaded, injecting data...');
+
+          try {
+            const historyData = localStorage.getItem(HISTORY_STORAGE_KEY) || '[]';
+            const parsedHistory = JSON.parse(historyData);
+            console.log('Injecting history data:', parsedHistory.length, 'items');
+
+            webview.executeJavaScript(`
             if (window.receiveHistoryData) {
               window.receiveHistoryData(${historyData});
             } else {
@@ -2694,18 +2694,18 @@ function showHistoryPage(): void {
               }, 500);
             }
           `).then(() => {
-            console.log('History data injected successfully');
-          }).catch((err: any) => {
-            console.error('Error injecting history data:', err);
-          });
-          
-        } catch (error) {
-          console.error('Error preparing history data:', error);
-        }
-        
-        webview.removeEventListener('did-finish-load', historyLoadHandler);
-      };
-        
+              console.log('History data injected successfully');
+            }).catch((err: any) => {
+              console.error('Error injecting history data:', err);
+            });
+
+          } catch (error) {
+            console.error('Error preparing history data:', error);
+          }
+
+          webview.removeEventListener('did-finish-load', historyLoadHandler);
+        };
+
         webview.addEventListener('did-finish-load', historyLoadHandler);
         webview.loadURL(historyURL);
         console.log('History URL loaded successfully');
@@ -2715,15 +2715,15 @@ function showHistoryPage(): void {
         const cwd = window.electronAPI.cwd();
         const historyURL = `file://${window.electronAPI.path.join(cwd, 'src/renderer/history.html')}`;
         console.log('[History] Fallback to CWD path:', historyURL);
-        
+
         const historyLoadHandler = () => {
           console.log('History page loaded, injecting data...');
-          
+
           try {
             const historyData = localStorage.getItem(HISTORY_STORAGE_KEY) || '[]';
             const parsedHistory = JSON.parse(historyData);
             console.log('Injecting history data:', parsedHistory.length, 'items');
-            
+
             webview.executeJavaScript(`
               if (window.receiveHistoryData) {
                 window.receiveHistoryData(${historyData});
@@ -2741,19 +2741,19 @@ function showHistoryPage(): void {
             }).catch((err: any) => {
               console.error('Error injecting history data:', err);
             });
-            
+
           } catch (error) {
             console.error('Error preparing history data:', error);
           }
-          
+
           webview.removeEventListener('did-finish-load', historyLoadHandler);
         };
-        
+
         webview.addEventListener('did-finish-load', historyLoadHandler);
         webview.loadURL(historyURL);
         console.log('History URL loaded successfully (fallback)');
       });
-      
+
     } else {
       console.log('No active webview, creating new tab...');
       // For packaged apps, use getResourcePath instead of cwd
@@ -2788,7 +2788,7 @@ function getExtensionDisplayName(extensionId: string): string {
     'research-agent': 'Research Agent',
     'conversation-agent': 'Conversation Agent'
   };
-  
+
   return displayNames[extensionId] || extensionId.replace('-', ' ').replace(/\b\w/g, l => l.toUpperCase());
 }
 
@@ -2805,9 +2805,9 @@ function getBrowserApiKeys(): Record<string, string> {
   // Only include Anthropic API key - other providers commented out
   const providers = ['anthropic']; // ['openai', 'anthropic', 'perplexity', 'chutes'];
   const apiKeys: Record<string, string> = {};
-  
+
   console.log('[DEBUG] Reading API keys from localStorage...');
-  
+
   providers.forEach(provider => {
     const key = localStorage.getItem(`${provider}_api_key`);
     if (key) {
@@ -2819,7 +2819,7 @@ function getBrowserApiKeys(): Record<string, string> {
       console.log(`[DEBUG] ${provider}: NO KEY FOUND`);
     }
   });
-  
+
   console.log(`[DEBUG] Total API keys found: ${Object.keys(apiKeys).length}`);
   return apiKeys;
 }
@@ -2829,15 +2829,15 @@ async function syncApiKeysWithBackend(): Promise<void> {
   try {
     const apiKeys = getBrowserApiKeys();
     const provider = getSelectedProvider();
-    
+
     console.log('[DEBUG] Syncing API keys with backend...');
-    
+
     // Update API keys in ExtensionManager
     await ipcRenderer.invoke('update-browser-api-keys', apiKeys);
-    
+
     // Update selected provider in ExtensionManager
     await ipcRenderer.invoke('update-selected-provider', provider);
-    
+
     console.log('[DEBUG] Successfully synced API keys and provider with backend');
   } catch (error) {
     console.error('[DEBUG] Failed to sync API keys with backend:', error);
@@ -2848,46 +2848,46 @@ async function executeAgent(): Promise<void> {
   logExecutionFlow('executeAgent', { isWorkflowExecuting });
   console.log('🎯 [EXECUTION DEBUG] executeAgent() called');
   console.log('🎯 [EXECUTION DEBUG] isWorkflowExecuting:', isWorkflowExecuting);
-  
+
   // Prevent manual execution when workflow is already executing (from chat input)
   if (isWorkflowExecuting) {
     console.log('[executeAgent] Workflow already executing (likely from chat input), skipping Run Agent button execution');
     showToast('Workflow already in progress...', 'info');
     return;
   }
-  
+
   // Set execution flag immediately to prevent race conditions
   isWorkflowExecuting = true;
   console.log('[executeAgent] Setting execution flag at start to prevent conflicts');
-  
+
   try {
     console.log("executeAgent function called - running agent");
-    
+
     // Sync API keys with backend first
     await syncApiKeysWithBackend();
-    
+
     const webview = getActiveWebview();
     if (!webview) {
       console.error('No webview available for agent execution');
       showToast('No active tab found', 'error');
       return;
     }
-    
+
     // Model selector commented out - always use 'anthropic'
     // if (!modelSelector) {
     //   console.error('Model selector not found');
     //   showToast('Model selector not found', 'error');
     //   return;
     // }
-    
+
     const provider = 'anthropic'; // Always use Anthropic Claude
     const apiKey = localStorage.getItem(`${provider}_api_key`);
-    
+
     if (!apiKey) {
       showToast(`Please configure your ${provider} API key in the Extensions panel first.`, 'error');
       return;
     }
-    
+
     const url = webview.src || '';
     let title = '';
     try {
@@ -2896,9 +2896,9 @@ async function executeAgent(): Promise<void> {
       console.error('Error getting title:', e);
       title = '';
     }
-    
+
     if (!title) title = url;
-    
+
     let query = url;
     if (url.includes('google.com/search')) {
       try {
@@ -2913,34 +2913,34 @@ async function executeAgent(): Promise<void> {
     } else {
       query = title;
     }
-    
+
     // Global duplicate check - prevent same query from any path
     if (isQueryRecentlyProcessed(query)) {
       console.log('🚨 [GLOBAL DUPLICATE FIX] Duplicate query detected in executeAgent, aborting');
       showToast('This query was just processed, skipping duplicate', 'info');
       return;
     }
-    
+
     // Prevent duplicate processing of the same query within 5 seconds
     const currentTime = Date.now();
     const queryKey = `${query}-${url}`;
     const lastProcessedKey = `lastProcessed_${queryKey}`;
     const lastProcessedTime = parseInt(localStorage.getItem(lastProcessedKey) || '0');
-    
+
     if (currentTime - lastProcessedTime < 5000) {
       console.log('[executeAgent] Same query processed recently, skipping duplicate execution');
       showToast('This query was just processed, skipping duplicate execution', 'info');
       return;
     }
-    
+
     // Store current processing time
     localStorage.setItem(lastProcessedKey, currentTime.toString());
-    
+
     // Ensure chat input area exists in the fixed container
     const chatInputContainer = document.querySelector('.chat-input-container');
     if (chatInputContainer && !document.querySelector('.chat-input-area')) {
       console.log('[executeAgent] Chat input area not found, creating one');
-      
+
       const chatInputArea = document.createElement('div');
       chatInputArea.className = 'chat-input-area';
       chatInputArea.innerHTML = `
@@ -2961,30 +2961,30 @@ async function executeAgent(): Promise<void> {
           <button id="sendMessageBtn" class="chat-send-btn">Send</button>
         </div>
       `;
-      
+
       chatInputContainer.appendChild(chatInputArea);
       setupChatInputHandlers();
     }
 
     // Show loading
     addMessageToChat('assistant', '<div class="loading">Analyzing request and routing to appropriate agents...</div>');
-    
+
     // Extract page content
     const pageContent = await extractPageContent(webview);
-    
+
     // Debug: Log that HTML content is being passed to agent
     console.log('🔍 [CONTENT DEBUG] Page content extracted for agent:');
     console.log('📄 Title:', pageContent.title);
     console.log('📝 Text content length:', pageContent.content?.length || 0, 'chars');
     console.log('🌐 HTML content length:', pageContent.html?.length || 0, 'chars');
     console.log('🔗 HTML includes links:', pageContent.html?.includes('<a ') || false);
-    
+
     // Route request to appropriate extension or workflow
     console.log('Routing extension request for query:', query);
-    
+
     const routingResult = await ipcRenderer.invoke('route-extension-request', query);
     console.log('Agent execution routing result:', routingResult);
-    
+
     // Clear loading indicators first  
     const loadingMessages = document.querySelectorAll('.loading');
     loadingMessages.forEach(message => {
@@ -2993,15 +2993,15 @@ async function executeAgent(): Promise<void> {
         parentMessage.remove();
       }
     });
-    
+
     // Check if routing returned a workflow result - execute asynchronously with progress
     if (routingResult.type === 'workflow') {
       console.log('Agent execution detected workflow - using async execution with progress events');
-      
+
       // Don't initialize workflow progress indicator here - let the backend workflow-start event handle it
       // This fixes the workflow ID mismatch issue where frontend uses Date.now() but backend uses uuid4()
       console.log('Workflow detected - progress will be initialized by backend workflow-start event');
-      
+
       // Execute workflow asynchronously - progress events will update the UI
       // The workflow-complete event listener will call displayAgentResults when done
       try {
@@ -3019,10 +3019,10 @@ async function executeAgent(): Promise<void> {
           query,
           data: workflowData
         });
-        
+
         // Workflow execution is async - progress events will handle UI updates
         // The workflow-complete event listener will call displayAgentResults when done
-        
+
       } catch (workflowError) {
         console.error('Workflow execution failed:', workflowError);
         addMessageToChat('assistant', `Workflow execution failed: ${(workflowError as Error).message}`);
@@ -3031,17 +3031,17 @@ async function executeAgent(): Promise<void> {
         isWorkflowExecuting = false;
         console.log('[executeAgent] Workflow execution finished, clearing execution flag');
       }
-      
+
       return; // Don't execute single extension path
     }
-    
+
     // Handle single extension result
     const extensionId = routingResult.extensionId;
     if (!extensionId) {
       addMessageToChat('assistant', 'Error: No extension available for your request');
       return;
     }
-    
+
     // Create progress indicator for single extension execution
     const singleExtensionWorkflowData = {
       workflowId: `single-${Date.now()}`,
@@ -3051,14 +3051,14 @@ async function executeAgent(): Promise<void> {
         extensionName: getExtensionDisplayName(extensionId)
       }]
     };
-    
+
     console.log('🚨 [SINGLE EXTENSION DEBUG] Creating progress indicator for single extension:', singleExtensionWorkflowData);
     const progressElement = addWorkflowProgressToChat(singleExtensionWorkflowData);
-    
+
     // Start the progress indicator
     if (progressElement && (progressElement as any).progressIndicator) {
       (progressElement as any).progressIndicator.startWorkflow(singleExtensionWorkflowData);
-      
+
       // Update to running state
       (progressElement as any).progressIndicator.updateProgress({
         workflowId: singleExtensionWorkflowData.workflowId,
@@ -3066,7 +3066,7 @@ async function executeAgent(): Promise<void> {
         stepStatus: 'running'
       });
     }
-    
+
     const action = 'process_page';
     const data = {
       query,
@@ -3075,12 +3075,12 @@ async function executeAgent(): Promise<void> {
       conversationHistory: await buildConversationHistoryWithMemories(url, query),
       mcpTools: await getMcpToolsForAsk() // Add MCP tools to extension data
     };
-    
+
     console.log(`Executing single extension: ${extensionId} (confidence: ${routingResult.confidence}) with action: ${action}`);
     console.log(`Routing reason: ${routingResult.reason}`);
-    
+
     const startTime = Date.now();
-    
+
     try {
       const result = await ipcRenderer.invoke('execute-python-extension', {
         extensionId,
@@ -3089,12 +3089,12 @@ async function executeAgent(): Promise<void> {
         browserApiKeys: getBrowserApiKeys(),
         selectedProvider: provider
       });
-      
+
       const endTime = Date.now();
       const executionTime = endTime - startTime;
-      
+
       console.log(`Agent result received:`, result);
-      
+
       // Complete the progress indicator
       if (progressElement && (progressElement as any).progressIndicator) {
         (progressElement as any).progressIndicator.updateProgress({
@@ -3103,57 +3103,57 @@ async function executeAgent(): Promise<void> {
           stepStatus: 'completed',
           stepResult: result.data
         });
-        
+
         (progressElement as any).progressIndicator.completeWorkflow({
           workflowId: singleExtensionWorkflowData.workflowId,
           result: result.data
         });
       }
-      
+
       if (result.success === false) {
         addMessageToChat('assistant', `Error: ${result.error}`);
       } else {
-              console.log('Calling displayAgentResults with:', result.data);
-      displayAgentResults(result.data);
-      
-      // Store memory if available - try multiple content sources
-      if (memoryService && result.data) {
-        let summary = '';
-        let memoryQuery = query || 'Agent Query';
-        
-        // Try different content sources in order of preference
-        if (result.data.consolidated_summary) {
-          summary = result.data.consolidated_summary;
-        } else if (result.data.summaries && result.data.summaries.length > 0) {
-          summary = result.data.summaries.map((s: any) => `${s.title}: ${s.summary}`).join('\n\n');
-        } else if (typeof result.data === 'string') {
-          // Handle simple string responses
-          summary = result.data;
-        } else if (result.data.content) {
-          // Handle responses with content field
-          summary = result.data.content;
-        } else if (result.data.response) {
-          // Handle responses with response field
-          summary = result.data.response;
+        console.log('Calling displayAgentResults with:', result.data);
+        displayAgentResults(result.data);
+
+        // Store memory if available - try multiple content sources
+        if (memoryService && result.data) {
+          let summary = '';
+          let memoryQuery = query || 'Agent Query';
+
+          // Try different content sources in order of preference
+          if (result.data.consolidated_summary) {
+            summary = result.data.consolidated_summary;
+          } else if (result.data.summaries && result.data.summaries.length > 0) {
+            summary = result.data.summaries.map((s: any) => `${s.title}: ${s.summary}`).join('\n\n');
+          } else if (typeof result.data === 'string') {
+            // Handle simple string responses
+            summary = result.data;
+          } else if (result.data.content) {
+            // Handle responses with content field
+            summary = result.data.content;
+          } else if (result.data.response) {
+            // Handle responses with response field
+            summary = result.data.response;
+          }
+
+          if (summary && summary.trim()) {
+            console.log('[Memory] Storing agent result in memory from workflow-complete');
+
+            // Get current page info for memory context
+            const webview = getActiveWebview();
+            const url = webview?.src || '';
+            const title = webview?.getTitle ? webview.getTitle() : '';
+
+            storeInMemory(url, memoryQuery, summary, title);
+          } else {
+            console.log('[Memory] No suitable content found for memory storage in workflow-complete');
+          }
         }
-        
-        if (summary && summary.trim()) {
-          console.log('[Memory] Storing agent result in memory from workflow-complete');
-          
-          // Get current page info for memory context
-          const webview = getActiveWebview();
-          const url = webview?.src || '';
-          const title = webview?.getTitle ? webview.getTitle() : '';
-          
-          storeInMemory(url, memoryQuery, summary, title);
-        } else {
-          console.log('[Memory] No suitable content found for memory storage in workflow-complete');
-        }
-      }
       }
     } catch (extensionError) {
       console.error('Single extension execution failed:', extensionError);
-      
+
       // Mark progress as failed
       if (progressElement && (progressElement as any).progressIndicator) {
         (progressElement as any).progressIndicator.handleWorkflowError({
@@ -3161,12 +3161,12 @@ async function executeAgent(): Promise<void> {
           error: (extensionError as Error).message
         });
       }
-      
+
       addMessageToChat('assistant', `Error: ${(extensionError as Error).message}`);
     }
   } catch (error) {
     console.error("Agent execution error:", error);
-    
+
     // Remove any loading indicators
     const loadingMessages = document.querySelectorAll('.loading');
     loadingMessages.forEach(message => {
@@ -3175,7 +3175,7 @@ async function executeAgent(): Promise<void> {
         parentMessage.remove();
       }
     });
-    
+
     addMessageToChat('assistant', `Error: ${(error as Error).message}`);
   } finally {
     // Always clear the execution flag when function ends
@@ -3230,7 +3230,7 @@ async function extractPageContent(webview: any): Promise<any> {
         }
       })();
     `;
-    
+
     const result = await webview.executeJavaScript(extractScript);
     return result || { title: '', description: '', content: '', html: '', url: '' };
   } catch (error) {
@@ -3242,91 +3242,91 @@ async function extractPageContent(webview: any): Promise<any> {
 // Simple markdown to HTML converter
 function markdownToHtml(text: string): string {
   let html = text;
-  
+
   // Escape HTML entities in content first, but preserve already-escaped entities
   html = html.replace(/&(?!amp;|lt;|gt;|quot;|#39;|#x27;)/g, '&amp;');
-  
+
   // Headers (must come before other processing)
   html = html.replace(/^### (.*$)/gm, '<h3>$1</h3>');
   html = html.replace(/^## (.*$)/gm, '<h2>$1</h2>');
   html = html.replace(/^# (.*$)/gm, '<h1>$1</h1>');
-  
+
   // Bold text
   html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
-  
+
   // Italic text
   html = html.replace(/\*(.*?)\*/g, '<em>$1</em>');
-  
+
   // Code blocks (triple backticks)
   html = html.replace(/```([\s\S]*?)```/g, '<pre><code>$1</code></pre>');
-  
+
   // Inline code (single backticks)
   html = html.replace(/`([^`]*)`/g, '<code>$1</code>');
-  
+
   // Lists - simple approach
   // Convert unordered list items
   html = html.replace(/^\* (.*$)/gm, '<li>$1</li>');
   html = html.replace(/^\- (.*$)/gm, '<li>$1</li>');
-  
+
   // Convert ordered list items  
   html = html.replace(/^\d+\. (.*$)/gm, '<li>$1</li>');
-  
+
   // Wrap consecutive <li> elements in appropriate list tags
-  html = html.replace(/(<li>.*<\/li>)/gms, function(match) {
+  html = html.replace(/(<li>.*<\/li>)/gms, function (match) {
     return '<ul>' + match + '</ul>';
   });
-  
+
   // Convert line breaks to <br> but preserve existing HTML structure
   // Don't add <br> before closing tags, opening tags, or after certain elements
   html = html.replace(/\n(?!<\/|<h|<ul|<ol|<li|<pre|<blockquote|<strong|<em)/g, '<br>');
-  
+
   // Links [text](url)
   html = html.replace(/\[([^\]]*)\]\(([^\)]*)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
-  
+
   // Blockquotes
   html = html.replace(/^> (.*$)/gm, '<blockquote>$1</blockquote>');
-  
+
   return html;
 }
 
 function addMessageToChat(role: string, content: string, timing?: number): void {
   try {
     let chatContainer = document.getElementById('chatContainer');
-    
+
     // Create chat container if it doesn't exist
     if (!chatContainer) {
       console.log('[addMessageToChat] Chat container not found, creating one');
-      
+
       const agentResults = document.getElementById('agentResults');
       if (!agentResults) {
         console.error('[addMessageToChat] agentResults container not found');
         return;
       }
-      
+
       // Remove any existing welcome containers when starting chat
       const existingWelcome = agentResults.querySelector('.welcome-container');
       if (existingWelcome) {
         existingWelcome.remove();
       }
-      
+
       // Create the chat container
       chatContainer = document.createElement('div');
       chatContainer.id = 'chatContainer';
       chatContainer.className = 'chat-container';
       agentResults.appendChild(chatContainer);
-      
+
       console.log('[addMessageToChat] Chat container created successfully');
     }
-    
+
     if (!content || content.trim() === '') {
       console.log('[addMessageToChat] Empty content, skipping');
       return;
     }
-    
+
     console.log(`[addMessageToChat] Adding ${role} message:`, content.substring(0, 100) + '...');
-    
+
     const messageDiv = document.createElement('div');
-    
+
     if (role === 'context') {
       // Special handling for context messages
       messageDiv.className = 'chat-message context-message';
@@ -3341,13 +3341,13 @@ function addMessageToChat(role: string, content: string, timing?: number): void 
       messageDiv.className = 'chat-message assistant-message';
       messageDiv.dataset.role = 'assistant';
       messageDiv.dataset.timestamp = new Date().toISOString();
-      
+
       // Check if content contains only a loading indicator
       const isLoading = content.includes('class="loading"') && !content.replace(/<div class="loading">.*?<\/div>/g, '').trim();
-      
+
       // Apply markdown processing for assistant messages (but not for loading indicators)
       const processedContent = isLoading ? content : markdownToHtml(content);
-      
+
       if (timing && !isLoading) {
         messageDiv.innerHTML = `
           <div class="timing-info">
@@ -3361,17 +3361,17 @@ function addMessageToChat(role: string, content: string, timing?: number): void 
         messageDiv.innerHTML = `<div class="message-content">${processedContent}</div>`;
       }
     }
-    
+
     chatContainer.appendChild(messageDiv);
-    
+
     // Scroll to bottom with smooth behavior
     chatContainer.scrollTop = chatContainer.scrollHeight;
-    
+
     // Ensure chat input area exists in the fixed container
     const chatInputContainer = document.querySelector('.chat-input-container');
     if (chatInputContainer && !document.querySelector('.chat-input-area')) {
       console.log('[addMessageToChat] Creating chat input area for follow-up questions');
-      
+
       const chatInputArea = document.createElement('div');
       chatInputArea.className = 'chat-input-area';
       chatInputArea.innerHTML = `
@@ -3392,11 +3392,11 @@ function addMessageToChat(role: string, content: string, timing?: number): void 
           <button id="sendMessageBtn" class="chat-send-btn">Send</button>
         </div>
       `;
-      
+
       chatInputContainer.appendChild(chatInputArea);
       setupChatInputHandlers();
     }
-    
+
     console.log(`[addMessageToChat] Message added successfully. Total messages: ${chatContainer.children.length}`);
   } catch (error) {
     console.error('[addMessageToChat] Error adding message to chat:', error);
@@ -3409,12 +3409,12 @@ function displayAgentResults(data: any): void {
   // Track this call for duplicate debugging
   trackDisplayAgentResultsCall(data);
   logExecutionFlow('displayAgentResults', { hasData: !!data, hasConsolidatedSummary: !!(data && data.consolidated_summary) });
-  
+
   try {
     console.log('[displayAgentResults] Called with data:', data);
     console.log('[displayAgentResults] Data type:', typeof data);
     console.log('[displayAgentResults] Data keys:', data ? Object.keys(data) : 'null');
-    
+
     if (!data) {
       console.log('[displayAgentResults] No data - showing fallback message');
       addMessageToChat('assistant', 'No data received from agent');
@@ -3426,12 +3426,12 @@ function displayAgentResults(data: any): void {
     const contentHash = JSON.stringify(data).substring(0, 200); // Use first 200 chars as hash
     const lastDisplayKey = `lastDisplayed_${contentHash}`;
     const lastDisplayTime = parseInt(localStorage.getItem(lastDisplayKey) || '0');
-    
+
     if (currentTime - lastDisplayTime < 3000) {
       console.log('[displayAgentResults] Same content displayed recently, skipping duplicate');
       return;
     }
-    
+
     // Store current display time
     localStorage.setItem(lastDisplayKey, currentTime.toString());
 
@@ -3439,7 +3439,7 @@ function displayAgentResults(data: any): void {
     console.log('[displayAgentResults] Has consolidated_summary:', !!data.consolidated_summary);
     console.log('[displayAgentResults] Has summaries:', !!data.summaries);
     console.log('[displayAgentResults] Summaries length:', data.summaries ? data.summaries.length : 'none');
-    
+
     if (data.consolidated_summary) {
       console.log('[displayAgentResults] Displaying consolidated summary:', data.consolidated_summary.substring(0, 100) + '...');
       addMessageToChat('assistant', data.consolidated_summary, data.generation_time);
@@ -3454,13 +3454,13 @@ function displayAgentResults(data: any): void {
       addMessageToChat('assistant', 'No relevant information found.', data.generation_time);
       console.log('[displayAgentResults] Fallback message displayed successfully');
     }
-    
+
     console.log('[displayAgentResults] Function completed successfully');
   } catch (error) {
     console.error('[displayAgentResults] Error in displayAgentResults:', error);
     console.error('[displayAgentResults] Error stack:', error instanceof Error ? error.stack : 'No stack trace');
     console.error('[displayAgentResults] Data that caused error:', data);
-    
+
     // Fallback error handling - show user-friendly message
     try {
       addMessageToChat('assistant', 'Error displaying results: ' + (error instanceof Error ? error.message : 'Unknown error'));
@@ -3472,40 +3472,40 @@ function displayAgentResults(data: any): void {
 
 async function processFollowupQuestion(question: string): Promise<void> {
   console.log('[processFollowupQuestion] Processing question:', question);
-  
+
   // Global duplicate check - prevent same query from any path
   if (isQueryRecentlyProcessed(question)) {
     console.log('🚨 [GLOBAL DUPLICATE FIX] Duplicate query detected in processFollowupQuestion, aborting');
     showToast('This question was just processed, skipping duplicate', 'info');
     return;
   }
-  
+
   // Prevent follow-up execution when workflow is already executing
   if (isWorkflowExecuting) {
     console.log('[processFollowupQuestion] Workflow already executing, skipping follow-up execution');
     showToast('Workflow already in progress...', 'info');
     return;
   }
-  
+
   // Prevent duplicate processing of the same query within 5 seconds
   const currentTime = Date.now();
   const queryKey = `followup_${question}`;
   const lastProcessedKey = `lastProcessed_${queryKey}`;
   const lastProcessedTime = parseInt(localStorage.getItem(lastProcessedKey) || '0');
-  
+
   if (currentTime - lastProcessedTime < 5000) {
     console.log('[processFollowupQuestion] Same question processed recently, skipping duplicate execution');
     showToast('This question was just processed, skipping duplicate execution', 'info');
     return;
   }
-  
+
   // Store current processing time
   localStorage.setItem(lastProcessedKey, currentTime.toString());
-  
+
   // Set execution flag immediately to prevent race conditions
   isWorkflowExecuting = true;
   console.log('[processFollowupQuestion] Setting execution flag at start to prevent conflicts');
-  
+
   // Helper function to clear loading indicators
   const clearLoadingIndicators = () => {
     const loadingMessages = document.querySelectorAll('.loading');
@@ -3516,10 +3516,10 @@ async function processFollowupQuestion(question: string): Promise<void> {
       }
     });
   };
-  
+
   try {
     addMessageToChat('assistant', '<div class="loading">Processing your question...</div>');
-    
+
     // Model selector commented out - always use 'anthropic'
     // if (!modelSelector) {
     //   clearLoadingIndicators();
@@ -3527,17 +3527,17 @@ async function processFollowupQuestion(question: string): Promise<void> {
     //   isWorkflowExecuting = false; // Clear flag if not proceeding
     //   return;
     // }
-    
+
     const provider = 'anthropic'; // Always use Anthropic Claude
     const apiKey = localStorage.getItem(`${provider}_api_key`);
-    
+
     if (!apiKey) {
       clearLoadingIndicators();
       addMessageToChat('assistant', 'Please configure your API key in the Extensions panel.');
       isWorkflowExecuting = false; // Clear flag if not proceeding
       return;
     }
-    
+
     const activeWebview = getActiveWebview();
     if (!activeWebview) {
       clearLoadingIndicators();
@@ -3545,39 +3545,39 @@ async function processFollowupQuestion(question: string): Promise<void> {
       isWorkflowExecuting = false; // Clear flag if not proceeding
       return;
     }
-    
+
     const currentUrl = activeWebview.src || '';
     console.log('[processFollowupQuestion] Extracting page content from:', currentUrl);
     const pageContent = await extractPageContent(activeWebview);
-    
+
     // Debug: Log that HTML content is being passed to agent
     console.log('🔍 [CONTENT DEBUG] Page content extracted for agent:');
     console.log('📄 Title:', pageContent.title);
     console.log('📝 Text content length:', pageContent.content?.length || 0, 'chars');
     console.log('🌐 HTML content length:', pageContent.html?.length || 0, 'chars');
     console.log('🔗 HTML includes links:', pageContent.html?.includes('<a ') || false);
-    
+
     // Route request to appropriate extension for question answering
     const questionRequest = `Answer this question about the page: ${question}`;
-    
+
     console.log('[processFollowupQuestion] Routing extension request...');
     const routingResult = await ipcRenderer.invoke('route-extension-request', questionRequest);
     console.log('Follow-up question routing result:', routingResult);
     console.log('Follow-up question routing result type:', routingResult.type);
     console.log('Follow-up question workflow_info:', routingResult.workflow_info);
-    
+
     // Clear loading indicators first
     clearLoadingIndicators();
-    
+
     // Check if routing returned a workflow result
     if (routingResult.type === 'workflow') {
       console.log('Follow-up question received workflow result:', routingResult);
       console.log('workflowProgressIndicator exists:', !!workflowProgressIndicator);
-      
+
       // Don't initialize workflow progress indicator here - let the backend workflow-start event handle it
       // This fixes the workflow ID mismatch issue where frontend uses Date.now() but backend uses uuid4()
       console.log('Follow-up workflow detected - progress will be initialized by backend workflow-start event');
-      
+
       // Execute workflow asynchronously with progress events
       try {
         const workflowData = {
@@ -3594,25 +3594,25 @@ async function processFollowupQuestion(question: string): Promise<void> {
           query: questionRequest,
           data: workflowData
         });
-        
+
         // Workflow execution is async - progress events will handle UI updates
         // The workflow-complete event listener will call displayAgentResults when done
-        
+
       } catch (workflowError) {
         console.error('Follow-up workflow execution failed:', workflowError);
         addMessageToChat('assistant', `Workflow execution failed: ${(workflowError as Error).message}`);
       }
-      
+
       return; // Don't execute single extension path
     }
-    
+
     // Handle single extension result
     const extensionId = routingResult.extensionId;
     if (!extensionId) {
       addMessageToChat('assistant', 'Error: No extension available to answer your question');
       return;
     }
-    
+
     // Create progress indicator for single extension execution
     const singleExtensionWorkflowData = {
       workflowId: `followup-single-${Date.now()}`,
@@ -3622,14 +3622,14 @@ async function processFollowupQuestion(question: string): Promise<void> {
         extensionName: getExtensionDisplayName(extensionId)
       }]
     };
-    
+
     console.log('🚨 [FOLLOWUP DEBUG] Creating progress indicator for single extension:', singleExtensionWorkflowData);
     const progressElement = addWorkflowProgressToChat(singleExtensionWorkflowData);
-    
+
     // Start the progress indicator
     if (progressElement && (progressElement as any).progressIndicator) {
       (progressElement as any).progressIndicator.startWorkflow(singleExtensionWorkflowData);
-      
+
       // Update to running state
       (progressElement as any).progressIndicator.updateProgress({
         workflowId: singleExtensionWorkflowData.workflowId,
@@ -3637,7 +3637,7 @@ async function processFollowupQuestion(question: string): Promise<void> {
         stepStatus: 'running'
       });
     }
-    
+
     const action = 'process_page';
     const data = {
       query: questionRequest,
@@ -3646,12 +3646,12 @@ async function processFollowupQuestion(question: string): Promise<void> {
       conversationHistory: await buildConversationHistoryWithMemories(currentUrl, question),
       mcpTools: await getMcpToolsForAsk() // Add MCP tools to extension data
     };
-    
+
     console.log(`[processFollowupQuestion] Executing extension with question: ${extensionId} (confidence: ${routingResult.confidence}) - ${question}`);
     console.log(`Follow-up routing reason: ${routingResult.reason}`);
-    
+
     const startTime = Date.now();
-    
+
     try {
       const result = await ipcRenderer.invoke('execute-python-extension', {
         extensionId,
@@ -3660,12 +3660,12 @@ async function processFollowupQuestion(question: string): Promise<void> {
         browserApiKeys: getBrowserApiKeys(),
         selectedProvider: provider
       });
-      
+
       const endTime = Date.now();
       const executionTime = endTime - startTime;
-      
+
       console.log('[processFollowupQuestion] Extension result received:', result);
-      
+
       // Complete the progress indicator
       if (progressElement && (progressElement as any).progressIndicator) {
         (progressElement as any).progressIndicator.updateProgress({
@@ -3674,25 +3674,25 @@ async function processFollowupQuestion(question: string): Promise<void> {
           stepStatus: 'completed',
           stepResult: result.data
         });
-        
+
         (progressElement as any).progressIndicator.completeWorkflow({
           workflowId: singleExtensionWorkflowData.workflowId,
           result: result.data
         });
       }
-      
+
       if (result.success === false) {
         addMessageToChat('assistant', `Error: ${result.error || 'Unknown error'}`);
         return;
       }
-      
+
       console.log('[processFollowupQuestion] Displaying results...');
       displayAgentResults(result.data);
-      
+
       // Store memory if available - try multiple content sources
       if (memoryService && result.data) {
         let summary = '';
-        
+
         // Try different content sources in order of preference
         if (result.data.consolidated_summary) {
           summary = result.data.consolidated_summary;
@@ -3708,15 +3708,15 @@ async function processFollowupQuestion(question: string): Promise<void> {
           // Handle responses with response field
           summary = result.data.response;
         }
-        
+
         if (summary && summary.trim()) {
           console.log('[Memory] Storing followup result in memory');
-          
+
           // Get current page info for memory context
           const webview = getActiveWebview();
           const url = webview?.src || '';
           const title = webview?.getTitle ? webview.getTitle() : '';
-          
+
           storeInMemory(url, question, summary, title);
         } else {
           console.log('[Memory] No suitable content found for memory storage in followup');
@@ -3724,7 +3724,7 @@ async function processFollowupQuestion(question: string): Promise<void> {
       }
     } catch (extensionError) {
       console.error('Follow-up extension execution failed:', extensionError);
-      
+
       // Mark progress as failed
       if (progressElement && (progressElement as any).progressIndicator) {
         (progressElement as any).progressIndicator.handleWorkflowError({
@@ -3732,15 +3732,15 @@ async function processFollowupQuestion(question: string): Promise<void> {
           error: (extensionError as Error).message
         });
       }
-      
+
       addMessageToChat('assistant', `Error: ${(extensionError as Error).message}`);
     }
   } catch (error) {
     console.error('Error in processFollowupQuestion:', error);
-    
+
     // Ensure loading indicators are cleared even on error
     clearLoadingIndicators();
-    
+
     addMessageToChat('assistant', `Error: ${(error as Error).message}`);
   } finally {
     // Always clear the execution flag when function ends
@@ -3752,18 +3752,18 @@ async function processFollowupQuestion(question: string): Promise<void> {
 async function processFollowupQuestionWithContexts(question: string, contexts: WebpageContext[]): Promise<void> {
   console.log('[processFollowupQuestionWithContexts] Processing question:', question);
   console.log('[processFollowupQuestionWithContexts] Contexts:', contexts.length);
-  
+
   // Prevent follow-up execution when workflow is already executing
   if (isWorkflowExecuting) {
     console.log('[processFollowupQuestionWithContexts] Workflow already executing, skipping follow-up execution');
     showToast('Workflow already in progress...', 'info');
     return;
   }
-  
+
   // Set execution flag immediately to prevent race conditions
   isWorkflowExecuting = true;
   console.log('[processFollowupQuestionWithContexts] Setting execution flag at start to prevent conflicts');
-  
+
   // Helper function to clear loading indicators
   const clearLoadingIndicators = () => {
     const loadingMessages = document.querySelectorAll('.loading');
@@ -3774,10 +3774,10 @@ async function processFollowupQuestionWithContexts(question: string, contexts: W
       }
     });
   };
-  
+
   try {
     addMessageToChat('assistant', '<div class="loading">Processing your question with webpage contexts...</div>');
-    
+
     // Model selector commented out - always use 'anthropic'
     // if (!modelSelector) {
     //   clearLoadingIndicators();
@@ -3785,17 +3785,17 @@ async function processFollowupQuestionWithContexts(question: string, contexts: W
     //   isWorkflowExecuting = false;
     //   return;
     // }
-    
+
     const provider = 'anthropic'; // Always use Anthropic Claude
     const apiKey = localStorage.getItem(`${provider}_api_key`);
-    
+
     if (!apiKey) {
       clearLoadingIndicators();
       addMessageToChat('assistant', 'Please configure your API key in the Extensions panel.');
       isWorkflowExecuting = false;
       return;
     }
-    
+
     const activeWebview = getActiveWebview();
     if (!activeWebview) {
       clearLoadingIndicators();
@@ -3803,11 +3803,11 @@ async function processFollowupQuestionWithContexts(question: string, contexts: W
       isWorkflowExecuting = false;
       return;
     }
-    
+
     const currentUrl = activeWebview.src || '';
     console.log('[processFollowupQuestionWithContexts] Extracting page content from:', currentUrl);
     const pageContent = await extractPageContent(activeWebview);
-    
+
     // Debug: Log enhanced content and contexts
     console.log('🔍 [CONTEXT DEBUG] Page content extracted for agent:');
     console.log('📄 Title:', pageContent.title);
@@ -3815,7 +3815,7 @@ async function processFollowupQuestionWithContexts(question: string, contexts: W
     console.log('🌐 HTML content length:', pageContent.html?.length || 0, 'chars');
     console.log('🔗 HTML includes links:', pageContent.html?.includes('<a ') || false);
     console.log('📋 Additional contexts:', contexts.length);
-    
+
     // Log each additional context in detail
     if (contexts.length > 0) {
       console.log('🔍 [CONTEXT DEBUG] Additional webpage contexts:');
@@ -3829,7 +3829,7 @@ async function processFollowupQuestionWithContexts(question: string, contexts: W
         console.log(`    Has actual content: ${(ctx.content?.content?.length || 0) > 50}`);
       }
     }
-    
+
     // Prepare enhanced page content with additional contexts
     const enhancedPageContent = {
       ...pageContent,
@@ -3839,7 +3839,7 @@ async function processFollowupQuestionWithContexts(question: string, contexts: W
         content: ctx.content || {}
       }))
     };
-    
+
     // Debug: Log the final enhanced page content structure
     console.log('🔍 [CONTEXT DEBUG] Enhanced page content structure:');
     console.log('  Current page content length:', enhancedPageContent.content?.length || 0);
@@ -3848,23 +3848,23 @@ async function processFollowupQuestionWithContexts(question: string, contexts: W
     enhancedPageContent.additionalContexts?.forEach((ctx: any, index: number) => {
       console.log(`  Additional context ${index + 1} content length:`, ctx.content?.content?.length || 0);
     });
-    
+
     // Route request to appropriate extension for question answering
     const questionRequest = `Answer this question using the current page and any provided webpage contexts: ${question}`;
-    
+
     console.log('[processFollowupQuestionWithContexts] Routing extension request...');
     const routingResult = await ipcRenderer.invoke('route-extension-request', questionRequest);
     console.log('Follow-up question with contexts routing result:', routingResult);
-    
+
     // Clear loading indicators first
     clearLoadingIndicators();
-    
+
     // Check if routing returned a workflow result
     if (routingResult.type === 'workflow') {
       console.log('Follow-up question with contexts received workflow result:', routingResult);
-      
+
       console.log('Follow-up workflow detected - progress will be initialized by backend workflow-start event');
-      
+
       // Execute workflow asynchronously with progress events
       try {
         const workflowData = {
@@ -3881,22 +3881,22 @@ async function processFollowupQuestionWithContexts(question: string, contexts: W
           query: questionRequest,
           data: workflowData
         });
-        
+
       } catch (workflowError) {
         console.error('Follow-up workflow with contexts execution failed:', workflowError);
         addMessageToChat('assistant', `Workflow execution failed: ${(workflowError as Error).message}`);
       }
-      
+
       return;
     }
-    
+
     // Handle single extension result
     const extensionId = routingResult.extensionId;
     if (!extensionId) {
       addMessageToChat('assistant', 'Error: No extension available to answer your question');
       return;
     }
-    
+
     // Create progress indicator for single extension execution
     const singleExtensionWorkflowData = {
       workflowId: `followup-context-single-${Date.now()}`,
@@ -3906,14 +3906,14 @@ async function processFollowupQuestionWithContexts(question: string, contexts: W
         extensionName: getExtensionDisplayName(extensionId)
       }]
     };
-    
+
     console.log('🚨 [FOLLOWUP CONTEXT DEBUG] Creating progress indicator for single extension:', singleExtensionWorkflowData);
     const progressElement = addWorkflowProgressToChat(singleExtensionWorkflowData);
-    
+
     // Start the progress indicator
     if (progressElement && (progressElement as any).progressIndicator) {
       (progressElement as any).progressIndicator.startWorkflow(singleExtensionWorkflowData);
-      
+
       // Update to running state
       (progressElement as any).progressIndicator.updateProgress({
         workflowId: singleExtensionWorkflowData.workflowId,
@@ -3921,7 +3921,7 @@ async function processFollowupQuestionWithContexts(question: string, contexts: W
         stepStatus: 'running'
       });
     }
-    
+
     const action = 'process_page';
     const data = {
       query: questionRequest,
@@ -3930,12 +3930,12 @@ async function processFollowupQuestionWithContexts(question: string, contexts: W
       conversationHistory: await buildConversationHistoryWithMemories(currentUrl, question),
       mcpTools: await getMcpToolsForAsk() // Add MCP tools to extension data
     };
-    
+
     console.log(`[processFollowupQuestionWithContexts] Executing extension with question: ${extensionId} (confidence: ${routingResult.confidence}) - ${question}`);
     console.log(`Follow-up with contexts routing reason: ${routingResult.reason}`);
-    
+
     const startTime = Date.now();
-    
+
     try {
       const result = await ipcRenderer.invoke('execute-python-extension', {
         extensionId,
@@ -3944,12 +3944,12 @@ async function processFollowupQuestionWithContexts(question: string, contexts: W
         browserApiKeys: getBrowserApiKeys(),
         selectedProvider: provider
       });
-      
+
       const endTime = Date.now();
       const executionTime = endTime - startTime;
-      
+
       console.log('[processFollowupQuestionWithContexts] Extension result received:', result);
-      
+
       // Complete the progress indicator
       if (progressElement && (progressElement as any).progressIndicator) {
         (progressElement as any).progressIndicator.updateProgress({
@@ -3958,25 +3958,25 @@ async function processFollowupQuestionWithContexts(question: string, contexts: W
           stepStatus: 'completed',
           stepResult: result.data
         });
-        
+
         (progressElement as any).progressIndicator.completeWorkflow({
           workflowId: singleExtensionWorkflowData.workflowId,
           result: result.data
         });
       }
-      
+
       if (result.success === false) {
         addMessageToChat('assistant', `Error: ${result.error || 'Unknown error'}`);
         return;
       }
-      
+
       console.log('[processFollowupQuestionWithContexts] Displaying results...');
       displayAgentResults(result.data);
-      
+
       // Store memory if available - try multiple content sources
       if (memoryService && result.data) {
         let summary = '';
-        
+
         // Try different content sources in order of preference
         if (result.data.consolidated_summary) {
           summary = result.data.consolidated_summary;
@@ -3992,15 +3992,15 @@ async function processFollowupQuestionWithContexts(question: string, contexts: W
           // Handle responses with response field
           summary = result.data.response;
         }
-        
+
         if (summary && summary.trim()) {
           console.log('[Memory] Storing followup with contexts result in memory');
-          
+
           // Get current page info for memory context
           const webview = getActiveWebview();
           const url = webview?.src || '';
           const title = webview?.getTitle ? webview.getTitle() : '';
-          
+
           storeInMemory(url, question, summary, title);
         } else {
           console.log('[Memory] No suitable content found for memory storage in followup with contexts');
@@ -4008,7 +4008,7 @@ async function processFollowupQuestionWithContexts(question: string, contexts: W
       }
     } catch (extensionError) {
       console.error('Follow-up extension with contexts execution failed:', extensionError);
-      
+
       // Mark progress as failed
       if (progressElement && (progressElement as any).progressIndicator) {
         (progressElement as any).progressIndicator.handleWorkflowError({
@@ -4016,15 +4016,15 @@ async function processFollowupQuestionWithContexts(question: string, contexts: W
           error: (extensionError as Error).message
         });
       }
-      
+
       addMessageToChat('assistant', `Error: ${(extensionError as Error).message}`);
     }
   } catch (error) {
     console.error('Error in processFollowupQuestionWithContexts:', error);
-    
+
     // Ensure loading indicators are cleared even on error
     clearLoadingIndicators();
-    
+
     addMessageToChat('assistant', `Error: ${(error as Error).message}`);
   } finally {
     // Always clear the execution flag when function ends
@@ -4035,44 +4035,44 @@ async function processFollowupQuestionWithContexts(question: string, contexts: W
 
 async function processDoTask(taskInstruction: string): Promise<void> {
   console.log('[processDoTask] Processing task:', taskInstruction);
-  
+
   if (!DOAGENT_ENABLED) {
     addMessageToChat('assistant', 'DoAgent functionality is disabled in this build.');
     return;
   }
-  
+
   // Prevent duplicate execution
   if (isWorkflowExecuting) {
     console.log('[processDoTask] Workflow already executing, skipping task execution');
     showToast('Task already in progress...', 'info');
     return;
   }
-  
+
   // Set execution flag
   isWorkflowExecuting = true;
   console.log('[processDoTask] Setting execution flag for task execution');
-  
+
   try {
     const activeWebview = getActiveWebview();
     if (!activeWebview) {
       addMessageToChat('assistant', 'No active webview found.');
       return;
     }
-    
+
     // Import DoAgent
     const { DoAgent } = await import('./services/DoAgent');
-    
+
     // Create DoAgent instance with enhanced progress callback
     const doAgent = new DoAgent((task, step) => {
       console.log('[DoAgent Progress]', `Step ${step.id}: ${step.description} - ${step.status}`);
-      
+
       // Create detailed progress message with LLM reasoning
       let progressMessage = `**${step.id}:** ${step.description}`;
-      
+
       if (step.reasoning) {
         progressMessage += `\n  *AI Reasoning: ${step.reasoning}*`;
       }
-      
+
       if (step.status === 'completed') {
         progressMessage += ' ✅';
       } else if (step.status === 'failed') {
@@ -4083,7 +4083,7 @@ async function processDoTask(taskInstruction: string): Promise<void> {
       } else if (step.status === 'running') {
         progressMessage += ' ⏳';
       }
-      
+
       // Find the latest assistant message and update it with progress
       const chatContainer = document.getElementById('chatContainer');
       if (chatContainer) {
@@ -4099,13 +4099,13 @@ async function processDoTask(taskInstruction: string): Promise<void> {
         }
       }
     });
-    
+
     // Show initial loading message
     addMessageToChat('assistant', '<div class="loading">🤖 Analyzing page and planning actions with AI...</div>');
-    
+
     // Execute the task
     const result = await doAgent.executeTask(taskInstruction, activeWebview);
-    
+
     // Remove loading message
     const loadingMessages = document.querySelectorAll('.loading');
     loadingMessages.forEach(message => {
@@ -4114,11 +4114,11 @@ async function processDoTask(taskInstruction: string): Promise<void> {
         parentMessage.remove();
       }
     });
-    
+
     // Display results
     if (result.success) {
       let resultMessage = `✅ **Task completed successfully!**\n⏱️ *Execution time: ${(result.executionTime / 1000).toFixed(2)}s*`;
-      
+
       if (result.data) {
         // Handle generic extracted content format
         if (typeof result.data === 'string') {
@@ -4130,7 +4130,7 @@ async function processDoTask(taskInstruction: string): Promise<void> {
         } else if (result.data.url) {
           // Generic extracted content structure
           resultMessage += `\n\n📄 **Extracted from:** ${result.data.url}`;
-          
+
           // Show headings if available
           if (result.data.headings && result.data.headings.length > 0) {
             resultMessage += '\n\n📋 **Page Structure:**\n';
@@ -4138,7 +4138,7 @@ async function processDoTask(taskInstruction: string): Promise<void> {
               resultMessage += `${'#'.repeat(heading.level === 'h1' ? 1 : heading.level === 'h2' ? 2 : 3)} ${heading.text}\n`;
             });
           }
-          
+
           // Show main content if available
           if (result.data.textContent && result.data.textContent.length > 0) {
             resultMessage += '\n\n📝 **Main Content:**\n';
@@ -4148,7 +4148,7 @@ async function processDoTask(taskInstruction: string): Promise<void> {
               }
             });
           }
-          
+
           // Show links if available
           if (result.data.links && result.data.links.length > 0) {
             resultMessage += '\n\n🔗 **Links found:**\n';
@@ -4156,7 +4156,7 @@ async function processDoTask(taskInstruction: string): Promise<void> {
               resultMessage += `${index + 1}. [${link.text}](${link.href})\n`;
             });
           }
-          
+
           // Show lists if available
           if (result.data.lists && result.data.lists.length > 0) {
             resultMessage += '\n\n📝 **Lists found:**\n';
@@ -4167,7 +4167,7 @@ async function processDoTask(taskInstruction: string): Promise<void> {
               });
             });
           }
-          
+
           // Show page type information
           if (result.data.pageStructure) {
             const structure = result.data.pageStructure;
@@ -4178,16 +4178,16 @@ async function processDoTask(taskInstruction: string): Promise<void> {
             if (structure.hasFlights) pageTypes.push('Flights');
             if (structure.hasComments) pageTypes.push('Comments');
             if (structure.hasArticles) pageTypes.push('Articles');
-            
+
             if (pageTypes.length > 0) {
               resultMessage += `\n\n🏷️ **Page Type:** ${pageTypes.join(', ')}`;
             }
           }
-          
+
           // Show fallback content if no structured data
-          if (result.data.fallbackContent && 
-              (!result.data.textContent || result.data.textContent.length === 0) &&
-              (!result.data.headings || result.data.headings.length === 0)) {
+          if (result.data.fallbackContent &&
+            (!result.data.textContent || result.data.textContent.length === 0) &&
+            (!result.data.headings || result.data.headings.length === 0)) {
             resultMessage += `\n\n📄 **Page content:**\n${result.data.fallbackContent}`;
           }
         } else {
@@ -4195,15 +4195,15 @@ async function processDoTask(taskInstruction: string): Promise<void> {
           resultMessage += `\n\n📄 **Result:**\n${JSON.stringify(result.data, null, 2)}`;
         }
       }
-      
+
       addMessageToChat('assistant', resultMessage, result.executionTime / 1000);
     } else {
       addMessageToChat('assistant', `❌ **Task failed:** ${result.error}`);
     }
-    
+
   } catch (error) {
     console.error('[processDoTask] Error executing task:', error);
-    
+
     // Remove loading message
     const loadingMessages = document.querySelectorAll('.loading');
     loadingMessages.forEach(message => {
@@ -4212,7 +4212,7 @@ async function processDoTask(taskInstruction: string): Promise<void> {
         parentMessage.remove();
       }
     });
-    
+
     addMessageToChat('assistant', `❌ **Task execution failed:** ${(error as Error).message}`);
   } finally {
     // Always clear execution flag
@@ -4225,13 +4225,13 @@ async function processDoTask(taskInstruction: string): Promise<void> {
 
 function showExtensionStore(): void {
   console.log('Showing extension store');
-  
+
   // Hide the current webview
   const currentWebview = getActiveWebview();
   if (currentWebview) {
     currentWebview.style.display = 'none';
   }
-  
+
   // Get or create the extension store container
   let storeContainer = document.getElementById('extension-store-container');
   if (!storeContainer) {
@@ -4243,22 +4243,22 @@ function showExtensionStore(): void {
       webviewsContainer.appendChild(storeContainer);
     }
   }
-  
+
   // Show the store container
   storeContainer.style.display = 'block';
-  
+
   // Initialize and render the extension store
   const extensionStore = new ExtensionStore(storeContainer);
   extensionStore.render();
-  
+
   // Make it globally available for onclick handlers
   (window as any).extensionStore = extensionStore;
-  
+
   // Update URL bar
   if (urlBar) {
     urlBar.value = 'file://browzer-store';
   }
-  
+
   // Update tab title
   if (activeTabId) {
     const tab = tabs.find(t => t.id === activeTabId);
@@ -4271,7 +4271,7 @@ function showExtensionStore(): void {
       }
     }
   }
-  
+
   // Update navigation buttons (disable them for the store)
   if (backBtn) backBtn.disabled = true;
   if (forwardBtn) forwardBtn.disabled = true;
@@ -4283,64 +4283,64 @@ function createAddToChatButton(): HTMLElement {
   if (addToChatButton) {
     return addToChatButton;
   }
-  
+
   addToChatButton = document.createElement('button');
   addToChatButton.className = 'add-to-chat-button';
   addToChatButton.textContent = 'Add to Chat';
   addToChatButton.setAttribute('title', 'Add selected text to chat conversation');
-  
+
   // Add click handler
   addToChatButton.addEventListener('click', () => {
     if (currentSelection) {
       console.log('[Add to Chat] Adding selected text to chat:', currentSelection.text.substring(0, 50) + '...');
-      
+
       // Add the selected text as a context message to chat
       addMessageToChat('context', `**Selected Text:**\n\n${currentSelection.text}`);
-      
+
       // Clear selection and hide button
       hideAddToChatButton();
-      
+
       // Show success feedback
       showToast('Text added to chat!', 'success');
     }
   });
-  
+
   document.body.appendChild(addToChatButton);
   return addToChatButton;
 }
 
 function showAddToChatButton(text: string, rect: any, webview: any): void {
   console.log('[Add to Chat] Showing button for selection:', text.substring(0, 30) + '...');
-  
+
   // Store current selection
   currentSelection = { text, rect, webview };
-  
+
   // Create button if it doesn't exist
   const button = createAddToChatButton();
-  
+
   // Get webview container position to calculate absolute coordinates
   const webviewContainer = document.querySelector('.webviews-container');
   if (!webviewContainer) return;
-  
+
   const containerRect = webviewContainer.getBoundingClientRect();
-  
+
   // Position the button above the selection
   const buttonX = containerRect.left + rect.left + (rect.width / 2);
   const buttonY = containerRect.top + rect.top - 40; // 40px above selection
-  
+
   // Ensure button stays within viewport
   const buttonWidth = 120; // Approximate button width
   const adjustedX = Math.max(10, Math.min(buttonX - buttonWidth / 2, window.innerWidth - buttonWidth - 10));
   const adjustedY = Math.max(10, buttonY);
-  
+
   button.style.left = `${adjustedX}px`;
   button.style.top = `${adjustedY}px`;
-  
+
   // Show the button with animation
   requestAnimationFrame(() => {
     button.classList.add('show');
   });
-  
+
   // Auto-hide after 5 seconds
   setTimeout(() => {
     if (currentSelection && currentSelection.text === text) {
@@ -4369,7 +4369,7 @@ window.addEventListener('resize', hideAddToChatButton);
 
 function setupTextSelectionListener(): void {
   console.log('[Text Selection] Setting up message listener for text selections');
-  
+
   // Listen for messages from webviews about text selections
   window.addEventListener('message', (event) => {
     console.log('🔍 [MESSAGE DEBUG] Received window message:', event.data);
@@ -4389,22 +4389,22 @@ function setupTextSelectionListener(): void {
       }
     }
   });
-  
+
   console.log('[Text Selection] Message listener set up successfully');
 }
 
 function injectEnhancedSelectionHandler(webview: any): void {
   if (!webview) return;
-  
+
   // Check if webview is valid and ready
   if (!webview.id || !webview.src || webview.src === 'about:blank' || webview.isDestroyed) {
     console.log('[Selection Handler] Skipping injection - webview not ready');
     return;
   }
-  
+
   try {
     console.log('[Selection Handler] Injecting enhanced selection handler for webview:', webview.id);
-    
+
     const injectionScript = `
       (function() {
         // Prevent multiple injections
@@ -4602,26 +4602,26 @@ function injectEnhancedSelectionHandler(webview: any): void {
         
       })();
     `;
-    
+
     // Check one more time before execution
     if (!webview || webview.isDestroyed || !webview.executeJavaScript) {
       console.log('[Selection Handler] Webview no longer valid, skipping injection');
       return;
     }
-    
+
     webview.executeJavaScript(injectionScript, false)
       .then(() => {
         console.log('[Selection Handler] ✓ Enhanced selection handler injection successful for webview:', webview.id);
       })
       .catch((error: any) => {
         // Don't log errors for destroyed webviews or common navigation errors
-        if (!error.message.includes('Object has been destroyed') && 
-            !error.message.includes('navigation') &&
-            !error.message.includes('Script failed to execute')) {
+        if (!error.message.includes('Object has been destroyed') &&
+          !error.message.includes('navigation') &&
+          !error.message.includes('Script failed to execute')) {
           console.error('[Selection Handler] Failed to inject enhanced selection handler:', error);
         }
       });
-      
+
   } catch (error) {
     console.error('[Selection Handler] Error setting up enhanced selection handler:', error);
   }
@@ -4641,33 +4641,33 @@ function injectEnhancedSelectionHandler(webview: any): void {
   showHistoryPage,
   executeAgent,
   showExtensionStore
-}; 
+};
 
 function addWorkflowProgressToChat(workflowData: any): HTMLElement {
   let chatContainer = document.getElementById('chatContainer');
-  
+
   // Create chat container if it doesn't exist
   if (!chatContainer) {
     console.log('[addWorkflowProgressToChat] Chat container not found, creating one');
-    
+
     const agentResults = document.getElementById('agentResults');
     if (!agentResults) {
       console.error('[addWorkflowProgressToChat] agentResults container not found');
       return document.createElement('div');
     }
-    
+
     // Remove any existing welcome containers when starting chat
     const existingWelcome = agentResults.querySelector('.welcome-container');
     if (existingWelcome) {
       existingWelcome.remove();
     }
-    
+
     // Create the chat container
     chatContainer = document.createElement('div');
     chatContainer.id = 'chatContainer';
     chatContainer.className = 'chat-container';
     agentResults.appendChild(chatContainer);
-    
+
     console.log('[addWorkflowProgressToChat] Chat container created successfully');
   }
 
@@ -4683,7 +4683,7 @@ function addWorkflowProgressToChat(workflowData: any): HTMLElement {
   // Create container for the workflow progress component
   const progressContainer = document.createElement('div');
   progressContainer.className = 'workflow-progress-container';
-  
+
   messageDiv.appendChild(progressContainer);
   chatContainer.appendChild(messageDiv);
 
@@ -4714,15 +4714,15 @@ function findWorkflowProgressInChat(workflowId: string): HTMLElement | null {
 async function addSelectedTextToContextSystem(selectedText: string, webview: any): Promise<void> {
   try {
     console.log('[Context System] Adding selected text to @ context system:', selectedText.substring(0, 50) + '...');
-    
+
     // Get current page info
     const url = webview.src || '';
     const title = webview.getTitle ? webview.getTitle() : '';
-    
+
     // Create a webpage context with the selected text
     const contextId = `selected-${Date.now()}`;
     const contextTitle = `Selected: ${selectedText.substring(0, 30)}${selectedText.length > 30 ? '...' : ''}`;
-    
+
     const webpageContext: WebpageContext = {
       id: contextId,
       title: contextTitle,
@@ -4736,13 +4736,13 @@ async function addSelectedTextToContextSystem(selectedText: string, webview: any
         url: url
       }
     };
-    
+
     // Add to the context system
     addWebpageContext(webpageContext);
-    
+
     console.log('[Context System] Selected text successfully added to @ context system');
     console.log('[Context System] Total contexts now:', selectedWebpageContexts.length);
-    
+
   } catch (error) {
     console.error('[Context System] Error adding selected text to context system:', error);
     // Fallback to regular chat message if context system fails
@@ -4756,32 +4756,32 @@ function getAvailableWebpages(): WebpageContext[] {
   try {
     const history = JSON.parse(localStorage.getItem(HISTORY_STORAGE_KEY) || '[]');
     console.log('🔍 [DROPDOWN DEBUG] Total history items:', history.length);
-    
+
     // Filter out internal pages and take up to 15 items for @ mentions
     const filteredHistory = history.filter((item: any) => {
-      return item.url && 
-             !item.url.startsWith('about:') && 
-             !item.url.startsWith('file://') &&
-             !item.url.includes('localhost') &&
-             item.title && 
-             item.title.length > 0 &&
-             item.title !== 'New Tab';
+      return item.url &&
+        !item.url.startsWith('about:') &&
+        !item.url.startsWith('file://') &&
+        !item.url.includes('localhost') &&
+        item.title &&
+        item.title.length > 0 &&
+        item.title !== 'New Tab';
     });
-    
+
     console.log('🔍 [DROPDOWN DEBUG] Filtered history items:', filteredHistory.length);
-    
+
     const webpages = filteredHistory.slice(0, 15).map((item: any) => ({
       id: item.id.toString(),
       title: item.title,
       url: item.url,
       timestamp: item.timestamp
     }));
-    
+
     console.log('🔍 [DROPDOWN DEBUG] Available webpages for dropdown:', webpages.length);
     webpages.forEach((webpage: WebpageContext, index: number) => {
       console.log(`🔍 [DROPDOWN DEBUG] ${index + 1}. ${webpage.title} - ${webpage.url}`);
     });
-    
+
     return webpages;
   } catch (error) {
     console.error('Error getting available webpages:', error);
@@ -4792,7 +4792,7 @@ function getAvailableWebpages(): WebpageContext[] {
 function addWebpageContext(webpage: WebpageContext): void {
   console.log('🚨 [ADD CONTEXT] Adding webpage context:', webpage.title);
   console.log('🚨 [ADD CONTEXT] Current contexts before add:', selectedWebpageContexts.length);
-  
+
   // Avoid duplicates
   if (!selectedWebpageContexts.find(ctx => ctx.url === webpage.url)) {
     selectedWebpageContexts.push(webpage);
@@ -4831,9 +4831,9 @@ async function fetchWebpageContent(url: string): Promise<any> {
         return await extractPageContent(webview);
       }
     }
-    
+
     console.log('🔍 [FETCH] Creating hidden webview to fetch content for:', url);
-    
+
     // Create a hidden webview to fetch the content
     return new Promise((resolve, reject) => {
       const hiddenWebview = document.createElement('webview') as any;
@@ -4842,7 +4842,7 @@ async function fetchWebpageContent(url: string): Promise<any> {
       hiddenWebview.style.top = '-10000px';
       hiddenWebview.style.width = '1024px';
       hiddenWebview.style.height = '768px';
-      
+
       // Add timeout to prevent hanging
       const timeout = setTimeout(() => {
         console.warn('🔍 [FETCH] Timeout fetching content for:', url);
@@ -4855,16 +4855,16 @@ async function fetchWebpageContent(url: string): Promise<any> {
           url: url
         });
       }, 15000); // 15 second timeout
-      
+
       hiddenWebview.addEventListener('did-finish-load', async () => {
         try {
           console.log('🔍 [FETCH] Hidden webview loaded, extracting content for:', url);
           clearTimeout(timeout);
-          
+
           // Extract content from the hidden webview
           const content = await extractPageContent(hiddenWebview);
           console.log('🔍 [FETCH] Content extracted successfully:', content.title);
-          
+
           // Clean up
           hiddenWebview.remove();
           resolve(content);
@@ -4881,7 +4881,7 @@ async function fetchWebpageContent(url: string): Promise<any> {
           });
         }
       });
-      
+
       hiddenWebview.addEventListener('did-fail-load', (event: any) => {
         console.error('🔍 [FETCH] Failed to load webpage:', url, event);
         clearTimeout(timeout);
@@ -4894,12 +4894,12 @@ async function fetchWebpageContent(url: string): Promise<any> {
           url: url
         });
       });
-      
+
       // Add to DOM and load URL
       document.body.appendChild(hiddenWebview);
       hiddenWebview.src = url;
     });
-    
+
   } catch (error) {
     console.error('🔍 [FETCH] Error in fetchWebpageContent:', error);
     return {
@@ -4915,26 +4915,26 @@ async function fetchWebpageContent(url: string): Promise<any> {
 function updateContextVisualIndicators(): void {
   console.log('🚨 [VISUAL INDICATORS] Updating context visual indicators');
   console.log('🚨 [VISUAL INDICATORS] Selected contexts count:', selectedWebpageContexts.length);
-  
+
   // Update UI to show selected contexts
   const chatInputArea = document.querySelector('.chat-input-area');
   if (!chatInputArea) {
     console.log('🚨 [VISUAL INDICATORS] Chat input area not found, returning');
     return;
   }
-  
+
   // Remove existing context indicators
   const existingIndicators = document.querySelectorAll('.context-indicators');
   console.log('🚨 [VISUAL INDICATORS] Removing existing indicators:', existingIndicators.length);
   existingIndicators.forEach(indicator => indicator.remove());
-  
+
   // Add context indicators directly attached to the chat input area
   if (selectedWebpageContexts.length > 0) {
     console.log('🚨 [VISUAL INDICATORS] Creating context container for', selectedWebpageContexts.length, 'contexts');
-    
+
     const contextContainer = document.createElement('div');
     contextContainer.className = 'context-indicators';
-    
+
     selectedWebpageContexts.forEach(context => {
       console.log('🚨 [VISUAL INDICATORS] Creating indicator for:', context.title);
       const indicator = document.createElement('div');
@@ -4945,15 +4945,15 @@ function updateContextVisualIndicators(): void {
       `;
       contextContainer.appendChild(indicator);
     });
-    
+
     // Insert the context container right before the chat input area to create seamless connection
     chatInputArea.parentElement?.insertBefore(contextContainer, chatInputArea);
     console.log('🚨 [VISUAL INDICATORS] Context container inserted before chat input area');
-    
+
     // Add CSS class to chat input area to modify its styling when context is present
     chatInputArea.classList.add('has-context');
     console.log('🚨 [VISUAL INDICATORS] Added has-context class to chat input area');
-    
+
     // Add remove event listeners
     contextContainer.querySelectorAll('.context-remove').forEach(btn => {
       btn.addEventListener('click', (e) => {
@@ -4977,9 +4977,9 @@ function createMentionDropdown(): HTMLElement {
   const dropdown = document.createElement('div');
   dropdown.className = 'mention-dropdown';
   dropdown.id = 'mentionDropdown';
-  
+
   const webpages = getAvailableWebpages();
-  
+
   if (webpages.length === 0) {
     dropdown.innerHTML = '<div class="mention-item empty">No recent webpages found</div>';
   } else {
@@ -4990,21 +4990,21 @@ function createMentionDropdown(): HTMLElement {
       </div>
     `).join('');
   }
-  
+
   // Add click handlers
   dropdown.querySelectorAll('.mention-item:not(.empty)').forEach(item => {
     item.addEventListener('click', async (e) => {
       const webpageId = (e.currentTarget as HTMLElement).dataset.webpageId;
       const webpageUrl = (e.currentTarget as HTMLElement).dataset.webpageUrl;
-      
+
       console.log('🚨 [MENTION CLICK] Webpage selected:', { webpageId, webpageUrl });
-      
+
       if (webpageId && webpageUrl) {
         const webpage = webpages.find(w => w.id === webpageId);
         if (webpage) {
           console.log('🚨 [MENTION CLICK] Found webpage object:', webpage.title);
           console.log('🚨 [MENTION CLICK] Calling fetchWebpageContent for:', webpageUrl);
-          
+
           // Fetch content for this webpage
           const content = await fetchWebpageContent(webpageUrl);
           console.log('🚨 [MENTION CLICK] Content fetched:', {
@@ -5012,15 +5012,15 @@ function createMentionDropdown(): HTMLElement {
             contentLength: content.content?.length || 0,
             htmlLength: content.html?.length || 0
           });
-          
+
           webpage.content = content;
-          
+
           console.log('🚨 [MENTION CLICK] Adding webpage context');
           addWebpageContext(webpage);
           console.log('🚨 [MENTION CLICK] Context added, total contexts:', selectedWebpageContexts.length);
-          
+
           hideMentionDropdown();
-          
+
           // Update chat input to remove the @ trigger
           const chatInput = document.getElementById('chatInput') as HTMLInputElement;
           if (chatInput) {
@@ -5040,23 +5040,23 @@ function createMentionDropdown(): HTMLElement {
       }
     });
   });
-  
+
   return dropdown;
 }
 
 function showMentionDropdown(chatInput: HTMLInputElement): void {
   console.log('🚨 [MENTION DROPDOWN] showMentionDropdown called');
   console.log('🚨 [MENTION DROPDOWN] isShowingMentionDropdown:', isShowingMentionDropdown);
-  
+
   if (isShowingMentionDropdown) {
     console.log('🚨 [MENTION DROPDOWN] Already showing, returning');
     return;
   }
-  
+
   console.log('🚨 [MENTION DROPDOWN] Creating mention dropdown');
   const dropdown = createMentionDropdown();
   isShowingMentionDropdown = true;
-  
+
   // Position dropdown above the input
   const inputRect = chatInput.getBoundingClientRect();
   dropdown.style.position = 'fixed';
@@ -5064,16 +5064,16 @@ function showMentionDropdown(chatInput: HTMLInputElement): void {
   dropdown.style.bottom = `${window.innerHeight - inputRect.top + 5}px`;
   dropdown.style.width = `${inputRect.width}px`;
   dropdown.style.maxHeight = '200px';
-  
+
   document.body.appendChild(dropdown);
   console.log('🚨 [MENTION DROPDOWN] Dropdown added to body');
-  
+
   console.log('🔍 [MENTION] Showing mention dropdown');
 }
 
 function hideMentionDropdown(): void {
   console.log('🚨 [MENTION DROPDOWN] hideMentionDropdown called');
-  
+
   const dropdown = document.getElementById('mentionDropdown');
   if (dropdown) {
     console.log('🚨 [MENTION DROPDOWN] Removing dropdown from DOM');
@@ -5088,25 +5088,25 @@ function hideMentionDropdown(): void {
 // Helper function to build conversation history with memories
 async function buildConversationHistoryWithMemories(currentUrl: string, query: string): Promise<any[]> {
   const conversationHistory: any[] = [];
-  
+
   try {
     // Get recent chat messages from the UI
     const chatContainer = document.getElementById('chatContainer');
     if (chatContainer) {
       const messages = chatContainer.querySelectorAll('.chat-message');
-      
+
       // Add recent chat messages (last 10)
       const recentMessages = Array.from(messages).slice(-10);
       recentMessages.forEach(message => {
         // Skip loading messages
         if (message.querySelector('.loading')) return;
-        
+
         // Determine role (user or assistant)
         let role = 'assistant';
         if (message.classList.contains('user-message')) {
           role = 'user';
         }
-        
+
         // Get text content, stripping HTML
         const contentEl = message.querySelector('.message-content');
         let content = '';
@@ -5116,7 +5116,7 @@ async function buildConversationHistoryWithMemories(currentUrl: string, query: s
           tempDiv.innerHTML = contentEl.innerHTML;
           content = tempDiv.textContent || tempDiv.innerText || '';
         }
-        
+
         if (content && !content.includes('class="loading"')) {
           conversationHistory.push({
             role: role,
@@ -5125,7 +5125,7 @@ async function buildConversationHistoryWithMemories(currentUrl: string, query: s
         }
       });
     }
-    
+
     // Get relevant memories from localStorage (simple approach)
     try {
       const allMemories = JSON.parse(localStorage.getItem(MEMORY_KEY) || '[]');
@@ -5133,24 +5133,24 @@ async function buildConversationHistoryWithMemories(currentUrl: string, query: s
         // Simple relevance scoring - get recent memories from same domain or with query keywords
         const relevantMemories = allMemories.slice(0, 10).filter((memory: any) => {
           if (!memory) return false;
-          
+
           // Check domain match
           const currentDomain = currentUrl ? new URL(currentUrl).hostname : '';
           const memoryDomain = memory.domain || '';
           if (currentDomain && memoryDomain && currentDomain === memoryDomain) {
             return true;
           }
-          
+
           // Check keyword match in question or answer
           const queryLower = query.toLowerCase();
           const questionMatch = memory.question && memory.question.toLowerCase().includes(queryLower);
           const answerMatch = memory.answer && memory.answer.toLowerCase().includes(queryLower);
-          
+
           return questionMatch || answerMatch;
         }).slice(0, 5); // Take top 5 relevant memories
-        
+
         console.log(`[Memory] Found ${relevantMemories.length} relevant memories for query:`, query);
-        
+
         // Format memories with proper structure expected by Python agents
         relevantMemories.forEach((memory: any) => {
           // Add the original question as a user message with memory flag
@@ -5166,7 +5166,7 @@ async function buildConversationHistoryWithMemories(currentUrl: string, query: s
               topic: memory.topic
             }
           });
-          
+
           // Add the answer as an assistant message with memory flag  
           conversationHistory.push({
             role: 'assistant',
@@ -5185,15 +5185,15 @@ async function buildConversationHistoryWithMemories(currentUrl: string, query: s
     } catch (memoryError) {
       console.error('[Memory] Error retrieving memories:', memoryError);
     }
-    
-         console.log(`[Memory] Built conversation history with ${conversationHistory.length} items (${conversationHistory.filter(item => item.isMemory).length} from memory)`);
-     return conversationHistory;
-     
-   } catch (error) {
-     console.error('[Memory] Error building conversation history with memories:', error);
-     return conversationHistory; // Return whatever we have so far
-   }
- }
+
+    console.log(`[Memory] Built conversation history with ${conversationHistory.length} items (${conversationHistory.filter(item => item.isMemory).length} from memory)`);
+    return conversationHistory;
+
+  } catch (error) {
+    console.error('[Memory] Error building conversation history with memories:', error);
+    return conversationHistory; // Return whatever we have so far
+  }
+}
 
 // Simple memory functions (based on working deprecated implementation)
 function storeInMemory(url: string, question: string, answer: string, title: string = ''): void {
@@ -5203,7 +5203,7 @@ function storeInMemory(url: string, question: string, answer: string, title: str
       console.log('Skipping memory storage due to empty content');
       return;
     }
-    
+
     // Get existing memory
     let memory: any[] = [];
     try {
@@ -5216,7 +5216,7 @@ function storeInMemory(url: string, question: string, answer: string, title: str
       console.error('Error parsing memory from localStorage:', parseError);
       memory = [];
     }
-    
+
     // Get page title from active webview if not provided
     let pageTitle = title;
     if (!pageTitle) {
@@ -5229,7 +5229,7 @@ function storeInMemory(url: string, question: string, answer: string, title: str
         }
       }
     }
-    
+
     // Try to detect the main topic automatically
     let pageTopic = '';
     try {
@@ -5241,7 +5241,7 @@ function storeInMemory(url: string, question: string, answer: string, title: str
     } catch (topicError) {
       console.error('Error extracting topic:', topicError);
     }
-    
+
     // Create memory item with enhanced metadata
     const memoryItem = {
       timestamp: Date.now(),
@@ -5257,15 +5257,15 @@ function storeInMemory(url: string, question: string, answer: string, title: str
         name: 'unknown' // We can enhance this later
       }
     };
-    
+
     // Add to beginning of array
     memory.unshift(memoryItem);
-    
+
     // Limit size
     if (memory.length > MAX_MEMORY_ITEMS) {
       memory = memory.slice(0, MAX_MEMORY_ITEMS);
     }
-    
+
     // Save to localStorage immediately
     try {
       localStorage.setItem(MEMORY_KEY, JSON.stringify(memory));
@@ -5273,7 +5273,7 @@ function storeInMemory(url: string, question: string, answer: string, title: str
     } catch (saveError) {
       console.error('Error saving memory to localStorage:', saveError);
     }
-    
+
   } catch (error) {
     console.error('Error storing memory:', error);
   }
@@ -5282,10 +5282,10 @@ function storeInMemory(url: string, question: string, answer: string, title: str
 function extractTopicSimple(itemContent: any): string {
   try {
     if (!itemContent) return '';
-    
+
     // Simple topic extraction - look for knowledge domains, subjects, or key entities
     const fullText = `${itemContent.title || ''} ${itemContent.question || ''}`.toLowerCase();
-    
+
     // Common subjects and entities people might compare
     const knownDomains = [
       'python', 'javascript', 'react', 'machine learning', 'ai', 'artificial intelligence',
@@ -5295,19 +5295,19 @@ function extractTopicSimple(itemContent: any): string {
       'climate', 'environment', 'technology', 'privacy', 'security',
       'education', 'travel', 'food', 'nutrition', 'diet', 'fitness'
     ];
-    
+
     for (const domain of knownDomains) {
       if (fullText.includes(domain)) {
         return domain;
       }
     }
-    
+
     // If no known domain, try to use first 2-3 significant words from title/question
     const words = fullText.split(/\s+/).filter(w => w && w.length > 3);
     if (words.length >= 2) {
       return words.slice(0, 2).join(' ');
     }
-    
+
     return '';
   } catch (error) {
     console.error('Error extracting topic:', error);
@@ -5319,7 +5319,7 @@ function extractTopicSimple(itemContent: any): string {
 
 function setupAdBlocker(): void {
   console.log('[AdBlocker] Setting up ad blocker controls...');
-  
+
   // Get UI elements
   const adBlockEnabledCheckbox = document.getElementById('adBlockEnabled') as HTMLInputElement;
   const domainInput = document.getElementById('domainInput') as HTMLInputElement;
@@ -5330,25 +5330,25 @@ function setupAdBlocker(): void {
   const filterRulesCount = document.getElementById('filterRulesCount') as HTMLSpanElement;
   const blockedDomainsList = document.getElementById('blockedDomainsList') as HTMLDivElement;
   const allowedDomainsList = document.getElementById('allowedDomainsList') as HTMLDivElement;
-  
+
   if (!adBlockEnabledCheckbox || !domainInput || !blockDomainBtn || !allowDomainBtn) {
     console.error('[AdBlocker] Required UI elements not found');
     return;
   }
-  
+
   // Load initial state
   loadAdBlockerStatus();
-  
+
   // Set up event listeners
   adBlockEnabledCheckbox.addEventListener('change', async () => {
     try {
       const enabled = adBlockEnabledCheckbox.checked;
       const result = await ipcRenderer.invoke('toggle-adblock', enabled);
-      
+
       if (result.success) {
         console.log(`[AdBlocker] Ad blocking ${enabled ? 'enabled' : 'disabled'}`);
         showToast(`Ad blocking ${enabled ? 'enabled' : 'disabled'}`, 'success');
-        
+
         // Re-inject CSS into all webviews
         const webviews = document.querySelectorAll('webview');
         webviews.forEach((webview: any) => {
@@ -5370,14 +5370,14 @@ function setupAdBlocker(): void {
       showToast('Error toggling ad blocker', 'error');
     }
   });
-  
+
   blockDomainBtn.addEventListener('click', async () => {
     const domain = domainInput.value.trim();
     if (!domain) {
       showToast('Please enter a domain', 'error');
       return;
     }
-    
+
     try {
       const result = await ipcRenderer.invoke('add-blocked-domain', domain);
       if (result.success) {
@@ -5394,14 +5394,14 @@ function setupAdBlocker(): void {
       showToast('Error adding blocked domain', 'error');
     }
   });
-  
+
   allowDomainBtn.addEventListener('click', async () => {
     const domain = domainInput.value.trim();
     if (!domain) {
       showToast('Please enter a domain', 'error');
       return;
     }
-    
+
     try {
       const result = await ipcRenderer.invoke('add-allowed-domain', domain);
       if (result.success) {
@@ -5418,7 +5418,7 @@ function setupAdBlocker(): void {
       showToast('Error adding allowed domain', 'error');
     }
   });
-  
+
   // Allow adding domains by pressing Enter
   domainInput.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') {
@@ -5430,38 +5430,38 @@ function setupAdBlocker(): void {
       }
     }
   });
-  
+
   console.log('[AdBlocker] Ad blocker controls set up successfully');
 }
 
 async function loadAdBlockerStatus(): Promise<void> {
   try {
     const status = await ipcRenderer.invoke('get-adblock-status');
-    
+
     // Update checkbox
     const adBlockEnabledCheckbox = document.getElementById('adBlockEnabled') as HTMLInputElement;
     if (adBlockEnabledCheckbox) {
       adBlockEnabledCheckbox.checked = status.enabled;
     }
-    
+
     // Update stats
     const blockedDomainsCount = document.getElementById('blockedDomainsCount') as HTMLSpanElement;
     const cssRulesCount = document.getElementById('cssRulesCount') as HTMLSpanElement;
     const filterRulesCount = document.getElementById('filterRulesCount') as HTMLSpanElement;
-    
+
     if (blockedDomainsCount) blockedDomainsCount.textContent = status.stats.blockedDomains.toString();
     if (cssRulesCount) cssRulesCount.textContent = status.stats.cssRules.toString();
     if (filterRulesCount) filterRulesCount.textContent = status.stats.filterRules.toString();
-    
+
     console.log('[AdBlocker] Status loaded:', status);
   } catch (error) {
     console.error('[AdBlocker] Error loading status:', error);
-    
+
     // Set default values
     const blockedDomainsCount = document.getElementById('blockedDomainsCount') as HTMLSpanElement;
     const cssRulesCount = document.getElementById('cssRulesCount') as HTMLSpanElement;
     const filterRulesCount = document.getElementById('filterRulesCount') as HTMLSpanElement;
-    
+
     if (blockedDomainsCount) blockedDomainsCount.textContent = 'Error';
     if (cssRulesCount) cssRulesCount.textContent = 'Error';
     if (filterRulesCount) filterRulesCount.textContent = 'Error';
@@ -5515,7 +5515,7 @@ function initializeTabSearch(): void {
       e.preventDefault();
       showTabSearch();
     }
-    
+
     // Escape to close
     if (e.key === 'Escape' && !tabSearchModal?.classList.contains('hidden')) {
       hideTabSearch();
@@ -5525,19 +5525,19 @@ function initializeTabSearch(): void {
 
 function showTabSearch(): void {
   if (!tabSearchModal || !tabSearchInput) return;
-  
+
   tabSearchModal.classList.remove('hidden');
   tabSearchInput.focus();
   tabSearchInput.value = '';
   selectedSearchResultIndex = -1;
-  
+
   // Show all tabs initially
   displayTabSearchResults(tabs);
 }
 
 function hideTabSearch(): void {
   if (!tabSearchModal) return;
-  
+
   tabSearchModal.classList.add('hidden');
   selectedSearchResultIndex = -1;
   searchResults = [];
@@ -5546,82 +5546,82 @@ function hideTabSearch(): void {
 function handleTabSearchInput(event: Event): void {
   const input = event.target as HTMLInputElement;
   const query = input.value.trim().toLowerCase();
-  
+
   if (query === '') {
     displayTabSearchResults(tabs);
     return;
   }
-  
+
   // Fuzzy search through tabs
   const filteredTabs = tabs.filter(tab => {
     const titleMatch = tab.title.toLowerCase().includes(query);
     const urlMatch = tab.url.toLowerCase().includes(query);
-    
+
     // Simple fuzzy matching - check if all query characters appear in order
     const fuzzyTitleMatch = fuzzyMatch(tab.title.toLowerCase(), query);
     const fuzzyUrlMatch = fuzzyMatch(tab.url.toLowerCase(), query);
-    
+
     return titleMatch || urlMatch || fuzzyTitleMatch || fuzzyUrlMatch;
   });
-  
+
   // Sort by relevance (exact matches first, then fuzzy matches)
   filteredTabs.sort((a, b) => {
     const aExactTitle = a.title.toLowerCase().includes(query);
     const bExactTitle = b.title.toLowerCase().includes(query);
     const aExactUrl = a.url.toLowerCase().includes(query);
     const bExactUrl = b.url.toLowerCase().includes(query);
-    
+
     if (aExactTitle && !bExactTitle) return -1;
     if (!aExactTitle && bExactTitle) return 1;
     if (aExactUrl && !bExactUrl) return -1;
     if (!aExactUrl && bExactUrl) return 1;
-    
+
     return 0;
   });
-  
+
   displayTabSearchResults(filteredTabs, query);
 }
 
 function fuzzyMatch(text: string, query: string): boolean {
   let textIndex = 0;
   let queryIndex = 0;
-  
+
   while (textIndex < text.length && queryIndex < query.length) {
     if (text[textIndex] === query[queryIndex]) {
       queryIndex++;
     }
     textIndex++;
   }
-  
+
   return queryIndex === query.length;
 }
 
 function highlightMatch(text: string, query: string): string {
   if (!query) return text;
-  
+
   const regex = new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
   return text.replace(regex, '<mark>$1</mark>');
 }
 
 function displayTabSearchResults(tabList: TabInfo[], query: string = ''): void {
   if (!tabSearchResults) return;
-  
+
   searchResults = tabList;
   selectedSearchResultIndex = -1;
-  
+
   if (tabList.length === 0) {
     tabSearchResults.innerHTML = '<div class="tab-search-no-results">No tabs found</div>';
     return;
   }
-  
+
   const resultsHTML = tabList.map((tab, index) => {
     const tabElement = document.getElementById(tab.id);
     const faviconElement = tabElement?.querySelector('.tab-favicon') as HTMLElement;
     const faviconStyle = faviconElement?.style.backgroundImage || '';
-    
+
     const highlightedTitle = highlightMatch(tab.title, query);
     const highlightedUrl = highlightMatch(tab.url, query);
-    
+
     return `
       <div class="tab-search-result" data-tab-id="${tab.id}" data-index="${index}">
         <div class="tab-search-result-favicon" style="${faviconStyle ? `background-image: ${faviconStyle}; background-size: contain; background-repeat: no-repeat; background-position: center;` : ''}"></div>
@@ -5632,9 +5632,9 @@ function displayTabSearchResults(tabList: TabInfo[], query: string = ''): void {
       </div>
     `;
   }).join('');
-  
+
   tabSearchResults.innerHTML = resultsHTML;
-  
+
   // Add click event listeners
   const resultElements = tabSearchResults.querySelectorAll('.tab-search-result');
   resultElements.forEach((element, index) => {
@@ -5645,7 +5645,7 @@ function displayTabSearchResults(tabList: TabInfo[], query: string = ''): void {
         hideTabSearch();
       }
     });
-    
+
     element.addEventListener('mouseenter', () => {
       setSelectedSearchResult(index);
     });
@@ -5654,18 +5654,18 @@ function displayTabSearchResults(tabList: TabInfo[], query: string = ''): void {
 
 function handleTabSearchKeydown(event: KeyboardEvent): void {
   if (searchResults.length === 0) return;
-  
+
   switch (event.key) {
     case 'ArrowDown':
       event.preventDefault();
       setSelectedSearchResult(Math.min(selectedSearchResultIndex + 1, searchResults.length - 1));
       break;
-      
+
     case 'ArrowUp':
       event.preventDefault();
       setSelectedSearchResult(Math.max(selectedSearchResultIndex - 1, -1));
       break;
-      
+
     case 'Enter':
       event.preventDefault();
       if (selectedSearchResultIndex >= 0 && selectedSearchResultIndex < searchResults.length) {
@@ -5679,20 +5679,20 @@ function handleTabSearchKeydown(event: KeyboardEvent): void {
 
 function setSelectedSearchResult(index: number): void {
   if (!tabSearchResults) return;
-  
+
   // Remove previous selection
   const previousSelected = tabSearchResults.querySelector('.tab-search-result.selected');
   if (previousSelected) {
     previousSelected.classList.remove('selected');
   }
-  
+
   selectedSearchResultIndex = index;
-  
+
   if (index >= 0 && index < searchResults.length) {
     const newSelected = tabSearchResults.children[index];
     if (newSelected) {
       newSelected.classList.add('selected');
-      
+
       // Scroll into view if needed
       newSelected.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
     }
@@ -5706,14 +5706,14 @@ function setSelectedSearchResult(index: number): void {
 function initializeAutoSessionManagement(): void {
   // Set up automatic saving on various events
   setupAutoSaveEvents();
-  
+
   // Set up periodic saving (every 30 seconds) as backup
   setInterval(() => {
     if (tabs.length > 0) {
       autoSaveTabs();
     }
   }, 30000);
-  
+
   // Initial save after page load
   setTimeout(() => {
     if (tabs.length > 0) {
@@ -5726,7 +5726,7 @@ function setupAutoSaveEvents(): void {
   // Save when browser window is about to close
   window.addEventListener('beforeunload', (e) => {
     autoSaveTabs();
-    
+
     // Force synchronous save as backup
     try {
       if (tabs && tabs.length > 0) {
@@ -5792,7 +5792,7 @@ function autoSaveTabs(): void {
       try {
         const webview = document.getElementById(tab.webviewId) as any;
         const titleElem = document.querySelector(`#${tab.id} .tab-title`);
-        
+
         return {
           url: webview && webview.src ? webview.src : tab.url,
           title: titleElem ? titleElem.textContent || 'New Tab' : tab.title,
@@ -5817,7 +5817,7 @@ function autoSaveTabs(): void {
     };
 
     localStorage.setItem(SAVED_TABS_KEY, JSON.stringify(sessionData));
-    
+
   } catch (err) {
     console.error('❌ Error in autoSaveTabs:', err);
     if (err instanceof Error) {
@@ -5836,7 +5836,8 @@ function enhancedRestoreTabs(): void {
 
   try {
     const savedSessionJSON = localStorage.getItem(SAVED_TABS_KEY);
-    
+
+
     if (savedSessionJSON) {
       let savedSession = null;
       try {
@@ -5846,49 +5847,111 @@ function enhancedRestoreTabs(): void {
         createNewTab();
         return;
       }
-      
+
       if (savedSession && savedSession.tabs && savedSession.tabs.length > 0) {
         // Clear current state
         tabs = [];
         tabsContainer.innerHTML = '';
         webviewsContainer.innerHTML = '';
-        
+
         let restoredCount = 0;
         let activeTabToRestore = null;
         const restoredTabIds: string[] = [];
-        
+
         // Create tabs without selecting them immediately
         for (let i = 0; i < savedSession.tabs.length; i++) {
           const tabData = savedSession.tabs[i];
           try {
-            if (tabData.url && tabData.url !== 'about:blank') {
-              const newTabId = createNewTabWithoutSelection(tabData.url);
-              
-              if (newTabId) {
-                restoredCount++;
-                restoredTabIds.push(newTabId);
-                
-                // Update the tab title if it was saved
-                if (tabData.title && tabData.title !== 'New Tab') {
-                  setTimeout(() => {
-                    const titleElement = document.querySelector(`#${newTabId} .tab-title`);
-                    if (titleElement) {
-                      titleElement.textContent = tabData.title;
-                    }
-                  }, 100);
+            const savedSessionJSON = localStorage.getItem(SAVED_TABS_KEY);
+
+            if (savedSessionJSON) {
+              let savedSession = null;
+              try {
+                savedSession = JSON.parse(savedSessionJSON);
+              } catch (parseErr) {
+                localStorage.removeItem(SAVED_TABS_KEY);
+                createNewTab();
+                return;
+              }
+
+              if (savedSession && savedSession.tabs && savedSession.tabs.length > 0) {
+                // Filter out settings tabs to prevent communication issues during restoration
+                const filteredTabs = savedSession.tabs.filter((tab: any) =>
+                  !tab.url || !tab.url.startsWith('file://')
+                );
+
+                if (filteredTabs.length === 0) {
+                  // If all tabs were settings tabs, create a new tab instead
+                  createNewTab();
+                  return;
                 }
-                
-                // Remember which tab was active
-                if (tabData.isActive || tabData.webviewId === savedSession.activeTabId) {
-                  activeTabToRestore = newTabId;
+
+                // Clear current state
+                tabs = [];
+                tabsContainer.innerHTML = '';
+                webviewsContainer.innerHTML = '';
+
+                let restoredCount = 0;
+                let activeTabToRestore = null;
+                const restoredTabIds: string[] = [];
+
+                // Create tabs without selecting them immediately
+                for (let i = 0; i < filteredTabs.length; i++) {
+                  const tabData = filteredTabs[i];
+                  try {
+                    if (tabData.url && tabData.url !== 'about:blank') {
+                      const newTabId = createNewTabWithoutSelection(tabData.url);
+
+                      if (newTabId) {
+                        restoredCount++;
+                        restoredTabIds.push(newTabId);
+
+                        // Update the tab title if it was saved
+                        if (tabData.title && tabData.title !== 'New Tab') {
+                          setTimeout(() => {
+                            const titleElement = document.querySelector(`#${newTabId} .tab-title`);
+                            if (titleElement) {
+                              titleElement.textContent = tabData.title;
+                            }
+                          }, 100);
+                        }
+
+                        // Remember which tab was active
+                        if (tabData.isActive || tabData.webviewId === savedSession.activeTabId) {
+                          activeTabToRestore = newTabId;
+                        }
+                      }
+                    }
+                  } catch (tabErr) {
+                    // Ignore individual tab restoration errors
+                  }
+                }
+
+                // Wait for all webviews to be ready, then select the active tab
+                if (restoredCount > 0) {
+                  setTimeout(() => {
+                    if (activeTabToRestore && restoredTabIds.includes(activeTabToRestore)) {
+                      selectTab(activeTabToRestore);
+                    } else if (restoredTabIds.length > 0) {
+                      selectTab(restoredTabIds[0]);
+                    }
+
+                    // Show notification after tab selection
+                    setTimeout(() => {
+                      showToast(`Restored ${restoredCount} tabs from previous session`, 'success');
+                    }, 500);
+
+                  }, 800); // Give webviews more time to initialize
+
+                  return;
                 }
               }
             }
-          } catch (tabErr) {
-            // Ignore individual tab restoration errors
+          } catch (err) {
+            console.error('Error in tab restoration:', err);
           }
         }
-        
+
         // Wait for all webviews to be ready, then select the active tab
         if (restoredCount > 0) {
           setTimeout(() => {
@@ -5897,14 +5960,14 @@ function enhancedRestoreTabs(): void {
             } else if (restoredTabIds.length > 0) {
               selectTab(restoredTabIds[0]);
             }
-            
+
             // Show notification after tab selection
             setTimeout(() => {
               showToast(`Restored ${restoredCount} tabs from previous session`, 'success');
             }, 500);
-            
+
           }, 800); // Give webviews more time to initialize
-          
+
           return;
         }
       }
@@ -5912,7 +5975,7 @@ function enhancedRestoreTabs(): void {
   } catch (err) {
     console.error('Error in tab restoration:', err);
   }
-  
+
   // Create fallback tab if no tabs were restored
   createNewTab();
 }
@@ -6023,10 +6086,10 @@ async function showTabPreview(tabId: string, tabElement: HTMLElement): Promise<v
       // For newer Electron versions
       const nativeImage = await webview.capturePage();
       const dataUrl = nativeImage.toDataURL();
-      
+
       // Cache the screenshot
       previewCache.set(cacheKey, { dataUrl, timestamp: now });
-      
+
       await drawImageToCanvas(dataUrl);
       tabPreviewLoading.classList.add('hidden');
     } else {
@@ -6037,7 +6100,7 @@ async function showTabPreview(tabId: string, tabElement: HTMLElement): Promise<v
 
   } catch (error) {
     console.error('Error capturing tab preview:', error);
-    
+
     // Show fallback content
     drawFallbackPreview(tab);
     tabPreviewLoading.classList.add('hidden');
