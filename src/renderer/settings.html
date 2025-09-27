@@ -1,11 +1,13 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Browzer Settings</title>
     <link rel="stylesheet" href="styles.css">
 </head>
+
 <body>
     <div class="chrome-settings-container">
         <!-- Sidebar Navigation -->
@@ -17,7 +19,7 @@
                 </h1>
                 <p class="settings-sidebar-subtitle">Customize your Browzer experience</p>
             </div>
-            
+
             <nav class="settings-nav">
                 <div class="settings-nav-item">
                     <a href="#ai-keys" class="settings-nav-link active" data-section="ai-keys">
@@ -70,7 +72,8 @@
             <section id="ai-keys" class="settings-section">
                 <div class="settings-main-header">
                     <h1 class="settings-main-title">AI Integration</h1>
-                    <p class="settings-main-subtitle">Configure your AI providers and API keys for enhanced browsing assistance</p>
+                    <p class="settings-main-subtitle">Configure your AI providers and API keys for enhanced browsing
+                        assistance</p>
                 </div>
 
                 <div class="settings-card">
@@ -91,16 +94,18 @@
                             </div>
                             <p class="chrome-form-description">Used for GPT models and chat assistance</p>
                         </div> -->
-                        
+
                         <div class="chrome-form-group">
                             <label class="chrome-form-label" for="anthropicApiKey">Anthropic API Key</label>
                             <div class="chrome-input-with-button">
-                                <input type="password" id="anthropicApiKey" class="chrome-form-input" placeholder="sk-ant-...">
-                                <button class="chrome-btn chrome-btn-primary chrome-btn-small" id="saveAnthropicBtn">Save</button>
+                                <input type="password" id="anthropicApiKey" class="chrome-form-input"
+                                    placeholder="sk-ant-...">
+                                <button class="chrome-btn chrome-btn-primary chrome-btn-small"
+                                    id="saveAnthropicBtn">Save</button>
                             </div>
                             <p class="chrome-form-description">Used for Claude models</p>
                         </div>
-                        
+
                         <!-- Perplexity API Key input commented out -->
                         <!-- <div class="chrome-form-group">
                             <label class="chrome-form-label" for="perplexityApiKey">Perplexity API Key</label>
@@ -110,7 +115,7 @@
                             </div>
                             <p class="chrome-form-description">Used for web search and research</p>
                         </div> -->
-                        
+
                         <!-- Chutes API Key input commented out -->
                         <!-- <div class="chrome-form-group">
                             <label class="chrome-form-label" for="chutesApiKey">Chutes API Key</label>
@@ -137,13 +142,15 @@
                             <span class="settings-icon">🎨</span>
                             Layout Options
                         </h3>
-                        <p class="settings-card-description">Choose how you want your tabs and interface to be organized</p>
+                        <p class="settings-card-description">Choose how you want your tabs and interface to be organized
+                        </p>
                     </div>
                     <div class="settings-card-content">
                         <div class="chrome-toggle-row">
                             <div class="chrome-toggle-content">
                                 <div class="chrome-toggle-title">Sidebar Tab Layout</div>
-                                <div class="chrome-toggle-description">Display tabs vertically in a sidebar instead of horizontally</div>
+                                <div class="chrome-toggle-description">Display tabs vertically in a sidebar instead of
+                                    horizontally</div>
                             </div>
                             <div class="chrome-toggle-switch" id="sidebarToggle">
                                 <input type="checkbox" id="sidebarEnabled" class="chrome-toggle-input">
@@ -163,7 +170,8 @@
                     <div class="settings-card-content">
                         <div class="chrome-form-group">
                             <label class="chrome-form-label" for="homepageInput">Homepage URL</label>
-                            <input type="url" id="homepageInput" class="chrome-form-input" placeholder="https://www.google.com">
+                            <input type="url" id="homepageInput" class="chrome-form-input"
+                                placeholder="https://www.google.com">
                             <p class="chrome-form-description">This page will open when you create a new tab</p>
                         </div>
                         <div class="chrome-button-group">
@@ -186,7 +194,8 @@
                             <span class="settings-icon">🛡️</span>
                             Ad Blocker
                         </h3>
-                        <p class="settings-card-description">Block unwanted ads and trackers for a cleaner browsing experience</p>
+                        <p class="settings-card-description">Block unwanted ads and trackers for a cleaner browsing
+                            experience</p>
                     </div>
                     <div class="settings-card-content">
                         <div class="chrome-toggle-row">
@@ -218,17 +227,21 @@
                             <div class="chrome-domain-section">
                                 <h4 class="chrome-domain-section-title">Blocked Domains</h4>
                                 <div class="chrome-domain-input-group">
-                                    <input type="text" id="blockedDomainInput" class="chrome-domain-input" placeholder="example.com">
-                                    <button class="chrome-btn chrome-btn-secondary" id="addBlockedDomainBtn">Block</button>
+                                    <input type="text" id="blockedDomainInput" class="chrome-domain-input"
+                                        placeholder="example.com">
+                                    <button class="chrome-btn chrome-btn-secondary"
+                                        id="addBlockedDomainBtn">Block</button>
                                 </div>
                                 <div class="chrome-domain-list" id="blockedDomainsList"></div>
                             </div>
-                            
+
                             <div class="chrome-domain-section">
                                 <h4 class="chrome-domain-section-title">Allowed Domains</h4>
                                 <div class="chrome-domain-input-group">
-                                    <input type="text" id="allowedDomainInput" class="chrome-domain-input" placeholder="trusted-site.com">
-                                    <button class="chrome-btn chrome-btn-secondary" id="addAllowedDomainBtn">Allow</button>
+                                    <input type="text" id="allowedDomainInput" class="chrome-domain-input"
+                                        placeholder="trusted-site.com">
+                                    <button class="chrome-btn chrome-btn-secondary"
+                                        id="addAllowedDomainBtn">Allow</button>
                                 </div>
                                 <div class="chrome-domain-list" id="allowedDomainsList"></div>
                             </div>
@@ -250,7 +263,8 @@
                             <span class="settings-icon">🧠</span>
                             Memory Management
                         </h3>
-                        <p class="settings-card-description">Control how your AI assistant remembers past interactions</p>
+                        <p class="settings-card-description">Control how your AI assistant remembers past interactions
+                        </p>
                     </div>
                     <div class="settings-card-content">
                         <div class="chrome-stats-grid">
@@ -288,14 +302,16 @@
                     <div class="settings-card-content">
                         <div class="chrome-form-group">
                             <label class="chrome-form-label" for="maxCacheSize">Maximum Cache Size (MB)</label>
-                            <input type="number" id="maxCacheSize" class="chrome-form-input" value="50" min="10" max="1000">
+                            <input type="number" id="maxCacheSize" class="chrome-form-input" value="50" min="10"
+                                max="1000">
                             <p class="chrome-form-description">Maximum amount of disk space to use for caching</p>
                         </div>
 
                         <div class="chrome-toggle-row">
                             <div class="chrome-toggle-content">
                                 <div class="chrome-toggle-title">Auto Cleanup</div>
-                                <div class="chrome-toggle-description">Automatically clean up old cache files when limit is reached</div>
+                                <div class="chrome-toggle-description">Automatically clean up old cache files when limit
+                                    is reached</div>
                             </div>
                             <div class="chrome-toggle-switch" id="autoCleanupToggle">
                                 <input type="checkbox" id="autoCleanupEnabled" class="chrome-toggle-input" checked>
@@ -314,7 +330,8 @@
                         </div>
 
                         <div class="chrome-button-group">
-                            <button class="chrome-btn chrome-btn-primary" id="saveCacheSettingsBtn">Save Settings</button>
+                            <button class="chrome-btn chrome-btn-primary" id="saveCacheSettingsBtn">Save
+                                Settings</button>
                             <button class="chrome-btn chrome-btn-danger" id="clearCacheBtn">Clear Cache</button>
                         </div>
                     </div>
@@ -325,7 +342,8 @@
             <section id="mcp-servers" class="settings-section hidden">
                 <div class="settings-main-header">
                     <h1 class="settings-main-title">MCP Servers</h1>
-                    <p class="settings-main-subtitle">Connect to Model Context Protocol servers for enhanced AI capabilities</p>
+                    <p class="settings-main-subtitle">Connect to Model Context Protocol servers for enhanced AI
+                        capabilities</p>
                 </div>
 
                 <div class="settings-card">
@@ -333,7 +351,7 @@
                         <!-- McpServersPanel will be rendered here -->
                     </div>
                 </div>
-                
+
                 <!-- MCP Testing Section -->
                 <div class="settings-card" style="margin-top: 20px;">
                     <div class="settings-card-header">
@@ -341,13 +359,16 @@
                         <p class="settings-card-subtitle">Test MCP functionality directly in Browzer</p>
                     </div>
                     <div class="settings-card-content">
-                        <button onclick="testMcpIntegration()" class="chrome-btn chrome-btn-primary" style="margin-right: 10px;">
+                        <button onclick="testMcpIntegration()" class="chrome-btn chrome-btn-primary"
+                            style="margin-right: 10px;">
                             🚀 Run MCP Test
                         </button>
                         <button onclick="clearMcpTestLog()" class="chrome-btn chrome-btn-secondary">
                             🧹 Clear Log
                         </button>
-                        <div id="mcp-test-log" style="background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 4px; padding: 15px; margin-top: 15px; font-family: 'SF Mono', Monaco, monospace; font-size: 12px; white-space: pre-wrap; max-height: 400px; overflow-y: auto; line-height: 1.4; display: none;"></div>
+                        <div id="mcp-test-log"
+                            style="background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 4px; padding: 15px; margin-top: 15px; font-family: 'SF Mono', Monaco, monospace; font-size: 12px; white-space: pre-wrap; max-height: 400px; overflow-y: auto; line-height: 1.4; display: none;">
+                        </div>
                         <div id="mcp-test-status" style="margin-top: 10px;"></div>
                     </div>
                 </div>
@@ -387,33 +408,33 @@
             toast.className = `settings-toast ${type}`;
             toast.textContent = message;
             document.body.appendChild(toast);
-            
+
             setTimeout(() => toast.classList.add('show'), 100);
             setTimeout(() => {
                 toast.classList.remove('show');
                 setTimeout(() => document.body.removeChild(toast), 300);
             }, 3000);
         }
-        
+
         // Communication functions will be injected by the main renderer
-        window.sendToMainRenderer = window.sendToBrowser || function(action, data) {
+        window.sendToMainRenderer = window.sendToBrowser || function (action, data) {
             console.warn('Settings communication not ready yet');
         };
 
         // Navigation functionality
         function showSection(sectionId) {
             console.log('Showing section:', sectionId);
-            
+
             // Hide all sections
             document.querySelectorAll('.settings-section').forEach(section => {
                 section.classList.add('hidden');
             });
-            
+
             // Remove active class from all nav links
             document.querySelectorAll('.settings-nav-link').forEach(link => {
                 link.classList.remove('active');
             });
-            
+
             // Show selected section
             const targetSection = document.getElementById(sectionId);
             if (targetSection) {
@@ -422,14 +443,14 @@
             } else {
                 console.warn('Section not found:', sectionId);
             }
-            
+
             // Add active class to clicked nav link
             const activeLink = document.querySelector(`[data-section="${sectionId}"]`);
             if (activeLink) {
                 activeLink.classList.add('active');
                 console.log('Set active nav link for section:', sectionId);
             }
-            
+
             // Update the URL hash without reloading the page
             if (window.location.hash !== '#' + sectionId) {
                 window.history.replaceState(null, null, '#' + sectionId);
@@ -440,30 +461,30 @@
         // Toggle switch functionality
         function initializeToggleSwitches() {
             const toggleSwitches = document.querySelectorAll('.chrome-toggle-switch');
-            
+
             toggleSwitches.forEach(toggle => {
                 const checkbox = toggle.querySelector('.chrome-toggle-input');
-                
+
                 // Set initial state
                 if (checkbox && checkbox.checked) {
                     toggle.classList.add('active');
                 }
-                
+
                 // Add click handler
                 toggle.addEventListener('click', () => {
                     if (checkbox) {
                         checkbox.checked = !checkbox.checked;
                         toggle.classList.toggle('active', checkbox.checked);
-                        
+
                         // Trigger change event for specific settings
                         if (checkbox.id === 'sidebarEnabled') {
                             window.sendToMainRenderer('toggle-sidebar', { enabled: checkbox.checked });
                         } else if (checkbox.id === 'adBlockEnabled') {
                             window.sendToMainRenderer('toggle-adblock', { enabled: checkbox.checked });
                         } else if (checkbox.id === 'autoCleanupEnabled') {
-                            window.sendToMainRenderer('save-cache-settings', { 
+                            window.sendToMainRenderer('save-cache-settings', {
                                 maxCacheSize: document.getElementById('maxCacheSize').value,
-                                autoCleanupEnabled: checkbox.checked 
+                                autoCleanupEnabled: checkbox.checked
                             });
                         }
                     }
@@ -483,7 +504,7 @@
 
             // Inline MCP client manager and panel (keeping it simple for now)
             const STORAGE_KEY = 'mcp_servers';
-            
+
             function loadConfigs() {
                 try {
                     const raw = localStorage.getItem(STORAGE_KEY);
@@ -527,37 +548,48 @@
                 // Add event listeners with error handling
                 const addBtn = root.querySelector('#mcp-add-btn');
                 console.log('🔘 Add button found:', addBtn);
-                
+
                 if (addBtn) {
                     // Remove any existing listeners first
                     addBtn.replaceWith(addBtn.cloneNode(true));
                     const newAddBtn = root.querySelector('#mcp-add-btn');
-                    
-                    newAddBtn.addEventListener('click', function(e) {
+
+                    newAddBtn.addEventListener('click', function (e) {
                         e.preventDefault();
                         e.stopPropagation();
-                        
+
                         console.log('🚀 Add server button clicked!');
                         showAddServerModal();
                     });
-                    
+
                     console.log('✅ Event listener attached successfully');
                 } else {
                     console.error('❌ Add button not found in DOM!');
                 }
-
                 root.querySelectorAll('input[type="checkbox"]').forEach(checkbox => {
-                    checkbox.addEventListener('change', (e) => {
+                    checkbox.addEventListener('change', async (e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+
                         const index = parseInt(e.target.dataset.index);
                         const list = loadConfigs();
-                        list[index].enabled = e.target.checked;
-                        saveConfigs(list);
-                        
-                        // Update test button state
-                        const testBtn = root.querySelector(`.mcp-test[data-index="${index}"]`);
-                        if (testBtn) {
-                            testBtn.disabled = !list[index].enabled;
+                        const currentServer = list[index];
+
+                        if (!currentServer.enabled) {
+                            // Enable this server, disable all others
+                            list.forEach((server, i) => {
+                                server.enabled = (i === index);
+                            });
+                        } else {
+                            // Disable this server
+                            currentServer.enabled = false;
                         }
+
+                        saveConfigs(list);
+                        renderPanel();
+
+                        // ✅ Run MCP integration test after toggle
+                        await testMcpIntegration();
                     });
                 });
 
@@ -570,12 +602,14 @@
                 });
 
                 root.querySelectorAll('.mcp-remove').forEach(button => {
-                    button.addEventListener('click', (e) => {
+                    button.addEventListener('click', async (e) => {
                         const index = parseInt(e.target.dataset.index);
                         const list = loadConfigs();
                         list.splice(index, 1);
                         saveConfigs(list);
                         renderPanel();
+                        // ✅ Run MCP integration test after removal
+                        await testMcpIntegration();
                     });
                 });
             }
@@ -584,9 +618,9 @@
             async function testServerTools(config, index) {
                 const toolsListElement = root.querySelector(`#tools-list-${index}`);
                 const testBtn = root.querySelector(`.mcp-test[data-index="${index}"]`);
-                
+
                 if (!toolsListElement || !testBtn) return;
-                
+
                 // Toggle visibility
                 const isVisible = toolsListElement.style.display !== 'none';
                 if (isVisible) {
@@ -594,19 +628,19 @@
                     testBtn.textContent = 'Test Tools';
                     return;
                 }
-                
+
                 // Show loading state
                 testBtn.textContent = 'Testing...';
                 testBtn.disabled = true;
                 toolsListElement.style.display = 'block';
                 toolsListElement.innerHTML = '<div class="mcp-tools-loading">🔄 Discovering tools...</div>';
-                
+
                 try {
                     console.log(`Testing MCP server: ${config.name} at ${config.url}`);
-                    
+
                     // Actually connect to the MCP server and get tools
                     const tools = await getToolsFromServer(config);
-                    
+
                     if (tools && tools.length > 0) {
                         toolsListElement.innerHTML = `
                             <div class="mcp-tools-header">
@@ -635,10 +669,10 @@
                             </div>
                         `;
                     }
-                    
+
                     testBtn.textContent = 'Hide Tools';
                     testBtn.disabled = false;
-                    
+
                 } catch (error) {
                     console.error('Failed to test server:', error);
                     toolsListElement.innerHTML = `<div class="mcp-tools-error">❌ Failed to test server: ${error.message}</div>`;
@@ -650,7 +684,7 @@
             // Function to actually connect to MCP server and get tools
             async function getToolsFromServer(config) {
                 console.log(`🔌 Connecting to MCP server: ${config.name} at ${config.url}`);
-                
+
                 if (config.url.startsWith('ws://') || config.url.startsWith('wss://')) {
                     // WebSocket connection
                     console.log(`📡 Using WebSocket for ${config.name}`);
@@ -668,7 +702,7 @@
                 return new Promise((resolve, reject) => {
                     const ws = new WebSocket(config.url);
                     let resolved = false;
-                    
+
                     const timeout = setTimeout(() => {
                         if (!resolved) {
                             resolved = true;
@@ -676,10 +710,10 @@
                             reject(new Error('Connection timeout'));
                         }
                     }, 10000);
-                    
+
                     ws.onopen = () => {
                         console.log(`✅ WebSocket connected to ${config.name}`);
-                        
+
                         // Send initialize request
                         ws.send(JSON.stringify({
                             jsonrpc: '2.0',
@@ -692,11 +726,11 @@
                             }
                         }));
                     };
-                    
+
                     ws.onmessage = (event) => {
                         try {
                             const response = JSON.parse(event.data);
-                            
+
                             if (response.id === 1 && response.result) {
                                 // Initialize successful, now request tools
                                 ws.send(JSON.stringify({
@@ -722,7 +756,7 @@
                             }
                         }
                     };
-                    
+
                     ws.onerror = (error) => {
                         clearTimeout(timeout);
                         if (!resolved) {
@@ -730,7 +764,7 @@
                             reject(new Error('WebSocket connection failed'));
                         }
                     };
-                    
+
                     ws.onclose = () => {
                         clearTimeout(timeout);
                         if (!resolved) {
@@ -743,13 +777,13 @@
 
             async function getToolsViaHTTP(config) {
                 console.log(`📤 Starting HTTP/SSE test for ${config.name}`);
-                
+
                 // Check if this is invideo server (uses different format)
                 if (config.url.includes('mcp.invideo.io')) {
                     console.log(`📡 Detected invideo server - using special handling`);
                     return await getToolsFromInvideo(config);
                 }
-                
+
                 // Standard MCP over HTTP/SSE (for Zapier etc.)
                 const initPayload = {
                     jsonrpc: '2.0',
@@ -761,26 +795,26 @@
                         clientInfo: { name: 'browzer-electron-test', version: '1.0.0' }
                     }
                 };
-                
+
                 console.log(`📤 Sending initialize to ${config.url}:`, initPayload);
                 const initResponse = await fetch(config.url, {
                     method: 'POST',
-                    headers: { 
+                    headers: {
                         'Content-Type': 'application/json',
                         'Accept': 'application/json, text/event-stream'
                     },
                     body: JSON.stringify(initPayload)
                 });
-                
+
                 console.log(`📥 Initialize response: ${initResponse.status} ${initResponse.statusText}`);
-                
+
                 if (!initResponse.ok) {
                     if (initResponse.status === 401) {
                         throw new Error(`Authentication required for ${config.name}. Please check if you need to sign in to your ${config.name} account first.`);
                     }
                     throw new Error(`HTTP ${initResponse.status}: ${initResponse.statusText}`);
                 }
-                
+
                 // Handle SSE response for initialization
                 if (initResponse.headers.get('content-type')?.includes('text/event-stream')) {
                     const reader = initResponse.body.getReader();
@@ -797,7 +831,7 @@
                         buffer = lines.pop() || '';
 
                         let currentEvent = {};
-                        
+
                         for (const line of lines) {
                             if (line.startsWith('data:')) {
                                 currentEvent.data = line.substring(5).trim();
@@ -816,15 +850,15 @@
                                 currentEvent = {};
                             }
                         }
-                        
+
                         if (initialized) break;
                     }
                 }
-                
+
                 // Now request tools
                 const toolsResponse = await fetch(config.url, {
                     method: 'POST',
-                    headers: { 
+                    headers: {
                         'Content-Type': 'application/json',
                         'Accept': 'application/json, text/event-stream'
                     },
@@ -835,11 +869,11 @@
                         params: {}
                     })
                 });
-                
+
                 if (!toolsResponse.ok) {
                     throw new Error(`HTTP ${toolsResponse.status}: ${toolsResponse.statusText}`);
                 }
-                
+
                 // Handle SSE response for tools
                 if (toolsResponse.headers.get('content-type')?.includes('text/event-stream')) {
                     const reader = toolsResponse.body.getReader();
@@ -856,7 +890,7 @@
                         buffer = lines.pop() || '';
 
                         let currentEvent = {};
-                        
+
                         for (const line of lines) {
                             if (line.startsWith('data:')) {
                                 currentEvent.data = line.substring(5).trim();
@@ -875,10 +909,10 @@
                                 currentEvent = {};
                             }
                         }
-                        
+
                         if (tools.length > 0) break;
                     }
-                    
+
                     return tools;
                 } else {
                     const result = await toolsResponse.json();
@@ -888,19 +922,19 @@
 
             async function getToolsFromInvideo(config) {
                 console.log(`📡 Getting session endpoint from invideo...`);
-                
+
                 // First, get the session endpoint
                 const response = await fetch(config.url, {
                     method: 'GET',
-                    headers: { 
+                    headers: {
                         'Accept': 'text/event-stream'
                     }
                 });
-                
+
                 if (!response.ok) {
                     throw new Error(`HTTP ${response.status}: ${response.statusText}`);
                 }
-                
+
                 let sessionUrl = null;
                 const reader = response.body.getReader();
                 const decoder = new TextDecoder();
@@ -926,14 +960,14 @@
                             }
                         }
                     }
-                    
+
                     if (sessionUrl) break;
                 }
-                
+
                 if (!sessionUrl) {
                     throw new Error('Failed to get session URL from invideo');
                 }
-                
+
                 // Now use the session URL for MCP communication
                 const initPayload = {
                     jsonrpc: '2.0',
@@ -945,20 +979,20 @@
                         clientInfo: { name: 'browzer-electron-test', version: '1.0.0' }
                     }
                 };
-                
+
                 const initResponse = await fetch(sessionUrl, {
                     method: 'POST',
-                    headers: { 
+                    headers: {
                         'Content-Type': 'application/json',
                         'Accept': 'application/json, text/event-stream'
                     },
                     body: JSON.stringify(initPayload)
                 });
-                
+
                 if (!initResponse.ok) {
                     throw new Error(`Session init failed: HTTP ${initResponse.status}: ${initResponse.statusText}`);
                 }
-                
+
                 // Handle session initialization
                 if (initResponse.headers.get('content-type')?.includes('text/event-stream')) {
                     const reader = initResponse.body.getReader();
@@ -975,7 +1009,7 @@
                         buffer = lines.pop() || '';
 
                         let currentEvent = {};
-                        
+
                         for (const line of lines) {
                             if (line.startsWith('data:')) {
                                 currentEvent.data = line.substring(5).trim();
@@ -994,15 +1028,15 @@
                                 currentEvent = {};
                             }
                         }
-                        
+
                         if (initialized) break;
                     }
                 }
-                
+
                 // Now get tools using session URL
                 const toolsResponse = await fetch(sessionUrl, {
                     method: 'POST',
-                    headers: { 
+                    headers: {
                         'Content-Type': 'application/json',
                         'Accept': 'application/json, text/event-stream'
                     },
@@ -1013,11 +1047,11 @@
                         params: {}
                     })
                 });
-                
+
                 if (!toolsResponse.ok) {
                     throw new Error(`Tools request failed: HTTP ${toolsResponse.status}: ${toolsResponse.statusText}`);
                 }
-                
+
                 // Handle tools response
                 if (toolsResponse.headers.get('content-type')?.includes('text/event-stream')) {
                     const reader = toolsResponse.body.getReader();
@@ -1034,7 +1068,7 @@
                         buffer = lines.pop() || '';
 
                         let currentEvent = {};
-                        
+
                         for (const line of lines) {
                             if (line.startsWith('data:')) {
                                 currentEvent.data = line.substring(5).trim();
@@ -1053,10 +1087,10 @@
                                 currentEvent = {};
                             }
                         }
-                        
+
                         if (tools.length > 0) break;
                     }
-                    
+
                     return tools;
                 } else {
                     const result = await toolsResponse.json();
@@ -1068,6 +1102,7 @@
             try {
                 renderPanel();
                 console.log('✅ MCP panel initialized successfully');
+                setTimeout(() => testMcpIntegration(), 500);
             } catch (error) {
                 console.error('❌ Error rendering MCP panel:', error);
                 // Fallback: create a simple working button
@@ -1084,13 +1119,13 @@
         document.addEventListener('DOMContentLoaded', () => {
             setupEventListeners();
             initializeToggleSwitches();
-            
+
             // Initialize MCP panel with retry
             setTimeout(() => {
                 console.log('🔄 Attempting to initialize MCP panel...');
                 initializeMcpPanel();
             }, 100);
-            
+
             // Check for anchor in URL and navigate to that section
             const hash = window.location.hash.substring(1); // Remove the #
             if (hash) {
@@ -1125,7 +1160,7 @@
             apiKeyProviders.forEach(provider => {
                 const saveBtn = document.getElementById(`save${provider.charAt(0).toUpperCase() + provider.slice(1)}Btn`);
                 const input = document.getElementById(`${provider}ApiKey`);
-                
+
                 if (saveBtn && input) {
                     saveBtn.addEventListener('click', () => {
                         const apiKey = input.value.trim();
@@ -1134,15 +1169,15 @@
                             const originalText = saveBtn.textContent;
                             saveBtn.textContent = 'Saving...';
                             saveBtn.disabled = true;
-                            
+
                             // Save the API key
                             window.sendToMainRenderer('save-api-key', { provider, apiKey });
-                            
+
                             // Show success feedback
                             setTimeout(() => {
                                 saveBtn.textContent = 'Saved!';
                                 saveBtn.style.background = '#34a853';
-                                
+
                                 // Reset button after 2 seconds
                                 setTimeout(() => {
                                     saveBtn.textContent = originalText;
@@ -1154,13 +1189,13 @@
                             // Show error if no API key entered
                             input.style.borderColor = '#ea4335';
                             input.focus();
-                            
+
                             setTimeout(() => {
                                 input.style.borderColor = '';
                             }, 3000);
                         }
                     });
-                    
+
                     // Clear error styling when user starts typing
                     input.addEventListener('input', () => {
                         input.style.borderColor = '';
@@ -1274,7 +1309,7 @@
         function updateCacheStats(stats) {
             const totalCacheSizeElement = document.getElementById('totalCacheSize');
             const cacheItemCountElement = document.getElementById('cacheItemCount');
-            
+
             if (totalCacheSizeElement) {
                 totalCacheSizeElement.textContent = stats.totalSize || '0 MB';
             }
@@ -1287,7 +1322,7 @@
             const blockedDomainsCountElement = document.getElementById('blockedDomainsCount');
             const cssRulesCountElement = document.getElementById('cssRulesCount');
             const filterRulesCountElement = document.getElementById('filterRulesCount');
-            
+
             if (blockedDomainsCountElement) {
                 blockedDomainsCountElement.textContent = stats.blockedDomains || 0;
             }
@@ -1303,21 +1338,21 @@
         async function testMcpIntegration() {
             const logElement = document.getElementById('mcp-test-log');
             const statusElement = document.getElementById('mcp-test-status');
-            
+
             logElement.style.display = 'block';
             logElement.textContent = '';
             statusElement.innerHTML = '<div style="padding: 10px; background: #d1ecf1; color: #0c5460; border-radius: 4px;">🔄 Running MCP integration test...</div>';
-            
+
             function log(message) {
                 const timestamp = new Date().toLocaleTimeString();
                 logElement.textContent += `[${timestamp}] ${message}\n`;
                 logElement.scrollTop = logElement.scrollHeight;
             }
-            
+
             try {
                 log('🚀 Starting MCP Integration Test in Browzer Electron...');
-                
-                // Test 1: Environment Check
+
+                // 1️⃣ Environment Check
                 log('\n1️⃣ Testing Electron Environment:');
                 const envTests = [
                     { name: 'fetch API', test: () => typeof fetch !== 'undefined' },
@@ -1326,22 +1361,24 @@
                     { name: 'EventSource', test: () => typeof EventSource !== 'undefined' },
                     { name: 'URL constructor', test: () => typeof URL !== 'undefined' }
                 ];
-                
+
                 let envOk = true;
                 envTests.forEach(({ name, test }) => {
                     const passed = test();
                     envOk = envOk && passed;
                     log(`   ${passed ? '✅' : '❌'} ${name}: ${passed ? 'Available' : 'Missing'}`);
                 });
-                
-                if (!envOk) {
-                    throw new Error('Environment check failed - missing required APIs');
-                }
-                
-                // Test 2: MCP Connection
+
+                if (!envOk) throw new Error('Environment check failed - missing required APIs');
+
+                // 2️⃣ MCP Connection
                 log('\n2️⃣ Testing MCP Server Connection:');
-                const zapierUrl = 'https://mcp.zapier.com/api/mcp/s/.../mcp';
-                
+                const serversAll = JSON.parse(localStorage.getItem('mcp_servers') || '[]');
+                const enabledServer = serversAll.find(s => s.enabled === true) || null;
+                const zapierUrl = enabledServer?.url || null;
+
+                if (!zapierUrl) throw new Error('No enabled MCP server found. Please add and enable a server.');
+
                 const initPayload = {
                     jsonrpc: '2.0',
                     id: 1,
@@ -1352,7 +1389,7 @@
                         clientInfo: { name: 'browzer-electron-test', version: '1.0.0' }
                     }
                 };
-                
+
                 log('   📤 Sending initialize request...');
                 const response = await fetch(zapierUrl, {
                     method: 'POST',
@@ -1362,18 +1399,14 @@
                     },
                     body: JSON.stringify(initPayload)
                 });
-                
+
                 log(`   📥 Response: ${response.status} ${response.statusText}`);
-                
-                if (!response.ok) {
-                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-                }
-                
-                // Handle SSE response
+                if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+
+                // Handle SSE connection
                 let serverConnected = false;
                 if (response.headers.get('content-type')?.includes('text/event-stream')) {
                     log('   📡 Processing SSE stream...');
-                    
                     const reader = response.body.getReader();
                     const decoder = new TextDecoder();
                     let buffer = '';
@@ -1387,45 +1420,32 @@
                         buffer = lines.pop() || '';
 
                         let currentEvent = {};
-                        
                         for (const line of lines) {
-                            if (line.startsWith('data:')) {
-                                currentEvent.data = line.substring(5).trim();
-                            } else if (line === '') {
+                            if (line.startsWith('data:')) currentEvent.data = line.substring(5).trim();
+                            else if (line === '') {
                                 if (currentEvent.data) {
                                     try {
                                         const eventData = JSON.parse(currentEvent.data);
-                                        if (eventData.result && eventData.result.serverInfo) {
+                                        if (eventData.result?.serverInfo) {
                                             const server = eventData.result.serverInfo;
                                             log(`   ✅ Connected to: ${server.name} v${server.version}`);
                                             serverConnected = true;
                                             break;
                                         }
-                                    } catch (parseError) {
-                                        // Continue processing
-                                    }
+                                    } catch { }
                                 }
                                 currentEvent = {};
                             }
                         }
-                        
                         if (serverConnected) break;
                     }
                 }
-                
-                if (!serverConnected) {
-                    throw new Error('Failed to establish MCP connection');
-                }
-                
-                // Test 3: Tools List
+
+                if (!serverConnected) throw new Error('Failed to establish MCP connection');
+
+                // 3️⃣ Tools List
                 log('\n3️⃣ Testing Tools Discovery:');
-                const toolsPayload = {
-                    jsonrpc: '2.0',
-                    id: 2,
-                    method: 'tools/list',
-                    params: {}
-                };
-                
+                const toolsPayload = { jsonrpc: '2.0', id: 2, method: 'tools/list', params: {} };
                 const toolsResponse = await fetch(zapierUrl, {
                     method: 'POST',
                     headers: {
@@ -1434,7 +1454,7 @@
                     },
                     body: JSON.stringify(toolsPayload)
                 });
-                
+
                 let toolsFound = 0;
                 if (toolsResponse.headers.get('content-type')?.includes('text/event-stream')) {
                     const reader = toolsResponse.body.getReader();
@@ -1450,100 +1470,91 @@
                         buffer = lines.pop() || '';
 
                         let currentEvent = {};
-                        
                         for (const line of lines) {
-                            if (line.startsWith('data:')) {
-                                currentEvent.data = line.substring(5).trim();
-                            } else if (line === '') {
+                            if (line.startsWith('data:')) currentEvent.data = line.substring(5).trim();
+                            else if (line === '') {
                                 if (currentEvent.data) {
                                     try {
                                         const eventData = JSON.parse(currentEvent.data);
-                                        if (eventData.result && eventData.result.tools) {
+                                        if (eventData.result?.tools) {
                                             const tools = eventData.result.tools;
                                             toolsFound = tools.length;
                                             log(`   ✅ Discovered ${tools.length} tools!`);
-                                            
-                                            // Show sample tools
+
                                             log('   📋 Sample tools:');
                                             tools.slice(0, 3).forEach((tool, i) => {
                                                 log(`      ${i + 1}. ${tool.name} - ${tool.description?.substring(0, 60) || 'No description'}...`);
                                             });
-                                            
-                                            if (tools.length > 3) {
-                                                log(`      ... and ${tools.length - 3} more tools`);
-                                            }
+                                            if (tools.length > 3) log(`      ... and ${tools.length - 3} more tools`);
                                             break;
                                         }
-                                    } catch (parseError) {
-                                        // Continue processing
-                                    }
+                                    } catch { }
                                 }
                                 currentEvent = {};
                             }
                         }
-                        
                         if (toolsFound > 0) break;
                     }
                 }
-                
-                // Test 4: McpClientManager
+
+                // 4️⃣ McpClientManager storage test
                 log('\n4️⃣ Testing McpClientManager Class:');
                 try {
-                    // Try to import and test the actual manager
                     log('   🔧 Testing manager functionality...');
-                    
-                    // Test localStorage for MCP configs
-                    const testConfig = {
-                        name: 'zapier-electron-test',
-                        url: zapierUrl,
-                        enabled: false,
-                        transport: 'sse'
-                    };
-                    
+                    const testConfig = { name: 'zapier-electron-test', url: zapierUrl, enabled: false, transport: 'sse' };
                     localStorage.setItem('mcp_test_electron', JSON.stringify([testConfig]));
                     const retrieved = JSON.parse(localStorage.getItem('mcp_test_electron'));
                     localStorage.removeItem('mcp_test_electron');
-                    
-                    if (retrieved && retrieved[0].name === 'zapier-electron-test') {
+                    if (retrieved?.[0]?.name === 'zapier-electron-test') {
                         log('   ✅ McpClientManager storage compatibility verified');
-                    } else {
-                        throw new Error('Storage test failed');
-                    }
-                    
-                } catch (error) {
-                    log(`   ⚠️ McpClientManager test: ${error.message}`);
+                    } else throw new Error('Storage test failed');
+                } catch (err) {
+                    log(`   ⚠️ McpClientManager test: ${err.message}`);
                 }
-                
-                // Summary
+
+                // ✅ Summary
                 log('\n📊 Test Results:');
                 log(`   Environment: ✅ Pass`);
                 log(`   Connection: ✅ Pass`);
                 log(`   Tools Discovery: ${toolsFound > 0 ? '✅ Pass' : '❌ Fail'} (${toolsFound} tools)`);
                 log(`   Manager Compatibility: ✅ Pass`);
-                
-                log('\n🎉 MCP Integration Test PASSED!');
-                log('💡 MCP is fully functional in Browzer Electron');
-                log('💡 You can now add MCP servers in the settings above');
-                
-                statusElement.innerHTML = '<div style="padding: 10px; background: #d4edda; color: #155724; border-radius: 4px;">✅ All tests passed! MCP is working in Browzer.</div>';
-                
+
+                if (toolsFound > 0) {
+                    log('\n🎉 MCP Integration Test PASSED!');
+                    statusElement.innerHTML = '<div style="padding: 10px; background: #d4edda; color: #155724; border-radius: 4px;">✅ All tests passed! MCP is working in Browzer.</div>';
+
+                    // Save server to main process
+                    window.sendToMainRenderer('save-mcp-server', {
+                        name: enabledServer?.name || 'zapier-electron-test',
+                        url: zapierUrl,
+                        enabled: true
+                    });
+                } else {
+                    throw new Error('Tools discovery failed, MCP integration incomplete');
+                }
+
             } catch (error) {
                 log(`\n❌ Test failed: ${error.message}`);
                 statusElement.innerHTML = `<div style="padding: 10px; background: #f8d7da; color: #721c24; border-radius: 4px;">❌ Test failed: ${error.message}</div>`;
+
+                // ❌ Remove MCP server if test failed
+                window.sendToMainRenderer('save-mcp-server', null);
+                console.warn('[MCP] Integration failed, MCP server not saved.');
             }
         }
-        
+
+
         function clearMcpTestLog() {
             const logElement = document.getElementById('mcp-test-log');
             const statusElement = document.getElementById('mcp-test-status');
-            
+
             logElement.textContent = '';
             logElement.style.display = 'none';
             statusElement.innerHTML = '';
         }
 
         // Debug function for troubleshooting MCP panel
-        window.debugMcpPanel = function() {
+        window.debugMcpPanel = function () {
             console.log('🐛 DEBUG MCP PANEL:');
             console.log('- Root element:', document.getElementById('mcp-servers-root'));
             console.log('- Add button:', document.querySelector('#mcp-add-btn'));
@@ -1553,7 +1564,7 @@
         };
 
         // Global add server function (backup for onclick)
-        window.mcpAddServer = function() {
+        window.mcpAddServer = function () {
             console.log('🚀 Global mcpAddServer called!');
             showAddServerModal();
         };
@@ -1673,9 +1684,9 @@
                 }
 
                 try {
-                    const cfg = { name, url, enabled: true };
+                    const cfg = { name, url, enabled: false };
                     const configs = JSON.parse(localStorage.getItem('mcp_servers') || '[]');
-                    
+
                     // Check for duplicate names
                     if (configs.find(c => c.name === name)) {
                         nameInput.style.borderColor = '#dc3545';
@@ -1683,13 +1694,13 @@
                         alert('Server name already exists!');
                         return;
                     }
-                    
+
                     configs.push(cfg);
                     localStorage.setItem('mcp_servers', JSON.stringify(configs));
-                    
+
                     console.log('✅ Server added:', cfg);
                     modal.remove();
-                    
+
                     // Show success message
                     const success = document.createElement('div');
                     success.style.cssText = `
@@ -1705,16 +1716,16 @@
                     `;
                     success.textContent = `✅ Server "${name}" added successfully!`;
                     document.body.appendChild(success);
-                    
+
                     setTimeout(() => success.remove(), 3000);
-                    
+
                     // Try to refresh the panel
                     if (typeof initializeMcpPanel === 'function') {
                         initializeMcpPanel();
                     } else {
                         location.reload();
                     }
-                    
+
                 } catch (error) {
                     console.error('❌ Error adding server:', error);
                     alert('Error adding server: ' + error.message);
@@ -1732,20 +1743,21 @@
         }
 
         // Quick add server function for testing
-        window.addTestServer = function() {
+        window.addTestServer = function () {
             const cfg = {
                 name: 'zapier',
                 url: 'https://mcp.zapier.com/api/mcp/s/.../mcp',
                 enabled: true
             };
-            
+
             const configs = JSON.parse(localStorage.getItem('mcp_servers') || '[]');
             configs.push(cfg);
             localStorage.setItem('mcp_servers', JSON.stringify(configs));
-            
+
             console.log('✅ Test server added:', cfg);
             initializeMcpPanel();
         };
     </script>
 </body>
-</html> 
+
+</html>
