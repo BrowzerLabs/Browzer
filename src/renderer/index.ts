@@ -1654,6 +1654,27 @@ async function handleSettingsRequest(webview: any, action: string, data: any): P
       showToast(`${provider.charAt(0).toUpperCase() + provider.slice(1)} API key saved!`, 'success');
       break;
 
+    case 'save-mcp-server': {
+      if (data && data.name && data.url) {
+        const { name, url, enabled } = data;
+
+        // Always overwrite with a single-element array
+        const mcpConfigs = [{ name, url, enabled }];
+
+        localStorage.setItem('mcp_servers', JSON.stringify(mcpConfigs));
+
+        showToast(`MCP server "${name}" saved!`, 'success');
+        console.log('[MCP] Saved MCP server to localStorage:', mcpConfigs[0]);
+      } else {
+        // If no data provided → clear configs
+        localStorage.setItem('mcp_servers', JSON.stringify([]));
+
+        showToast('MCP server config cleared', 'info');
+        console.log('[MCP] Cleared MCP server configs');
+      }
+      break;
+    }
+
     case 'toggle-sidebar':
       localStorage.setItem('sidebarEnabled', data.enabled.toString());
       applySidebarLayout(data.enabled);
@@ -2452,6 +2473,10 @@ function setupAgentControls(): void {
             <span>Do</span>
           </label>
           ` : ''}
+          <label class="mode-option">
+            <input type="radio" name="chatMode" value="get_it_done" />
+            <span>Get it done</span>
+          </label>
         </div>
         <div class="chat-input-row">
           <input type="text" id="chatInput" placeholder="Ask a follow-up question..." />
@@ -2522,6 +2547,10 @@ function setupChatInputHandlers(): void {
           // Use DoAgent for automation tasks
           console.log('[sendMessage] Using DoAgent for automation task');
           processDoTask(message);
+        } else if (mode === 'get_it_done') {
+          // Use MCP tools for task execution
+          console.log('[sendMessage] Using Get it done mode with MCP tools');
+          // processGetItDoneTask(message);
         } else {
           // Use existing ask mode logic
           if (selectedWebpageContexts.length > 0) {
@@ -2955,6 +2984,10 @@ async function executeAgent(): Promise<void> {
             <span>Do</span>
           </label>
           ` : ''}
+          <label class="mode-option">
+            <input type="radio" name="chatMode" value="get_it_done" />
+            <span>Get it done</span>
+          </label>
         </div>
         <div class="chat-input-row">
           <input type="text" id="chatInput" placeholder="Ask a follow-up question..." />
@@ -2963,7 +2996,6 @@ async function executeAgent(): Promise<void> {
       `;
 
       chatInputContainer.appendChild(chatInputArea);
-      setupChatInputHandlers();
     }
 
     // Show loading
@@ -3386,6 +3418,10 @@ function addMessageToChat(role: string, content: string, timing?: number): void 
             <span>Do</span>
           </label>
           ` : ''}
+          <label class="mode-option">
+            <input type="radio" name="chatMode" value="get_it_done" />
+            <span>Get it done</span>
+          </label>
         </div>
         <div class="chat-input-row">
           <input type="text" id="chatInput" placeholder="Ask a follow-up question..." />
@@ -3394,7 +3430,6 @@ function addMessageToChat(role: string, content: string, timing?: number): void 
       `;
 
       chatInputContainer.appendChild(chatInputArea);
-      setupChatInputHandlers();
     }
 
     console.log(`[addMessageToChat] Message added successfully. Total messages: ${chatContainer.children.length}`);
