@@ -3,6 +3,7 @@ import { GetItDoneStep } from './types';
 export class GetItDoneUI {
   private executionSummaryContainer: HTMLElement | null = null;
   private executionSteps: { [key: string]: string } = {};
+  private stepStatuses: { [key: string]: 'pending' | 'running' | 'completed' | 'failed' } = {};
   private toolStatuses: { [key: string]: 'running' | 'completed' | 'failed' } = {};
   private startTime: number = Date.now();
   private stepCount: number = 0;
@@ -17,6 +18,7 @@ export class GetItDoneUI {
 
     // Reset state variables
     this.executionSteps = {};
+    this.stepStatuses = {};
     this.toolStatuses = {};
     this.completedSteps = 0;
     this.stepCount = 5; // Standard 5-step workflow
@@ -31,8 +33,10 @@ export class GetItDoneUI {
       this.executionSummaryContainer = this.createExecutionSummaryContainer();
     }
 
-    // Update step status
+    // Update step status and message
     this.executionSteps[step.phase] = step.message;
+    this.stepStatuses[step.phase] = step.status;
+
     if (step.status === 'completed') {
       this.completedSteps++;
     }
@@ -54,11 +58,20 @@ export class GetItDoneUI {
   async displayFinalResult(formattedResponse: string): Promise<void> {
     console.log('[GetItDoneUI] Displaying final result:', formattedResponse);
 
+    // Mark the final 'complete' step as completed and increment counter
+    if (this.stepStatuses['complete'] !== 'completed') {
+      this.stepStatuses['complete'] = 'completed';
+      this.completedSteps++;
+    }
+
     // Update the execution summary with final results
     this.updateResultsSection(formattedResponse);
 
     // Update overall status to completed
     this.updateOverallStatus('completed');
+
+    // Update the execution summary to reflect final step completion
+    this.updateExecutionSummary();
 
     // NO separate chat message - results are shown in the execution summary only
   }
@@ -261,6 +274,21 @@ export class GetItDoneUI {
           border-radius: 12px;
         }
 
+        .loading-spinner {
+          width: 16px;
+          height: 16px;
+          border: 2px solid #f3f3f3;
+          border-top: 2px solid #007bff;
+          border-radius: 50%;
+          animation: spin 1s linear infinite;
+          display: inline-block;
+        }
+
+        @keyframes spin {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
+        }
+
         .tool-item {
           display: flex;
           align-items: center;
@@ -454,7 +482,9 @@ export class GetItDoneUI {
 
     return steps.map(step => {
       const stepMessage = this.executionSteps[step.key];
-      const isCompleted = stepMessage && stepMessage.includes('✅');
+      const stepStatus = this.stepStatuses[step.key] || 'pending';
+      const isCompleted = stepStatus === 'completed';
+      const isRunning = stepStatus === 'running';
 
       let displayText = step.defaultLabel;
       let statusText = '';
@@ -476,10 +506,20 @@ export class GetItDoneUI {
         statusText = isCompleted ? 'Done' : '';
       }
 
+      // Create step icon based on status
+      let stepIcon;
+      if (isCompleted) {
+        stepIcon = '✅';
+      } else if (isRunning) {
+        stepIcon = '<div class="loading-spinner"></div>';
+      } else {
+        stepIcon = '⏸️'; // Pending/paused icon
+      }
+
       return `
         <div class="step-item">
           <div class="step-main">
-            <span class="step-icon">${isCompleted ? '✅' : '⏳'}</span>
+            <span class="step-icon">${stepIcon}</span>
             <span class="step-text">${displayText}</span>
           </div>
           ${statusText ? `<span class="step-status">${statusText}</span>` : ''}
