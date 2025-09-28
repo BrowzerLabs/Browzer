@@ -27,6 +27,9 @@ export class GetItDoneService {
     const startTime = Date.now();
     this.steps = [];
 
+    // Reset UI for fresh start on each request
+    this.ui.resetForNewRequest();
+
     try {
       console.log('[GetItDone] Starting query processing:', userQuery);
 
@@ -153,6 +156,7 @@ export class GetItDoneService {
     this.steps.push(step);
     await this.ui.updateStep(step);
   }
+  
 
   private async updateLastStep(message: string, status: GetItDoneStep['status'], data?: any): Promise<void> {
     if (this.steps.length > 0) {

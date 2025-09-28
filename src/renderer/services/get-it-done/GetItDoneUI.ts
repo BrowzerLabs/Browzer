@@ -1,145 +1,76 @@
 import { GetItDoneStep } from './types';
 
 export class GetItDoneUI {
-  private currentMessageElement: HTMLElement | null = null;
-  private toolExecutionContainer: HTMLElement | null = null;
+  private executionSummaryContainer: HTMLElement | null = null;
+  private executionSteps: { [key: string]: string } = {};
+  private toolStatuses: { [key: string]: 'running' | 'completed' | 'failed' } = {};
+  private startTime: number = Date.now();
+  private stepCount: number = 0;
+  private completedSteps: number = 0;
+
+  // Reset all UI state for a new Get It Done request
+  resetForNewRequest(): void {
+    console.log('[GetItDoneUI] Resetting UI for new request');
+
+    // Clear container reference (forces recreation)
+    this.executionSummaryContainer = null;
+
+    // Reset state variables
+    this.executionSteps = {};
+    this.toolStatuses = {};
+    this.completedSteps = 0;
+    this.stepCount = 5; // Standard 5-step workflow
+    this.startTime = Date.now();
+  }
 
   async updateStep(step: GetItDoneStep): Promise<void> {
     console.log('[GetItDoneUI] Updating step:', step);
 
-    // Add or update the main step message
-    this.addOrUpdateMessage(step.message, 'assistant', `get-it-done-${step.phase}`, step.status);
-
-    // Create tool execution container if we're in the executing phase
-    if (step.phase === 'executing' && !this.toolExecutionContainer) {
-      this.toolExecutionContainer = this.createToolExecutionContainer();
+    // Initialize execution summary container if needed
+    if (!this.executionSummaryContainer) {
+      this.executionSummaryContainer = this.createExecutionSummaryContainer();
     }
+
+    // Update step status
+    this.executionSteps[step.phase] = step.message;
+    if (step.status === 'completed') {
+      this.completedSteps++;
+    }
+
+    // Update the execution summary (ONLY new UI)
+    this.updateExecutionSummary();
   }
 
   async updateToolExecution(toolName: string, status: 'running' | 'completed' | 'failed', error?: string): Promise<void> {
     console.log('[GetItDoneUI] Tool execution update:', { toolName, status, error });
 
-    const message = this.formatToolExecutionMessage(toolName, status, error);
-    const messageClass = `tool-execution-${status}`;
+    // Update tool status tracking
+    this.toolStatuses[toolName] = status;
 
-    // Add to tool execution container if it exists, otherwise add as regular message
-    if (this.toolExecutionContainer) {
-      this.addMessageToContainer(this.toolExecutionContainer, message, messageClass);
-    } else {
-      this.addMessageToChat(message, 'assistant', messageClass);
-    }
+    // Update the execution summary tool progress section (ONLY new UI)
+    this.updateToolProgressSection();
   }
 
   async displayFinalResult(formattedResponse: string): Promise<void> {
     console.log('[GetItDoneUI] Displaying final result:', formattedResponse);
-    this.addMessageToChat(formattedResponse, 'assistant', 'get-it-done-result');
 
-    // Clean up containers
-    this.toolExecutionContainer = null;
-    this.currentMessageElement = null;
+    // Update the execution summary with final results
+    this.updateResultsSection(formattedResponse);
+
+    // Update overall status to completed
+    this.updateOverallStatus('completed');
+
+    // NO separate chat message - results are shown in the execution summary only
   }
 
   async handleError(error: any): Promise<void> {
     console.error('[GetItDoneUI] Handling error:', error);
-    const errorMessage = `❌ Get it done mode failed: ${error.message}`;
-    this.addMessageToChat(errorMessage, 'assistant', 'get-it-done-error');
 
-    // Clean up containers
-    this.toolExecutionContainer = null;
-    this.currentMessageElement = null;
+    // Update execution summary with error status (no separate chat message needed)
+    this.updateOverallStatus('failed');
+    this.updateResultsSection(`❌ Error: ${error.message}`);
   }
 
-  private formatToolExecutionMessage(toolName: string, status: 'running' | 'completed' | 'failed', error?: string): string {
-    switch (status) {
-      case 'running':
-        return `🔄 Executing ${toolName}...`;
-      case 'completed':
-        return `✅ ${toolName} completed`;
-      case 'failed':
-        return `❌ ${toolName} failed${error ? ': ' + error : ''}`;
-      default:
-        return `• ${toolName}: ${status}`;
-    }
-  }
-
-  private addOrUpdateMessage(content: string, sender: string, type: string, status: string): void {
-    const chatContainer = this.getChatContainer();
-    if (!chatContainer) return;
-
-    // If this is an update to the current message, update it
-    if (this.currentMessageElement && status === 'completed') {
-      this.currentMessageElement.innerHTML = this.formatMessageContent(content);
-      return;
-    }
-
-    // Create new message
-    const messageElement = this.createMessageElement(content, sender, type);
-    chatContainer.appendChild(messageElement);
-    this.scrollToBottom(chatContainer);
-
-    // Store reference if this is a running step
-    if (status === 'running') {
-      this.currentMessageElement = messageElement;
-    }
-  }
-
-  private addMessageToChat(content: string, sender: string, type: string): void {
-    const chatContainer = this.getChatContainer();
-    if (!chatContainer) return;
-
-    const messageElement = this.createMessageElement(content, sender, type);
-    chatContainer.appendChild(messageElement);
-    this.scrollToBottom(chatContainer);
-  }
-
-  private addMessageToContainer(container: HTMLElement, content: string, className: string): void {
-    const messageElement = document.createElement('div');
-    messageElement.className = `tool-execution-item ${className}`;
-    messageElement.innerHTML = this.formatMessageContent(content);
-    container.appendChild(messageElement);
-
-    // Scroll the chat container
-    const chatContainer = this.getChatContainer();
-    if (chatContainer) {
-      this.scrollToBottom(chatContainer);
-    }
-  }
-
-  private createMessageElement(content: string, sender: string, type: string): HTMLElement {
-    const messageElement = document.createElement('div');
-    messageElement.className = `message ${sender}-message ${type}`;
-    messageElement.innerHTML = this.formatMessageContent(content);
-    return messageElement;
-  }
-
-  private createToolExecutionContainer(): HTMLElement {
-    const chatContainer = this.getChatContainer();
-    if (!chatContainer) {
-      throw new Error('Chat container not found');
-    }
-
-    const container = document.createElement('div');
-    container.className = 'tool-execution-container';
-    container.innerHTML = `
-      <div class="tool-execution-header">
-        <strong>Tool Execution Progress:</strong>
-      </div>
-    `;
-
-    chatContainer.appendChild(container);
-    this.scrollToBottom(chatContainer);
-
-    return container;
-  }
-
-  private formatMessageContent(content: string): string {
-    // Convert markdown-style formatting to HTML
-    return content
-      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-      .replace(/\*(.*?)\*/g, '<em>$1</em>')
-      .replace(/`(.*?)`/g, '<code>$1</code>')
-      .replace(/\n/g, '<br>');
-  }
 
   private getChatContainer(): HTMLElement | null {
     // Try multiple possible chat container IDs/classes used in the app
@@ -172,5 +103,422 @@ export class GetItDoneUI {
     } catch (error) {
       console.warn('[GetItDoneUI] Failed to scroll to bottom:', error);
     }
+  }
+
+  // ========================= EXECUTION SUMMARY UI =========================
+
+  private createExecutionSummaryContainer(): HTMLElement {
+    const chatContainer = this.getChatContainer();
+    if (!chatContainer) {
+      throw new Error('Chat container not found');
+    }
+
+    const container = document.createElement('div');
+    container.className = 'execution-summary-container';
+    container.innerHTML = `
+      <style>
+        .execution-summary-container {
+          background: #f8f9fa;
+          border: 1px solid #e9ecef;
+          border-radius: 8px;
+          margin: 16px 0;
+          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
+
+        .execution-header {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          padding: 16px 20px;
+          border-bottom: 1px solid #e9ecef;
+          background: white;
+          border-radius: 8px 8px 0 0;
+        }
+
+        .execution-title {
+          font-size: 18px;
+          font-weight: 600;
+          color: #212529;
+          margin: 0;
+        }
+
+        .status-badge {
+          padding: 6px 12px;
+          border-radius: 20px;
+          font-size: 14px;
+          font-weight: 500;
+          display: flex;
+          align-items: center;
+          gap: 6px;
+        }
+
+        .status-completed {
+          background: #d1f2eb;
+          color: #00875f;
+          border: 1px solid #7bdeb8;
+        }
+
+        .status-running {
+          background: #fff3cd;
+          color: #856404;
+          border: 1px solid #ffeaa7;
+        }
+
+        .status-failed {
+          background: #f8d7da;
+          color: #721c24;
+          border: 1px solid #f5c6cb;
+        }
+
+        .accordion-section {
+          border-bottom: 1px solid #e9ecef;
+        }
+
+        .accordion-section:last-child {
+          border-bottom: none;
+        }
+
+        .accordion-header {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          padding: 14px 20px;
+          cursor: pointer;
+          background: white;
+          transition: background-color 0.2s;
+        }
+
+        .accordion-header:hover {
+          background: #f8f9fa;
+        }
+
+        .accordion-title {
+          font-size: 16px;
+          font-weight: 500;
+          color: #212529;
+          margin: 0;
+        }
+
+        .accordion-arrow {
+          transition: transform 0.2s;
+          color: #6c757d;
+        }
+
+        .accordion-section.collapsed .accordion-arrow {
+          transform: rotate(-90deg);
+        }
+
+        .accordion-section.collapsed .accordion-content {
+          display: none;
+        }
+
+        .accordion-content {
+          padding: 0 20px 16px 20px;
+          background: white;
+        }
+
+        .step-item {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          padding: 12px 0;
+          border-bottom: 1px solid #f1f3f4;
+        }
+
+        .step-item:last-child {
+          border-bottom: none;
+        }
+
+        .step-main {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+        }
+
+        .step-icon {
+          font-size: 18px;
+          width: 24px;
+          height: 24px;
+          border-radius: 50%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          background: #e8f5e8;
+        }
+
+        .step-text {
+          color: #495057;
+          font-size: 14px;
+          font-weight: 500;
+        }
+
+        .step-status {
+          color: #28a745;
+          font-size: 13px;
+          font-weight: 600;
+          background: #e8f5e8;
+          padding: 4px 8px;
+          border-radius: 12px;
+        }
+
+        .tool-item {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          padding: 10px 0;
+          border-bottom: 1px solid #f1f3f4;
+        }
+
+        .tool-item:last-child {
+          border-bottom: none;
+        }
+
+        .tool-name {
+          font-family: 'SF Mono', Consolas, monospace;
+          color: #495057;
+          font-size: 14px;
+        }
+
+        .tool-status {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          font-size: 14px;
+          font-weight: 500;
+        }
+
+        .tool-status.completed {
+          color: #28a745;
+        }
+
+        .tool-status.running {
+          color: #ffc107;
+        }
+
+        .tool-status.failed {
+          color: #dc3545;
+        }
+
+        .result-item {
+          padding: 12px 0;
+        }
+
+        .result-content {
+          color: #495057;
+          font-size: 14px;
+          line-height: 1.5;
+        }
+
+        .result-item.result-error .result-content {
+          color: #721c24;
+        }
+
+        .result-item.result-warning .result-content {
+          color: #856404;
+        }
+
+        .execution-footer {
+          padding: 12px 20px;
+          background: #f8f9fa;
+          border-radius: 0 0 8px 8px;
+          display: flex;
+          justify-content: flex-end;
+          font-size: 12px;
+          color: #6c757d;
+        }
+      </style>
+
+      <div class="execution-header">
+        <h3 class="execution-title">Execution Summary</h3>
+        <div class="status-badge status-running" id="overall-status">
+          <span>⏳</span> Running
+        </div>
+      </div>
+
+      <div class="accordion-section" id="execution-steps-section">
+        <div class="accordion-header" onclick="this.parentElement.classList.toggle('collapsed')">
+          <h4 class="accordion-title">Execution Steps</h4>
+          <span class="accordion-arrow">▼</span>
+        </div>
+        <div class="accordion-content" id="execution-steps-content">
+          <!-- Steps will be populated here -->
+        </div>
+      </div>
+
+      <div class="accordion-section" id="tool-progress-section">
+        <div class="accordion-header" onclick="this.parentElement.classList.toggle('collapsed')">
+          <h4 class="accordion-title">Tool Execution Progress</h4>
+          <span class="accordion-arrow">▼</span>
+        </div>
+        <div class="accordion-content" id="tool-progress-content">
+          <!-- Tool progress will be populated here -->
+        </div>
+      </div>
+
+      <div class="accordion-section" id="results-section">
+        <div class="accordion-header" onclick="this.parentElement.classList.toggle('collapsed')">
+          <h4 class="accordion-title">Results</h4>
+          <span class="accordion-arrow">▼</span>
+        </div>
+        <div class="accordion-content" id="results-content">
+          <!-- Results will be populated here -->
+        </div>
+      </div>
+
+      <div class="execution-footer" id="execution-footer">
+        Duration: <span id="duration">0.0s</span> • Steps: <span id="step-counter">0/5</span>
+      </div>
+    `;
+
+    chatContainer.appendChild(container);
+    this.scrollToBottom(chatContainer);
+
+    return container;
+  }
+
+  private updateExecutionSummary(): void {
+    if (!this.executionSummaryContainer) return;
+
+    // Update execution steps content
+    const stepsContent = this.executionSummaryContainer.querySelector('#execution-steps-content');
+    if (stepsContent) {
+      stepsContent.innerHTML = this.generateExecutionStepsHTML();
+    }
+
+    // Update step counter
+    const stepCounter = this.executionSummaryContainer.querySelector('#step-counter');
+    if (stepCounter) {
+      stepCounter.textContent = `${this.completedSteps}/${this.stepCount}`;
+    }
+
+    // Update duration
+    this.updateDuration();
+  }
+
+  private updateToolProgressSection(): void {
+    if (!this.executionSummaryContainer) return;
+
+    const toolProgressContent = this.executionSummaryContainer.querySelector('#tool-progress-content');
+    if (toolProgressContent) {
+      toolProgressContent.innerHTML = this.generateToolProgressHTML();
+    }
+  }
+
+  private updateResultsSection(formattedResponse: string): void {
+    if (!this.executionSummaryContainer) return;
+
+    const resultsContent = this.executionSummaryContainer.querySelector('#results-content');
+    if (resultsContent) {
+      resultsContent.innerHTML = this.generateResultsHTML(formattedResponse);
+    }
+  }
+
+  private updateOverallStatus(status: 'running' | 'completed' | 'failed'): void {
+    if (!this.executionSummaryContainer) return;
+
+    const statusBadge = this.executionSummaryContainer.querySelector('#overall-status');
+    if (statusBadge) {
+      statusBadge.className = `status-badge status-${status}`;
+
+      switch (status) {
+        case 'completed':
+          statusBadge.innerHTML = '<span>✅</span> Completed';
+          break;
+        case 'failed':
+          statusBadge.innerHTML = '<span>❌</span> Failed';
+          break;
+        default:
+          statusBadge.innerHTML = '<span>⏳</span> Running';
+      }
+    }
+  }
+
+  private updateDuration(): void {
+    if (!this.executionSummaryContainer) return;
+
+    const duration = ((Date.now() - this.startTime) / 1000).toFixed(1);
+    const durationElement = this.executionSummaryContainer.querySelector('#duration');
+    if (durationElement) {
+      durationElement.textContent = `${duration}s`;
+    }
+  }
+
+  private generateExecutionStepsHTML(): string {
+    const steps = [
+      { key: 'discovering', defaultLabel: 'Discovering tools...', icon: '🔍' },
+      { key: 'mapping', defaultLabel: 'Mapping instructions...', icon: '🎯' },
+      { key: 'executing', defaultLabel: 'Executing tools...', icon: '⚡' },
+      { key: 'formatting', defaultLabel: 'Formatting results...', icon: '📊' },
+      { key: 'complete', defaultLabel: 'Completing execution...', icon: '🎉' }
+    ];
+
+    return steps.map(step => {
+      const stepMessage = this.executionSteps[step.key];
+      const isCompleted = stepMessage && stepMessage.includes('✅');
+
+      let displayText = step.defaultLabel;
+      let statusText = '';
+
+      if (stepMessage) {
+        // Clean up the message and extract meaningful content
+        displayText = stepMessage.replace(/[🔍🎯⚡📊🎉✅]/g, '').trim();
+
+        // Special handling for discovery step to show found tools
+        if (step.key === 'discovering' && isCompleted) {
+          const toolsMatch = stepMessage.match(/Found (\d+) tools?: (.+)/);
+          if (toolsMatch) {
+            const toolCount = toolsMatch[1];
+            const toolNames = toolsMatch[2];
+            displayText = `Found ${toolCount} tool${parseInt(toolCount) > 1 ? 's' : ''}: ${toolNames}`;
+          }
+        }
+
+        statusText = isCompleted ? 'Done' : '';
+      }
+
+      return `
+        <div class="step-item">
+          <div class="step-main">
+            <span class="step-icon">${isCompleted ? '✅' : '⏳'}</span>
+            <span class="step-text">${displayText}</span>
+          </div>
+          ${statusText ? `<span class="step-status">${statusText}</span>` : ''}
+        </div>
+      `;
+    }).join('');
+  }
+
+  private generateToolProgressHTML(): string {
+    return Object.entries(this.toolStatuses).map(([toolName, status]) => `
+      <div class="tool-item">
+        <span class="tool-name">${toolName}</span>
+        <span class="tool-status ${status}">
+          ${status === 'running' ? '🔄' : status === 'completed' ? '✅' : '❌'}
+          ${status.charAt(0).toUpperCase() + status.slice(1)}
+        </span>
+      </div>
+    `).join('');
+  }
+
+  private generateResultsHTML(formattedResponse: string): string {
+    // Show the formatted response as a single result block instead of splitting lines
+    const cleanResponse = formattedResponse.replace(/[✅❌📋➡️]/g, '').trim();
+
+    // Determine overall status from the response
+    let resultClass = 'success';
+
+    if (formattedResponse.includes('❌') || formattedResponse.toLowerCase().includes('error') || formattedResponse.toLowerCase().includes('failed')) {
+      resultClass = 'error';
+    } else if (formattedResponse.includes('⚠️') || formattedResponse.toLowerCase().includes('warning')) {
+      resultClass = 'warning';
+    }
+
+    return `
+      <div class="result-item result-${resultClass}">
+        <div class="result-content">
+          ${cleanResponse.replace(/\n/g, '<br>')}
+        </div>
+      </div>
+    `;
   }
 }
