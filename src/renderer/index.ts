@@ -7,6 +7,7 @@ import { devToolsManager } from './components/DevToolsManager';
 import { MemoryService } from './services/MemoryService';
 import { TextProcessing } from './utils/textProcessing';
 import { McpClientManager } from './services/McpClientManager';
+import { GetItDoneService } from './services/get-it-done/GetItDoneService';
 
 // Import Electron APIs
 // Use electronAPI from preload script instead of direct electron access
@@ -146,6 +147,7 @@ let workflowProgressSetup = false; // Prevent duplicate event listener setup
 
 // Initialize services
 let memoryService: MemoryService | null = null;
+let getItDoneService: GetItDoneService | null = null;
 
 // Text selection state
 let currentSelection: { text: string; rect: any; webview: any } | null = null;
@@ -418,6 +420,11 @@ document.addEventListener('DOMContentLoaded', () => {
   (window as any).memoryService = memoryService;
 
   setupTextSelectionListener();
+
+  // Initialize Get It Done service
+  getItDoneService = new GetItDoneService();
+  console.log('[GetItDone] Service initialized');
+
   setupAdBlocker();
   initializeTabSearch();
   initializeAutoSessionManagement();
@@ -2550,7 +2557,7 @@ function setupChatInputHandlers(): void {
         } else if (mode === 'get_it_done') {
           // Use MCP tools for task execution
           console.log('[sendMessage] Using Get it done mode with MCP tools');
-          // processGetItDoneTask(message);
+          processGetItDoneTask(message);
         } else {
           // Use existing ask mode logic
           if (selectedWebpageContexts.length > 0) {
@@ -4253,6 +4260,44 @@ async function processDoTask(taskInstruction: string): Promise<void> {
     // Always clear execution flag
     isWorkflowExecuting = false;
     console.log('[processDoTask] Clearing execution flag');
+  }
+}
+
+// ========================= GET IT DONE MODE =========================
+async function processGetItDoneTask(userQuery: string): Promise<void> {
+  console.log('[processGetItDoneTask] Processing query:', userQuery);
+
+  if (!getItDoneService) {
+    console.error('[processGetItDoneTask] GetItDoneService not initialized');
+    addMessageToChat('assistant', '❌ Get it done mode is not available. Service not initialized.');
+    return;
+  }
+
+  // Prevent duplicate execution
+  if (isWorkflowExecuting) {
+    console.log('[processGetItDoneTask] Another task is already executing, skipping');
+    return;
+  }
+
+  isWorkflowExecuting = true;
+  console.log('[processGetItDoneTask] Setting execution flag');
+
+  try {
+    addMessageToChat('assistant', '🚀 Starting Get It Done mode...');
+
+    // Process the query using the GetItDoneService
+    const result = await getItDoneService.processQuery(userQuery);
+
+    console.log('[processGetItDoneTask] Task completed:', result.success);
+
+  } catch (error) {
+    console.error('[processGetItDoneTask] Error executing task:', error);
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    addMessageToChat('assistant', `❌ Get it done mode failed: ${errorMessage}`);
+  } finally {
+    // Always clear execution flag
+    isWorkflowExecuting = false;
+    console.log('[processGetItDoneTask] Clearing execution flag');
   }
 }
 
