@@ -1,31 +1,70 @@
 import { McpClientManager } from '../McpClientManager';
-import { ToolInstruction, ToolExecutionResult } from './types';
+import { ToolInstruction, ToolExecutionResult, McpToolInfo } from './types';
 
 export class McpExecutor {
-  constructor(private mcpManager: McpClientManager) {}
+  constructor(
+    private mcpManager: McpClientManager,
+    private claudeAnalyzer?: any // Optional dependency for parameter enhancement
+  ) {}
 
   async executeToolArray(
     toolInstructions: ToolInstruction[],
-    progressCallback?: (toolName: string, status: 'running' | 'completed' | 'failed', error?: string) => void
+    progressCallback?: (toolName: string, status: 'running' | 'completed' | 'failed', error?: string) => void,
+    toolSchemas?: Map<string, McpToolInfo> // Optional tool schemas for enhanced execution
   ): Promise<ToolExecutionResult[]> {
     const results: ToolExecutionResult[] = [];
+    const executionContext: any[] = []; // Store all previous tool results for context
 
     console.log('[McpExecutor] Starting execution of', toolInstructions.length, 'tools');
+    const isMultiTool = toolInstructions.length > 1;
 
-    for (const { toolName, instruction } of toolInstructions) {
+    if (isMultiTool) {
+      console.log('[McpExecutor] Multi-tool execution detected - enabling context chaining');
+    }
+
+    for (let i = 0; i < toolInstructions.length; i++) {
+      const { toolName, instruction } = toolInstructions[i];
       const startTime = Date.now();
 
       console.log(`[McpExecutor] Executing ${toolName} with instruction:`, instruction);
       progressCallback?.(toolName, 'running');
 
       try {
-        const response = await this.executeToolSimple(toolName, instruction);
+        // Enhanced parameter extraction for multi-tool scenarios
+        let enhancedParams: any = { instructions: instruction };
 
-        results.push({
+        if (isMultiTool && executionContext.length > 0 && this.claudeAnalyzer && toolSchemas?.has(toolName)) {
+          try {
+            console.log(`[McpExecutor] Attempting parameter enhancement for ${toolName} with context:`, executionContext);
+            const toolSchema = toolSchemas.get(toolName);
+            enhancedParams = await this.claudeAnalyzer.enhanceParametersFromContext(
+              toolSchema,
+              executionContext,
+              instruction
+            );
+            console.log(`[McpExecutor] Enhanced parameters for ${toolName}:`, enhancedParams);
+          } catch (enhanceError) {
+            console.warn(`[McpExecutor] Parameter enhancement failed for ${toolName}, using fallback:`, enhanceError);
+            // Fallback to original instruction-only approach
+          }
+        }
+
+        const response = await this.executeToolWithParams(toolName, enhancedParams);
+
+        const result = {
           toolName,
           success: true,
           response,
           executionTime: Date.now() - startTime
+        };
+
+        results.push(result);
+
+        // Add result to execution context for future tools
+        executionContext.push({
+          toolName,
+          result: response,
+          timestamp: Date.now()
         });
 
         console.log(`[McpExecutor] ${toolName} completed successfully:`, response);
@@ -51,9 +90,9 @@ export class McpExecutor {
     return results;
   }
 
-  private async executeToolSimple(toolName: string, instruction: string): Promise<any> {
+  private async executeToolWithParams(toolName: string, params: any): Promise<any> {
     try {
-      console.log(`[McpExecutor] Simple execution of ${toolName} with instruction:`, instruction);
+      console.log(`[McpExecutor] Executing ${toolName} with params:`, params);
 
       // Get the MCP server from localStorage (there's only one)
       const enabledServers = this.mcpManager.loadConfigs().filter(s => s.enabled);
@@ -68,17 +107,20 @@ export class McpExecutor {
 
       console.log(`[McpExecutor] Calling tool ${fullToolName} on server ${server.name}`);
 
-      // Simple direct call with just the instructions parameter
-      const response = await this.mcpManager.callTool(fullToolName, {
-        instructions: instruction
-      });
+      // Call with enhanced or original parameters
+      const response = await this.mcpManager.callTool(fullToolName, params);
 
       console.log(`[McpExecutor] Tool ${fullToolName} response:`, response);
       return response;
 
     } catch (error) {
-      console.error(`[McpExecutor] Simple execution failed for ${toolName}:`, error);
+      console.error(`[McpExecutor] Execution failed for ${toolName}:`, error);
       throw error;
     }
+  }
+
+  // Maintain backward compatibility for simple execution
+  private async executeToolSimple(toolName: string, instruction: string): Promise<any> {
+    return this.executeToolWithParams(toolName, { instructions: instruction });
   }
 }

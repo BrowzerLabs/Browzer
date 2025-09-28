@@ -2681,7 +2681,7 @@ function setupChatInputHandlers(): void {
         console.log('[setupChatInputHandlers] Mode changed to:', mode);
 
         // Update placeholder based on mode
-        const placeholderText = mode === 'do' ? 'Enter a task to perform...' : 'Ask a follow-up question...';
+        const placeholderText = mode === 'do' ? 'Enter a task to perform...' : mode === 'get_it_done' ? 'What should I do?' : 'Ask a follow-up question...';
         chatInput.placeholder = placeholderText;
       });
     });

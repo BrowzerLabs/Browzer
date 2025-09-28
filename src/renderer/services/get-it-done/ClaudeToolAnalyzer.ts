@@ -239,4 +239,89 @@ Response:`;
       }
     }
   }
+
+  async enhanceParametersFromContext(
+    toolSchema: McpToolInfo,
+    executionContext: any[],
+    originalInstruction: string
+  ): Promise<any> {
+    console.log('[ClaudeToolAnalyzer] Enhancing parameters from context for:', toolSchema.name);
+
+    // Create context summary for Claude
+    const contextSummary = executionContext.map(ctx =>
+      `Tool: ${ctx.toolName}\nResult: ${JSON.stringify(ctx.result, null, 2)}\nTimestamp: ${new Date(ctx.timestamp).toISOString()}`
+    ).join('\n\n');
+
+    const prompt = `
+You are an AI assistant that intelligently extracts parameters from previous tool execution results to enhance the current tool call.
+
+Current Tool to Execute: ${toolSchema.name}
+Tool Description: ${toolSchema.description || 'No description available'}
+Original Instruction: "${originalInstruction}"
+
+Tool Input Schema:
+${JSON.stringify(toolSchema.inputSchema, null, 2)}
+
+Previous Execution Context:
+${contextSummary}
+
+Your task:
+1. Analyze the previous execution results to find data relevant to the current tool
+2. Extract specific parameter values that the current tool needs from the context
+3. Merge the extracted parameters with the original instruction
+4. Return a JSON object with the enhanced parameters
+
+Requirements:
+- Always include the original instruction as "instructions" field
+- Extract specific values (IDs, names, etc.) from previous results when they match the tool's input schema
+- Only include parameters that exist in the tool's input schema
+- If no relevant context is found, just return {"instructions": originalInstruction}
+- Return ONLY the JSON object, no other text
+
+Example outputs:
+{"instructions": "Find cards in EB1A tracker", "board_id": "67954b86a0aa3b5ca4bf662f"}
+{"instructions": "Send email about meeting", "recipient": "user@example.com", "subject": "Meeting Update"}
+
+Response:`;
+
+    try {
+      const response = await this.callClaudeAPI(prompt);
+
+      // Extract JSON from response
+      const jsonMatch = response.match(/\{[\s\S]*?\}/);
+      if (jsonMatch) {
+        const enhancedParams = JSON.parse(jsonMatch[0]);
+
+        // Validate that we have the basic instructions field
+        if (!enhancedParams.instructions) {
+          enhancedParams.instructions = originalInstruction;
+        }
+
+        console.log('[ClaudeToolAnalyzer] Enhanced parameters:', enhancedParams);
+        return enhancedParams;
+      }
+
+      // Fallback: try to parse entire response
+      try {
+        const enhancedParams = JSON.parse(response.trim());
+        if (typeof enhancedParams === 'object') {
+          if (!enhancedParams.instructions) {
+            enhancedParams.instructions = originalInstruction;
+          }
+          return enhancedParams;
+        }
+      } catch (parseError) {
+        console.warn('[ClaudeToolAnalyzer] Failed to parse parameter enhancement response:', response);
+      }
+
+      // Final fallback
+      console.warn('[ClaudeToolAnalyzer] Parameter enhancement failed, using fallback');
+      return { instructions: originalInstruction };
+
+    } catch (error) {
+      console.error('[ClaudeToolAnalyzer] Parameter enhancement failed:', error);
+      // Always return fallback to maintain functionality
+      return { instructions: originalInstruction };
+    }
+  }
 }

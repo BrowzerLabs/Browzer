@@ -19,7 +19,7 @@ export class GetItDoneService {
   constructor() {
     this.mcpManager = new McpClientManager();
     this.claudeAnalyzer = new ClaudeToolAnalyzer();
-    this.mcpExecutor = new McpExecutor(this.mcpManager);
+    this.mcpExecutor = new McpExecutor(this.mcpManager, this.claudeAnalyzer);
     this.ui = new GetItDoneUI();
   }
 
@@ -53,9 +53,24 @@ export class GetItDoneService {
 
       // Step 3: Tool Execution
       await this.addStep('executing', '⚡ Executing tools via MCP servers...', 'running');
-      const executionResults = await this.mcpExecutor.executeToolArray(toolInstructions, (toolName, status, error) => {
-        this.ui.updateToolExecution(toolName, status, error);
+
+      // Create tool schema map for enhanced execution
+      const toolSchemaMap = new Map<string, McpToolInfo>();
+      allTools.forEach(tool => {
+        if (requiredTools.includes(tool.name)) {
+          toolSchemaMap.set(tool.name, tool);
+        }
       });
+
+      console.log('[GetItDone] Tool schemas for execution:', Array.from(toolSchemaMap.keys()));
+
+      const executionResults = await this.mcpExecutor.executeToolArray(
+        toolInstructions,
+        (toolName, status, error) => {
+          this.ui.updateToolExecution(toolName, status, error);
+        },
+        toolSchemaMap
+      );
       console.log('[GetItDone] Execution results:', executionResults);
 
       await this.updateLastStep('✅ All tools executed successfully', 'completed');
