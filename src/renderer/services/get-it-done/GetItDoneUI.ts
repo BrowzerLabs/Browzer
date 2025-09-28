@@ -275,13 +275,21 @@ export class GetItDoneUI {
         }
 
         .loading-spinner {
-          width: 16px;
-          height: 16px;
-          border: 2px solid #f3f3f3;
+          width: 18px;
+          height: 18px;
+          border: 2px solid #e3e3e3;
           border-top: 2px solid #007bff;
           border-radius: 50%;
+          padding: 0px;
           animation: spin 1s linear infinite;
           display: inline-block;
+          vertical-align: middle;
+        }
+
+        .loading-spinner::before,
+        .loading-spinner::after {
+          content: none;
+          display: none;
         }
 
         @keyframes spin {

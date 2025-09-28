@@ -156,7 +156,7 @@ export class GetItDoneService {
     this.steps.push(step);
     await this.ui.updateStep(step);
   }
-  
+
 
   private async updateLastStep(message: string, status: GetItDoneStep['status'], data?: any): Promise<void> {
     if (this.steps.length > 0) {
