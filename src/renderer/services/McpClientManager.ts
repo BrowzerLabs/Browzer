@@ -108,6 +108,7 @@ class BrowserSSETransport {
 }
 
 export interface McpServerConfig {
+  id: string;
   name: string;
   url: string;
   enabled: boolean;
@@ -130,10 +131,33 @@ export class McpClientManager {
 
   private clients = new Map<string, Client>();
   private toolIndex = new Map<string, McpTool>();
+  private configChangeCallbacks: Array<() => void> = [];
 
   constructor() {
     // Auto-connect enabled servers on construction
     this.initializeConnections();
+  }
+
+  /**
+   * Register a callback to be notified when server configuration changes.
+   * Used by GetItDoneService to invalidate cache on config changes.
+   */
+  public onConfigChange(callback: () => void): void {
+    this.configChangeCallbacks.push(callback);
+  }
+
+  /**
+   * Notify all registered callbacks that configuration has changed.
+   */
+  private notifyConfigChange(): void {
+    console.log('[MCP] Notifying config change listeners');
+    this.configChangeCallbacks.forEach(cb => {
+      try {
+        cb();
+      } catch (error) {
+        console.error('[MCP] Error in config change callback:', error);
+      }
+    });
   }
 
   private async initializeConnections() {
@@ -149,6 +173,21 @@ export class McpClientManager {
       const raw = localStorage.getItem(McpClientManager.STORAGE_KEY);
       if (!raw) return [];
       const list: McpServerConfig[] = JSON.parse(raw);
+
+      // Migration: Add IDs to old configs that don't have them
+      let needsSave = false;
+      list.forEach(config => {
+        if (!config.id) {
+          config.id = `mcp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+          needsSave = true;
+        }
+      });
+
+      if (needsSave) {
+        this.saveConfigs(list);
+        console.log('[MCP] Migrated old configs to include IDs');
+      }
+
       return Array.isArray(list) ? list : [];
     } catch {
       return [];
@@ -157,12 +196,19 @@ export class McpClientManager {
 
   saveConfigs(configs: McpServerConfig[]) {
     localStorage.setItem(McpClientManager.STORAGE_KEY, JSON.stringify(configs));
+    this.notifyConfigChange();
   }
 
   async addConfig(config: McpServerConfig) {
     const list = this.loadConfigs();
+
+    // Generate unique ID if not provided
+    if (!config.id) {
+      config.id = `mcp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    }
+
     list.push(config);
-    this.saveConfigs(list);
+    this.saveConfigs(list); // This will trigger notifyConfigChange
     if (config.enabled) {
       await this.connect(config);
     }
@@ -172,10 +218,10 @@ export class McpClientManager {
     const list = this.loadConfigs();
     const config = list.find(s => s.name === name);
     if (!config) return;
-    
+
     config.enabled = enabled;
-    this.saveConfigs(list);
-    
+    this.saveConfigs(list); // This will trigger notifyConfigChange
+
     if (enabled) {
       await this.connect(config);
     } else {

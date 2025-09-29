@@ -16,11 +16,35 @@ export class GetItDoneService {
   private ui: GetItDoneUI;
   private steps: GetItDoneStep[] = [];
 
+  // Tool cache properties - using atomic object for thread safety
+  private toolCache: {
+    tools: McpToolInfo[];
+    serverId: string;
+    serverName: string;
+    serverUrl: string;
+    timestamp: number;
+  } | null = null;
+  private CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
   constructor() {
     this.mcpManager = new McpClientManager();
     this.claudeAnalyzer = new ClaudeToolAnalyzer();
     this.mcpExecutor = new McpExecutor(this.mcpManager, this.claudeAnalyzer);
     this.ui = new GetItDoneUI();
+
+    // Register to receive notifications when server config changes
+    this.mcpManager.onConfigChange(() => {
+      this.clearToolCache();
+    });
+  }
+
+  /**
+   * Clears the tool cache. Should be called when server configuration changes.
+   * Public method to allow external invalidation when configs are modified.
+   */
+  public clearToolCache(): void {
+    console.log('[GetItDone] Cache invalidated');
+    this.toolCache = null;
   }
 
   async processQuery(userQuery: string): Promise<GetItDoneResult> {
@@ -117,6 +141,48 @@ export class GetItDoneService {
 
   private async getAllAvailableTools(): Promise<McpToolInfo[]> {
     const servers = this.mcpManager.loadConfigs().filter(s => s.enabled);
+
+    // Get first server info for cache validation
+    const firstServer = servers[0];
+    const currentServerId = firstServer?.id || '';
+    const currentServerName = firstServer?.name || '';
+    const currentServerUrl = firstServer?.url || '';
+    const now = Date.now();
+
+    // Check if cache is valid:
+    // 1. Cache exists
+    // 2. Server ID matches (most important!)
+    // 3. Server name matches (extra safety)
+    // 4. Server URL matches (detects endpoint changes)
+    // 5. Server ID not empty (has valid server)
+    // 6. Cache not expired (< 5 minutes)
+    const cacheValid =
+      this.toolCache !== null &&
+      this.toolCache.serverId === currentServerId &&
+      this.toolCache.serverName === currentServerName &&
+      this.toolCache.serverUrl === currentServerUrl &&
+      currentServerId !== '' &&
+      (now - this.toolCache.timestamp) < this.CACHE_TTL;
+
+    if (cacheValid) {
+      console.log('[GetItDone] Using cached tools (server unchanged)');
+      return this.toolCache!.tools;
+    }
+
+    // Cache invalid - log why
+    if (this.toolCache === null) {
+      console.log('[GetItDone] No cache, fetching fresh tools');
+    } else if (this.toolCache.serverId !== currentServerId) {
+      console.log('[GetItDone] Server ID changed, invalidating cache');
+      console.log(`  Old: ${this.toolCache.serverId} | New: ${currentServerId}`);
+    } else if (this.toolCache.serverUrl !== currentServerUrl) {
+      console.log('[GetItDone] Server URL changed, invalidating cache');
+      console.log(`  Old: ${this.toolCache.serverUrl} | New: ${currentServerUrl}`);
+    } else if ((now - this.toolCache.timestamp) >= this.CACHE_TTL) {
+      console.log('[GetItDone] Cache expired, fetching fresh tools');
+    }
+
+    // Fetch fresh tools
     const allTools: McpToolInfo[] = [];
 
     console.log('[GetItDone] Checking servers:', servers.map(s => s.name));
@@ -136,11 +202,25 @@ export class GetItDoneService {
         allTools.push(...mcpTools);
         console.log(`[GetItDone] Got ${mcpTools.length} tools from ${server.name}`);
       } catch (error) {
-        console.warn(`[GetItDone] Failed to get tools from ${server.name}:`, error);
+        console.error(`[GetItDone] Failed to get tools from ${server.name}:`, error);
+        // Clear cache on error to ensure fresh fetch on retry
+        this.toolCache = null;
+        throw error; // Re-throw to propagate error up
       }
     }
 
+    // Update cache atomically with single object assignment
+    this.toolCache = {
+      tools: allTools,
+      serverId: currentServerId,
+      serverName: currentServerName,
+      serverUrl: currentServerUrl,
+      timestamp: now
+    };
+
     console.log('[GetItDone] Total tools available:', allTools.length);
+    console.log('[GetItDone] Cached for server:', currentServerName, `(ID: ${currentServerId}, URL: ${currentServerUrl})`);
+
     return allTools;
   }
 
