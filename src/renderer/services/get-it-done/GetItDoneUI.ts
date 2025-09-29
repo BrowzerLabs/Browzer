@@ -155,33 +155,33 @@ export class GetItDoneUI {
           margin: 0;
         }
 
-        .status-badge {
-          padding: 6px 12px;
-          border-radius: 20px;
-          font-size: 14px;
-          font-weight: 500;
-          display: flex;
-          align-items: center;
-          gap: 6px;
-        }
+        // .status-badge {
+        //   padding: 6px 12px;
+        //   border-radius: 20px;
+        //   font-size: 14px;
+        //   font-weight: 500;
+        //   display: flex;
+        //   align-items: center;
+        //   gap: 6px;
+        // }
 
-        .status-completed {
-          background: #d1f2eb;
-          color: #00875f;
-          border: 1px solid #7bdeb8;
-        }
+        // .status-completed {
+        //   background: #d1f2eb;
+        //   color: #00875f;
+        //   border: 1px solid #7bdeb8;
+        // }
 
-        .status-running {
-          background: #fff3cd;
-          color: #856404;
-          border: 1px solid #ffeaa7;
-        }
+        // .status-running {
+        //   background: #fff3cd;
+        //   color: #856404;
+        //   border: 1px solid #ffeaa7;
+        // }
 
-        .status-failed {
-          background: #f8d7da;
-          color: #721c24;
-          border: 1px solid #f5c6cb;
-        }
+        // .status-failed {
+        //   background: #f8d7da;
+        //   color: #721c24;
+        //   border: 1px solid #f5c6cb;
+        // }
 
         .accordion-section {
           border-bottom: 1px solid #e9ecef;
@@ -256,7 +256,7 @@ export class GetItDoneUI {
           display: flex;
           align-items: center;
           justify-content: center;
-          background: #e8f5e8;
+          // background: #e8f5e8;
         }
 
         .step-text {
@@ -269,7 +269,7 @@ export class GetItDoneUI {
           color: #28a745;
           font-size: 13px;
           font-weight: 600;
-          background: #e8f5e8;
+          // background: #e8f5e8;
           padding: 4px 8px;
           border-radius: 12px;
         }
@@ -367,7 +367,7 @@ export class GetItDoneUI {
       <div class="execution-header">
         <h3 class="execution-title">Execution Summary</h3>
         <div class="status-badge status-running" id="overall-status">
-          <span>⏳</span> Running
+        <span class="loading-spinner"></span>
         </div>
       </div>
 
@@ -458,13 +458,13 @@ export class GetItDoneUI {
 
       switch (status) {
         case 'completed':
-          statusBadge.innerHTML = '<span>✅</span> Completed';
+          statusBadge.innerHTML = '<span>✅</span>';
           break;
         case 'failed':
-          statusBadge.innerHTML = '<span>❌</span> Failed';
+          statusBadge.innerHTML = '<span>❌</span>';
           break;
         default:
-          statusBadge.innerHTML = '<span>⏳</span> Running';
+          statusBadge.innerHTML = '<span class="loading-spinner"></span>';
       }
     }
   }
@@ -495,7 +495,6 @@ export class GetItDoneUI {
       const isRunning = stepStatus === 'running';
 
       let displayText = step.defaultLabel;
-      let statusText = '';
 
       if (stepMessage) {
         // Clean up the message and extract meaningful content
@@ -510,8 +509,6 @@ export class GetItDoneUI {
             displayText = `Found ${toolCount} tool${parseInt(toolCount) > 1 ? 's' : ''}: ${toolNames}`;
           }
         }
-
-        statusText = isCompleted ? 'Done' : '';
       }
 
       // Create step icon based on status
@@ -530,7 +527,6 @@ export class GetItDoneUI {
             <span class="step-icon">${stepIcon}</span>
             <span class="step-text">${displayText}</span>
           </div>
-          ${statusText ? `<span class="step-status">${statusText}</span>` : ''}
         </div>
       `;
     }).join('');
@@ -541,8 +537,7 @@ export class GetItDoneUI {
       <div class="tool-item">
         <span class="tool-name">${toolName}</span>
         <span class="tool-status ${status}">
-          ${status === 'running' ? '🔄' : status === 'completed' ? '✅' : '❌'}
-          ${status.charAt(0).toUpperCase() + status.slice(1)}
+          ${status === 'running' ? '<span class="loading-spinner"></span>' : status === 'completed' ? '✅' : '❌'}
         </span>
       </div>
     `).join('');

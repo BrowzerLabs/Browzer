@@ -4283,8 +4283,6 @@ async function processGetItDoneTask(userQuery: string): Promise<void> {
   console.log('[processGetItDoneTask] Setting execution flag');
 
   try {
-    addMessageToChat('assistant', '🚀 Starting Get It Done mode...');
-
     // Process the query using the GetItDoneService
     const result = await getItDoneService.processQuery(userQuery);
 
