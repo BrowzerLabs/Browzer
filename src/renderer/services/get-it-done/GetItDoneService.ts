@@ -250,7 +250,28 @@ export class GetItDoneService {
   }
 
   private async handleError(error: any): Promise<void> {
-    await this.addStep('complete', `❌ Error: ${error instanceof Error ? error.message : String(error)}`, 'failed');
+    console.error('[GetItDone] Error details:', error);
+
+    // Mark current running step as failed
+    if (this.steps.length > 0) {
+      const lastStep = this.steps[this.steps.length - 1];
+      if (lastStep.status === 'running') {
+        lastStep.status = 'failed';
+        lastStep.message = lastStep.message.replace(/^[🔍🎯⚡📊🎉✅❌]/, '');
+        await this.ui.updateStep(lastStep);
+      }
+    }
+
+    // Mark all remaining steps as failed
+    const allPhases: GetItDoneStep['phase'][] = ['discovering', 'mapping', 'executing', 'formatting', 'complete'];
+    const completedPhases = this.steps.map(s => s.phase);
+
+    for (const phase of allPhases) {
+      if (!completedPhases.includes(phase)) {
+        await this.addStep(phase, `Skipped due to error`, 'failed');
+      }
+    }
+
     await this.ui.handleError(error);
   }
 }

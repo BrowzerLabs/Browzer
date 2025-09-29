@@ -566,6 +566,8 @@ export class GetItDoneUI {
       let stepIcon;
       if (isCompleted) {
         stepIcon = '✅';
+      } else if (stepStatus === 'failed') {
+        stepIcon = '❌';
       } else if (isRunning) {
         stepIcon = '<div class="loading-spinner"></div>';
       } else {
