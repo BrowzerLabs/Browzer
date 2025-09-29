@@ -8,10 +8,14 @@ export class GetItDoneUI {
   private startTime: number = Date.now();
   private stepCount: number = 0;
   private completedSteps: number = 0;
+  private animationFrameId: number | null = null;
 
   // Reset all UI state for a new Get It Done request
   resetForNewRequest(): void {
     console.log('[GetItDoneUI] Resetting UI for new request');
+
+    // Stop any running timer
+    this.stopDurationTimer();
 
     // Clear container reference (forces recreation)
     this.executionSummaryContainer = null;
@@ -67,6 +71,9 @@ export class GetItDoneUI {
     // Update the execution summary with final results
     this.updateResultsSection(formattedResponse);
 
+    // Stop the duration timer
+    this.stopDurationTimer();
+
     // Update overall status to completed
     this.updateOverallStatus('completed');
 
@@ -78,6 +85,9 @@ export class GetItDoneUI {
 
   async handleError(error: any): Promise<void> {
     console.error('[GetItDoneUI] Handling error:', error);
+
+    // Stop the duration timer
+    this.stopDurationTimer();
 
     // Update execution summary with error status (no separate chat message needed)
     this.updateOverallStatus('failed');
@@ -149,39 +159,33 @@ export class GetItDoneUI {
         }
 
         .execution-title {
-          font-size: 18px;
+          font-size: 15px;
           font-weight: 600;
-          color: #212529;
+          color: #495057;
           margin: 0;
         }
 
-        // .status-badge {
-        //   padding: 6px 12px;
-        //   border-radius: 20px;
-        //   font-size: 14px;
-        //   font-weight: 500;
-        //   display: flex;
-        //   align-items: center;
-        //   gap: 6px;
-        // }
+        .status-badge {
+          width: 24px;
+          height: 24px;
+          border-radius: 4px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 14px;
+        }
 
-        // .status-completed {
-        //   background: #d1f2eb;
-        //   color: #00875f;
-        //   border: 1px solid #7bdeb8;
-        // }
+        .status-completed {
+          color: #10b981;
+        }
 
-        // .status-running {
-        //   background: #fff3cd;
-        //   color: #856404;
-        //   border: 1px solid #ffeaa7;
-        // }
+        .status-running {
+          color: #3b82f6;
+        }
 
-        // .status-failed {
-        //   background: #f8d7da;
-        //   color: #721c24;
-        //   border: 1px solid #f5c6cb;
-        // }
+        .status-failed {
+          color: #ef4444;
+        }
 
         .accordion-section {
           border-bottom: 1px solid #e9ecef;
@@ -195,7 +199,7 @@ export class GetItDoneUI {
           display: flex;
           align-items: center;
           justify-content: space-between;
-          padding: 14px 20px;
+          padding: 16px 20px;
           cursor: pointer;
           background: white;
           transition: background-color 0.2s;
@@ -206,15 +210,21 @@ export class GetItDoneUI {
         }
 
         .accordion-title {
-          font-size: 16px;
+          font-size: 14px;
           font-weight: 500;
-          color: #212529;
+          color: #495057;
           margin: 0;
         }
 
         .accordion-arrow {
-          transition: transform 0.2s;
-          color: #6c757d;
+          transition: transform 0.25s ease, opacity 0.2s;
+          color: #adb5bd;
+          font-size: 14px;
+          opacity: 0.7;
+        }
+
+        .accordion-header:hover .accordion-arrow {
+          opacity: 1;
         }
 
         .accordion-section.collapsed .accordion-arrow {
@@ -359,8 +369,22 @@ export class GetItDoneUI {
           border-radius: 0 0 8px 8px;
           display: flex;
           justify-content: flex-end;
-          font-size: 12px;
-          color: #6c757d;
+          font-size: 11px;
+          color: #adb5bd;
+        }
+
+        #duration {
+          display: inline-block;
+          min-width: 45px;
+          text-align: right;
+          font-family: 'SF Mono', Consolas, 'Courier New', monospace;
+        }
+
+        #step-counter {
+          display: inline-block;
+          min-width: 30px;
+          text-align: left;
+          font-family: 'SF Mono', Consolas, 'Courier New', monospace;
         }
       </style>
 
@@ -402,12 +426,15 @@ export class GetItDoneUI {
       </div>
 
       <div class="execution-footer" id="execution-footer">
-        Duration: <span id="duration">0.0s</span> • Steps: <span id="step-counter">0/5</span>
+        Duration: <span id="duration">0.0s</span> &nbsp;•&nbsp; Steps: <span id="step-counter">0/5</span>
       </div>
     `;
 
     chatContainer.appendChild(container);
     this.scrollToBottom(chatContainer);
+
+    // Start the real-time duration timer
+    this.startDurationTimer();
 
     return container;
   }
@@ -477,6 +504,30 @@ export class GetItDoneUI {
     if (durationElement) {
       durationElement.textContent = `${duration}s`;
     }
+  }
+
+  private updateDurationLoop(): void {
+    this.updateDuration();
+    this.animationFrameId = requestAnimationFrame(() => this.updateDurationLoop());
+  }
+
+  private startDurationTimer(): void {
+    // Clear any existing timer first
+    if (this.animationFrameId) {
+      cancelAnimationFrame(this.animationFrameId);
+    }
+
+    // Start the animation loop
+    this.animationFrameId = requestAnimationFrame(() => this.updateDurationLoop());
+  }
+
+  private stopDurationTimer(): void {
+    if (this.animationFrameId) {
+      cancelAnimationFrame(this.animationFrameId);
+      this.animationFrameId = null;
+    }
+    // Final update to show exact duration
+    this.updateDuration();
   }
 
   private generateExecutionStepsHTML(): string {
