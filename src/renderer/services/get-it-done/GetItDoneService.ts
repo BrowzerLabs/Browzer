@@ -182,12 +182,11 @@ export class GetItDoneService {
       console.log('[GetItDone] Cache expired, fetching fresh tools');
     }
 
-    // Fetch fresh tools
-    const allTools: McpToolInfo[] = [];
-
+    // Fetch fresh tools in PARALLEL (4x faster!)
     console.log('[GetItDone] Checking servers:', servers.map(s => s.name));
 
-    for (const server of servers) {
+    // Create parallel promises for all servers
+    const toolPromises = servers.map(async (server) => {
       try {
         console.log(`[GetItDone] Getting tools from ${server.name}...`);
         const tools = await this.mcpManager.getToolsForServer(server.name);
@@ -199,14 +198,23 @@ export class GetItDoneService {
           inputSchema: tool.inputSchema
         }));
 
-        allTools.push(...mcpTools);
         console.log(`[GetItDone] Got ${mcpTools.length} tools from ${server.name}`);
+        return mcpTools;
       } catch (error) {
         console.error(`[GetItDone] Failed to get tools from ${server.name}:`, error);
-        // Clear cache on error to ensure fresh fetch on retry
-        this.toolCache = null;
-        throw error; // Re-throw to propagate error up
+        return []; // Return empty array on error (don't fail entire operation)
       }
+    });
+
+    // Wait for all servers in parallel
+    const toolArrays = await Promise.all(toolPromises);
+    const allTools = toolArrays.flat();
+
+    // Check if all servers failed
+    if (toolArrays.every(arr => arr.length === 0)) {
+      console.error('[GetItDone] All servers failed to return tools');
+      this.toolCache = null;
+      throw new Error('Failed to get tools from all servers');
     }
 
     // Update cache atomically with single object assignment

@@ -1,4 +1,6 @@
 import { ToolInstruction, ToolExecutionResult, McpToolInfo } from './types';
+import { ServiceExtractor } from './ServiceExtractor';
+import { ToolDescriptionAnalyzer } from './ToolDescriptionAnalyzer';
 
 export class ClaudeToolAnalyzer {
   private async callClaudeAPI(prompt: string): Promise<string> {
@@ -47,35 +49,123 @@ export class ClaudeToolAnalyzer {
   }
 
   async discoverRequiredTools(userQuery: string, availableTools: McpToolInfo[]): Promise<string[]> {
-    const toolsList = availableTools.map(tool =>
-      `- ${tool.name}${tool.description ? ': ' + tool.description : ''}`
-    ).join('\n');
+    // Step 1: Extract services from tools (dynamic, no hardcoding)
+    const serviceExtractor = new ServiceExtractor();
+    const availableServices = serviceExtractor.extractServicesFromTools(availableTools);
 
+    console.log('[Discovery] Available services:', Array.from(availableServices));
+
+    // Step 2: Extract services mentioned in query
+    const queryServices = serviceExtractor.extractServicesFromQuery(userQuery, availableServices);
+
+    console.log('[Discovery] Query services:', queryServices);
+
+    // Step 3: Filter tools by detected services
+    const filteredTools = serviceExtractor.filterToolsByServices(availableTools, queryServices);
+
+    // Safety: If no services detected or too few tools, use all tools
+    const toolsToUse = filteredTools.length >= 3 ? filteredTools : availableTools;
+
+    console.log(`[Discovery] Filtered: ${availableTools.length} → ${toolsToUse.length} tools`);
+
+    // Step 4: Format tools with descriptions for Claude
+    const descriptionAnalyzer = new ToolDescriptionAnalyzer();
+    const toolsList = descriptionAnalyzer.formatToolsForClaude(toolsToUse);
+
+    // Step 5: Enhanced prompt for Claude with tool chaining intelligence
     const prompt = `
-You are an AI assistant that analyzes user queries to determine which MCP tools are needed.
+You are a tool selection expert. Analyze the user query and select ALL tools needed to complete the request.
 
 User Query: "${userQuery}"
+Detected Services: [${queryServices.join(', ')}]
 
-Available MCP Tools:
+Available Tools (filtered by service):
 ${toolsList}
 
-Your task:
-1. Analyze the user query to understand what actions need to be performed
-2. Identify which tools from the available list are required to complete this task
-3. Return ONLY a JSON array of tool names (strings) that are needed
+CRITICAL INSTRUCTIONS:
 
-Requirements:
-- Only include tools that are actually available in the list above
-- Be precise - don't include unnecessary tools
-- If no suitable tools are found, return an empty array []
-- Return ONLY the JSON array, no other text
+1. READ TOOL DESCRIPTIONS CAREFULLY
+   - Each tool has a description explaining what it does
+   - If user provides a NAME but tool needs ID, find a tool that searches by name first
+   - Example: User says "find board EB1A" → Use tool that "Finds board by name", not "by ID"
 
-Example responses:
-["send_email", "create_calendar_event"]
-["search_documentation"]
-[]
+2. HANDLE TOOL CHAINING
+   - If user provides NAME but tool needs ID:
+     a) First, select tool that finds by name (returns ID)
+     b) Then, select tool that uses ID (if needed for next action)
+   - Example chain: trello_find_board (by name) → trello_find_card (uses board_id from previous result)
 
-Response:`;
+3. BREAK DOWN QUERY INTO ACTIONS
+   - What information does user provide? (name, title, ID, etc.)
+   - What information does tool need? (check description)
+   - If mismatch, find intermediate tool to convert
+
+4. TOOL SELECTION RULES
+   ✓ Read EACH tool description to understand capabilities
+   ✓ Match user input format (name/ID/title) with tool requirements
+   ✓ If tool needs ID but user gives name, include "find by name" tool
+   ✓ Include ALL tools for complete workflow
+   ✓ Tool names must EXACTLY match list above
+   ✓ Be CONSERVATIVE - select minimum tools needed
+
+EXAMPLES:
+
+Example 1: Query with NAME instead of ID
+Query: "find trello board EB1A"
+Analysis:
+  - User provides: board NAME "EB1A"
+  - Check descriptions:
+    • trello_find_board: "Finds a board by name" ✓ MATCH
+    • trello_find_board_by_id: "Finds board by ID" ✗ (needs ID, not name)
+  - Decision: Use trello_find_board (matches user's input format)
+Result: ["trello_find_board"]
+
+Example 2: Tool Chaining
+Query: "get cards from board EB1A"
+Analysis:
+  - User provides: board NAME "EB1A"
+  - Goal: Get cards (needs board_id)
+  - Check descriptions:
+    • trello_find_board: "Finds board by name" → returns board_id
+    • trello_find_card: "Search for cards" (needs board_id)
+  - Decision: Chain tools (name → ID → cards)
+Result: ["trello_find_board", "trello_find_card"]
+
+Example 3: Direct ID provided
+Query: "find board by id 67954b86"
+Analysis:
+  - User provides: board ID
+  - Check descriptions:
+    • trello_find_board_by_id: "Finds board by ID" ✓ MATCH
+Result: ["trello_find_board_by_id"]
+
+Example 4: Multi-step workflow
+Query: "find gmail email about meeting and add to existing doc titled report"
+Analysis:
+  - Step 1: Find email → gmail_find_email
+  - Step 2: Find document by title → google_docs_find_a_document (or similar)
+  - Step 3: Add to document → append/update tool
+  - Note: "existing doc" means don't use create tool
+Result: ["gmail_find_email", "google_docs_find_a_document", "google_docs_append_text_to_document"]
+
+5. COMMON MISTAKES TO AVOID:
+   ✗ Don't include create tool if query says "add to existing" or "titled"
+   ✗ Don't include find tool if query says "create new"
+   ✗ Don't miss intermediate steps (e.g., finding by name before using ID)
+   ✗ Don't hallucinate tool names not in the list
+
+NOW ANALYZE THIS QUERY STEP-BY-STEP:
+
+Query: "${userQuery}"
+
+Think step-by-step:
+1. What information does user provide? (name, ID, title, keyword, etc.)
+2. For each available tool, read its description carefully
+3. Which tool(s) match the user's input format?
+4. Do I need to chain tools? (name → ID → action)
+5. What is the complete workflow from start to finish?
+
+Return ONLY JSON array of tool names in execution order:`;
 
     try {
       const response = await this.callClaudeAPI(prompt);
@@ -85,11 +175,18 @@ Response:`;
       if (jsonMatch) {
         const tools = JSON.parse(jsonMatch[0]);
 
-        // Validate that all tools exist in available tools
-        const availableToolNames = availableTools.map(t => t.name);
-        const validTools = tools.filter((tool: string) => availableToolNames.includes(tool));
+        // Validate that all tools exist in filtered tools
+        const toolNames = toolsToUse.map(t => t.name);
+        const validTools = tools.filter((tool: string) => toolNames.includes(tool));
 
         console.log('[ClaudeToolAnalyzer] Discovered tools:', validTools);
+
+        // Log hallucinations (tools not in filtered list)
+        const hallucinated = tools.filter((tool: string) => !toolNames.includes(tool));
+        if (hallucinated.length > 0) {
+          console.warn('[ClaudeToolAnalyzer] Hallucinated tools (removed):', hallucinated);
+        }
+
         return validTools;
       }
 
@@ -97,7 +194,8 @@ Response:`;
       try {
         const tools = JSON.parse(response.trim());
         if (Array.isArray(tools)) {
-          return tools.filter(tool => availableTools.some(t => t.name === tool));
+          const toolNames = toolsToUse.map(t => t.name);
+          return tools.filter(tool => toolNames.includes(tool));
         }
       } catch (parseError) {
         console.warn('[ClaudeToolAnalyzer] Failed to parse response as JSON:', response);

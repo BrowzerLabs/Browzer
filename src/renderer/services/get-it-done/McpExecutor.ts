@@ -49,7 +49,9 @@ export class McpExecutor {
           }
         }
 
-        const response = await this.executeToolWithParams(toolName, enhancedParams);
+        // Get server name from tool schemas
+        const serverName = toolSchemas?.get(toolName)?.serverName;
+        const response = await this.executeToolWithParams(toolName, enhancedParams, serverName);
 
         const result = {
           toolName,
@@ -90,19 +92,29 @@ export class McpExecutor {
     return results;
   }
 
-  private async executeToolWithParams(toolName: string, params: any): Promise<any> {
+  private async executeToolWithParams(toolName: string, params: any, serverNameFromSchema?: string): Promise<any> {
     try {
       console.log(`[McpExecutor] Executing ${toolName} with params:`, params);
 
-      // Get the MCP server from localStorage (there's only one)
+      // Get the MCP server from localStorage
       const enabledServers = this.mcpManager.loadConfigs().filter(s => s.enabled);
 
       if (enabledServers.length === 0) {
         throw new Error('No MCP servers are enabled');
       }
 
-      // Use the first (and typically only) enabled server
-      const server = enabledServers[0];
+      // Use server name from schema if provided, otherwise use first enabled server
+      let server = enabledServers[0];
+      if (serverNameFromSchema) {
+        const foundServer = enabledServers.find(s => s.name === serverNameFromSchema);
+        if (foundServer) {
+          server = foundServer;
+          console.log(`[McpExecutor] Using server from schema: ${serverNameFromSchema}`);
+        } else {
+          console.warn(`[McpExecutor] Server ${serverNameFromSchema} not found, using default: ${server.name}`);
+        }
+      }
+
       const fullToolName = `${server.name}.${toolName}`;
 
       console.log(`[McpExecutor] Calling tool ${fullToolName} on server ${server.name}`);
