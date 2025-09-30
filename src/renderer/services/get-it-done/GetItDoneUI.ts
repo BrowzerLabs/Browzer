@@ -273,6 +273,9 @@ export class GetItDoneUI {
           color: #495057;
           font-size: 14px;
           font-weight: 500;
+          flex: 1;
+          word-break: break-word;
+          overflow-wrap: break-word;
         }
 
         .step-status {
@@ -323,6 +326,9 @@ export class GetItDoneUI {
           font-family: 'SF Mono', Consolas, monospace;
           color: #495057;
           font-size: 14px;
+          flex: 1;
+          word-break: break-word;
+          overflow-wrap: break-word;
         }
 
         .tool-status {
