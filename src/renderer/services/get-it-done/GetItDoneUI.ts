@@ -359,6 +359,18 @@ export class GetItDoneUI {
           color: #495057;
           font-size: 14px;
           line-height: 1.5;
+          word-break: break-word;
+        }
+
+        .result-content a {
+          color: #007bff;
+          text-decoration: none;
+          border-bottom: 1px solid transparent;
+          transition: border-bottom-color 0.2s;
+        }
+
+        .result-content a:hover {
+          border-bottom-color: #007bff;
         }
 
         .result-item.result-error .result-content {
@@ -603,8 +615,8 @@ export class GetItDoneUI {
   }
 
   private generateResultsHTML(formattedResponse: string): string {
-    // Show the formatted response as a single result block instead of splitting lines
-    const cleanResponse = formattedResponse.replace(/[✅❌📋➡️]/g, '').trim();
+    // Show the formatted response as-is, keeping all emojis from Claude's response
+    const cleanResponse = formattedResponse.trim();
 
     // Determine overall status from the response
     let resultClass = 'success';
@@ -615,12 +627,36 @@ export class GetItDoneUI {
       resultClass = 'warning';
     }
 
+    // Escape HTML to prevent XSS, then make links clickable
+    const processedResponse = this.makeLinksClickable(this.sanitizeText(cleanResponse));
+
     return `
       <div class="result-item result-${resultClass}">
         <div class="result-content">
-          ${cleanResponse.replace(/\n/g, '<br>')}
+          ${processedResponse.replace(/\n/g, '<br>')}
         </div>
       </div>
     `;
+  }
+
+  private sanitizeText(text: string): string {
+    // Only escape the dangerous HTML characters, preserve emojis and unicode
+    return text
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+  }
+
+  private makeLinksClickable(text: string): string {
+    // URL regex pattern - matches http://, https://, and www. URLs
+    const urlPattern = /(https?:\/\/[^\s<]+|www\.[^\s<]+)/g;
+
+    return text.replace(urlPattern, (url) => {
+      // Add protocol if missing (for www. URLs)
+      const href = url.startsWith('www.') ? `https://${url}` : url;
+      return `<a href="${href}" target="_blank" rel="noopener noreferrer">${url}</a>`;
+    });
   }
 }
