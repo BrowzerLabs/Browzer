@@ -502,10 +502,23 @@ export class AgentService implements IAgentService {
     this.isExecuting = true;
     
     try {
-      const result = await this.executeAgentService.executeTask(message);
+      const conversationHistory = this.executeAgentService.getConversationHistory();
       
-      if (!result.success && result.error) {
-        console.error('[AgentService] Execute task failed:', result.error);
+      if (conversationHistory.length > 0) {
+        console.log('[AgentService] Continuing conversation with', conversationHistory.length, 'messages');
+        this.executeAgentService.continueConversation(message);
+        
+        const result = await this.executeAgentService.executeTask(message);
+        
+        if (!result.success && result.error) {
+          console.error('[AgentService] Execute task failed:', result.error);
+        }
+      } else {
+        const result = await this.executeAgentService.executeTask(message);
+        
+        if (!result.success && result.error) {
+          console.error('[AgentService] Execute task failed:', result.error);
+        }
       }
       
     } catch (error) {
