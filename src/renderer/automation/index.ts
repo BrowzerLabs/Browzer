@@ -27,3 +27,23 @@ export type {
   ExecutionHistoryEntry,
   NextStepDecision,
 } from './AdaptiveExecutionEngine';
+
+// DOM Downsampling (D2Snap Algorithm)
+export { DOMDownsampler } from './DOMDownsampler';
+export type {
+  DownsampledElement,
+  DownsamplingResult,
+} from './DOMDownsampler';
+
+// Screenshot Capture (Multi-modal Support)
+export { ScreenshotCapture } from './ScreenshotCapture';
+export type { CapturedScreenshot } from './ScreenshotCapture';
+
+// Hybrid Execution Engine (Best of both worlds)
+export { HybridExecutionEngine } from './HybridExecutionEngine';
+export type {
+  HybridExecutionContext,
+  ExecutionPlan,
+  PlannedStep,
+  ExecutionResult,
+} from './HybridExecutionEngine';

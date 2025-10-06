@@ -18,34 +18,22 @@ export class ExecuteAgentService {
     this.sessionSelector = new SessionSelector();
     this.orchestrator = AutomationOrchestrator.getInstance();
     
-    // Initialize orchestrator with current webview
     this.initializeOrchestrator();
     
-    // Setup execution feedback
     this.setupExecutionFeedback();
   }
 
   private initializeOrchestrator(): void {
     const webview = this.tabService.getActiveWebview();
-    if (webview) {
-      this.orchestrator.initialize(webview);
-      
-      // IMPORTANT: Enable adaptive mode for real-time LLM feedback
-      this.orchestrator.setAdaptiveMode(true);
-      
-      console.log('[ExecuteAgentService] Orchestrator initialized with webview');
-      console.log('[ExecuteAgentService] ✅ ADAPTIVE MODE ENABLED - Using iterative LLM execution');
-    }
+    this.orchestrator.initialize(webview);
   }
 
   private setupExecutionFeedback(): void {
     this.orchestrator.onExecutionFeedback((feedback) => {
-      // Dispatch event for UI updates
       window.dispatchEvent(new CustomEvent('automation-feedback', {
         detail: feedback
       }));
       
-      // Log progress
       console.log(`[ExecuteAgentService] Step ${feedback.stepId}: ${feedback.message} (${feedback.progress}%)`);
     });
   }
@@ -63,12 +51,8 @@ export class ExecuteAgentService {
     const startTime = Date.now();
 
     try {
-      // Ensure orchestrator is initialized with current webview and adaptive mode
       const webview = this.tabService.getActiveWebview();
-      if (webview) {
-        this.orchestrator.initialize(webview);
-        this.orchestrator.setAdaptiveMode(true); // Ensure adaptive mode is enabled
-      }
+      this.orchestrator.initialize(webview);
 
       this.addMessageToChat('assistant', '<div class="loading">🤖 Preparing adaptive execution - I will execute step-by-step with real-time verification...</div>');
       
@@ -98,7 +82,6 @@ export class ExecuteAgentService {
       this.clearLoadingMessages();
       this.addMessageToChat('user', instruction);
 
-      // Execute using new orchestrator
       const automationRequest: AutomationRequest = {
         userPrompt: instruction,
         recordingSessionId: selectedSessionId,

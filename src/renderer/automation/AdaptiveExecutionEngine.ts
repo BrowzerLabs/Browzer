@@ -1,6 +1,8 @@
 import { IntelligentDOMExtractor } from './IntelligentDOMExtractor';
 import { SPAReadyDetector } from './SPAReadyDetector';
 import { ChatOrchestrator } from './ChatOrchestrator';
+import { DOMDownsampler } from './DOMDownsampler';
+import { ScreenshotCapture } from './ScreenshotCapture';
 
 export interface AdaptiveExecutionContext {
   userGoal: string;
@@ -42,12 +44,16 @@ export class AdaptiveExecutionEngine {
   private domExtractor: IntelligentDOMExtractor;
   private spaDetector: SPAReadyDetector;
   private chatOrchestrator: ChatOrchestrator;
+  private domDownsampler: DOMDownsampler;
+  private screenshotCapture: ScreenshotCapture;
   private feedbackCallbacks: Array<(feedback: any) => void> = [];
 
   private constructor() {
     this.domExtractor = IntelligentDOMExtractor.getInstance();
     this.spaDetector = SPAReadyDetector.getInstance();
     this.chatOrchestrator = ChatOrchestrator.getInstance();
+    this.domDownsampler = DOMDownsampler.getInstance();
+    this.screenshotCapture = ScreenshotCapture.getInstance();
   }
 
   static getInstance(): AdaptiveExecutionEngine {
@@ -60,6 +66,7 @@ export class AdaptiveExecutionEngine {
   setWebview(webview: any): void {
     this.webview = webview;
     this.spaDetector.setWebview(webview);
+    this.screenshotCapture.setWebview(webview);
   }
 
   onFeedback(callback: (feedback: any) => void): void {
@@ -83,7 +90,7 @@ export class AdaptiveExecutionEngine {
     console.log('[AdaptiveExecutionEngine] Starting adaptive execution');
     console.log('[AdaptiveExecutionEngine] User goal:', context.userGoal);
 
-    const maxSteps = 50; // Safety limit
+    const maxSteps = 100; // Safety limit
     let stepNumber = 0;
     let goalAchieved = false;
 
@@ -105,10 +112,11 @@ export class AdaptiveExecutionEngine {
 
       // 1. Get current browser state
       const browserState = await this.captureBrowserState();
-
+      console.log('[AdaptiveExecutionEngine] Browser state:', browserState);
+      console.log('[AdaptiveExecutionEngine] Context:', context);
       // 2. Ask LLM what to do next based on current state
       const nextStep = await this.askLLMForNextStep(context, browserState, stepNumber);
-
+      console.log('[AdaptiveExecutionEngine] Next step:', nextStep);
       if (!nextStep.shouldContinue) {
         console.log('[AdaptiveExecutionEngine] LLM decided to stop:', nextStep.reasoning);
         goalAchieved = true;
@@ -125,10 +133,12 @@ export class AdaptiveExecutionEngine {
       });
 
       const executionResult = await this.executeStep(nextStep);
+      console.log('[AdaptiveExecutionEngine] Execution result:', executionResult);
 
       // 4. Capture result and browser state after execution
       await this.sleep(1000); // Wait for any async updates
       const afterState = await this.captureBrowserState();
+      console.log('[AdaptiveExecutionEngine] After state:', afterState);
 
       // 5. Record in history
       const historyEntry: ExecutionHistoryEntry = {
@@ -206,7 +216,7 @@ export class AdaptiveExecutionEngine {
   }
 
   /**
-   * Capture current browser state
+   * Capture current browser state with downsampling and screenshot
    */
   private async captureBrowserState(): Promise<any> {
     if (!this.webview) {
@@ -219,30 +229,44 @@ export class AdaptiveExecutionEngine {
     // Wait for page to be ready
     await this.spaDetector.waitForReady({ timeout: 5000 });
 
-    // Extract DOM
+    // Extract full DOM
     const domSnapshot = await this.domExtractor.extractFilteredDOM(this.webview);
 
     // Get ready state
     const readyState = await this.spaDetector.getReadyState();
+
+    // Capture screenshot for visual context
+    // let screenshot = null;
+    // try {
+    //   screenshot = await this.screenshotCapture.captureScreenshot({
+    //     maxWidth: 1280,
+    //     maxHeight: 1024,
+    //     quality: 0.7,
+    //   });
+    //   console.log(`[AdaptiveExecutionEngine] Screenshot captured: ${screenshot.width}x${screenshot.height}, ${Math.round(screenshot.fileSize / 1024)}KB`);
+    // } catch (error) {
+    //   console.warn('[AdaptiveExecutionEngine] Failed to capture screenshot:', error);
+    // }
 
     return {
       url,
       title,
       domSnapshot,
       readyState,
+      // screenshot,
     };
   }
 
   /**
-   * Ask LLM what to do next based on current state
+   * Ask LLM what to do next based on current state (with multi-modal support)
    */
   private async askLLMForNextStep(
     context: AdaptiveExecutionContext,
     browserState: any,
     stepNumber: number
   ): Promise<NextStepDecision> {
-    // Build prompt with full context
-    const prompt = this.buildNextStepPrompt(context, browserState, stepNumber);
+    // Build prompt with downsampling
+    const promptData = await this.buildNextStepPrompt(context, browserState, stepNumber);
 
     // Call LLM
     const apiKey = localStorage.getItem('anthropic_api_key');
@@ -250,18 +274,48 @@ export class AdaptiveExecutionEngine {
       throw new Error('Anthropic API key not configured');
     }
 
+    // Build messages with multi-modal content
+    const messages: any[] = [];
+
+    // Add system prompt
+    const systemPrompt = this.buildAdaptiveSystemPrompt();
+
+    // Add conversation history (last 5 messages to save context)
+    const history = this.chatOrchestrator.getConversationHistory().slice(-5);
+    history.forEach((msg) => {
+      messages.push({
+        role: msg.role,
+        content: msg.content,
+      });
+    });
+
+    // Add current prompt with screenshot
+    const currentContent: any[] = [
+      {
+        type: 'text',
+        text: promptData.text,
+      },
+    ];
+
+    messages.push({
+      role: 'user',
+      content: currentContent,
+    });
+
     const llmRequest = {
       provider: 'anthropic',
       apiKey,
-      systemPrompt: this.buildAdaptiveSystemPrompt(),
-      prompt,
-      conversationHistory: this.chatOrchestrator.getConversationHistory(),
+      systemPrompt,
+      messages,
       maxTokens: 2000,
       temperature: 0.1,
     };
 
-    console.log('[AdaptiveExecutionEngine] Asking LLM for next step...');
+    console.log('[AdaptiveExecutionEngine] LLM request:', llmRequest);
+
     const response = await (window as any).electronAPI.ipcInvoke('call-llm', llmRequest);
+
+    console.log('[AdaptiveExecutionEngine] LLM response:', response);
 
     if (!response.success) {
       throw new Error(response.error || 'LLM call failed');
@@ -331,14 +385,24 @@ Remember: You're in direct sync with the browser. You see exactly what's happeni
   }
 
   /**
-   * Build prompt for next step decision
+   * Build prompt for next step decision with downsampling
    */
-  private buildNextStepPrompt(
+  private async buildNextStepPrompt(
     context: AdaptiveExecutionContext,
     browserState: any,
     stepNumber: number
-  ): string {
-    const domDescription = this.domExtractor.generateLLMDescription(browserState.domSnapshot);
+  ): Promise<{ text: string; screenshot?: any }> {
+    // Downsample DOM elements
+    const downsampledDOM = await this.domDownsampler.downsample(
+      browserState.domSnapshot.interactiveElements,
+      context.userGoal,
+      80 // Max 80 elements
+    );
+
+    console.log(`[AdaptiveExecutionEngine] DOM downsampled: ${downsampledDOM.summary.originalCount} → ${downsampledDOM.summary.downsampledCount} elements (${downsampledDOM.summary.compressionRatio}% compression)`);
+
+    // Generate compressed DOM description
+    const compressedDOM = this.domDownsampler.generateCompressedPrompt(downsampledDOM);
 
     let prompt = `## Current Situation
 
@@ -347,16 +411,15 @@ Remember: You're in direct sync with the browser. You see exactly what's happeni
 **Current URL:** ${browserState.url}
 **Page Title:** ${browserState.title}
 **Page Ready:** ${browserState.readyState.isReady ? 'Yes' : 'No'}
-**Network Idle:** ${browserState.readyState.networkIdle ? 'Yes' : 'No'}
 
-${domDescription}
+${compressedDOM}
 
 `;
 
-    // Add execution history
+    // Add execution history (last 3 steps only)
     if (context.executionHistory.length > 0) {
-      prompt += `## Execution History\n\n`;
-      context.executionHistory.slice(-5).forEach((entry) => {
+      prompt += `## Recent Actions\n\n`;
+      context.executionHistory.slice(-3).forEach((entry) => {
         const status = entry.result === 'success' ? '✓' : '✗';
         prompt += `**Step ${entry.stepNumber}** ${status}: ${entry.reasoning}\n`;
         prompt += `  Action: ${entry.action} on "${entry.target}"\n`;
@@ -370,14 +433,19 @@ ${domDescription}
 
     prompt += `## Your Task
 
-Based on the current browser state and execution history, decide the NEXT SINGLE ACTION to take.
+Based on the current browser state (see screenshot for visual context) and execution history, decide the NEXT SINGLE ACTION to take.
 
-If the previous step failed, analyze why and try a different approach.
-If the goal is achieved, set shouldContinue to false.
+**Important:**
+- Use the element selectors provided in the compressed DOM above
+- If previous step failed, try alternative selectors or approaches
+- If goal is achieved, set shouldContinue to false
 
 Respond with JSON only.`;
 
-    return prompt;
+    return {
+      text: prompt,
+      screenshot: browserState.screenshot,
+    };
   }
 
   /**

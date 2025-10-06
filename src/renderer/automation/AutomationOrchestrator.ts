@@ -2,6 +2,7 @@ import { ChatOrchestrator, ChatSession } from './ChatOrchestrator';
 import { IntelligentDOMExtractor, FilteredDOM } from './IntelligentDOMExtractor';
 import { SPAReadyDetector } from './SPAReadyDetector';
 import { AdaptiveExecutionEngine, AdaptiveExecutionContext } from './AdaptiveExecutionEngine';
+import { HybridExecutionEngine } from './HybridExecutionEngine';
 
 export interface AutomationRequest {
   userPrompt: string;
@@ -31,14 +32,17 @@ export class AutomationOrchestrator {
   private domExtractor: IntelligentDOMExtractor;
   private spaDetector: SPAReadyDetector;
   private adaptiveEngine: AdaptiveExecutionEngine;
+  private hybridEngine: HybridExecutionEngine;
   private webview: any = null;
   private isExecuting: boolean = false;
+  private useHybridMode: boolean = true; // NEW: Use hybrid by default
 
   private constructor() {
     this.chatOrchestrator = ChatOrchestrator.getInstance();
     this.domExtractor = IntelligentDOMExtractor.getInstance();
     this.spaDetector = SPAReadyDetector.getInstance();
     this.adaptiveEngine = AdaptiveExecutionEngine.getInstance();
+    this.hybridEngine = HybridExecutionEngine.getInstance();
   }
 
   static getInstance(): AutomationOrchestrator {
@@ -55,14 +59,16 @@ export class AutomationOrchestrator {
     this.webview = webview;
     this.spaDetector.setWebview(webview);
     this.adaptiveEngine.setWebview(webview);
-    console.log('[AutomationOrchestrator] Initialized - ADAPTIVE MODE ONLY');
+    this.hybridEngine.setWebview(webview);
+    console.log('[AutomationOrchestrator] Initialized - HYBRID MODE (default)');
   }
 
   /**
-   * Set execution mode (kept for backward compatibility, but always uses adaptive)
+   * Set execution mode
    */
-  setAdaptiveMode(enabled: boolean): void {
-    console.log('[AutomationOrchestrator] Adaptive mode is always ENABLED');
+  setExecutionMode(mode: 'hybrid' | 'adaptive'): void {
+    this.useHybridMode = mode === 'hybrid';
+    console.log(`[AutomationOrchestrator] Execution mode: ${mode.toUpperCase()}`);
   }
 
   /**
@@ -121,35 +127,80 @@ export class AutomationOrchestrator {
       // Get browser context
       const browserContext = await this.getBrowserContext();
 
-      console.log('[AutomationOrchestrator] Using ADAPTIVE execution mode');
-      
-      // Add assistant message
-      this.chatOrchestrator.addMessage(
-        'assistant',
-        '🤖 Starting adaptive execution - I will execute step-by-step with real-time verification and adaptation.'
-      );
+      if (this.useHybridMode) {
+        // HYBRID MODE: Fast execution with adaptive recovery
+        console.log('[AutomationOrchestrator] Using HYBRID execution mode');
+        
+        this.chatOrchestrator.addMessage(
+          'assistant',
+          '⚡ **Hybrid Execution Mode**\n\nGenerating execution plan... Steps will execute quickly. I\'ll take control only if something fails.'
+        );
 
-      // Execute adaptively
-      const adaptiveContext: AdaptiveExecutionContext = {
-        userGoal: request.userPrompt,
-        recordingSession: request.recordingSession,
-        chatSessionId: session.id,
-        currentUrl: browserContext.url,
-        executionHistory: [],
-      };
+        const hybridContext = {
+          userGoal: request.userPrompt,
+          recordingSession: request.recordingSession,
+          chatSessionId: session.id,
+          currentUrl: browserContext.url,
+        };
 
-      const result = await this.adaptiveEngine.executeAdaptively(adaptiveContext);
+        const result = await this.hybridEngine.executeHybrid(hybridContext);
 
-      const executionTime = Date.now() - startTime;
-      this.chatOrchestrator.updateSessionStatus('completed');
+        const executionTime = Date.now() - startTime;
+        this.chatOrchestrator.updateSessionStatus('completed');
 
-      return {
-        success: result.success,
-        message: `Adaptive execution completed with ${result.stepsExecuted} steps`,
-        chatSessionId: session.id,
-        executionTime,
-        steps: result.executionHistory,
-      };
+        // Show cost savings
+        const costSavings = Math.round(
+          (1 - result.totalCost.adaptiveTokens / (result.totalCost.totalTokens || 1)) * 100
+        );
+
+        this.chatOrchestrator.addMessage(
+          'assistant',
+          `✅ **Execution Complete**\n\n` +
+          `- Steps executed: ${result.stepsExecuted}\n` +
+          `- Succeeded: ${result.stepsSucceeded}\n` +
+          `- Failed: ${result.stepsFailed}\n` +
+          `- Adaptive switches: ${result.adaptiveSwitches}\n` +
+          `- Token cost: ${result.totalCost.totalTokens} (~${costSavings}% savings)\n` +
+          `- Time: ${(executionTime / 1000).toFixed(1)}s`
+        );
+
+        return {
+          success: result.success,
+          message: `Hybrid execution completed: ${result.stepsSucceeded}/${result.stepsExecuted} steps succeeded`,
+          chatSessionId: session.id,
+          executionTime,
+          steps: result.executionHistory,
+        };
+      } else {
+        // ADAPTIVE MODE: Full LLM control every step
+        console.log('[AutomationOrchestrator] Using ADAPTIVE execution mode');
+        
+        this.chatOrchestrator.addMessage(
+          'assistant',
+          '🤖 Starting adaptive execution - I will execute step-by-step with real-time verification and adaptation.'
+        );
+
+        const adaptiveContext: AdaptiveExecutionContext = {
+          userGoal: request.userPrompt,
+          recordingSession: request.recordingSession,
+          chatSessionId: session.id,
+          currentUrl: browserContext.url,
+          executionHistory: [],
+        };
+
+        const result = await this.adaptiveEngine.executeAdaptively(adaptiveContext);
+
+        const executionTime = Date.now() - startTime;
+        this.chatOrchestrator.updateSessionStatus('completed');
+
+        return {
+          success: result.success,
+          message: `Adaptive execution completed with ${result.stepsExecuted} steps`,
+          chatSessionId: session.id,
+          executionTime,
+          steps: result.executionHistory,
+        };
+      }
     } catch (error) {
       const executionTime = Date.now() - startTime;
       const errorMessage = (error as Error).message;
@@ -222,6 +273,7 @@ export class AutomationOrchestrator {
    */
   onExecutionFeedback(callback: (feedback: any) => void): void {
     this.adaptiveEngine.onFeedback(callback);
+    this.hybridEngine.onFeedback(callback);
   }
 
   /**

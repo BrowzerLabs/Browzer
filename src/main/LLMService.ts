@@ -1,16 +1,32 @@
 import * as https from 'https';
 import { GoogleGenAI } from '@google/genai';
 
+export interface LLMMessage {
+  role: 'user' | 'assistant' | 'system';
+  content: string | MultiModalContent[];
+}
+
+export interface MultiModalContent {
+  type: 'text' | 'image';
+  text?: string;
+  image?: {
+    base64: string;
+    mimeType: string;
+  };
+}
+
 export interface LLMRequest {
   provider: 'anthropic' | 'openai' | 'gemini';
   apiKey: string;
-  prompt: string;
-  systemPrompt?: string;
+  prompt?: string; // Deprecated, use messages instead
+  systemPrompt?: string; // Deprecated, use messages instead
+  messages?: LLMMessage[]; // NEW: Conversation history
+  conversationHistory?: Array<{ role: string; content: string }>; // Legacy support
   model?: string;
   maxTokens?: number;
-  temperature?: number; // Added for better control
-  safetySettings?: GeminiSafetySettings[]; // Gemini-specific
-  thinkingBudget?: number; // Gemini 2.5 thinking feature
+  temperature?: number;
+  safetySettings?: GeminiSafetySettings[];
+  thinkingBudget?: number;
 }
 
 export interface GeminiSafetySettings {
@@ -22,7 +38,7 @@ export interface LLMResponse {
   success: boolean;
   response?: string;
   error?: string;
-  finishReason?: string; // Added for better response handling
+  finishReason?: string;
   usageMetadata?: {
     promptTokenCount?: number;
     candidatesTokenCount?: number;
@@ -35,14 +51,14 @@ export class LLMService {
 
   async callLLM(request: LLMRequest): Promise<LLMResponse> {
     try {
-      console.log('[LLMService] Making API call to:', request.provider);
+      const messages = this.normalizeMessages(request);
       
       if (request.provider === 'anthropic') {
-        return await this.callAnthropicAPI(request)
+        return await this.callGeminiAPI(request, messages);
       } else if (request.provider === 'openai') {
-        return await this.callOpenAIAPI(request);
+        return await this.callOpenAIAPI(request, messages);
       } else if (request.provider === 'gemini') {
-        return await this.callGeminiAPI(request);
+        return await this.callGeminiAPI(request, messages);
       } else {
         return {
           success: false,
@@ -56,6 +72,38 @@ export class LLMService {
         error: (error as Error).message
       };
     }
+  }
+
+  private normalizeMessages(request: LLMRequest): LLMMessage[] {
+    if (request.messages && request.messages.length > 0) {
+      return request.messages;
+    }
+
+    const messages: LLMMessage[] = [];
+
+    if (request.systemPrompt) {
+      messages.push({
+        role: 'system',
+        content: request.systemPrompt,
+      });
+    }
+    if (request.conversationHistory && request.conversationHistory.length > 0) {
+      request.conversationHistory.forEach((msg) => {
+        messages.push({
+          role: msg.role as 'user' | 'assistant' | 'system',
+          content: msg.content,
+        });
+      });
+    }
+
+    if (request.prompt) {
+      messages.push({
+        role: 'user',
+        content: request.prompt,
+      });
+    }
+
+    return messages;
   }
 
   private async makeHttpsRequest(hostname: string, path: string, headers: Record<string, string>, body: string): Promise<any> {
@@ -99,21 +147,31 @@ export class LLMService {
     });
   }
 
-  private async callAnthropicAPI(request: LLMRequest): Promise<LLMResponse> {
+  private async callAnthropicAPI(request: LLMRequest, messages: LLMMessage[]): Promise<LLMResponse> {
     try {
+      const anthropicMessages: any[] = [];
+      let systemPrompt: string | undefined;
+
+      messages.forEach((msg) => {
+        if (msg.role === 'system') {
+          systemPrompt = typeof msg.content === 'string' ? msg.content : '';
+        } else {
+          const content = this.convertToAnthropicContent(msg.content);
+          anthropicMessages.push({
+            role: msg.role,
+            content,
+          });
+        }
+      });
+
       const requestBody: any = {
         model: request.model || 'claude-sonnet-4-20250514',
-        max_tokens: request.maxTokens || 1000,
-        messages: [
-          {
-            role: 'user',
-            content: request.prompt
-          }
-        ]
+        max_tokens: request.maxTokens || 4000,
+        messages: anthropicMessages,
       };
 
-      if (request.systemPrompt) {
-        requestBody.system = request.systemPrompt;
+      if (systemPrompt) {
+        requestBody.system = systemPrompt;
       }
 
       if (request.temperature !== undefined) {
@@ -133,16 +191,27 @@ export class LLMService {
         JSON.stringify(requestBody)
       );
       
-      if (!data.content || !data.content[0] || !data.content[0].text) {
+      if (!data.content || !data.content[0]) {
         return {
           success: false,
           error: 'Invalid response format from Anthropic API'
         };
       }
 
+      const responseText = data.content
+        .filter((c: any) => c.type === 'text')
+        .map((c: any) => c.text)
+        .join('\n');
+
       return {
         success: true,
-        response: data.content[0].text
+        response: responseText,
+        finishReason: data.stop_reason,
+        usageMetadata: {
+          promptTokenCount: data.usage?.input_tokens,
+          candidatesTokenCount: data.usage?.output_tokens,
+          totalTokenCount: (data.usage?.input_tokens || 0) + (data.usage?.output_tokens || 0),
+        },
       };
     } catch (error) {
       console.error('[LLMService] Anthropic API call failed:', error);
@@ -153,26 +222,48 @@ export class LLMService {
     }
   }
 
-  private async callOpenAIAPI(request: LLMRequest): Promise<LLMResponse> {
-    try {
-      const messages: any[] = [];
-      
-      if (request.systemPrompt) {
-        messages.push({
-          role: 'system',
-          content: request.systemPrompt
-        });
-      }
+  /**
+   * Convert content to Anthropic format
+   */
+  private convertToAnthropicContent(content: string | MultiModalContent[]): any {
+    if (typeof content === 'string') {
+      return content;
+    }
 
-      messages.push({
-        role: 'user',
-        content: request.prompt
-      });
+    return content.map((item) => {
+      if (item.type === 'text') {
+        return {
+          type: 'text',
+          text: item.text,
+        };
+      } else if (item.type === 'image') {
+        return {
+          type: 'image',
+          source: {
+            type: 'base64',
+            media_type: item.image!.mimeType,
+            data: item.image!.base64,
+          },
+        };
+      }
+      return item;
+    });
+  }
+
+  /**
+   * Call OpenAI API with multi-modal support
+   */
+  private async callOpenAIAPI(request: LLMRequest, messages: LLMMessage[]): Promise<LLMResponse> {
+    try {
+      const openaiMessages = messages.map((msg) => ({
+        role: msg.role,
+        content: this.convertToOpenAIContent(msg.content),
+      }));
 
       const requestBody: any = {
         model: request.model || 'gpt-4o',
-        max_tokens: request.maxTokens || 1000,
-        messages: messages
+        max_tokens: request.maxTokens || 4000,
+        messages: openaiMessages,
       };
 
       if (request.temperature !== undefined) {
@@ -191,7 +282,7 @@ export class LLMService {
         JSON.stringify(requestBody)
       );
       
-      if (!data.choices || !data.choices[0] || !data.choices[0].message || !data.choices[0].message.content) {
+      if (!data.choices || !data.choices[0] || !data.choices[0].message) {
         return {
           success: false,
           error: 'Invalid response format from OpenAI API'
@@ -201,7 +292,12 @@ export class LLMService {
       return {
         success: true,
         response: data.choices[0].message.content,
-        finishReason: data.choices[0].finish_reason
+        finishReason: data.choices[0].finish_reason,
+        usageMetadata: {
+          promptTokenCount: data.usage?.prompt_tokens,
+          candidatesTokenCount: data.usage?.completion_tokens,
+          totalTokenCount: data.usage?.total_tokens,
+        },
       };
     } catch (error) {
       console.error('[LLMService] OpenAI API call failed:', error);
@@ -212,50 +308,81 @@ export class LLMService {
     }
   }
 
-  private async callGeminiAPI(request: LLMRequest): Promise<LLMResponse> {
+  /**
+   * Convert content to OpenAI format
+   */
+  private convertToOpenAIContent(content: string | MultiModalContent[]): any {
+    if (typeof content === 'string') {
+      return content;
+    }
+
+    return content.map((item) => {
+      if (item.type === 'text') {
+        return {
+          type: 'text',
+          text: item.text,
+        };
+      } else if (item.type === 'image') {
+        return {
+          type: 'image_url',
+          image_url: {
+            url: `data:${item.image!.mimeType};base64,${item.image!.base64}`,
+          },
+        };
+      }
+      return item;
+    });
+  }
+
+  /**
+   * Call Gemini API with multi-modal support
+   */
+  private async callGeminiAPI(request: LLMRequest, messages: LLMMessage[]): Promise<LLMResponse> {
     try {
-      // Initialize Google GenAI with API key
       const genAI = new GoogleGenAI({ apiKey: request.apiKey });
 
-      // Prepare the content string
-      let contentString = request.prompt;
-      
-      // If system prompt is provided, prepend it to the user prompt
-      // Note: For proper system instruction support, you might want to use the chat approach
-      if (request.systemPrompt) {
-        contentString = `${request.systemPrompt}\n\nUser: ${request.prompt}`;
-      }
+      // Convert messages to Gemini format
+      const geminiContents: any[] = [];
+      let systemInstruction: string | undefined;
 
-      // Prepare config object
-      const config: any = {};
+      messages.forEach((msg) => {
+        if (msg.role === 'system') {
+          systemInstruction = typeof msg.content === 'string' ? msg.content : '';
+        } else {
+          geminiContents.push({
+            role: msg.role === 'assistant' ? 'model' : 'user',
+            parts: this.convertToGeminiParts(msg.content),
+          });
+        }
+      });
 
-      // Add generation config
-      if (request.maxTokens || request.temperature !== undefined) {
-        config.generationConfig = {};
-        if (request.maxTokens) config.generationConfig.maxOutputTokens = request.maxTokens;
-        if (request.temperature !== undefined) config.generationConfig.temperature = request.temperature;
-      }
+      const config: any = {
+        generationConfig: {
+          maxOutputTokens: request.maxTokens || 4000,
+          temperature: request.temperature !== undefined ? request.temperature : 0.1,
+        },
+      };
 
-      // Add safety settings
       if (request.safetySettings) {
         config.safetySettings = request.safetySettings;
+      }
+
+      if (systemInstruction) {
+        config.systemInstruction = systemInstruction;
       }
 
       config.thinkingConfig = {
         thinkingBudget: 0
       };
 
-      // Determine model (default to gemini-2.5-flash if not specified)
       const model = request.model || 'gemini-2.5-flash';
 
-      // Make the API call using the new @google/genai package
       const response = await genAI.models.generateContent({
-        model: model,
-        contents: contentString,
-        config: config
+        model,
+        contents: geminiContents,
+        config,
       });
 
-      // Extract response text
       const responseText = response.text;
 
       if (!responseText) {
@@ -265,29 +392,20 @@ export class LLMService {
         };
       }
 
-      const result: LLMResponse = {
+      return {
         success: true,
-        response: responseText
+        response: responseText,
+        usageMetadata: {
+          promptTokenCount: response.usageMetadata?.promptTokenCount,
+          candidatesTokenCount: response.usageMetadata?.candidatesTokenCount,
+          totalTokenCount: response.usageMetadata?.totalTokenCount,
+        },
       };
-
-      // Add usage metadata if available
-      if (response.usageMetadata) {
-        result.usageMetadata = {
-          promptTokenCount: response.usageMetadata.promptTokenCount,
-          candidatesTokenCount: response.usageMetadata.candidatesTokenCount,
-          totalTokenCount: response.usageMetadata.totalTokenCount
-        };
-      }
-
-      return result;
-
     } catch (error) {
       console.error('[LLMService] Gemini API call failed:', error);
       
-      // Handle specific error types
       let errorMessage = `Gemini API call failed: ${(error as Error).message}`;
       
-      // Check for safety-related errors
       if (error instanceof Error && error.message.includes('SAFETY')) {
         errorMessage = 'Content blocked due to safety filters';
         return {
@@ -302,5 +420,39 @@ export class LLMService {
         error: errorMessage
       };
     }
+  }
+
+  /**
+   * Convert content to Gemini parts format
+   */
+  private convertToGeminiParts(content: string | MultiModalContent[]): any[] {
+    if (typeof content === 'string') {
+      return [{ text: content }];
+    }
+
+    return content.map((item) => {
+      if (item.type === 'text') {
+        return { text: item.text };
+      } else if (item.type === 'image') {
+        // // Clean base64 data - remove any whitespace, newlines, or data URI prefix
+        // let cleanBase64 = item.image!.base64;
+        
+        // // Remove data URI prefix if present (e.g., "data:image/jpeg;base64,")
+        // if (cleanBase64.includes(',')) {
+        //   cleanBase64 = cleanBase64.split(',')[1];
+        // }
+        
+        // // Remove all whitespace and newlines
+        // cleanBase64 = cleanBase64.replace(/\s/g, '');
+        
+        return {
+          inlineData: {
+            mimeType: item.image!.mimeType,
+            data: ''
+          },
+        };
+      }
+      return item;
+    });
   }
 }
