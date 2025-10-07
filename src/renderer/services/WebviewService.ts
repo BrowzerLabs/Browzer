@@ -166,14 +166,19 @@ export class WebviewService implements IWebviewService {
   private handleLoadingStart(webview: any): void {
     const tabElement = this.getTabElementByWebviewId(webview.id);
     if (tabElement) {
-      tabElement.classList.add('loading');
-      
-      // Clear the favicon when starting to load a new page
-      const tabId = webview.id.replace('webview-', '');
+      // Only add loading class if there's no favicon yet
       const faviconContainer = tabElement.querySelector('.tab-favicon') as HTMLElement;
+      const hasFavicon = faviconContainer?.classList.contains('has-favicon');
+      
+      if (!hasFavicon) {
+        // No favicon yet, show loading spinner
+        tabElement.classList.add('loading');
+      }
+      
+      // Mark favicon as loading but keep the old one visible if it exists
       if (faviconContainer) {
-        // Keep the old favicon visible while loading, but prepare to replace it
-        faviconContainer.classList.remove('favicon-error');
+        faviconContainer.classList.add('favicon-loading');
+        // Don't remove has-favicon class - keep showing old favicon during navigation
       }
     }
   }
@@ -186,8 +191,16 @@ export class WebviewService implements IWebviewService {
   }
   private handleFaviconUpdate(webview: any, faviconUrl: string): void {
     // Validate favicon URL
-    if (!faviconUrl || faviconUrl === 'about:blank') {
+    if (!faviconUrl || faviconUrl === 'about:blank' || faviconUrl.trim() === '') {
+      // No valid favicon, try to extract one
+      this.extractFavicon(webview);
       return;
+    }
+    
+    // Remove loading state from tab since we got a favicon
+    const tabElement = this.getTabElementByWebviewId(webview.id);
+    if (tabElement) {
+      tabElement.classList.remove('loading');
     }
     
     const faviconEvent = new CustomEvent('webview-favicon-updated', {
@@ -199,7 +212,7 @@ export class WebviewService implements IWebviewService {
   private async extractFavicon(webview: any): Promise<void> {
     try {
       // Wait a bit for the page to fully load
-      await new Promise(resolve => setTimeout(resolve, 500));
+      await new Promise(resolve => setTimeout(resolve, 300));
       
       const favicon = await webview.executeJavaScript(`
         (function() {
@@ -227,11 +240,21 @@ export class WebviewService implements IWebviewService {
         })()
       `);
       
-      if (favicon) {
+      if (favicon && favicon !== 'about:blank') {
         this.handleFaviconUpdate(webview, favicon);
+      } else {
+        // No favicon found, dispatch event to show default
+        const faviconEvent = new CustomEvent('webview-favicon-not-found', {
+          detail: { webviewId: webview.id }
+        });
+        window.dispatchEvent(faviconEvent);
       }
     } catch (error) {
-      // Silently fail - favicon is not critical
+      // Failed to extract favicon, dispatch event to show default
+      const faviconEvent = new CustomEvent('webview-favicon-not-found', {
+        detail: { webviewId: webview.id }
+      });
+      window.dispatchEvent(faviconEvent);
     }
   }
 
@@ -244,11 +267,6 @@ export class WebviewService implements IWebviewService {
 
 
   private handleLoadingFinish(webview: any): void {
-    const tabElement = this.getTabElementByWebviewId(webview.id);
-    if (tabElement) {
-      tabElement.classList.remove('loading');
-    }
-  
     this.updateUrlBar(webview, webview.src);
     this.notifyTabUrlChange(webview, webview.src);
     
@@ -261,14 +279,32 @@ export class WebviewService implements IWebviewService {
       this.historyService.addVisit(url, webviewTitle);
     }
     
-    // Try to get favicon after page loads
-    this.extractFavicon(webview);
+    // Notify that loading finished (for clearing timeouts)
+    window.dispatchEvent(new CustomEvent('webview-loading-finished', {
+      detail: { webviewId: webview.id }
+    }));
+    
+    // Try to get favicon after page loads if we haven't received one yet
+    const tabElement = this.getTabElementByWebviewId(webview.id);
+    const faviconContainer = tabElement?.querySelector('.tab-favicon') as HTMLElement;
+    const hasFavicon = faviconContainer?.classList.contains('has-favicon');
+    
+    if (!hasFavicon) {
+      // No favicon received yet, try to extract one
+      this.extractFavicon(webview);
+    } else {
+      // We have a favicon, remove loading state
+      if (tabElement) {
+        tabElement.classList.remove('loading');
+      }
+    }
     
     setTimeout(() => {
       if (webview && !webview.isDestroyed && webview.executeJavaScript) {
         this.adBlockService.injectAdBlockCSS(webview);
       }
     }, 500);
+    
     setTimeout(() => {
       window.dispatchEvent(new CustomEvent('webview-navigation-changed', { 
         detail: { webviewId: webview.id } 

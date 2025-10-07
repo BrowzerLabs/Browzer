@@ -11,6 +11,7 @@ export class TabService implements ITabService {
   // State
   private tabs: TabInfo[] = [];
   private activeTabId: string = '';
+  private faviconTimeouts: Map<string, NodeJS.Timeout> = new Map();
 
   // DOM elements
   private tabsContainer: HTMLElement | null = null;
@@ -91,29 +92,7 @@ export class TabService implements ITabService {
       });
     }
 
-    // Setup keyboard shortcuts
-    document.addEventListener('keydown', (e) => {
-      if (e.ctrlKey || e.metaKey) {
-        switch (e.key) {
-          case 't':
-            e.preventDefault();
-            if (this.newTabCallback) {
-              this.newTabCallback();
-            }
-            break;
-          case 'w':
-            e.preventDefault();
-            if (this.activeTabId && this.tabCloseCallback) {
-              this.tabCloseCallback(this.activeTabId);
-            }
-            break;
-          case 'Tab':
-            e.preventDefault();
-            this.cycleTab(e.shiftKey ? -1 : 1);
-            break;
-        }
-      }
-    });
+    // Note: Keyboard shortcuts are handled in index.ts to avoid duplicate listeners
   }
 
   private setupAutoSaveEvents(): void {
@@ -180,7 +159,7 @@ export class TabService implements ITabService {
   
       // Create tab element with loading state
       const tab = document.createElement('div');
-      tab.className = 'tab loading';
+      tab.className = 'tab';
       tab.id = tabId;
       tab.dataset.webviewId = webviewId;
   
@@ -277,6 +256,9 @@ export class TabService implements ITabService {
       const tabIndex = this.tabs.findIndex(tab => tab.id === tabId);
       if (tabIndex === -1) return;
       
+      const selectedTab = this.tabs[tabIndex];
+      if (!selectedTab) return;
+      
       this.activeTabId = tabId;
       this.tabs.forEach(tab => tab.isActive = tab.id === tabId);
 
@@ -291,18 +273,18 @@ export class TabService implements ITabService {
       }
 
       // Handle webview visibility
-      this.handleTabVisibility(this.tabs[tabIndex]);
+      this.handleTabVisibility(selectedTab);
       
       // Update URL bar with current tab's URL
       const urlBar = document.getElementById('urlBar') as HTMLInputElement;
-      if (urlBar) {
-        urlBar.value = this.tabs[tabIndex].url;
+      if (urlBar && selectedTab.url) {
+        urlBar.value = selectedTab.url;
       }
 
       // Update navigation buttons
       setTimeout(() => {
         const customEvent = new CustomEvent('tab-selected', { 
-          detail: { tabId, url: this.tabs[tabIndex].url } 
+          detail: { tabId, url: selectedTab.url || '' } 
         });
         window.dispatchEvent(customEvent);
       }, 100);
@@ -437,6 +419,8 @@ export class TabService implements ITabService {
   }
 
   public updateTabUrl(tabId: string, url: string): void {
+    if (!tabId || !url) return;
+    
     const tab = this.tabs.find(t => t.id === tabId);
     if (tab) {
       tab.url = url;
@@ -462,25 +446,124 @@ export class TabService implements ITabService {
       const faviconContainer = document.querySelector(`#${tabId} .tab-favicon`) as HTMLElement;
       const tabElement = document.getElementById(tabId);
       
-      if (faviconContainer && faviconUrl) {
-        // Create an image to test if the favicon loads successfully
-        const img = new Image();
-        img.onload = () => {
-          // Favicon loaded successfully
-          faviconContainer.style.backgroundImage = `url(${faviconUrl})`;
-          faviconContainer.classList.add('has-favicon');
-          faviconContainer.classList.remove('favicon-error');
-        };
-        img.onerror = () => {
-          // Favicon failed to load, use default
-          faviconContainer.style.backgroundImage = '';
-          faviconContainer.classList.remove('has-favicon');
-          faviconContainer.classList.add('favicon-error');
-        };
-        img.src = faviconUrl;
+      if (!faviconContainer) return;
+      
+      // Validate favicon URL
+      if (!faviconUrl || faviconUrl === 'about:blank' || faviconUrl.trim() === '') {
+        this.setDefaultFavicon(tabId);
+        return;
       }
+      
+      // Create an image to test if the favicon loads successfully
+      const img = new Image();
+      
+      // Set a timeout for favicon loading (Chrome-like behavior)
+      const timeoutId = setTimeout(() => {
+        img.onload = null;
+        img.onerror = null;
+        this.setDefaultFavicon(tabId);
+      }, 5000);
+      
+      img.onload = () => {
+        clearTimeout(timeoutId);
+        // Clear the safety timeout from handleNavigationStart
+        this.clearFaviconTimeout(tabId);
+        // Favicon loaded successfully - remove loading state and show favicon
+        if (tabElement) {
+          tabElement.classList.remove('loading');
+        }
+        faviconContainer.style.backgroundImage = `url(${faviconUrl})`;
+        faviconContainer.classList.add('has-favicon');
+        faviconContainer.classList.remove('favicon-error', 'favicon-loading');
+      };
+      
+      img.onerror = () => {
+        clearTimeout(timeoutId);
+        // Favicon failed to load - try default favicon.ico
+        this.tryDefaultFavicon(webview, tabId);
+      };
+      
+      // Mark as loading favicon
+      // faviconContainer.classList.add('favicon-loading');
+      img.src = faviconUrl;
     } catch (error) {
       console.error('[TabService] Error updating favicon:', error);
+      const tabId = this.getTabIdFromWebviewId(webview.id);
+      if (tabId) {
+        this.setDefaultFavicon(tabId);
+      }
+    }
+  }
+  
+  private async tryDefaultFavicon(webview: any, tabId: string): Promise<void> {
+    try {
+      // Try to get the origin and attempt /favicon.ico
+      const url = webview.src || webview.getURL();
+      if (!url || url === 'about:blank' || url.startsWith('file://')) {
+        this.setDefaultFavicon(tabId);
+        return;
+      }
+      
+      const urlObj = new URL(url);
+      const defaultFaviconUrl = `${urlObj.origin}/favicon.ico`;
+      
+      const img = new Image();
+      const timeoutId = setTimeout(() => {
+        img.onload = null;
+        img.onerror = null;
+        this.setDefaultFavicon(tabId);
+      }, 3000);
+      
+      img.onload = () => {
+        clearTimeout(timeoutId);
+        // Clear the safety timeout from handleNavigationStart
+        this.clearFaviconTimeout(tabId);
+        const faviconContainer = document.querySelector(`#${tabId} .tab-favicon`) as HTMLElement;
+        const tabElement = document.getElementById(tabId);
+        
+        if (faviconContainer) {
+          if (tabElement) {
+            tabElement.classList.remove('loading');
+          }
+          faviconContainer.style.backgroundImage = `url(${defaultFaviconUrl})`;
+          faviconContainer.classList.add('has-favicon');
+          faviconContainer.classList.remove('favicon-error', 'favicon-loading');
+        }
+      };
+      
+      img.onerror = () => {
+        clearTimeout(timeoutId);
+        this.setDefaultFavicon(tabId);
+      };
+      
+      img.src = defaultFaviconUrl;
+    } catch (error) {
+      this.setDefaultFavicon(tabId);
+    }
+  }
+  
+  private setDefaultFavicon(tabId: string): void {
+    const faviconContainer = document.querySelector(`#${tabId} .tab-favicon`) as HTMLElement;
+    const tabElement = document.getElementById(tabId);
+    
+    if (faviconContainer) {
+      // Don't override if favicon was already successfully loaded
+      if (faviconContainer.classList.contains('has-favicon') && faviconContainer.style.backgroundImage) {
+        // Favicon already loaded successfully, just remove loading states
+        if (tabElement) {
+          tabElement.classList.remove('loading');
+        }
+        faviconContainer.classList.remove('favicon-loading');
+        return;
+      }
+      
+      // Remove loading state and show default icon
+      if (tabElement) {
+        tabElement.classList.remove('loading');
+      }
+      faviconContainer.style.backgroundImage = '';
+      faviconContainer.classList.remove('has-favicon', 'favicon-loading');
+      faviconContainer.classList.add('favicon-error');
     }
   }
   
@@ -489,11 +572,67 @@ export class TabService implements ITabService {
       const faviconContainer = document.querySelector(`#${tabId} .tab-favicon`) as HTMLElement;
       if (faviconContainer) {
         faviconContainer.style.backgroundImage = '';
-        faviconContainer.classList.remove('has-favicon');
-        faviconContainer.classList.remove('favicon-error');
+        faviconContainer.classList.remove('has-favicon', 'favicon-loading');
+        faviconContainer.classList.add('favicon-error');
       }
     } catch (error) {
       console.error('[TabService] Error clearing favicon:', error);
+    }
+  }
+  
+  public setTabLoading(tabId: string, isLoading: boolean): void {
+    try {
+      const tabElement = document.getElementById(tabId);
+      if (tabElement) {
+        if (isLoading) {
+          tabElement.classList.add('loading');
+        } else {
+          tabElement.classList.remove('loading');
+        }
+      }
+    } catch (error) {
+      console.error('[TabService] Error setting tab loading state:', error);
+    }
+  }
+  
+  public handleNavigationStart(webviewId: string): void {
+    try {
+      const tabId = this.getTabIdFromWebviewId(webviewId);
+      if (!tabId) return;
+      
+      // Clear any existing timeout for this tab
+      this.clearFaviconTimeout(tabId);
+      
+      const faviconContainer = document.querySelector(`#${tabId} .tab-favicon`) as HTMLElement;
+      if (!faviconContainer) return;
+      
+      // Mark as loading but keep existing favicon visible
+      // faviconContainer.classList.add('favicon-loading');
+      
+      // Only show loading spinner if no favicon exists
+      const hasFavicon = faviconContainer.classList.contains('has-favicon');
+      const tabElement = document.getElementById(tabId);
+      
+      if (!hasFavicon && tabElement) {
+        tabElement.classList.add('loading');
+      }
+      
+      // Set a safety timeout to remove loading state after 10 seconds
+      const timeoutId = setTimeout(() => {
+        this.setDefaultFavicon(tabId);
+        this.faviconTimeouts.delete(tabId);
+      }, 10000);
+      
+      this.faviconTimeouts.set(tabId, timeoutId);
+    } catch (error) {
+      console.error('[TabService] Error handling navigation start:', error);
+    }
+  }
+  
+  public clearFaviconTimeout(tabId: string): void {
+    if (this.faviconTimeouts.has(tabId)) {
+      clearTimeout(this.faviconTimeouts.get(tabId)!);
+      this.faviconTimeouts.delete(tabId);
     }
   }
 
@@ -785,44 +924,24 @@ export class TabService implements ITabService {
           const expectedTabCount = savedSession.tabs.length;
           let tabsProcessed = 0;
           
-          // Restore each tab
+          // Restore each tab sequentially to avoid ERR_ABORTED errors
           for (let i = 0; i < savedSession.tabs.length; i++) {
             const tabData = savedSession.tabs[i];
             try {
-              if (tabData.url && tabData.url !== 'about:blank') {
-                // Use the callback to create tab properly with webview
-                if (this.newTabCallback) {
-                  this.newTabCallback(); // This will trigger createNewTab in the main app
-                  
-                  // Wait for tab to be created then update it
-                  setTimeout(() => {
-                    const latestTab = this.tabs[this.tabs.length - 1];
-                    if (latestTab) {
-                      // Update URL if different from default
-                      if (tabData.url !== CONSTANTS.NEW_TAB_URL) {
-                        const webview = document.getElementById(latestTab.webviewId) as any;
-                        if (webview) {
-                          webview.loadURL(tabData.url);
-                        }
-                      }
-                      
-                      // Update title
-                      if (tabData.title && tabData.title !== 'New Tab') {
-                        const titleElement = document.querySelector(`#${latestTab.id} .tab-title`);
-                        if (titleElement) {
-                          titleElement.textContent = tabData.title;
-                        }
-                        latestTab.title = tabData.title;
-                      }
-                      
-                      if (tabData.isActive) {
-                        activeTabToRestore = latestTab.id;
-                      }
-                    }
-                    
-                    tabsProcessed++;
-                    
-                    // When all tabs are processed, select the active one
+              // Validate tab data
+              if (!tabData || !tabData.url || tabData.url === 'about:blank') {
+                tabsProcessed++;
+                continue;
+              }
+              
+              // Use the callback to create tab properly with webview
+              if (this.newTabCallback) {
+                this.newTabCallback(); // This will trigger createNewTab in the main app
+                
+                // Wait for tab to be created then update it
+                setTimeout(() => {
+                  // Helper function to check if all tabs are processed
+                  const checkAllTabsProcessed = () => {
                     if (tabsProcessed === expectedTabCount) {
                       setTimeout(() => {
                         const tabToSelect = activeTabToRestore || this.tabs[0]?.id;
@@ -830,12 +949,67 @@ export class TabService implements ITabService {
                           this.selectTab(tabToSelect);
                           this.showToast(`Restored ${expectedTabCount} tabs from previous session`, 'success');
                         }
-                      }, 100);
+                      }, 200);
                     }
-                  }, 100 * (i + 1)); // Stagger the tab creation
-                }
-              } else {
-                tabsProcessed++;
+                  };
+                  
+                  const latestTab = this.tabs[this.tabs.length - 1];
+                  if (latestTab) {
+                    // Update title first (before loading URL)
+                    if (tabData.title && tabData.title !== 'New Tab') {
+                      const titleElement = document.querySelector(`#${latestTab.id} .tab-title`);
+                      if (titleElement) {
+                        titleElement.textContent = tabData.title;
+                      }
+                      latestTab.title = tabData.title;
+                    }
+                    
+                    // Update URL if different from default
+                    if (tabData.url && tabData.url !== CONSTANTS.NEW_TAB_URL) {
+                      const webview = document.getElementById(latestTab.webviewId) as any;
+                      if (webview) {
+                        // Wait for webview to be fully ready
+                        const waitForWebviewReady = (attempts = 0) => {
+                          if (attempts > 20) {
+                            console.warn('[TabService] Webview not ready after 20 attempts, skipping URL load');
+                            tabsProcessed++;
+                            checkAllTabsProcessed();
+                            return;
+                          }
+                          
+                          if (webview.getWebContentsId && webview.getWebContentsId() > 0) {
+                            try {
+                              webview.loadURL(tabData.url);
+                              tabsProcessed++;
+                              checkAllTabsProcessed();
+                            } catch (loadErr) {
+                              console.warn('[TabService] Failed to load URL for restored tab:', loadErr);
+                              tabsProcessed++;
+                              checkAllTabsProcessed();
+                            }
+                          } else {
+                            setTimeout(() => waitForWebviewReady(attempts + 1), 100);
+                          }
+                        };
+                        
+                        waitForWebviewReady();
+                      } else {
+                        tabsProcessed++;
+                        checkAllTabsProcessed();
+                      }
+                    } else {
+                      tabsProcessed++;
+                      checkAllTabsProcessed();
+                    }
+                    
+                    if (tabData.isActive) {
+                      activeTabToRestore = latestTab.id;
+                    }
+                  } else {
+                    tabsProcessed++;
+                    checkAllTabsProcessed();
+                  }
+                }, 250 * (i + 1)); // Increased stagger time to prevent ERR_ABORTED
               }
             } catch (tabErr) {
               console.warn('[TabService] Failed to restore individual tab:', tabErr);
@@ -948,6 +1122,12 @@ export class TabService implements ITabService {
         clearTimeout(this.hidePreviewTimeout);
         this.hidePreviewTimeout = null;
       }
+      
+      // Clear favicon timeouts
+      for (const timeout of this.faviconTimeouts.values()) {
+        clearTimeout(timeout);
+      }
+      this.faviconTimeouts.clear();
 
       // Clear cache
       this.previewCache.clear();

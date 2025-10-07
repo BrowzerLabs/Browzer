@@ -235,22 +235,27 @@ html, body {
     justify-content: center;
 }
 
-/* Default favicon for pages without a favicon */
-.tab-favicon:not(.has-favicon):not(.favicon-error) {
-    background-image: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="%235f6368" viewBox="0 0 16 16"><path d="M14 4.5V14a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V2a2 2 0 0 1 2-2h5.5L14 4.5zm-3 0A1.5 1.5 0 0 1 9.5 3V1H4a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V4.5h-2z"/></svg>');
+/* Default favicon for pages without a favicon or when favicon fails to load */
+.tab-favicon.favicon-error {
+    background-image: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="%235f6368" viewBox="0 0 16 16"><circle cx="8" cy="8" r="7" fill="none" stroke="%235f6368" stroke-width="1.5"/><path d="M8 4v5M8 11v1" stroke="%235f6368" stroke-width="1.5" stroke-linecap="round"/></svg>');
 }
 
-/* Hide default icon when loading */
-.tab.loading .tab-favicon:not(.has-favicon) {
+/* Globe icon for new tabs or pages being loaded */
+.tab-favicon:not(.has-favicon):not(.favicon-error):not(.favicon-loading) {
+    background-image: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="%235f6368" viewBox="0 0 16 16"><path d="M8 0a8 8 0 1 0 0 16A8 8 0 0 0 8 0zM1.5 8a6.5 6.5 0 1 1 13 0 6.5 6.5 0 0 1-13 0z"/><path d="M8 1.5a6.5 6.5 0 0 0 0 13c.5 0 1-.5 1.5-1.5.5-1 1-2.5 1-4.5s-.5-3.5-1-4.5c-.5-1-1-1.5-1.5-1.5zm0 0a6.5 6.5 0 0 1 0 13c-.5 0-1-.5-1.5-1.5-.5-1-1-2.5-1-4.5s.5-3.5 1-4.5c.5-1 1-1.5 1.5-1.5zM1.5 8h13"/></svg>');
+}
+
+/* Hide default icon when loading and no favicon */
+.tab.loading .tab-favicon:not(.has-favicon):not(.favicon-loading) {
     background-image: none;
 }
 
-/* Loading spinner - only show when tab is loading AND no favicon is present */
-.tab.loading .tab-favicon:not(.has-favicon)::after {
+/* Loading spinner - only show when tab is loading AND no favicon is present AND not already showing favicon-loading */
+.tab.loading .tab-favicon:not(.has-favicon):not(.favicon-loading)::after {
     content: '';
     position: absolute;
-    top: 0;
-    left: 0;
+    top: 1px;
+    left: 1px;
     width: 14px;
     height: 14px;
     border: 2px solid #e8eaed;
@@ -259,20 +264,21 @@ html, body {
     animation: tab-spin 0.8s linear infinite;
 }
 
-/* When tab has favicon, show a subtle loading indicator */
-.tab.loading .tab-favicon.has-favicon::before {
+/* When tab has favicon but page is still loading, show subtle loading indicator */
+.tab-favicon.has-favicon.favicon-loading::before {
     content: '';
     position: absolute;
     top: -2px;
     right: -2px;
-    width: 8px;
-    height: 8px;
+    width: 6px;
+    height: 6px;
     border: 1.5px solid #e8eaed;
     border-top-color: #1a73e8;
     border-radius: 50%;
-    animation: tab-spin 0.8s linear infinite;
+    animation: tab-spin 0.6s linear infinite;
     background: white;
     z-index: 2;
+    box-shadow: 0 0 2px rgba(0,0,0,0.1);
 }
 
 @keyframes tab-spin {
@@ -2826,16 +2832,18 @@ select:focus-visible {
 }
 
 /* Collapsed sidebar loading animation */
-.sidebar-collapsed .tab.loading .tab-favicon:not(.has-favicon)::after {
-    top: 1px;
-    left: 1px;
-    width: 16px;
-    height: 16px;
+.sidebar-collapsed .tab.loading .tab-favicon:not(.has-favicon):not(.favicon-loading)::after {
+    top: 2px;
+    left: 2px;
+    width: 14px;
+    height: 14px;
 }
 
-.sidebar-collapsed .tab.loading .tab-favicon.has-favicon::before {
-    top: -1px;
-    right: -1px;
+.sidebar-collapsed .tab-favicon.has-favicon.favicon-loading::before {
+    top: 0px;
+    right: 0px;
+    width: 5px;
+    height: 5px;
 }
 
 /* ============ TAB SEARCH MODAL ============ */

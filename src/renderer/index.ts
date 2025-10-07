@@ -509,6 +509,25 @@ class BrowzerApp {
         this.tabService.updateTabFavicon(webview, faviconUrl);
       }
     });
+    
+    // Listen for favicon not found event
+    window.addEventListener('webview-favicon-not-found', (e: any) => {
+      const { webviewId } = e.detail;
+      const tabId = this.tabService.getTabIdFromWebviewId(webviewId);
+      if (tabId) {
+        this.tabService.setTabLoading(tabId, false);
+        this.tabService.clearTabFavicon(tabId);
+      }
+    });
+    
+    // Listen for loading finished event to clear favicon timeouts
+    window.addEventListener('webview-loading-finished', (e: any) => {
+      const { webviewId } = e.detail;
+      const tabId = this.tabService.getTabIdFromWebviewId(webviewId);
+      if (tabId) {
+        this.tabService.clearFaviconTimeout(tabId);
+      }
+    });
   
     // Listen for webview URL changes
     window.addEventListener('webview-url-changed', (e: any) => {
@@ -547,6 +566,10 @@ class BrowzerApp {
         }
       });
 
+      webview.addEventListener('did-start-loading', () => {
+        this.tabService.handleNavigationStart(webview.id);
+      });
+
       webview.addEventListener('did-finish-load', async () => {
         try {
           const title = await webview.executeJavaScript('document.title');
@@ -559,12 +582,18 @@ class BrowzerApp {
       });
 
       webview.addEventListener('did-navigate', (e: any) => {
-        this.tabService.updateTabUrl(this.tabService.getTabIdFromWebviewId(webview.id)!, e.url);
+        const tabId = this.tabService.getTabIdFromWebviewId(webview.id);
+        if (tabId && e && e.url) {
+          this.tabService.updateTabUrl(tabId, e.url);
+        }
         this.browserService.updateNavigationButtons();
       });
 
       webview.addEventListener('did-navigate-in-page', (e: any) => {
-        this.tabService.updateTabUrl(this.tabService.getTabIdFromWebviewId(webview.id)!, e.url);
+        const tabId = this.tabService.getTabIdFromWebviewId(webview.id);
+        if (tabId && e && e.url) {
+          this.tabService.updateTabUrl(tabId, e.url);
+        }
         this.browserService.updateNavigationButtons();
       });
 
