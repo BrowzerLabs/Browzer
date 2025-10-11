@@ -355,7 +355,9 @@ export class BrowserManager {
     if (video) {
       console.log('🎥 Video included:', video.fileName);
     }
-    
+
+    this.clearRecordingState();
+
     // Notify renderer
     if (this.agentUIView && !this.agentUIView.webContents.isDestroyed()) {
       this.agentUIView.webContents.send('recording:saved', session);
@@ -399,6 +401,36 @@ export class BrowserManager {
     
     const tab = this.tabs.get(this.activeTabId);
     return tab?.recorder?.getActions() || [];
+  }
+
+  /**
+   * Get current recording metadata (duration, startUrl, etc.)
+   */
+  public getRecordingMetadata(): { duration: number; startUrl: string} {
+    const duration = this.recordingStartTime ? Date.now() - this.recordingStartTime : 0;
+    return {
+      duration,
+      startUrl: this.recordingStartUrl || ''
+    };
+  }
+
+  /**
+   * Clear recording state after saving or discarding
+   */
+  public clearRecordingState(): void {
+    this.isRecording = false;
+    this.recordingStartTime = 0;
+    this.recordingStartUrl = '';
+    
+    // Clear actions from active tab recorder
+    if (this.activeTabId) {
+      const tab = this.tabs.get(this.activeTabId);
+      if (tab?.recorder) {
+        tab.recorder.clearActions();
+      }
+    }
+    
+    console.log('Recording state cleared');
   }
 
   /**

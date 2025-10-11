@@ -41,6 +41,8 @@ export interface BrowserAPI {
   deleteRecording: (id: string) => Promise<boolean>;
   isRecording: () => Promise<boolean>;
   getRecordedActions: () => Promise<RecordedAction[]>;
+  getRecordingMetadata: () => Promise<{ duration: number; startUrl: string }>;
+  discardRecording: () => Promise<void>;
 
   // Settings Management
   getAllSettings: () => Promise<AppSettings>;
@@ -113,6 +115,8 @@ const browserAPI: BrowserAPI = {
   deleteRecording: (id: string) => ipcRenderer.invoke('browser:delete-recording', id),
   isRecording: () => ipcRenderer.invoke('browser:is-recording'),
   getRecordedActions: () => ipcRenderer.invoke('browser:get-recorded-actions'),
+  getRecordingMetadata: () => ipcRenderer.invoke('browser:get-recording-metadata'),
+  discardRecording: () => ipcRenderer.invoke('browser:discard-recording'),
 
   onTabsUpdated: (callback) => {
     const subscription = (_event: Electron.IpcRendererEvent, data: { tabs: TabInfo[]; activeTabId: string | null }) => callback(data);

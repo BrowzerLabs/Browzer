@@ -19,8 +19,15 @@ export function Sidebar() {
     const unsubStart = window.browserAPI.onRecordingStarted(() => {
       setActiveTab('recording');
     });
+
+    const unsubStop = window.browserAPI.onRecordingStopped(() => {
+      setActiveTab('recording');
+    });
     
-    return () => unsubStart();
+    return () => {
+      unsubStart();
+      unsubStop();
+    };
   }, [setActiveTab]);
 
   return (

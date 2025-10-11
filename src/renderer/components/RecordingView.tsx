@@ -17,9 +17,33 @@ export function RecordingView() {
   } | null>(null);
 
   useEffect(() => {
-    // Initialize state
-    window.browserAPI.isRecording().then(setIsRecording);
+    const initializeState = async () => {
+      const recordingStatus = await window.browserAPI.isRecording();
+      setIsRecording(recordingStatus);
+
+      if (recordingStatus) {
+        const existingActions = await window.browserAPI.getRecordedActions();
+        setActions(existingActions || []);
+      } 
+       else {
+         const existingActions = await window.browserAPI.getRecordedActions();
+         if (existingActions && existingActions.length > 0) {
+           const metadata = await window.browserAPI.getRecordingMetadata();
+           console.log('🔍 Recording metadata:', metadata);
+           setActions(existingActions);
+           setShowSaveForm(true);
+           setRecordingData({
+             actions: existingActions,
+             duration: metadata.duration,
+             startUrl: metadata.startUrl
+           });
+         }
+       }
+      
     loadSessions();
+    };
+
+    initializeState();
 
     // Setup event listeners
     const unsubStart = window.browserAPI.onRecordingStarted(() => {
@@ -32,7 +56,9 @@ export function RecordingView() {
     const unsubStop = window.browserAPI.onRecordingStopped((data) => {
       setIsRecording(false);
       setRecordingData(data);
+      if (data.actions && data.actions.length > 0) {
       setShowSaveForm(true);
+      }
     });
 
     const unsubAction = window.browserAPI.onRecordingAction((action: RecordedAction) => {
@@ -40,10 +66,12 @@ export function RecordingView() {
     });
 
     const unsubSaved = window.browserAPI.onRecordingSaved(() => {
+      setActions([]);
       loadSessions();
     });
 
     const unsubDeleted = window.browserAPI.onRecordingDeleted(() => {
+      setActions([]);
       loadSessions();
     });
 
@@ -71,7 +99,10 @@ export function RecordingView() {
     }
   };
 
-  const handleDiscardRecording = () => {
+  const handleDiscardRecording = async () => {
+    // Clear state in main process
+    await window.browserAPI.discardRecording();
+
     setShowSaveForm(false);
     setRecordingData(null);
     setActions([]);
