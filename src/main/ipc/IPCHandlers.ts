@@ -127,6 +127,11 @@ export class IPCHandlers {
     ipcMain.handle('browser:get-recorded-actions', async () => {
       return this.browserManager.getRecordedActions();
     });
+
+    // Discard current recording (clear state without saving)
+    ipcMain.handle('browser:discard-recording', async () => {
+      return this.browserManager.clearRecordingState();
+    });
   }
 
   private setupSettingsHandlers(): void {

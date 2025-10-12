@@ -108,6 +108,7 @@ export class ActionRecorder {
 
       this.isRecording = false;
       this.actions.sort((a, b) => a.timestamp - b.timestamp);
+      this.onActionCallback = undefined;
       
       console.log(`⏹️ Recording stopped. Captured ${this.actions.length} actions`);
       
@@ -136,6 +137,16 @@ export class ActionRecorder {
    */
   public getActions(): RecordedAction[] {
     return [...this.actions];
+  }
+
+  /**
+   * Clear all recorded actions
+   */
+  public clearActions(): void {
+    this.actions = [];
+    this.pendingActions.clear();
+    this.onActionCallback = undefined;
+    console.log('Actions cleared from recorder');
   }
 
   /**
@@ -766,6 +777,10 @@ export class ActionRecorder {
    * Setup CDP event listeners
    */
   private setupEventListeners(): void {
+    // Remove any existing listeners first to prevent duplicates
+    this.debugger.removeAllListeners('message');
+    this.debugger.removeAllListeners('detach');
+    
     this.debugger.on('message', async (_event, method, params) => {
       if (!this.isRecording) return;
 

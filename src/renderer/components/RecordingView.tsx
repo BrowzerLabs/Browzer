@@ -17,9 +17,31 @@ export function RecordingView() {
   } | null>(null);
 
   useEffect(() => {
-    // Initialize state
-    window.browserAPI.isRecording().then(setIsRecording);
+    const initializeState = async () => {
+      const recordingStatus = await window.browserAPI.isRecording();
+      setIsRecording(recordingStatus);
+
+      const existingActions = await window.browserAPI.getRecordedActions();
+      if (recordingStatus) {
+        setActions(existingActions || []);
+      } 
+       else {
+         if (existingActions && existingActions.length > 0) {
+           setActions(existingActions);
+           setShowSaveForm(true);
+           // TODO: Use recording metadata here
+           setRecordingData({
+             actions: existingActions,
+             duration: 0,
+             startUrl: ''
+           });
+         }
+       }
+      
     loadSessions();
+    };
+
+    initializeState();
 
     // Setup event listeners
     const unsubStart = window.browserAPI.onRecordingStarted(() => {
@@ -32,7 +54,9 @@ export function RecordingView() {
     const unsubStop = window.browserAPI.onRecordingStopped((data) => {
       setIsRecording(false);
       setRecordingData(data);
+      if (data.actions && data.actions.length > 0) {
       setShowSaveForm(true);
+      }
     });
 
     const unsubAction = window.browserAPI.onRecordingAction((action: RecordedAction) => {
@@ -40,10 +64,12 @@ export function RecordingView() {
     });
 
     const unsubSaved = window.browserAPI.onRecordingSaved(() => {
+      setActions([]);
       loadSessions();
     });
 
     const unsubDeleted = window.browserAPI.onRecordingDeleted(() => {
+      setActions([]);
       loadSessions();
     });
 
@@ -71,7 +97,10 @@ export function RecordingView() {
     }
   };
 
-  const handleDiscardRecording = () => {
+  const handleDiscardRecording = async () => {
+    // Clear state in main process
+    await window.browserAPI.discardRecording();
+
     setShowSaveForm(false);
     setRecordingData(null);
     setActions([]);
