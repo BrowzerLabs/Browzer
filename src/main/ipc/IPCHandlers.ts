@@ -128,11 +128,6 @@ export class IPCHandlers {
       return this.browserManager.getRecordedActions();
     });
 
-    // Get current recording metadata (duration, startUrl, etc.)
-    ipcMain.handle('browser:get-recording-metadata', async () => {
-      return this.browserManager.getRecordingMetadata();
-    });
-
     // Discard current recording (clear state without saving)
     ipcMain.handle('browser:discard-recording', async () => {
       return this.browserManager.clearRecordingState();

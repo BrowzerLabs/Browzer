@@ -21,21 +21,19 @@ export function RecordingView() {
       const recordingStatus = await window.browserAPI.isRecording();
       setIsRecording(recordingStatus);
 
+      const existingActions = await window.browserAPI.getRecordedActions();
       if (recordingStatus) {
-        const existingActions = await window.browserAPI.getRecordedActions();
         setActions(existingActions || []);
       } 
        else {
-         const existingActions = await window.browserAPI.getRecordedActions();
          if (existingActions && existingActions.length > 0) {
-           const metadata = await window.browserAPI.getRecordingMetadata();
-           console.log('🔍 Recording metadata:', metadata);
            setActions(existingActions);
            setShowSaveForm(true);
+           // TODO: Use recording metadata here
            setRecordingData({
              actions: existingActions,
-             duration: metadata.duration,
-             startUrl: metadata.startUrl
+             duration: 0,
+             startUrl: ''
            });
          }
        }

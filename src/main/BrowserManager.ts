@@ -404,17 +404,6 @@ export class BrowserManager {
   }
 
   /**
-   * Get current recording metadata (duration, startUrl, etc.)
-   */
-  public getRecordingMetadata(): { duration: number; startUrl: string} {
-    const duration = this.recordingStartTime ? Date.now() - this.recordingStartTime : 0;
-    return {
-      duration,
-      startUrl: this.recordingStartUrl || ''
-    };
-  }
-
-  /**
    * Clear recording state after saving or discarding
    */
   public clearRecordingState(): void {
