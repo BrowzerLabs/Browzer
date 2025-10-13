@@ -98,16 +98,18 @@ export function SaveRecordingForm({ actionCount, duration, onSave, onDiscard }: 
         </div>
 
         {/* Buttons */}
-        <div className="flex gap-3 pt-2">
+        <div className="flex gap-3 justify-between">
           <Button
             type="button"
             variant="ghost"
             onClick={handleDiscardClick}
+            className='w-1/2'
           >
             Discard
           </Button>
           <Button
             type="submit"
+            className='w-1/2'
           >
             Save Recording
           </Button>

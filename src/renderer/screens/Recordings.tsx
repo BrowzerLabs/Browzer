@@ -1,36 +1,10 @@
 import { useEffect, useState } from 'react';
-import { 
-  Play, 
-  Trash2, 
-  Clock, 
-  Video, 
-  MousePointerClick, 
-  Calendar, 
-  Loader2Icon, 
-  ExternalLink, 
-  X, 
-  RefreshCcw,
-  Download,
-  Search,
-  Filter,
-  FileVideo,
-  HardDrive
-} from 'lucide-react';
-import type { RecordingSession } from '../../shared/types';
-import { Button } from '../ui/button';
-import { Input } from '../ui/input';
+import { Video, Loader2Icon, RefreshCcw } from 'lucide-react';
+import type { RecordingSession } from '@/shared/types';
+import { Button } from '@/renderer/ui/button';
 import { toast } from 'sonner';
-import { formatDate, formatDuration, formatFileSize } from '../lib/utils';
-import { Badge } from '../ui/badge';
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '../ui/card';
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '../ui/dialog';
-import ThemeToggle from '../ui/theme-toggle';
+import ThemeToggle from '@/renderer/ui/theme-toggle';
+import { RecordingCard ,RecordingStats ,RecordingDialog ,RecordingFilters } from '@/renderer/components/recordings';
 
 export function Recordings() {
   const [recordings, setRecordings] = useState<RecordingSession[]>([]);
@@ -137,6 +111,7 @@ export function Recordings() {
     const totalActions = recordings.reduce((sum, rec) => sum + rec.actionCount, 0);
     const totalDuration = recordings.reduce((sum, rec) => sum + rec.duration, 0);
     const totalVideoSize = recordings.reduce((sum, rec) => sum + (rec.videoSize || 0), 0);
+    const totalSnapshotSize = recordings.reduce((sum, rec) => sum + (rec.totalSnapshotSize || 0), 0);
     const withVideo = recordings.filter((rec) => rec.videoPath).length;
 
     return {
@@ -144,13 +119,14 @@ export function Recordings() {
       totalActions,
       totalDuration,
       totalVideoSize,
+      totalSnapshotSize,
       withVideo,
     };
   };
 
   if (loading) {
     return (
-      <div className="h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800">
+      <div className="h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-black">
         <Loader2Icon className="size-4 animate-spin text-blue-600" />
       </div>
     );
@@ -175,119 +151,29 @@ export function Recordings() {
 
           <section className='flex items-center gap-2'>
             <Button 
-            onClick={() => { 
-              loadRecordings(); 
-              toast.success('Recordings refreshed'); 
-            }} 
-            disabled={loading}
-          >
-            <RefreshCcw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-            Refresh
-          </Button>
-          <ThemeToggle />
+              onClick={() => { 
+                loadRecordings(); 
+                toast.success('Recordings refreshed'); 
+              }} 
+              disabled={loading}
+            >
+              <RefreshCcw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+              Refresh
+            </Button>
+            <ThemeToggle />
           </section>
         </div>
 
         {/* Search and Filters */}
-        <div className="flex gap-4 mb-6">
-          <div className="flex-1 relative bg-white dark:bg-slate-700 rounded-md">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
-            <Input
-              type="text"
-              placeholder="Search recordings..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10 border-primary"
-            />
-            {searchQuery && (
-              <button
-                onClick={() => setSearchQuery('')}
-                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-800 hover:text-gray-600"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            )}
-          </div>
-
-          <div className="flex gap-2">
-            <Button
-              variant={filterType === 'all' ? 'default' : 'outline'}
-              onClick={() => setFilterType('all')}
-            >
-              <Filter className="w-4 h-4 mr-2" />
-              All
-            </Button>
-            <Button
-              variant={filterType === 'with-video' ? 'default' : 'outline'}
-              onClick={() => setFilterType('with-video')}
-            >
-              <FileVideo className="w-4 h-4 mr-2" />
-              With Video
-            </Button>
-            <Button
-              variant={filterType === 'actions-only' ? 'default' : 'outline'}
-              onClick={() => setFilterType('actions-only')}
-            >
-              <MousePointerClick className="w-4 h-4 mr-2" />
-              Actions Only
-            </Button>
-          </div>
-        </div>
+        <RecordingFilters
+          searchQuery={searchQuery}
+          filterType={filterType}
+          onSearchChange={setSearchQuery}
+          onFilterChange={setFilterType}
+        />
 
         {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-          <div className="bg-white dark:bg-slate-800 rounded-xl border border-gray-200 dark:border-slate-700 p-4 shadow-sm">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
-                <Video className="w-5 h-5 text-blue-600" />
-              </div>
-              <div>
-                <p className="text-sm text-gray-600 dark:text-gray-400">Total Recordings</p>
-                <p className="text-2xl font-bold text-gray-900 dark:text-white">{stats.total}</p>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white dark:bg-slate-800 rounded-xl border border-gray-200 dark:border-slate-700 p-4 shadow-sm">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-green-100 dark:bg-green-900/30 rounded-lg">
-                <MousePointerClick className="w-5 h-5 text-green-600" />
-              </div>
-              <div>
-                <p className="text-sm text-gray-600 dark:text-gray-400">Total Actions</p>
-                <p className="text-2xl font-bold text-gray-900 dark:text-white">{stats.totalActions}</p>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white dark:bg-slate-800 rounded-xl border border-gray-200 dark:border-slate-700 p-4 shadow-sm">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-purple-100 dark:bg-purple-900/30 rounded-lg">
-                <Clock className="w-5 h-5 text-purple-600" />
-              </div>
-              <div>
-                <p className="text-sm text-gray-600 dark:text-gray-400">Total Duration</p>
-                <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                  {formatDuration(stats.totalDuration)}
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white dark:bg-slate-800 rounded-xl border border-gray-200 dark:border-slate-700 p-4 shadow-sm">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-orange-100 dark:bg-orange-900/30 rounded-lg">
-                <HardDrive className="w-5 h-5 text-orange-600" />
-              </div>
-              <div>
-                <p className="text-sm text-gray-600 dark:text-gray-400">Storage Used</p>
-                <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                  {formatFileSize(stats.totalVideoSize)}
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
+        <RecordingStats {...stats} />
 
         {/* Recordings Grid */}
         {filteredRecordings.length === 0 ? (
@@ -305,247 +191,26 @@ export function Recordings() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {filteredRecordings.map((recording) => (
-              <Card 
-                key={recording.id} 
-                className="group hover:shadow-lg transition-all duration-200 hover:border-blue-300 dark:hover:border-blue-700"
-              >
-                <CardHeader className="pb-3">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="flex-1 min-w-0">
-                      <CardTitle className="text-lg truncate">{recording.name}</CardTitle>
-                      <CardDescription className="line-clamp-2 mt-1">
-                        {recording.description || 'No description'}
-                      </CardDescription>
-                    </div>
-                    {recording.videoPath && (
-                      <Badge variant="secondary" className="bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 shrink-0">
-                        <Video className="w-3 h-3 mr-1" />
-                        Video
-                      </Badge>
-                    )}
-                  </div>
-                </CardHeader>
-
-                <CardContent className="space-y-3">
-                  {/* URL */}
-                  {recording.url && (
-                    <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
-                      <ExternalLink className="w-4 h-4 shrink-0" />
-                      <span className="truncate">{recording.url}</span>
-                    </div>
-                  )}
-
-                  {/* Stats */}
-                  <div className="flex items-center gap-4 text-sm">
-                    <div className="flex items-center gap-1 text-gray-600 dark:text-gray-400">
-                      <MousePointerClick className="w-4 h-4" />
-                      <span>{recording.actionCount} actions</span>
-                    </div>
-                    <div className="flex items-center gap-1 text-gray-600 dark:text-gray-400">
-                      <Clock className="w-4 h-4" />
-                      <span>{formatDuration(recording.duration)}</span>
-                    </div>
-                  </div>
-
-                  {/* Video Info */}
-                  {recording.videoPath && recording.videoSize && (
-                    <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
-                      <HardDrive className="w-4 h-4" />
-                      <span>{formatFileSize(recording.videoSize)}</span>
-                      {recording.videoFormat && (
-                        <Badge variant="outline" className="text-xs">
-                          {recording.videoFormat.toUpperCase()}
-                        </Badge>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Date */}
-                  <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
-                    <Calendar className="w-4 h-4" />
-                    <span>{formatDate(recording.createdAt)}</span>
-                  </div>
-                </CardContent>
-
-                <CardFooter className="flex gap-2 pt-4 border-t">
-                  <Button
-                    onClick={() => handlePlay(recording)}
-                    className="flex-1"
-                    size="sm"
-                  >
-                    <Play className="w-4 h-4 mr-2" />
-                    View
-                  </Button>
-                  {recording.videoPath && (
-                    <Button
-                      onClick={() => handleOpenVideo(recording.videoPath)}
-                      variant="outline"
-                      size="sm"
-                    >
-                      <Download className="w-4 h-4" />
-                    </Button>
-                  )}
-                  <Button
-                    onClick={() => handleDelete(recording.id)}
-                    variant="ghost"
-                    size="sm"
-                    className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </Button>
-                </CardFooter>
-              </Card>
+              <RecordingCard
+                key={recording.id}
+                recording={recording}
+                onPlay={handlePlay}
+                onDelete={handleDelete}
+                onOpenVideo={handleOpenVideo}
+              />
             ))}
           </div>
         )}
       </div>
 
       {/* Recording Details Dialog */}
-      <Dialog open={isPlayDialogOpen} onOpenChange={setIsPlayDialogOpen}>
-        <DialogContent className="max-w-[90vw] w-[1250px] max-h-[90vh] overflow-hidden flex flex-col p-0">
-          <DialogHeader className="px-6 pt-6 pb-4 border-b">
-            <DialogTitle className="flex items-center gap-2 text-xl">
-              <Video className="w-6 h-6 text-blue-600" />
-              {selectedRecording?.name}
-            </DialogTitle>
-           
-          </DialogHeader>
-
-          {selectedRecording && (
-            <div className="flex-1 overflow-y-auto">
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 p-6">
-                {/* Left Column - Video Player */}
-                <div className="lg:col-span-2 space-y-6">
-                  {/* Video Player */}
-                  {selectedRecording.videoPath && videoUrl && (
-                    <div className="bg-black rounded-lg overflow-hidden shadow-lg">
-                      <video
-                        key={videoUrl}
-                        src={videoUrl}
-                        controls
-                        className="w-full"
-                        style={{ maxHeight: '600px' }}
-                      >
-                        Your browser does not support the video tag.
-                      </video>
-                    </div>
-                  )}
-                  
-                  {selectedRecording.videoPath && !videoUrl && (
-                    <div className="bg-slate-100 dark:bg-slate-800 rounded-lg p-12 text-center">
-                      <Loader2Icon className="w-12 h-12 animate-spin text-blue-600 mx-auto mb-4" />
-                      <p className="text-base text-gray-600 dark:text-gray-400">Loading video...</p>
-                    </div>
-                  )}
-
-                  {/* Recording Info */}
-                  <div className="bg-white dark:bg-slate-800 rounded-lg border border-gray-200 dark:border-slate-700 p-6">
-                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Recording Details</h3>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Description</p>
-                        <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
-                          {selectedRecording.description || 'No description provided'}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">URL</p>
-                        <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
-                          {selectedRecording.url}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Created</p>
-                        <p className="text-sm font-medium text-gray-900 dark:text-white">
-                          {formatDate(selectedRecording.createdAt)}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Duration</p>
-                        <p className="text-sm font-medium text-gray-900 dark:text-white">
-                          {formatDuration(selectedRecording.duration)}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Actions</p>
-                        <p className="text-sm font-medium text-gray-900 dark:text-white">
-                          {selectedRecording.actionCount} recorded
-                        </p>
-                      </div>
-                      {selectedRecording.videoSize && (
-                        <>
-                          <div>
-                            <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Video Size</p>
-                            <p className="text-sm font-medium text-gray-900 dark:text-white">
-                              {formatFileSize(selectedRecording.videoSize)}
-                            </p>
-                          </div>
-                          <div>
-                            <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Format</p>
-                            <p className="text-sm font-medium text-gray-900 dark:text-white">
-                              {selectedRecording.videoFormat?.toUpperCase() || 'N/A'}
-                            </p>
-                          </div>
-                        </>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Right Column - Actions List */}
-                <div className="lg:col-span-1">
-                  <div className="bg-white dark:bg-slate-800 rounded-lg border border-gray-200 dark:border-slate-700 p-6 sticky top-0">
-                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-                      <MousePointerClick className="w-5 h-5 text-blue-600" />
-                      Recorded Actions ({selectedRecording.actions.length})
-                    </h3>
-                    <div className="max-h-[600px] overflow-y-auto space-y-2 pr-2">
-                      {selectedRecording.actions.map((action, index) => (
-                        <div
-                          key={index}
-                          className="flex items-start gap-3 text-sm p-3 hover:bg-slate-50 dark:hover:bg-slate-700 rounded-lg border border-gray-200 dark:border-slate-600 transition-colors"
-                        >
-                          <Badge variant="outline" className="shrink-0 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400">
-                            {index + 1}
-                          </Badge>
-                          <div className="flex-1 min-w-0">
-                            <p className="font-medium text-gray-900 dark:text-white mb-1">
-                              {action.type}
-                            </p>
-                            {action.value && (
-                              <p className="text-xs text-gray-600 dark:text-gray-400 truncate">
-                                Value: {action.value}
-                              </p>
-                            )}
-                            <span className="text-xs text-gray-500 mt-1 block">
-                              {new Date(action.timestamp).toLocaleTimeString()}
-                            </span>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          <DialogFooter className="px-6 py-4 border-t bg-slate-50 dark:bg-slate-900">
-            {selectedRecording?.videoPath && (
-              <Button
-                onClick={() => handleOpenVideo(selectedRecording.videoPath)}
-                variant="outline"
-              >
-                <Download className="w-4 h-4 mr-2" />
-                Open Video File
-              </Button>
-            )}
-            <Button onClick={() => setIsPlayDialogOpen(false)}>
-              Close
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <RecordingDialog
+        recording={selectedRecording}
+        videoUrl={videoUrl}
+        open={isPlayDialogOpen}
+        onOpenChange={setIsPlayDialogOpen}
+        onOpenVideo={handleOpenVideo}
+      />
     </div>
   );
 }

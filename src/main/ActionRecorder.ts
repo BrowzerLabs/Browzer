@@ -2,6 +2,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { WebContentsView } from "electron";
 import { RecordedAction } from '../shared/types';
+import { SnapshotManager } from './SnapshotManager';
 
 export class ActionRecorder {
   private view: WebContentsView | null = null;
@@ -9,6 +10,7 @@ export class ActionRecorder {
   private actions: RecordedAction[] = [];
   private debugger: Electron.Debugger | null = null;
   public onActionCallback?: (action: RecordedAction) => void;
+  private snapshotManager: SnapshotManager;
 
   // Tab context for current recording
   private currentTabId: string | null = null;
@@ -37,6 +39,7 @@ export class ActionRecorder {
       this.view = view;
       this.debugger = view.webContents.debugger;
     }
+    this.snapshotManager = new SnapshotManager();
   }
 
   /**
@@ -117,7 +120,8 @@ export class ActionRecorder {
     tabId?: string,
     tabUrl?: string,
     tabTitle?: string,
-    webContentsId?: number
+    webContentsId?: number,
+    recordingId?: string
   ): Promise<void> {
     if (this.isRecording) {
       console.warn('Recording already in progress');
@@ -144,6 +148,11 @@ export class ActionRecorder {
         this.currentWebContentsId = webContentsId || this.view.webContents.id;
       }
 
+      // Initialize snapshot manager for this recording
+      if (recordingId) {
+        await this.snapshotManager.initializeRecording(recordingId);
+      }
+
       await this.enableCDPDomains();
       this.setupEventListeners();
 
@@ -158,7 +167,7 @@ export class ActionRecorder {
   /**
    * Stop recording
    */
-  public stopRecording(): RecordedAction[] {
+  public async stopRecording(): Promise<RecordedAction[]> {
     if (!this.isRecording) {
       console.warn('No recording in progress');
       return [];
@@ -171,6 +180,9 @@ export class ActionRecorder {
 
       this.isRecording = false;
       this.actions.sort((a, b) => a.timestamp - b.timestamp);
+      
+      // Finalize snapshots
+      await this.snapshotManager.finalizeRecording();
       
       console.log(`⏹️ Recording stopped. Captured ${this.actions.length} actions`);
       
@@ -195,10 +207,32 @@ export class ActionRecorder {
   }
 
   /**
-   * Get recorded actions
+   * Get all recorded actions
    */
   public getActions(): RecordedAction[] {
     return [...this.actions];
+  }
+
+  /**
+   * Add an action directly to the recorded actions
+   * Used for synthetic actions like tab-switch
+   */
+  public addAction(action: RecordedAction): void {
+    this.actions.push(action);
+  }
+
+  /**
+   * Get snapshot statistics
+   */
+  public async getSnapshotStats() {
+    return await this.snapshotManager.getSnapshotStats();
+  }
+
+  /**
+   * Get snapshots directory for a recording
+   */
+  public getSnapshotsDirectory(recordingId: string): string {
+    return this.snapshotManager.getSnapshotsDirectory(recordingId);
   }
 
   /**
@@ -874,7 +908,6 @@ export class ActionRecorder {
           if (firstArg === '[BROWZER_ACTION]') {
             try {
               const actionData = JSON.parse(params.args[1].value);
-              console.log("params: ", params)
               await this.handlePendingAction(actionData);
               
             } catch (error) {
@@ -951,6 +984,16 @@ export class ActionRecorder {
       // Verify immediately and record
       enrichedAction.verified = true;
       enrichedAction.verificationTime = 0;
+      
+      // Capture snapshot asynchronously (non-blocking)
+      if (this.view) {
+        this.snapshotManager.captureSnapshot(this.view, enrichedAction).then(snapshotPath => {
+          if (snapshotPath) {
+            enrichedAction.snapshotPath = snapshotPath;
+          }
+        }).catch(err => console.error('Snapshot capture failed:', err));
+      }
+      
       this.actions.push(enrichedAction);
       console.log(`✅ Action immediately verified: ${actionData.type}`);
       if (this.onActionCallback) {
@@ -993,6 +1036,16 @@ export class ActionRecorder {
       verificationTime: Date.now() - timestamp,
       effects
     };
+    
+    // Capture snapshot asynchronously for verified click actions
+    if (this.view) {
+      this.snapshotManager.captureSnapshot(this.view, verifiedAction).then(snapshotPath => {
+        if (snapshotPath) {
+          verifiedAction.snapshotPath = snapshotPath;
+        }
+      }).catch(err => console.error('Snapshot capture failed:', err));
+    }
+    
     this.actions.push(verifiedAction);
     console.log('✅ Action verified:', verifiedAction.type);
     console.log('📊 Effects:', effects.summary || 'none');
