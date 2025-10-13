@@ -585,7 +585,7 @@ If you find this project useful, please consider giving it a star! ⭐
 
 <div align="center">
 
-**Built with ❤️ by [Abhinandan Verma](https://github.com/abhi-browzer)**
+**Built with ❤️ by [Rahul](https://github.com/rahulkumaran) & [Abhinandan](https://github.com/abhi-browzer)**
 
 [⬆ Back to Top](#-browzer)
 
