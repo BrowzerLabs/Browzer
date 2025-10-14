@@ -1,6 +1,8 @@
+import 'dotenv/config';
 import { app, protocol, net } from 'electron';
 import started from 'electron-squirrel-startup';
 import { BrowserWindow } from './main/BrowserWindow';
+import memoryService from './main/MemoryService';
 import path from 'path';
 
 if (started) {
@@ -34,18 +36,22 @@ app.whenReady().then(() => {
 
 let mainBrowserWindow: BrowserWindow | null = null;
 
-const createWindow = () => {
+const createWindow = async () => {
+  await memoryService.initialize();
+  
   mainBrowserWindow = new BrowserWindow();
 };
 
 app.on('window-all-closed', () => {
+  memoryService.cleanup();
+  
   if (process.platform !== 'darwin') {
     app.quit();
   }
 });
 
-app.on('activate', () => {
+app.on('activate', async () => {
   if (mainBrowserWindow === null) {
-    createWindow();
+    await createWindow();
   }
 });

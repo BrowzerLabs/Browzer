@@ -606,6 +606,24 @@ export class BrowserManager {
   }
 
   /**
+   * Get the full outer HTML of the document for a given tab
+   */
+  public async getTabOuterHTML(tabId: string): Promise<string | null> {
+    const tab = this.tabs.get(tabId);
+    if (!tab) return null;
+    try {
+      const html: string = await tab.view.webContents.executeJavaScript(
+        'document.documentElement.outerHTML',
+        true
+      );
+      return html;
+    } catch (err) {
+      console.error('Failed to get outerHTML for tab', tabId, err);
+      return null;
+    }
+  }
+
+  /**
    * Update layout when window resizes or sidebar changes
    */
   public updateLayout(_windowWidth: number, _windowHeight: number, sidebarWidth = 0): void {

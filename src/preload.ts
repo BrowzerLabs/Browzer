@@ -18,6 +18,7 @@ export interface BrowserAPI {
   closeTab: (tabId: string) => Promise<boolean>;
   switchTab: (tabId: string) => Promise<boolean>;
   getTabs: () => Promise<{ tabs: TabInfo[]; activeTabId: string | null }>;
+  getTabOuterHTML: (tabId: string) => Promise<string | null>;
 
   // Navigation
   navigate: (tabId: string, url: string) => Promise<boolean>;
@@ -83,6 +84,12 @@ export interface BrowserAPI {
   getMostVisited: (limit?: number) => Promise<HistoryEntry[]>;
   getRecentlyVisited: (limit?: number) => Promise<HistoryEntry[]>;
 
+  addToMemory: (documents: string[], metadatas?: any[], ids?: string[]) => Promise<any>;
+  queryMemory: (queryTexts: string[], nResults?: number) => Promise<any>;
+  clearMemory: () => Promise<any>;
+
+  sendClaude: (fullMessage: string, contexts?: Array<{ type: 'tab'; tabId: string; title?: string; url?: string; markdown?: string }>) => Promise<string>;
+
   // Event listeners
   onTabsUpdated: (callback: (data: { tabs: TabInfo[]; activeTabId: string | null }) => void) => () => void;
   onRecordingAction: (callback: (action: any) => void) => () => void;
@@ -99,6 +106,7 @@ const browserAPI: BrowserAPI = {
   closeTab: (tabId: string) => ipcRenderer.invoke('browser:close-tab', tabId),
   switchTab: (tabId: string) => ipcRenderer.invoke('browser:switch-tab', tabId),
   getTabs: () => ipcRenderer.invoke('browser:get-tabs'),
+  getTabOuterHTML: (tabId: string) => ipcRenderer.invoke('browser:get-tab-outer-html', tabId),
 
   navigate: (tabId: string, url: string) => ipcRenderer.invoke('browser:navigate', tabId, url),
   goBack: (tabId: string) => ipcRenderer.invoke('browser:go-back', tabId),
@@ -199,26 +207,24 @@ const browserAPI: BrowserAPI = {
   getHistoryStats: () => ipcRenderer.invoke('history:get-stats'),
   getMostVisited: (limit?: number) => ipcRenderer.invoke('history:get-most-visited', limit),
   getRecentlyVisited: (limit?: number) => ipcRenderer.invoke('history:get-recently-visited', limit),
-  
-  // Desktop Capturer API
-  getDesktopSources: async () => {
-    const sources = await desktopCapturer.getSources({ 
-      types: ['window', 'screen'],
-      thumbnailSize: { width: 150, height: 150 }
-    });
-    return sources.map(source => ({
-      id: source.id,
-      name: source.name,
-      thumbnail: source.thumbnail.toDataURL()
-    }));
-  },
-  
-  // Video File Operations
+
+  addToMemory: (documents: string[], metadatas?: any[], ids?: string[]) => 
+    ipcRenderer.invoke('memory:add', documents, metadatas, ids),
+  queryMemory: (queryTexts: string[], nResults?: number) => 
+    ipcRenderer.invoke('memory:query', queryTexts, nResults),
+  clearMemory: () => ipcRenderer.invoke('memory:clear-all'),
+
+  sendClaude: (fullMessage: string, contexts?: Array<{ type: 'tab'; tabId: string; title?: string; url?: string; markdown?: string }>) => 
+    ipcRenderer.invoke('ai:claude', { fullMessage, contexts }),
+
+  getDesktopSources: () => desktopCapturer.getSources({ types: ['screen', 'window'] }),
   openVideoFile: (videoPath: string) => ipcRenderer.invoke('video:open-file', videoPath),
   getVideoFileUrl: (videoPath: string) => ipcRenderer.invoke('video:get-file-url', videoPath),
 };
 
+const aiAPI = {
+  sendClaude: browserAPI.sendClaude,
+};
+
 contextBridge.exposeInMainWorld('browserAPI', browserAPI);
-contextBridge.exposeInMainWorld('electronAPI', {
-  getDesktopSources: browserAPI.getDesktopSources
-});
+contextBridge.exposeInMainWorld('aiAPI', aiAPI);

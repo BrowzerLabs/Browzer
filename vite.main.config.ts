@@ -15,12 +15,25 @@ export default defineConfig({
     sourcemap: true,
     minify: false,
     rollupOptions: {
+      external: [
+        'chromadb',
+        '@chroma-core/default-embed',
+        '@chroma-core/embedding',
+        'node:fs',
+        'node:path',
+        'node:crypto',
+        'node:util',
+        'node:stream',
+        'node:buffer',
+        'node:events'
+      ],
       output: {
-        // Preserve module structure for better debugging
         manualChunks: undefined,
       },
     },
   },
-  // Enable better error messages
+  optimizeDeps: {
+    exclude: ['chromadb']
+  },
   clearScreen: false,
 });

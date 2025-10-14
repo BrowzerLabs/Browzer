@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { Bot, Video } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '../ui/tabs';
 import { RecordingView } from './RecordingView';
+import { ChatBox } from './chat';
 import { useSidebarStore } from '../store/useSidebarStore';
 
 /**
@@ -31,12 +32,12 @@ export function Sidebar() {
   }, [setActiveTab]);
 
   return (
-    <div className="h-full w-full flex flex-col ">
+    <div className="h-full w-full flex flex-col min-h-0">
       {/* Sidebar Header */}
 
       {/* Main Tabs */}
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col">
-        <TabsList className="w-full rounded-none p-0 h-auto">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col overflow-hidden min-h-0">
+        <TabsList className="w-full rounded-none p-0 h-auto sticky top-0 z-20 bg-background">
           <TabsTrigger 
             value="agent" 
           >
@@ -51,11 +52,11 @@ export function Sidebar() {
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="agent">
+        <TabsContent value="agent" className="flex-1 m-0 p-4 text-gray-200 overflow-hidden min-h-0">
           <AgentView />
         </TabsContent>
 
-        <TabsContent value="recording">
+        <TabsContent value="recording" className="flex-1 m-0 p-0 text-gray-200 overflow-hidden min-h-0">
           <RecordingView />
         </TabsContent>
       </Tabs>
@@ -66,17 +67,19 @@ export function Sidebar() {
 // Agent View - AI chat and automation
 function AgentView() {
   return (
-    <div className="space-y-4">
-      <div className="text-center py-8">
-        <Bot className="w-12 h-12 mx-auto text-gray-600 mb-3" />
-        <h3 className="text-lg font-semibold text-gray-300 mb-2">AI Agent</h3>
-        <p className="text-sm text-gray-500">
+    <div className="h-full flex flex-col min-h-0">
+      {/* Header */}
+      <div className="text-center py-4 border-b border-gray-700">
+        <Bot className="w-8 h-8 mx-auto text-gray-600 mb-2" />
+        <h3 className="text-lg font-semibold text-gray-300 mb-1">AI Agent</h3>
+        <p className="text-xs text-gray-500">
           Chat with AI to automate tasks and analyze pages
         </p>
       </div>
       
-      <div className="text-xs text-gray-600 text-center">
-        Coming soon...
+      {/* Chat Interface */}
+      <div className="flex-1 min-h-0">
+        <ChatBox />
       </div>
     </div>
   );
