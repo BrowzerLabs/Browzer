@@ -64,7 +64,7 @@ export class PasswordAutomation {
     if (this.isEnabled) return;
     
     try {
-      // console.log('[PasswordAutomation] Starting CDP-based password automation');
+      console.log('[PasswordAutomation] Starting CDP-based password automation');
       
       // Attach debugger if not already attached
       if (!this.debugger.isAttached()) {
@@ -81,7 +81,7 @@ export class PasswordAutomation {
       await this.scanForForms();
       
       this.isEnabled = true;
-      // console.log('✅ Password automation enabled');
+      console.log('✅ Password automation enabled');
       
     } catch (error) {
       console.error('[PasswordAutomation] Failed to start:', error);
@@ -105,7 +105,7 @@ export class PasswordAutomation {
       this.currentSessionId = null;
       
       this.isEnabled = false;
-      // console.log('[PasswordAutomation] Stopped');
+      console.log('[PasswordAutomation] Stopped');
       
     } catch (error) {
       console.error('[PasswordAutomation] Error stopping:', error);
@@ -123,7 +123,7 @@ export class PasswordAutomation {
     // Get initial document
     await this.debugger.sendCommand('DOM.getDocument', { depth: -1 });
     
-    // console.log('✅ CDP domains enabled for password automation');
+    console.log('✅ CDP domains enabled for password automation');
   }
 
   /**
@@ -158,7 +158,7 @@ export class PasswordAutomation {
     const urlChanged = newUrl !== this.lastUrl;
     
     if (urlChanged) {
-      // console.log(`[PasswordAutomation] Navigation detected: ${newUrl}`);
+      console.log(`[PasswordAutomation] Navigation detected: ${newUrl}`);
       this.lastUrl = newUrl;
       
       // Update session tracking
@@ -166,7 +166,7 @@ export class PasswordAutomation {
       
       // Show pending save prompt on new page if exists
       if (this.pendingCredentials) {
-        // console.log('[PasswordAutomation] Showing pending save prompt on new page');
+        console.log('[PasswordAutomation] Showing pending save prompt on new page');
         setTimeout(async () => {
           if (this.pendingCredentials) {
             await this.showSavePrompt(
@@ -180,7 +180,7 @@ export class PasswordAutomation {
       
       // Trigger auto-fill via main process callback
       if (this.onAutoFillPassword) {
-        // console.log('[PasswordAutomation] Requesting auto-fill from main process');
+        console.log('[PasswordAutomation] Requesting auto-fill from main process');
         setTimeout(async () => {
           if (this.onAutoFillPassword) {
             await this.onAutoFillPassword(this.tabId);
@@ -206,7 +206,7 @@ export class PasswordAutomation {
       origin,
       timestamp: Date.now()
     };
-    // console.log('[PasswordAutomation] Stored pending credentials for:', username);
+    console.log('[PasswordAutomation] Stored pending credentials for:', username);
   }
 
   /**
@@ -214,7 +214,7 @@ export class PasswordAutomation {
    */
   private clearPendingCredentials(): void {
     this.pendingCredentials = null;
-    // console.log('[PasswordAutomation] Cleared pending credentials');
+    console.log('[PasswordAutomation] Cleared pending credentials');
   }
 
   /**
@@ -256,28 +256,28 @@ export class PasswordAutomation {
       const credentials = this.passwordManager.getCredentialsForOrigin(origin);
       
       if (credentials.length === 0) {
-        // console.log('[PasswordAutomation] No credentials for immediate autofill on', origin);
+        console.log('[PasswordAutomation] No credentials for immediate autofill on', origin);
         return;
       }
       
-      // console.log('[PasswordAutomation] Setting up immediate autofill for', credentials.length, 'credentials');
+      console.log('[PasswordAutomation] Setting up immediate autofill for', credentials.length, 'credentials');
       
       await this.debugger.sendCommand('Runtime.evaluate', {
         expression: `
           (function() {
             try {
-              // console.log('[PasswordAutomation] Immediate autofill setup starting');
+              console.log('[PasswordAutomation] Immediate autofill setup starting');
               
               const usernameFields = document.querySelectorAll('input[type="email"], input[type="text"], input[name*="user"], input[name*="email"], input[id*="user"], input[id*="email"]');
               const credentials = ${JSON.stringify(credentials.map(c => ({ id: c.id, username: c.username })))};
               
-              // console.log('[PasswordAutomation] Found', usernameFields.length, 'fields for immediate autofill');
+              console.log('[PasswordAutomation] Found', usernameFields.length, 'fields for immediate autofill');
               
               usernameFields.forEach((field, index) => {
                 if (!field._browzerImmediateAutofill && credentials.length > 0) {
                   field._browzerImmediateAutofill = true;
                   
-                  // console.log('[PasswordAutomation] Setting up immediate autofill for field', index);
+                  console.log('[PasswordAutomation] Setting up immediate autofill for field', index);
                   
                   // Function to show autofill
                   const showAutofill = () => {
@@ -289,7 +289,7 @@ export class PasswordAutomation {
                   
                   // Check if already focused and show immediately
                   if (document.activeElement === field) {
-                    // console.log('[PasswordAutomation] Field', index, 'is already focused, showing autofill now');
+                    console.log('[PasswordAutomation] Field', index, 'is already focused, showing autofill now');
                     setTimeout(showAutofill, 50); // Small delay to ensure DOM is ready
                   }
                   
@@ -306,7 +306,7 @@ export class PasswordAutomation {
                 }
               });
               
-              // console.log('[PasswordAutomation] ✅ Immediate autofill setup complete');
+              console.log('[PasswordAutomation] ✅ Immediate autofill setup complete');
               
             } catch (error) {
               console.error('[PasswordAutomation] Error in immediate autofill setup:', error);
@@ -534,7 +534,7 @@ export class PasswordAutomation {
                 if (!field._browzerAutofillSetup) {
                   field._browzerAutofillSetup = true;
                   field.addEventListener('focus', function() {
-                    // console.log('BROWZER_REQUEST_AUTOFILL:' + JSON.stringify({
+                    console.log('BROWZER_REQUEST_AUTOFILL:' + JSON.stringify({
                       origin: '${origin}',
                       fieldType: 'username'
                     }));
@@ -542,7 +542,7 @@ export class PasswordAutomation {
                 }
               });
               
-              // console.log('Password monitoring setup complete for ${origin}');
+              console.log('Password monitoring setup complete for ${origin}');
             } catch (error) {
               console.error('Error setting up password monitoring:', error);
             }
@@ -551,7 +551,7 @@ export class PasswordAutomation {
       });
       
       this.monitoredForms.add(form.formNodeId);
-      // console.log(`[PasswordAutomation] Monitoring form ${form.formNodeId}`);
+      console.log(`[PasswordAutomation] Monitoring form ${form.formNodeId}`);
       
     } catch (error) {
       console.error('[PasswordAutomation] Error setting up form monitoring:', error);
@@ -565,11 +565,11 @@ export class PasswordAutomation {
     const credentials = this.passwordManager.getCredentialsForOrigin(origin);
     
     if (credentials.length === 0) {
-      // console.log('[PasswordAutomation] No saved credentials for', origin);
+      console.log('[PasswordAutomation] No saved credentials for', origin);
       return;
     }
     
-    // console.log(`[PasswordAutomation] Setting up autofill for ${credentials.length} credentials on ${origin}`);
+    console.log(`[PasswordAutomation] Setting up autofill for ${credentials.length} credentials on ${origin}`);
     
     // Set up autofill for all username/email fields on the page
     await this.setupGlobalAutofill(origin, credentials);
@@ -580,29 +580,29 @@ export class PasswordAutomation {
    */
   private async setupGlobalAutofill(origin: string, credentials: any[]): Promise<void> {
     try {
-      // console.log('[PasswordAutomation] Setting up global autofill for', credentials.length, 'credentials');
+      console.log('[PasswordAutomation] Setting up global autofill for', credentials.length, 'credentials');
       
       await this.debugger.sendCommand('Runtime.evaluate', {
         expression: `
           (function() {
             try {
-              // console.log('[PasswordAutomation] Setting up autofill on page');
+              console.log('[PasswordAutomation] Setting up autofill on page');
               
               // Find all potential username fields
               const usernameFields = document.querySelectorAll('input[type="email"], input[type="text"], input[name*="user"], input[name*="email"], input[id*="user"], input[id*="email"]');
               const credentials = ${JSON.stringify(credentials.map(c => ({ id: c.id, username: c.username })))};
               
-              // console.log('[PasswordAutomation] Found', usernameFields.length, 'username fields and', credentials.length, 'credentials');
+              console.log('[PasswordAutomation] Found', usernameFields.length, 'username fields and', credentials.length, 'credentials');
               
               usernameFields.forEach((field, index) => {
                 if (!field._browzerAutofillSetup && credentials.length > 0) {
                   field._browzerAutofillSetup = true;
                   
-                  // console.log('[PasswordAutomation] Setting up autofill for field', index);
+                  console.log('[PasswordAutomation] Setting up autofill for field', index);
                   
                   // Check if field is already focused and show autofill immediately
                   if (document.activeElement === field) {
-                    // console.log('[PasswordAutomation] Field already focused, showing autofill immediately');
+                    console.log('[PasswordAutomation] Field already focused, showing autofill immediately');
                     setTimeout(() => {
                       console.log('BROWZER_SHOW_AUTOFILL_DROPDOWN:' + JSON.stringify({
                         origin: '${origin}',
@@ -613,7 +613,7 @@ export class PasswordAutomation {
                   
                   // Show autofill on focus (instant)
                   field.addEventListener('focus', function() {
-                    // console.log('[PasswordAutomation] Username field focused, showing autofill instantly');
+                    console.log('[PasswordAutomation] Username field focused, showing autofill instantly');
                     console.log('BROWZER_SHOW_AUTOFILL_DROPDOWN:' + JSON.stringify({
                       origin: '${origin}',
                       credentials: credentials
@@ -622,7 +622,7 @@ export class PasswordAutomation {
                   
                   // Show autofill on click (instant)
                   field.addEventListener('click', function() {
-                    // console.log('[PasswordAutomation] Username field clicked, showing autofill instantly');
+                    console.log('[PasswordAutomation] Username field clicked, showing autofill instantly');
                     console.log('BROWZER_SHOW_AUTOFILL_DROPDOWN:' + JSON.stringify({
                       origin: '${origin}',
                       credentials: credentials
@@ -632,7 +632,7 @@ export class PasswordAutomation {
                   // Also show on input (for better UX)
                   field.addEventListener('input', function() {
                     if (this.value.length === 0) {
-                      // console.log('[PasswordAutomation] Empty field, showing autofill');
+                      console.log('[PasswordAutomation] Empty field, showing autofill');
                       console.log('BROWZER_SHOW_AUTOFILL_DROPDOWN:' + JSON.stringify({
                         origin: '${origin}',
                         credentials: credentials
@@ -642,7 +642,7 @@ export class PasswordAutomation {
                 }
               });
               
-              // console.log('[PasswordAutomation] ✅ Global autofill setup complete');
+              console.log('[PasswordAutomation] ✅ Global autofill setup complete');
               
             } catch (error) {
               console.error('[PasswordAutomation] Error in global autofill setup:', error);
@@ -695,14 +695,14 @@ export class PasswordAutomation {
       if (!jsonStr) return;
       
       const data = JSON.parse(jsonStr);
-      // console.log('[PasswordAutomation] Credentials submitted:', data.username, 'for', data.origin);
+      console.log('[PasswordAutomation] Credentials submitted:', data.username, 'for', data.origin);
       
       // Check if already saved
       const existing = this.passwordManager.getCredentialsForOrigin(data.origin)
         .find(c => c.username === data.username);
       
       if (!existing) {
-        // console.log('[PasswordAutomation] New credential detected, showing save prompt');
+        console.log('[PasswordAutomation] New credential detected, showing save prompt');
         
         // Store credentials for persistent prompt across navigation
         this.storePendingCredentials(data.username, data.password, data.origin);
@@ -710,7 +710,7 @@ export class PasswordAutomation {
         // Show prompt immediately
         await this.showSavePrompt(data.username, data.password, data.origin);
       } else {
-        // console.log('[PasswordAutomation] Credential already exists for:', data.username);
+        console.log('[PasswordAutomation] Credential already exists for:', data.username);
       }
     } catch (error) {
       console.error('[PasswordAutomation] Error handling credentials submission:', error);
@@ -745,7 +745,7 @@ export class PasswordAutomation {
       if (!jsonStr) return;
       
       const data = JSON.parse(jsonStr);
-      // console.log('[PasswordAutomation] Showing autofill dropdown instantly for', data.credentials.length, 'credentials');
+      console.log('[PasswordAutomation] Showing autofill dropdown instantly for', data.credentials.length, 'credentials');
       
       // Create dropdown immediately without delay
       await this.createAutofillDropdown(data.origin, data.credentials);
@@ -764,7 +764,7 @@ export class PasswordAutomation {
       const success = await this.passwordManager.saveCredential(data.origin, data.username, data.password);
       
       if (success) {
-        // console.log('[PasswordAutomation] Password saved successfully');
+        console.log('[PasswordAutomation] Password saved successfully');
         this.clearPendingCredentials();
       } else {
         console.error('[PasswordAutomation] Failed to save password');
@@ -782,7 +782,7 @@ export class PasswordAutomation {
       const data = JSON.parse(message.replace('BROWZER_NEVER_SAVE:', ''));
       this.passwordManager.addToBlacklist(data.origin);
       this.clearPendingCredentials();
-      // console.log('[PasswordAutomation] Site added to blacklist');
+      console.log('[PasswordAutomation] Site added to blacklist');
     } catch (error) {
       console.error('[PasswordAutomation] Error adding to blacklist:', error);
     }
@@ -811,7 +811,7 @@ export class PasswordAutomation {
           `
         });
         
-        // console.log('[PasswordAutomation] Password autofilled');
+        console.log('[PasswordAutomation] Password autofilled');
       }
     } catch (error) {
       console.error('[PasswordAutomation] Error handling autofill selection:', error);
@@ -830,7 +830,7 @@ export class PasswordAutomation {
       const password = this.passwordManager.getPassword(data.credentialId);
       
       if (password) {
-        // console.log('[PasswordAutomation] Filling password for credential:', data.credentialId);
+        console.log('[PasswordAutomation] Filling password for credential:', data.credentialId);
         
         await this.debugger.sendCommand('Runtime.evaluate', {
           expression: `
@@ -848,7 +848,7 @@ export class PasswordAutomation {
           `
         });
       } else {
-        // console.log('[PasswordAutomation] No password found for credential:', data.credentialId);
+        console.log('[PasswordAutomation] No password found for credential:', data.credentialId);
       }
     } catch (error) {
       console.error('[PasswordAutomation] Error filling password:', error);
@@ -870,7 +870,7 @@ export class PasswordAutomation {
         this.onCredentialSelected(this.tabId, data.credentialId, data.username);
       }
       
-      // console.log('[PasswordAutomation] Notified main process of credential selection:', data.username);
+      console.log('[PasswordAutomation] Notified main process of credential selection:', data.username);
     } catch (error) {
       console.error('[PasswordAutomation] Error handling credential selection:', error);
     }
@@ -885,11 +885,11 @@ export class PasswordAutomation {
       .find(c => c.username === username);
     
     if (existing) {
-      // console.log('[PasswordAutomation] Credential already exists, skipping prompt');
+      console.log('[PasswordAutomation] Credential already exists, skipping prompt');
       return;
     }
     
-    // console.log('[PasswordAutomation] Showing save prompt for:', username, 'on', origin);
+    console.log('[PasswordAutomation] Showing save prompt for:', username, 'on', origin);
     
     // Create persistent prompt that survives navigation
     try {
@@ -905,19 +905,19 @@ export class PasswordAutomation {
    * Create save prompt on current page
    */
   private async createSavePromptOnPage(username: string, password: string, origin: string): Promise<void> {
-    // console.log('[PasswordAutomation] Creating save prompt on page for:', username);
+    console.log('[PasswordAutomation] Creating save prompt on page for:', username);
     
     await this.debugger.sendCommand('Runtime.evaluate', {
       expression: `
         (function() {
-          // console.log('[PasswordAutomation] Executing prompt creation script');
+          console.log('[PasswordAutomation] Executing prompt creation script');
           
           try {
             // Remove any existing prompt
             const existing = document.getElementById('browzer-save-prompt');
             if (existing) {
               existing.remove();
-              // console.log('[PasswordAutomation] Removed existing prompt');
+              console.log('[PasswordAutomation] Removed existing prompt');
             }
             
             // Create bright, visible prompt
@@ -975,14 +975,14 @@ export class PasswordAutomation {
             
             // Add to page
             document.body.appendChild(prompt);
-            // console.log('[PasswordAutomation] ✅ Save prompt added to DOM successfully');
+            console.log('[PasswordAutomation] ✅ Save prompt added to DOM successfully');
             
             // Make sure it's visible
             setTimeout(() => {
               if (document.getElementById('browzer-save-prompt')) {
-                // console.log('[PasswordAutomation] ✅ Prompt confirmed visible in DOM');
+                console.log('[PasswordAutomation] ✅ Prompt confirmed visible in DOM');
               } else {
-                // console.log('[PasswordAutomation] ❌ Prompt not found in DOM after creation');
+                console.log('[PasswordAutomation] ❌ Prompt not found in DOM after creation');
               }
             }, 100);
             
@@ -993,20 +993,20 @@ export class PasswordAutomation {
       `
     });
     
-    // console.log('[PasswordAutomation] Prompt creation script executed');
+    console.log('[PasswordAutomation] Prompt creation script executed');
   }
 
   /**
    * Create autofill dropdown
    */
   private async createAutofillDropdown(origin: string, credentials: any[]): Promise<void> {
-    // console.log('[PasswordAutomation] Creating autofill dropdown for', credentials.length, 'credentials');
+    console.log('[PasswordAutomation] Creating autofill dropdown for', credentials.length, 'credentials');
     
     await this.debugger.sendCommand('Runtime.evaluate', {
       expression: `
         (function() {
           try {
-            // console.log('[PasswordAutomation] Creating autofill dropdown');
+            console.log('[PasswordAutomation] Creating autofill dropdown');
             
             // Remove existing dropdown
             const existing = document.getElementById('browzer-autofill-dropdown');
@@ -1015,7 +1015,7 @@ export class PasswordAutomation {
             // Find the focused username field
             const usernameField = document.activeElement;
             if (!usernameField || (usernameField.type !== 'email' && usernameField.type !== 'text')) {
-              // console.log('[PasswordAutomation] No suitable username field focused');
+              console.log('[PasswordAutomation] No suitable username field focused');
               return;
             }
             
@@ -1042,7 +1042,7 @@ export class PasswordAutomation {
               });
               
               item.addEventListener('click', function() {
-                // console.log('[PasswordAutomation] Credential selected:', cred.username);
+                console.log('[PasswordAutomation] Credential selected:', cred.username);
                 
                 // Store selected credential for multi-step flows
                 console.log('BROWZER_CREDENTIAL_SELECTED:' + JSON.stringify({
@@ -1065,7 +1065,7 @@ export class PasswordAutomation {
                     origin: '${origin}'
                   }));
                 } else {
-                  // console.log('[PasswordAutomation] No password field on current page, will fill on next page');
+                  console.log('[PasswordAutomation] No password field on current page, will fill on next page');
                 }
                 
                 dropdown.remove();
@@ -1075,7 +1075,7 @@ export class PasswordAutomation {
             });
             
             document.body.appendChild(dropdown);
-            // console.log('[PasswordAutomation] ✅ Autofill dropdown created with', credentials.length, 'items');
+            console.log('[PasswordAutomation] ✅ Autofill dropdown created with', credentials.length, 'items');
             
             // Auto-remove on outside click
             setTimeout(() => {
@@ -1141,7 +1141,7 @@ export class PasswordAutomation {
             item.addEventListener('click', function() {
               field.value = cred.username;
               field.dispatchEvent(new Event('input', { bubbles: true }));
-              // console.log('BROWZER_AUTOFILL_SELECTED:', JSON.stringify({credentialId: cred.id}));
+              console.log('BROWZER_AUTOFILL_SELECTED:', JSON.stringify({credentialId: cred.id}));
               dropdown.remove();
             });
             

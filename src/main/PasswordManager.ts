@@ -73,7 +73,7 @@ export class PasswordManager {
       }
     });
 
-    // console.log('[PasswordManager] Initialized with store at:', this.store.path);
+    console.log('[PasswordManager] Initialized with store at:', this.store.path);
   }
 
   /**
@@ -114,7 +114,7 @@ export class PasswordManager {
       }
 
       this.store.set('credentials', credentials);
-      // console.log(`[PasswordManager] Saved credential for ${username} at ${origin}`);
+      console.log(`[PasswordManager] Saved credential for ${username} at ${origin}`);
       return true;
     } catch (error) {
       console.error('[PasswordManager] Failed to save credential:', error);
@@ -179,7 +179,7 @@ export class PasswordManager {
       
       if (filteredCredentials.length < credentials.length) {
         this.store.set('credentials', filteredCredentials);
-        // console.log(`[PasswordManager] Deleted credential ${credentialId}`);
+        console.log(`[PasswordManager] Deleted credential ${credentialId}`);
         return true;
       }
       
@@ -198,7 +198,7 @@ export class PasswordManager {
     if (!blacklistedSites.includes(origin)) {
       blacklistedSites.push(origin);
       this.store.set('blacklistedSites', blacklistedSites);
-      // console.log(`[PasswordManager] Added ${origin} to blacklist`);
+      console.log(`[PasswordManager] Added ${origin} to blacklist`);
     }
   }
 
