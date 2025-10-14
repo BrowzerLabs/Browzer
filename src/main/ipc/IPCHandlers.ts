@@ -7,6 +7,7 @@ import { UserService } from '@/main/user/UserService';
 import { PasswordManager } from '@/main/password/PasswordManager';
 import { AutomationService } from '@/main/automation';
 import { RecordedAction, HistoryQuery, LLMAutomationRequest, AppSettings } from '@/shared/types';
+import { AIService, MemoryService } from '@/main/services';
 
 /**
  * IPCHandlers - Centralized IPC communication setup
@@ -17,6 +18,8 @@ export class IPCHandlers {
   private userService: UserService;
   private passwordManager: PasswordManager;
   private automationService: AutomationService;
+  private aiService: AIService;
+  private memoryService: typeof MemoryService;
 
   constructor(
     private browserManager: BrowserManager,
@@ -28,6 +31,8 @@ export class IPCHandlers {
     // Use the existing PasswordManager from BrowserManager instead of creating a new one
     this.passwordManager = this.browserManager.getPasswordManager();
     this.automationService = new AutomationService();
+    this.aiService = new AIService();
+    this.memoryService = MemoryService;
     this.setupHandlers();
 
     console.log('IPCHandlers initialized');
@@ -44,6 +49,8 @@ export class IPCHandlers {
     this.setupPasswordHandlers();
     this.setupWindowHandlers();
     this.setupAutomationHandlers();
+    this.setupMemoryHandlers();
+    this.setupAIHandlers();
   }
 
   private setupTabHandlers(): void {
@@ -61,6 +68,10 @@ export class IPCHandlers {
 
     ipcMain.handle('browser:get-tabs', async () => {
       return this.browserManager.getAllTabs();
+    });
+
+    ipcMain.handle('browser:get-tab-outer-html', async (_, tabId: string) => {
+      return this.browserManager.getTabOuterHTML(tabId);
     });
   }
 
@@ -283,6 +294,38 @@ export class IPCHandlers {
     });
   }
 
+  private setupMemoryHandlers(): void {
+    ipcMain.handle('memory:add', async (_, documents: string[], metadatas?: Record<string, unknown>[], ids?: string[]) => {
+      return await this.memoryService.add(documents, metadatas, ids);
+    });
+
+    ipcMain.handle('memory:query', async (_, queryTexts: string[], nResults?: number) => {
+      return await this.memoryService.query(queryTexts, nResults);
+    });
+
+    ipcMain.handle('memory:clear-all', async () => {
+      return await this.memoryService.clear();
+    });
+  }
+
+
+  private setupAIHandlers(): void {
+    ipcMain.handle('ai:claude', async (_, { fullMessage, contexts }: { 
+      fullMessage: string; 
+      contexts?: Array<{ type: 'tab'; tabId: string; title?: string; url?: string; markdown?: string }>;
+    }) => {
+      try {
+        return await this.aiService.processRequest(
+          { fullMessage, contexts },
+          this.memoryService
+        );
+      } catch (error) {
+        console.error('Claude API call failed:', error);
+        throw new Error(`Failed to get AI response: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      }
+    });
+  }
+
   private updateLayout(): void {
     const agentUIView = this.windowManager.getAgentUIView();
     const baseWindow = this.windowManager.getWindow();
@@ -396,6 +439,7 @@ export class IPCHandlers {
     ipcMain.removeAllListeners('browser:close-tab');
     ipcMain.removeAllListeners('browser:switch-tab');
     ipcMain.removeAllListeners('browser:get-tabs');
+    ipcMain.removeAllListeners('browser:get-tab-outer-html');
     ipcMain.removeAllListeners('browser:navigate');
     ipcMain.removeAllListeners('browser:go-back');
     ipcMain.removeAllListeners('browser:go-forward');
@@ -457,6 +501,13 @@ export class IPCHandlers {
     ipcMain.removeAllListeners('automation:generate-plan');
     ipcMain.removeAllListeners('automation:get-status');
     ipcMain.removeAllListeners('automation:cancel');
+
+    ipcMain.removeAllListeners('memory:add');
+    ipcMain.removeAllListeners('memory:query');
+    ipcMain.removeAllListeners('memory:clear-all');
+    ipcMain.removeAllListeners('ai:claude');
+
+    this.memoryService.cleanup();
   }
 
   private setupPasswordHandlers(): void {

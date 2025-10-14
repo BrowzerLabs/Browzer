@@ -9,6 +9,7 @@ export interface BrowserAPI {
   closeTab: (tabId: string) => Promise<boolean>;
   switchTab: (tabId: string) => Promise<boolean>;
   getTabs: () => Promise<{ tabs: TabInfo[]; activeTabId: string | null }>;
+  getTabOuterHTML: (tabId: string) => Promise<string | null>;
 
   // Navigation
   navigate: (tabId: string, url: string) => Promise<boolean>;
@@ -92,6 +93,12 @@ export interface BrowserAPI {
   getAutomationStatus: () => Promise<any>;
   cancelAutomation: () => Promise<{ success: boolean }>;
 
+  addToMemory: (documents: string[], metadatas?: any[], ids?: string[]) => Promise<any>;
+  queryMemory: (queryTexts: string[], nResults?: number) => Promise<any>;
+  clearMemory: () => Promise<any>;
+
+  sendClaude: (fullMessage: string, contexts?: Array<{ type: 'tab'; tabId: string; title?: string; url?: string; markdown?: string }>) => Promise<string>;
+
   // Event listeners
   onTabsUpdated: (callback: (data: { tabs: TabInfo[]; activeTabId: string | null }) => void) => () => void;
   onRecordingAction: (callback: (action: any) => void) => () => void;
@@ -109,6 +116,7 @@ const browserAPI: BrowserAPI = {
   closeTab: (tabId: string) => ipcRenderer.invoke('browser:close-tab', tabId),
   switchTab: (tabId: string) => ipcRenderer.invoke('browser:switch-tab', tabId),
   getTabs: () => ipcRenderer.invoke('browser:get-tabs'),
+  getTabOuterHTML: (tabId: string) => ipcRenderer.invoke('browser:get-tab-outer-html', tabId),
 
   navigate: (tabId: string, url: string) => ipcRenderer.invoke('browser:navigate', tabId, url),
   goBack: (tabId: string) => ipcRenderer.invoke('browser:go-back', tabId),
@@ -211,7 +219,7 @@ const browserAPI: BrowserAPI = {
   getHistoryStats: () => ipcRenderer.invoke('history:get-stats'),
   getMostVisited: (limit?: number) => ipcRenderer.invoke('history:get-most-visited', limit),
   getRecentlyVisited: (limit?: number) => ipcRenderer.invoke('history:get-recently-visited', limit),
-  
+
   // Desktop Capturer API
   getDesktopSources: async () => {
     const sources = await desktopCapturer.getSources({ 
@@ -224,10 +232,19 @@ const browserAPI: BrowserAPI = {
       thumbnail: source.thumbnail.toDataURL()
     }));
   },
-  
+
   // Video File Operations
   openVideoFile: (videoPath: string) => ipcRenderer.invoke('video:open-file', videoPath),
   getVideoFileUrl: (videoPath: string) => ipcRenderer.invoke('video:get-file-url', videoPath),
+
+  addToMemory: (documents: string[], metadatas?: any[], ids?: string[]) => 
+    ipcRenderer.invoke('memory:add', documents, metadatas, ids),
+  queryMemory: (queryTexts: string[], nResults?: number) => 
+    ipcRenderer.invoke('memory:query', queryTexts, nResults),
+  clearMemory: () => ipcRenderer.invoke('memory:clear-all'),
+
+  sendClaude: (fullMessage: string, contexts?: Array<{ type: 'tab'; tabId: string; title?: string; url?: string; markdown?: string }>) => 
+    ipcRenderer.invoke('ai:claude', { fullMessage, contexts }),
 
   // Password Management API
   savePassword: (origin: string, username: string, password: string) => 
@@ -262,7 +279,12 @@ const browserAPI: BrowserAPI = {
   },
 };
 
+const aiAPI = {
+  sendClaude: browserAPI.sendClaude,
+};
+
 contextBridge.exposeInMainWorld('browserAPI', browserAPI);
+contextBridge.exposeInMainWorld('aiAPI', aiAPI);
 contextBridge.exposeInMainWorld('electronAPI', {
   getDesktopSources: browserAPI.getDesktopSources
 });
