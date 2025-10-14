@@ -4,6 +4,7 @@ import { LayoutManager } from '../window/LayoutManager';
 import { WindowManager } from '../window/WindowManager';
 import { SettingsStore, AppSettings } from '../SettingsStore';
 import { UserService } from '../UserService';
+import { PasswordManager } from '../PasswordManager';
 import { RecordedAction, HistoryQuery } from '../../shared/types';
 
 /**
@@ -13,6 +14,7 @@ import { RecordedAction, HistoryQuery } from '../../shared/types';
 export class IPCHandlers {
   private settingsStore: SettingsStore;
   private userService: UserService;
+  private passwordManager: PasswordManager;
 
   constructor(
     private browserManager: BrowserManager,
@@ -21,6 +23,7 @@ export class IPCHandlers {
   ) {
     this.settingsStore = new SettingsStore();
     this.userService = new UserService();
+    this.passwordManager = new PasswordManager();
     this.setupHandlers();
 
     console.log('IPCHandlers initialized');
@@ -34,6 +37,7 @@ export class IPCHandlers {
     this.setupSettingsHandlers();
     this.setupUserHandlers();
     this.setupHistoryHandlers();
+    this.setupPasswordHandlers();
   }
 
   private setupTabHandlers(): void {
@@ -341,5 +345,46 @@ export class IPCHandlers {
     ipcMain.removeAllListeners('history:get-stats');
     ipcMain.removeAllListeners('history:get-most-visited');
     ipcMain.removeAllListeners('history:get-recently-visited');
+    
+    // Password manager cleanup
+    ipcMain.removeAllListeners('password:save');
+    ipcMain.removeAllListeners('password:get-for-origin');
+    ipcMain.removeAllListeners('password:get-password');
+    ipcMain.removeAllListeners('password:delete');
+    ipcMain.removeAllListeners('password:add-to-blacklist');
+    ipcMain.removeAllListeners('password:is-blacklisted');
+  }
+
+  private setupPasswordHandlers(): void {
+    // Save password
+    ipcMain.handle('password:save', async (_, origin: string, username: string, password: string) => {
+      return this.passwordManager.saveCredential(origin, username, password);
+    });
+
+    // Get credentials for origin
+    ipcMain.handle('password:get-for-origin', async (_, origin: string) => {
+      return this.passwordManager.getCredentialsForOrigin(origin);
+    });
+
+    // Get decrypted password
+    ipcMain.handle('password:get-password', async (_, credentialId: string) => {
+      return this.passwordManager.getPassword(credentialId);
+    });
+
+    // Delete credential
+    ipcMain.handle('password:delete', async (_, credentialId: string) => {
+      return this.passwordManager.deleteCredential(credentialId);
+    });
+
+    // Add to blacklist
+    ipcMain.handle('password:add-to-blacklist', async (_, origin: string) => {
+      this.passwordManager.addToBlacklist(origin);
+      return true;
+    });
+
+    // Check if blacklisted
+    ipcMain.handle('password:is-blacklisted', async (_, origin: string) => {
+      return this.passwordManager.isBlacklisted(origin);
+    });
   }
 }
