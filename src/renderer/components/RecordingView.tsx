@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react';
 import { Circle, Clock } from 'lucide-react';
-import { RecordedAction, RecordingSession } from '../../shared/types';
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '../ui/tabs';
+import { RecordedAction, RecordingSession } from '@/shared/types';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/renderer/ui/tabs';
 import { LiveRecordingView, SessionsListView } from './recording';
 import { toast } from 'sonner';
-import { cn } from '../lib/utils';
+import { cn } from '@/renderer/lib/utils';
 
 export function RecordingView() {
   const [recordingTab, setRecordingTab] = useState('live');

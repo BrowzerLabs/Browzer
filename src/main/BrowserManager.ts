@@ -319,12 +319,13 @@ export class BrowserManager {
         }
       });
 
-      // Start action recording with tab context
+      // Start action recording with tab context and recordingId for snapshots
       await this.centralRecorder.startRecording(
         this.activeTabId,
         tab.info.url,
         tab.info.title,
-        tab.view.webContents.id
+        tab.view.webContents.id,
+        this.currentRecordingId
       );
       
       // Start video recording on active tab
@@ -368,8 +369,8 @@ export class BrowserManager {
       return [];
     }
 
-    // Stop centralized action recording
-    const actions = this.centralRecorder.stopRecording();
+    // Stop centralized action recording (now async for snapshot finalization)
+    const actions = await this.centralRecorder.stopRecording();
     
     // Stop video recording from active video recorder
     let videoPath: string | null = null;
@@ -434,6 +435,9 @@ export class BrowserManager {
       }
     }
 
+    // Get snapshot statistics
+    const snapshotStats = await this.centralRecorder.getSnapshotStats();
+    
     const tabSwitchCount = this.countTabSwitchActions(actions);
     const firstTab = this.recordingTabs.values().next().value;
     
@@ -451,16 +455,27 @@ export class BrowserManager {
       startTabId: firstTab?.tabId,
       tabs: Array.from(this.recordingTabs.values()),
       tabSwitchCount,
+      
+      // Video metadata
       videoPath,
       videoSize,
       videoFormat: videoPath ? 'webm' : undefined,
-      videoDuration
+      videoDuration,
+      
+      // Snapshot metadata
+      snapshotCount: snapshotStats.count,
+      snapshotsDirectory: snapshotStats.directory,
+      totalSnapshotSize: snapshotStats.totalSize
     };
 
     this.recordingStore.saveRecording(session);
     console.log('💾 Recording saved:', session.id, session.name);
+    console.log('📊 Multi-tab session:', this.recordingTabs.size, 'tabs,', tabSwitchCount, 'switches');
     if (videoPath && videoSize) {
       console.log('🎥 Video included:', videoPath, `(${(videoSize / 1024 / 1024).toFixed(2)} MB)`);
+    }
+    if (snapshotStats.count > 0) {
+      console.log('📸 Snapshots captured:', snapshotStats.count, `(${(snapshotStats.totalSize / 1024 / 1024).toFixed(2)} MB)`);
     }
     
     // Notify renderer
@@ -535,8 +550,8 @@ export class BrowserManager {
         verificationTime: 0
       };
       
-      // Add to actions through the recorder (but don't send via IPC here)
-      this.centralRecorder.getActions().push(tabSwitchAction);
+      // Add to actions through the recorder
+      this.centralRecorder.addAction(tabSwitchAction);
       
       // Notify renderer via the action callback (which is already set up)
       // This ensures it goes through the same path as other actions

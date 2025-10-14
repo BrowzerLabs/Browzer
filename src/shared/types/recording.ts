@@ -75,6 +75,10 @@ export interface RecordedAction {
   tabTitle?: string;
   webContentsId?: number;
 
+  // Visual context snapshot
+  snapshotPath?: string; // Path to screenshot captured at action moment
+  snapshotSize?: number; // Snapshot file size in bytes
+
   // Verification metadata (added by ActionRecorder)
   verified?: boolean;
   verificationTime?: number;
@@ -208,4 +212,9 @@ export interface RecordingSession {
   videoSize?: number; // Video file size in bytes
   videoFormat?: string; // Video format (e.g., 'webm')
   videoDuration?: number; // Actual video duration in milliseconds
+  
+  // Snapshot metadata
+  snapshotCount?: number; // Number of snapshots captured
+  snapshotsDirectory?: string; // Directory containing all snapshots for this session
+  totalSnapshotSize?: number; // Total size of all snapshots in bytes
 }
