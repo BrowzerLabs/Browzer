@@ -4,7 +4,7 @@ import type { RecordingSession } from '@/shared/types';
 import { Button } from '@/renderer/ui/button';
 import { toast } from 'sonner';
 import ThemeToggle from '@/renderer/ui/theme-toggle';
-import { RecordingCard ,RecordingStats ,RecordingDialog ,RecordingFilters } from '@/renderer/components/recordings';
+import { RecordingCard ,RecordingStats ,RecordingDialog ,RecordingFilters } from '@/renderer/components/recording';
 
 export function Recordings() {
   const [recordings, setRecordings] = useState<RecordingSession[]>([]);
