@@ -4,6 +4,7 @@ import { ActionRecorder } from './ActionRecorder';
 import { VideoRecorder } from './VideoRecorder';
 import { RecordingStore } from './RecordingStore';
 import { BrowserAutomation } from './automation/BrowserAutomation';
+import { PasswordAutomation } from './automation/PasswordAutomation';
 import { HistoryService } from './HistoryService';
 import { PasswordManager } from './PasswordManager';
 import { RecordedAction, RecordingSession, HistoryTransition, RecordingTabInfo } from '../shared/types';
@@ -28,6 +29,10 @@ interface Tab {
   info: TabInfo;
   videoRecorder?: VideoRecorder;
   automation?: BrowserAutomation;
+  passwordAutomation?: PasswordAutomation;
+  // Track selected credential for multi-step flows
+  selectedCredentialId?: string;
+  selectedCredentialUsername?: string;
 }
 
 /**
@@ -52,18 +57,6 @@ export class BrowserManager {
   private currentRecordingId: string | null = null;
   private currentSidebarWidth = 0;
   
-  // Store pending password save across navigation (per tab)
-  private pendingPasswordSaves: Map<string, { username: string; password: string; origin: string }> = new Map();
-  
-  // Track login sessions across multiple steps/pages
-  private loginSessions: Map<string, {
-    origin: string;
-    username?: string;
-    password?: string;
-    startTime: number;
-    lastActivity: number;
-    steps: Array<{ url: string; timestamp: number; action: string; data?: any }>;
-  }> = new Map();
 
    // Centralized recorder for multi-tab recording
   private centralRecorder: ActionRecorder;
@@ -133,6 +126,13 @@ export class BrowserManager {
       info: tabInfo,
       videoRecorder: new VideoRecorder(view),
       automation: new BrowserAutomation(view),
+      passwordAutomation: new PasswordAutomation(
+        view, 
+        this.passwordManager, 
+        tabId,
+        (tabId: string, credentialId: string, username: string) => this.handleCredentialSelected(tabId, credentialId, username),
+        (tabId: string) => this.handleAutoFillPassword(tabId)
+      ),
     };
 
     // Store tab
@@ -166,6 +166,13 @@ export class BrowserManager {
 
     // Remove view from window
     this.baseWindow.contentView.removeChildView(tab.view);
+
+    // Clean up password automation
+    if (tab.passwordAutomation) {
+      tab.passwordAutomation.stop().catch(err => 
+        console.error('[BrowserManager] Error stopping password automation:', err)
+      );
+    }
 
     // Clean up
     tab.view.webContents.close();
@@ -670,7 +677,7 @@ export class BrowserManager {
       this.notifyTabsChanged();
     });
 
-    webContents.on('did-stop-loading', () => {
+    webContents.on('did-stop-loading', async () => {
       info.isLoading = false;
       info.canGoBack = webContents.navigationHistory.canGoBack();
       info.canGoForward = webContents.navigationHistory.canGoForward();
@@ -684,8 +691,14 @@ export class BrowserManager {
         ).catch(err => console.error('Failed to add history entry:', err));
       }
       
-      // Inject password autofill script
-      this.injectPasswordAutofill(webContents);
+      // Start CDP-based password automation
+      if (tab.passwordAutomation && !this.isInternalPage(info.url)) {
+        try {
+          await tab.passwordAutomation.start();
+        } catch (error) {
+          console.error('[BrowserManager] Failed to start password automation:', error);
+        }
+      }
       
       this.notifyTabsChanged();
     });
@@ -760,140 +773,13 @@ export class BrowserManager {
         if (webContents.isDevToolsOpened()) {
           webContents.closeDevTools();
         } else {
-          webContents.openDevTools({ mode: 'right' });
+          webContents.openDevTools({ mode: 'right', activate: true });
         }
       }
       // Cmd/Ctrl + Shift + C to open DevTools in inspect mode
       else if ((input.control || input.meta) && input.shift && input.key.toLowerCase() === 'c') {
         event.preventDefault();
         webContents.openDevTools({ mode: 'right', activate: true });
-      }
-    });
-
-    // Listen for password manager messages from injected script
-    webContents.on('console-message', (_event: any, level: number, message: string) => {
-      if (message.includes('[PasswordAutofill]')) {
-        console.log(`[WebView Console] ${message}`);
-      }
-    });
-
-    // Listen for console messages to intercept password storage requests
-    webContents.on('console-message', (_event: any, level: number, message: string) => {
-      if (message.includes('[PasswordAutofill]')) {
-        console.log(`[WebView Console] ${message}`);
-        
-        // Handle different password manager requests
-        if (message.includes('STORE_PENDING:')) {
-          try {
-            const jsonMatch = message.match(/STORE_PENDING: (.+)$/);
-            if (jsonMatch) {
-              const data = JSON.parse(jsonMatch[1]);
-              const tabId = this.getTabIdForWebContents(webContents);
-              if (tabId) {
-                this.pendingPasswordSaves.set(tabId, data);
-                console.log('[PasswordManager] Stored pending password save for tab:', tabId);
-              }
-            }
-          } catch (e) {
-            console.warn('[PasswordManager] Failed to parse pending password data');
-          }
-        }
-        // Handle username storage for multi-step login
-        else if (message.includes('STORE_USERNAME:')) {
-          try {
-            const jsonMatch = message.match(/STORE_USERNAME: (.+)$/);
-            if (jsonMatch) {
-              const data = JSON.parse(jsonMatch[1]);
-              const tabId = this.getTabIdForWebContents(webContents);
-              if (tabId) {
-                // Store or update login session
-                const existing = this.loginSessions.get(tabId) || {
-                  origin: data.origin,
-                  startTime: Date.now(),
-                  lastActivity: Date.now(),
-                  steps: []
-                };
-                
-                existing.username = data.username;
-                existing.lastActivity = Date.now();
-                existing.steps.push({
-                  url: data.url,
-                  timestamp: data.timestamp,
-                  action: data.action || 'username_entered',
-                  data: { username: data.username }
-                });
-                
-                this.loginSessions.set(tabId, existing);
-                console.log('[PasswordManager] Stored username for multi-step login:', data.username);
-              }
-            }
-          } catch (e) {
-            console.warn('[PasswordManager] Failed to parse username data');
-          }
-        }
-        // Handle password submission with username retrieval
-        else if (message.includes('GET_STORED_USERNAME:')) {
-          try {
-            const jsonMatch = message.match(/GET_STORED_USERNAME: (.+)$/);
-            if (jsonMatch) {
-              const data = JSON.parse(jsonMatch[1]);
-              const tabId = this.getTabIdForWebContents(webContents);
-              const session = tabId ? this.loginSessions.get(tabId) : null;
-              
-              if (session && session.username) {
-                console.log('[PasswordManager] Retrieved stored username for password submission:', session.username);
-                
-                // Check if this exact username+password combination already exists
-                const existingCreds = this.passwordManager.getCredentialsForOrigin(data.origin);
-                const existingCred = existingCreds.find(c => c.username === session.username);
-                
-                if (existingCred) {
-                  // Check if the password is different (user might be updating password)
-                  const existingPassword = this.passwordManager.getPassword(existingCred.id);
-                  if (existingPassword === data.password) {
-                    console.log('[PasswordManager] Identical credential already exists, skipping save prompt');
-                  } else {
-                    console.log('[PasswordManager] Same username but different password, showing update prompt');
-                    // Store for update prompt
-                    this.pendingPasswordSaves.set(tabId, {
-                      username: session.username,
-                      password: data.password,
-                      origin: data.origin,
-                      isUpdate: true
-                    });
-                    
-                    setTimeout(() => {
-                      const promptScript = this.generateSavePromptScript(session.username, data.password, data.origin);
-                      webContents.executeJavaScript(promptScript);
-                    }, 100);
-                  }
-                } else {
-                  console.log('[PasswordManager] New username for this site, showing save prompt');
-                  
-                  // Store complete credentials for save prompt
-                  this.pendingPasswordSaves.set(tabId, {
-                    username: session.username,
-                    password: data.password,
-                    origin: data.origin
-                  });
-                  
-                  // Inject save prompt into the current page
-                  setTimeout(() => {
-                    const promptScript = this.generateSavePromptScript(session.username, data.password, data.origin);
-                    webContents.executeJavaScript(promptScript);
-                  }, 100);
-                }
-                
-                // Clean up login session
-                this.loginSessions.delete(tabId);
-              } else {
-                console.warn('[PasswordManager] No stored username found for password submission');
-              }
-            }
-          } catch (e) {
-            console.warn('[PasswordManager] Failed to handle password submission');
-          }
-        }
       }
     });
 
@@ -1002,6 +888,15 @@ export class BrowserManager {
   }
 
   /**
+   * Check if URL is an internal page
+   */
+  private isInternalPage(url: string): boolean {
+    return url.startsWith('browzer://') || 
+           url.includes('index.html#/') ||
+           INTERNAL_PAGES.some(page => url.includes(`#/${page.path}`));
+  }
+
+  /**
    * Get automation instance for active tab
    */
   public getActiveAutomation(): BrowserAutomation | null {
@@ -1030,679 +925,6 @@ export class BrowserManager {
   }
 
   /**
-   * Inject password autofill script into web content
-   */
-  private injectPasswordAutofill(webContents: any): void {
-    // Skip for internal pages
-    const url = webContents.getURL();
-    if (url.startsWith('browzer://') || url.startsWith('file://') || url.startsWith('about:')) {
-      return;
-    }
-
-    // Check if there's a pending password save for this tab
-    const tabId = this.getTabIdForWebContents(webContents);
-    const pendingSave = tabId ? this.pendingPasswordSaves.get(tabId) : null;
-    
-    // Get saved credentials for this origin with decrypted passwords
-    const origin = new URL(url).origin;
-    let savedCredentials: any[] = [];
-    let credentialsWithPasswords: any[] = [];
-    
-    try {
-      savedCredentials = this.passwordManager.getCredentialsForOrigin(origin);
-      console.log(`[PasswordAutofill] Found ${savedCredentials.length} credentials for ${origin}`);
-      
-      // Decrypt passwords for injection (only for autofill, not for storage)
-      credentialsWithPasswords = savedCredentials.map(cred => {
-        console.log(`[PasswordAutofill] Attempting to decrypt password for ${cred.username} (ID: ${cred.id})`);
-        const decryptedPassword = this.passwordManager.getPassword(cred.id);
-        console.log(`[PasswordAutofill] Decryption result for ${cred.username}:`, decryptedPassword ? 'SUCCESS' : 'FAILED');
-        return {
-          ...cred,
-          password: decryptedPassword // Add decrypted password for autofill
-        };
-      });
-    } catch (error) {
-      console.warn('[PasswordAutofill] Failed to get credentials:', error);
-    }
-
-    // Generate and inject password autofill script
-    const script = `
-(function() {
-  'use strict';
-  
-  // Inject pending password save if exists
-  ${pendingSave ? `window.pendingPasswordSave = ${JSON.stringify(pendingSave)};` : ''}
-  
-  // Inject saved credentials for this origin (with decrypted passwords for autofill)
-  window.savedCredentials = ${JSON.stringify(savedCredentials)};
-  window.savedCredentialsWithPasswords = ${JSON.stringify(credentialsWithPasswords)};
-  
-  // Detect all types of login forms and fields
-  function detectLoginElements() {
-    const result = {
-      emailFields: [],
-      usernameFields: [],
-      passwordFields: [],
-      loginForms: [],
-      isMultiStep: false
-    };
-
-    // Find all email fields
-    result.emailFields = Array.from(document.querySelectorAll(
-      'input[type="email"], input[name*="email"], input[id*="email"], input[autocomplete="email"]'
-    ));
-
-    // Find all username fields
-    result.usernameFields = Array.from(document.querySelectorAll(
-      'input[type="text"][name*="user"], input[type="text"][id*="user"], input[type="text"][name*="login"], input[autocomplete="username"]'
-    ));
-
-    // Find all visible password fields (exclude hidden ones)
-    result.passwordFields = Array.from(document.querySelectorAll('input[type="password"]'))
-      .filter(field => {
-        const style = window.getComputedStyle(field);
-        return style.display !== 'none' && 
-               style.visibility !== 'hidden' && 
-               style.opacity !== '0' &&
-               field.offsetWidth > 0 && 
-               field.offsetHeight > 0;
-      });
-
-    // Find traditional login forms (email/username + visible password on same page)
-    const forms = Array.from(document.querySelectorAll('form'));
-    for (const form of forms) {
-      const passwordFields = Array.from(form.querySelectorAll('input[type="password"]'))
-        .filter(field => {
-          const style = window.getComputedStyle(field);
-          return style.display !== 'none' && 
-                 style.visibility !== 'hidden' && 
-                 style.opacity !== '0' &&
-                 field.offsetWidth > 0 && 
-                 field.offsetHeight > 0;
-        });
-      
-      const emailField = form.querySelector('input[type="email"], input[name*="email"]');
-      const usernameField = form.querySelector('input[type="text"][name*="user"], input[autocomplete="username"]');
-      
-      if (passwordFields.length > 0 && (emailField || usernameField)) {
-        result.loginForms.push({
-          form,
-          usernameField: emailField || usernameField,
-          passwordField: passwordFields[0]
-        });
-      }
-    }
-
-    // Detect multi-step login (email field without password, or password field without email)
-    const hasEmailWithoutPassword = result.emailFields.length > 0 && result.passwordFields.length === 0;
-    const hasPasswordWithoutEmail = result.passwordFields.length > 0 && result.emailFields.length === 0;
-    const hasStandaloneFields = (result.emailFields.length > 0 || result.usernameFields.length > 0) && result.loginForms.length === 0;
-    
-    result.isMultiStep = hasEmailWithoutPassword || hasPasswordWithoutEmail || hasStandaloneFields;
-
-    return result;
-  }
-
-  // Show save password prompt
-  function showSavePasswordPrompt(username, password, origin) {
-    console.log('[PasswordAutofill] 🔑 showSavePasswordPrompt called with:', { username, origin });
-    
-    // Check if prompt already exists
-    const existing = document.getElementById('browzer-password-prompt');
-    if (existing) {
-      console.log('[PasswordAutofill] Prompt already exists, skipping');
-      return;
-    }
-
-    console.log('[PasswordAutofill] Creating new save prompt');
-    const prompt = document.createElement('div');
-    prompt.id = 'browzer-password-prompt';
-    prompt.style.cssText = \`
-      position: fixed;
-      top: 60px;
-      right: 20px;
-      background: white;
-      border: 1px solid #dadce0;
-      border-radius: 8px;
-      padding: 16px;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-      z-index: 999999;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      font-size: 14px;
-      min-width: 300px;
-    \`;
-
-    const escapeHtml = (text) => {
-      const div = document.createElement('div');
-      div.textContent = text;
-      return div.innerHTML;
-    };
-
-    // Create elements safely without innerHTML (to avoid TrustedHTML issues)
-    const container = document.createElement('div');
-    container.style.cssText = 'position: relative;';
-    
-    // Close button
-    const closeBtn = document.createElement('button');
-    closeBtn.id = 'browzer-close-prompt';
-    closeBtn.textContent = '×';
-    closeBtn.style.cssText = \`
-      position: absolute;
-      top: 8px;
-      right: 8px;
-      background: transparent;
-      color: #666;
-      border: none;
-      padding: 4px;
-      cursor: pointer;
-      font-size: 18px;
-      line-height: 1;
-      border-radius: 4px;
-    \`;
-    
-    // Main content
-    const content = document.createElement('div');
-    content.style.cssText = 'display: flex; align-items: flex-start; gap: 12px; padding-right: 24px;';
-    
-    const icon = document.createElement('div');
-    icon.textContent = '🔑';
-    icon.style.cssText = 'font-size: 24px;';
-    
-    const textArea = document.createElement('div');
-    textArea.style.cssText = 'flex: 1;';
-    
-    const title = document.createElement('div');
-    title.textContent = 'Save password?';
-    title.style.cssText = 'font-weight: 500; margin-bottom: 8px; color: #000;';
-    
-    const usernameText = document.createElement('div');
-    usernameText.textContent = \`Username: \${username}\`;
-    usernameText.style.cssText = 'color: #5f6368; font-size: 13px; margin-bottom: 4px;';
-    
-    const passwordText = document.createElement('div');
-    passwordText.textContent = \`Password: \${'•'.repeat(password.length)}\`;
-    passwordText.style.cssText = 'color: #5f6368; font-size: 13px; margin-bottom: 12px;';
-    
-    const buttonArea = document.createElement('div');
-    buttonArea.style.cssText = 'display: flex; gap: 8px;';
-    
-    const saveBtn = document.createElement('button');
-    saveBtn.id = 'browzer-save-password';
-    saveBtn.textContent = 'Save';
-    saveBtn.style.cssText = \`
-      background: #1a73e8;
-      color: white;
-      border: none;
-      border-radius: 4px;
-      padding: 8px 16px;
-      cursor: pointer;
-      font-size: 13px;
-      font-weight: 500;
-    \`;
-    
-    const neverBtn = document.createElement('button');
-    neverBtn.id = 'browzer-never-save';
-    neverBtn.textContent = 'Never';
-    neverBtn.style.cssText = \`
-      background: transparent;
-      color: #5f6368;
-      border: 1px solid #dadce0;
-      border-radius: 4px;
-      padding: 8px 16px;
-      cursor: pointer;
-      font-size: 13px;
-    \`;
-    
-    // Assemble the prompt
-    buttonArea.appendChild(saveBtn);
-    buttonArea.appendChild(neverBtn);
-    textArea.appendChild(title);
-    textArea.appendChild(usernameText);
-    textArea.appendChild(passwordText);
-    textArea.appendChild(buttonArea);
-    content.appendChild(icon);
-    content.appendChild(textArea);
-    container.appendChild(closeBtn);
-    container.appendChild(content);
-    prompt.appendChild(container);
-
-    document.body.appendChild(prompt);
-    console.log('[PasswordAutofill] ✅ Save prompt added to DOM');
-
-    // Send messages to main process (works in sandboxed context)
-    const savePassword = () => {
-      // Clear flags to allow future prompts
-      window.pendingPasswordSave = null;
-      window.passwordPromptShown = false;
-      
-      // Try multiple communication methods
-      if (window.browserAPI) {
-        window.browserAPI.savePassword(origin, username, password);
-      } else if (window.electronAPI) {
-        // Use electron IPC if available
-        window.electronAPI.invoke('password:save', origin, username, password);
-      } else {
-        // Fallback: try to access ipcRenderer directly
-        try {
-          const { ipcRenderer } = require('electron');
-          ipcRenderer.invoke('password:save', origin, username, password);
-        } catch (e) {
-          console.error('[PasswordAutofill] No IPC method available');
-        }
-      }
-      console.log('[PasswordAutofill] Sent save password request');
-      prompt.remove();
-    };
-
-    const neverSave = () => {
-      // Clear flags to allow future prompts
-      window.pendingPasswordSave = null;
-      window.passwordPromptShown = false;
-      
-      if (window.browserAPI) {
-        window.browserAPI.neverSaveForSite(origin);
-      } else if (window.electronAPI) {
-        window.electronAPI.invoke('password:add-to-blacklist', origin);
-      } else {
-        try {
-          const { ipcRenderer } = require('electron');
-          ipcRenderer.invoke('password:add-to-blacklist', origin);
-        } catch (e) {
-          console.error('[PasswordAutofill] No IPC method available');
-        }
-      }
-      console.log('[PasswordAutofill] Sent never save request');
-      prompt.remove();
-    };
-
-    document.getElementById('browzer-save-password').addEventListener('click', savePassword);
-    document.getElementById('browzer-never-save').addEventListener('click', neverSave);
-    closeBtn.addEventListener('click', () => {
-      // Clear flags when manually closed
-      window.pendingPasswordSave = null;
-      window.passwordPromptShown = false;
-      prompt.remove();
-    });
-
-    // No auto-hide timeout - prompt stays until user takes action
-  }
-
-  // Setup traditional single-page login forms
-  function setupTraditionalForms(loginForms) {
-    for (const { form, usernameField, passwordField } of loginForms) {
-      // Set up autofill
-      if (window.savedCredentials && window.savedCredentials.length > 0) {
-        setupAutofillForField(usernameField);
-      }
-      
-      // Set up save on submit
-      form.addEventListener('submit', () => {
-        const username = usernameField.value;
-        const password = passwordField.value;
-        handleCredentialSubmission(username, password, origin);
-      });
-    }
-  }
-
-  // Setup multi-step login (email first, then password)
-  function setupMultiStepLogin(elements) {
-    // Handle email/username fields (first step)
-    const allUsernameFields = [...elements.emailFields, ...elements.usernameFields];
-    
-    for (const field of allUsernameFields) {
-      // Set up autofill for email/username
-      if (window.savedCredentials && window.savedCredentials.length > 0) {
-        setupAutofillForField(field);
-      }
-      
-      // Track email/username entry with debouncing
-      let inputTimeout;
-      field.addEventListener('input', () => {
-        clearTimeout(inputTimeout);
-        inputTimeout = setTimeout(() => {
-          if (field.value && field.value.length > 3) { // Only track meaningful input
-            // Store in main process via console log
-            console.log('[PasswordAutofill] STORE_USERNAME:', JSON.stringify({ 
-              username: field.value, 
-              origin: origin,
-              timestamp: Date.now(),
-              url: location.href
-            }));
-            console.log('[PasswordAutofill] Username captured in multi-step:', field.value);
-          }
-        }, 500); // Debounce to avoid spam
-      });
-      
-      // Handle form submission (email step)
-      const form = field.closest('form');
-      if (form) {
-        form.addEventListener('submit', () => {
-          if (field.value) {
-            // Store in main process for persistence
-            console.log('[PasswordAutofill] STORE_USERNAME:', JSON.stringify({ 
-              username: field.value, 
-              origin: origin,
-              timestamp: Date.now(),
-              url: location.href,
-              action: 'email_submitted'
-            }));
-            console.log('[PasswordAutofill] Email step submitted:', field.value);
-          }
-        });
-      }
-    }
-
-    // Handle password fields (second step)
-    for (const passwordField of elements.passwordFields) {
-      console.log('[PasswordAutofill] Setting up password field for multi-step');
-      
-      // Check if we have saved credentials with passwords for auto-fill
-      if (window.savedCredentialsWithPasswords && window.savedCredentialsWithPasswords.length > 0) {
-        console.log('[PasswordAutofill] Found saved credentials with passwords, auto-filling password');
-        
-        setTimeout(() => {
-          // For multi-step, we need to match the username that was entered in step 1
-          // Since we can't easily access the stored username from the webview,
-          // we'll auto-fill with the most recently used credential for now
-          const mostRecentCred = window.savedCredentialsWithPasswords
-            .sort((a, b) => b.lastUsed - a.lastUsed)[0];
-          
-          if (mostRecentCred && mostRecentCred.password) {
-            console.log('[PasswordAutofill] Auto-filling password for most recent user:', mostRecentCred.username);
-            passwordField.value = mostRecentCred.password;
-            passwordField.dispatchEvent(new Event('input', { bubbles: true }));
-            
-            // Show tooltip
-            const tooltip = document.createElement('div');
-            tooltip.style.cssText = \`
-              position: absolute;
-              top: -35px;
-              left: 50%;
-              transform: translateX(-50%);
-              background: #333;
-              color: white;
-              padding: 6px 12px;
-              border-radius: 4px;
-              font-size: 12px;
-              z-index: 999999;
-              white-space: nowrap;
-            \`;
-            tooltip.textContent = \`Password auto-filled for \${mostRecentCred.username}\`;
-            
-            passwordField.style.position = 'relative';
-            if (passwordField.parentElement) {
-              passwordField.parentElement.style.position = 'relative';
-              passwordField.parentElement.appendChild(tooltip);
-              
-              setTimeout(() => {
-                if (tooltip.parentElement) {
-                  tooltip.remove();
-                }
-              }, 3000);
-            }
-            
-            console.log('[PasswordAutofill] ✅ Password auto-filled for:', mostRecentCred.username);
-          }
-        }, 500);
-      }
-      
-      // Handle password form submission
-      const form = passwordField.closest('form');
-      if (form) {
-        form.addEventListener('submit', () => {
-          const password = passwordField.value;
-          if (password) {
-            console.log('[PasswordAutofill] Password submitted, requesting stored username');
-            // Request stored username from main process
-            console.log('[PasswordAutofill] GET_STORED_USERNAME:', JSON.stringify({ 
-              origin: origin,
-              password: password,
-              timestamp: Date.now()
-            }));
-          }
-        });
-      }
-    }
-  }
-
-  // Setup autofill for any field
-  function setupAutofillForField(field) {
-    // Show dropdown immediately if field is already focused
-    if (document.activeElement === field) {
-      setTimeout(() => showAutofillDropdown(field, window.savedCredentials), 100);
-    }
-    
-    // Add event listeners
-    field.addEventListener('focus', () => {
-      showAutofillDropdown(field, window.savedCredentials);
-    });
-    
-    field.addEventListener('click', () => {
-      showAutofillDropdown(field, window.savedCredentials);
-    });
-  }
-
-  // Handle credential submission (unified for all login types)
-  function handleCredentialSubmission(username, password, origin) {
-    console.log('[PasswordAutofill] ⚡ CREDENTIALS SUBMITTED!');
-    console.log('[PasswordAutofill] Username:', username ? 'present' : 'empty');
-    console.log('[PasswordAutofill] Password:', password ? 'present' : 'empty');
-
-    if (username && password) {
-      // Check if we already have this credential saved
-      const existingCred = window.savedCredentials?.find(c => 
-        c.origin === origin && c.username === username
-      );
-      
-      if (existingCred) {
-        console.log('[PasswordAutofill] Credential already exists, skipping save prompt');
-        return;
-      }
-      
-      console.log('[PasswordAutofill] New credential, storing for post-navigation prompt');
-      
-      // Store credentials in main process
-      console.log('[PasswordAutofill] STORE_PENDING:', JSON.stringify({ username, password, origin }));
-      
-      // Show prompt immediately
-      showSavePasswordPrompt(username, password, origin);
-    }
-  }
-
-  // Initialize password autofill
-  async function initializePasswordAutofill() {
-    const origin = window.location.origin;
-
-    try {
-      console.log('[PasswordAutofill] Starting initialization for:', origin);
-      
-      // Check for pending password save from previous page (only show once)
-      if (window.pendingPasswordSave && !window.passwordPromptShown) {
-        const pending = window.pendingPasswordSave;
-        console.log('[PasswordAutofill] Found pending password save, showing prompt');
-        showSavePasswordPrompt(pending.username, pending.password, pending.origin);
-        window.pendingPasswordSave = null; // Clear after showing
-        window.passwordPromptShown = true; // Prevent multiple prompts
-      }
-      
-      const loginElements = detectLoginElements();
-      console.log('[PasswordAutofill] Login detection result:', {
-        emailFields: loginElements.emailFields.length,
-        usernameFields: loginElements.usernameFields.length,
-        passwordFields: loginElements.passwordFields.length,
-        loginForms: loginElements.loginForms.length,
-        isMultiStep: loginElements.isMultiStep
-      });
-      
-      // Initialize login session tracking
-      if (!window.loginSession) {
-        window.loginSession = {
-          origin,
-          startTime: Date.now(),
-          lastActivity: Date.now(),
-          steps: []
-        };
-      }
-      
-      // Handle different login patterns
-      if (loginElements.loginForms.length > 0) {
-        // Traditional single-page login forms
-        console.log('[PasswordAutofill] Setting up traditional login forms');
-        setupTraditionalForms(loginElements.loginForms);
-      } else if (loginElements.isMultiStep) {
-        // Multi-step login process
-        console.log('[PasswordAutofill] Setting up multi-step login');
-        setupMultiStepLogin(loginElements);
-      } else {
-        console.log('[PasswordAutofill] No login elements detected');
-      }
-
-      // Legacy cleanup - this is now handled by setupTraditionalForms and setupMultiStepLogin
-
-      console.log('[PasswordAutofill] Initialized for', origin);
-    } catch (error) {
-      console.error('[PasswordAutofill] Initialization error:', error);
-    }
-  }
-
-  // Show autofill dropdown
-  function showAutofillDropdown(usernameField, credentials) {
-    const existing = document.getElementById('browzer-autofill-dropdown');
-    if (existing) existing.remove();
-
-    if (credentials.length === 0) return;
-
-    const rect = usernameField.getBoundingClientRect();
-    const dropdown = document.createElement('div');
-    dropdown.id = 'browzer-autofill-dropdown';
-    dropdown.style.cssText = \`
-      position: fixed;
-      top: \${rect.bottom + window.scrollY}px;
-      left: \${rect.left + window.scrollX}px;
-      width: \${rect.width}px;
-      background: white;
-      border: 1px solid #dadce0;
-      border-radius: 4px;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.15);
-      z-index: 999999;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      font-size: 14px;
-      max-height: 200px;
-      overflow-y: auto;
-    \`;
-
-    const escapeHtml = (text) => {
-      const div = document.createElement('div');
-      div.textContent = text;
-      return div.innerHTML;
-    };
-
-    // Create dropdown items safely without innerHTML
-    credentials.forEach(cred => {
-      const item = document.createElement('div');
-      item.className = 'browzer-autofill-item';
-      item.setAttribute('data-credential-id', cred.id);
-      item.style.cssText = \`
-        padding: 10px 12px;
-        cursor: pointer;
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        border-bottom: 1px solid #f0f0f0;
-        color: #000;
-        transition: background-color 0.2s;
-      \`;
-      
-      // Add hover effects
-      item.addEventListener('mouseenter', () => item.style.backgroundColor = '#f5f5f5');
-      item.addEventListener('mouseleave', () => item.style.backgroundColor = 'white');
-      
-      const usernameSpan = document.createElement('span');
-      usernameSpan.textContent = cred.username;
-      usernameSpan.style.cssText = 'color: #000;';
-      
-      item.appendChild(usernameSpan);
-      dropdown.appendChild(item);
-    });
-
-    document.body.appendChild(dropdown);
-
-    dropdown.addEventListener('click', async (e) => {
-      const target = e.target.closest('.browzer-autofill-item');
-      if (target) {
-        const credentialId = target.dataset.credentialId;
-        const credential = credentials.find(c => c.id === credentialId);
-        
-        console.log('[PasswordAutofill] Credential selected:', credentialId);
-        
-        if (credential) {
-          // Fill username immediately
-          usernameField.value = credential.username;
-          usernameField.dispatchEvent(new Event('input', { bubbles: true }));
-          
-          // Fill actual password if available (match by credential ID)
-          const passwordField = document.querySelector('input[type="password"]');
-          if (passwordField) {
-            // Find the exact matching credential with decrypted password
-            const credWithPassword = window.savedCredentialsWithPasswords?.find(c => c.id === credential.id);
-            if (credWithPassword && credWithPassword.password) {
-              passwordField.value = credWithPassword.password;
-              passwordField.dispatchEvent(new Event('input', { bubbles: true }));
-              console.log('[PasswordAutofill] ✅ Autofilled both username and password for:', credential.username);
-            } else {
-              console.log('[PasswordAutofill] Username filled, no decrypted password available for:', credential.username);
-            }
-          }
-          
-          console.log('[PasswordAutofill] Autofilled credentials for:', credential.username);
-        }
-        dropdown.remove();
-      }
-    });
-
-    // Close on click outside
-    setTimeout(() => {
-      const handleClickOutside = (e) => {
-        if (!dropdown.contains(e.target) && e.target !== usernameField) {
-          dropdown.remove();
-          document.removeEventListener('click', handleClickOutside);
-        }
-      };
-      document.addEventListener('click', handleClickOutside);
-    }, 100);
-  }
-
-  // Initialize when page loads
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', () => {
-      setTimeout(initializePasswordAutofill, 500);
-    });
-  } else {
-    setTimeout(initializePasswordAutofill, 500);
-  }
-
-  // Re-initialize on navigation (for SPAs)
-  let lastUrl = location.href;
-  new MutationObserver(() => {
-    if (location.href !== lastUrl) {
-      lastUrl = location.href;
-      setTimeout(initializePasswordAutofill, 500);
-    }
-  }).observe(document, { subtree: true, childList: true });
-
-  console.log('[PasswordAutofill] Script injected');
-})();
-`;
-    
-    webContents.executeJavaScript(script).then(() => {
-      console.log('[PasswordAutofill] Script injected successfully for:', url);
-    }).catch((error: Error) => {
-      console.warn('[PasswordAutofill] Failed to inject script:', error.message);
-    });
-  }
-
-  /**
    * Get tab ID for a given webContents
    */
   private getTabIdForWebContents(webContents: any): string | null {
@@ -1715,161 +937,88 @@ export class BrowserManager {
   }
 
   /**
-   * Generate a script to show save prompt on current page
+   * Handle credential selection for multi-step flows
    */
-  private generateSavePromptScript(username: string, password: string, origin: string): string {
-    return `
-(function() {
-  console.log('[PasswordAutofill] Showing save prompt for multi-step login: ${username}');
-  
-  // Create save prompt directly
-  const existing = document.getElementById('browzer-password-prompt');
-  if (existing) existing.remove();
-
-  const prompt = document.createElement('div');
-  prompt.id = 'browzer-password-prompt';
-  prompt.style.cssText = \`
-    position: fixed;
-    top: 60px;
-    right: 20px;
-    background: white;
-    border: 1px solid #dadce0;
-    border-radius: 8px;
-    padding: 16px;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-    z-index: 999999;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-    font-size: 14px;
-    min-width: 300px;
-  \`;
-
-  // Create elements safely without innerHTML (to avoid TrustedHTML issues)
-  const container = document.createElement('div');
-  container.style.cssText = 'position: relative;';
-  
-  // Close button
-  const closeBtn = document.createElement('button');
-  closeBtn.id = 'browzer-close-prompt';
-  closeBtn.textContent = '×';
-  closeBtn.style.cssText = \`
-    position: absolute;
-    top: 8px;
-    right: 8px;
-    background: transparent;
-    color: #666;
-    border: none;
-    padding: 4px;
-    cursor: pointer;
-    font-size: 18px;
-    line-height: 1;
-    border-radius: 4px;
-  \`;
-  
-  // Main content
-  const content = document.createElement('div');
-  content.style.cssText = 'display: flex; align-items: flex-start; gap: 12px; padding-right: 24px;';
-  
-  const icon = document.createElement('div');
-  icon.textContent = '🔑';
-  icon.style.cssText = 'font-size: 24px;';
-  
-  const textArea = document.createElement('div');
-  textArea.style.cssText = 'flex: 1;';
-  
-  const title = document.createElement('div');
-  title.textContent = 'Save password?';
-  title.style.cssText = 'font-weight: 500; margin-bottom: 8px; color: #000;';
-  
-  const usernameText = document.createElement('div');
-  usernameText.textContent = \`Username: \${username}\`;
-  usernameText.style.cssText = 'color: #5f6368; font-size: 13px; margin-bottom: 4px;';
-  
-  const passwordText = document.createElement('div');
-  passwordText.textContent = \`Password: \${'•'.repeat(password.length)}\`;
-  passwordText.style.cssText = 'color: #5f6368; font-size: 13px; margin-bottom: 12px;';
-  
-  const buttonArea = document.createElement('div');
-  buttonArea.style.cssText = 'display: flex; gap: 8px;';
-  
-  const saveBtn = document.createElement('button');
-  saveBtn.id = 'browzer-save-password';
-  saveBtn.textContent = 'Save';
-  saveBtn.style.cssText = \`
-    background: #1a73e8;
-    color: white;
-    border: none;
-    border-radius: 4px;
-    padding: 8px 16px;
-    cursor: pointer;
-    font-size: 13px;
-    font-weight: 500;
-  \`;
-  
-  const neverBtn = document.createElement('button');
-  neverBtn.id = 'browzer-never-save';
-  neverBtn.textContent = 'Never';
-  neverBtn.style.cssText = \`
-    background: transparent;
-    color: #5f6368;
-    border: 1px solid #dadce0;
-    border-radius: 4px;
-    padding: 8px 16px;
-    cursor: pointer;
-    font-size: 13px;
-  \`;
-  
-  // Assemble the prompt
-  buttonArea.appendChild(saveBtn);
-  buttonArea.appendChild(neverBtn);
-  textArea.appendChild(title);
-  textArea.appendChild(usernameText);
-  textArea.appendChild(passwordText);
-  textArea.appendChild(buttonArea);
-  content.appendChild(icon);
-  content.appendChild(textArea);
-  container.appendChild(closeBtn);
-  container.appendChild(content);
-  prompt.appendChild(container);
-
-  document.body.appendChild(prompt);
-  console.log('[PasswordAutofill] Multi-step save prompt shown');
-
-  // Add event listeners
-  document.getElementById('browzer-save-password').addEventListener('click', () => {
-    console.log('[PasswordAutofill] SAVE_PASSWORD:', JSON.stringify({ username: '${username}', password: '${password}', origin: '${origin}' }));
-    prompt.remove();
-  });
-
-  document.getElementById('browzer-never-save').addEventListener('click', () => {
-    console.log('[PasswordAutofill] NEVER_SAVE:', JSON.stringify({ origin: '${origin}' }));
-    prompt.remove();
-  });
-
-  document.getElementById('browzer-close-prompt').addEventListener('click', () => {
-    prompt.remove();
-  });
-})();
-`;
+  private handleCredentialSelected(tabId: string, credentialId: string, username: string): void {
+    const tab = this.tabs.get(tabId);
+    if (tab) {
+      tab.selectedCredentialId = credentialId;
+      tab.selectedCredentialUsername = username;
+      // console.log('[BrowserManager] Stored selected credential for tab:', tabId, 'username:', username);
+    }
   }
 
   /**
-   * Handle password actions from injected script
+   * Handle auto-fill password request
    */
-  private async handlePasswordAction(action: any): Promise<void> {
+  private async handleAutoFillPassword(tabId: string): Promise<void> {
+    const tab = this.tabs.get(tabId);
+    if (!tab || !tab.selectedCredentialId) {
+      // console.log('[BrowserManager] No selected credential for auto-fill on tab:', tabId);
+      return;
+    }
+    
+    const password = this.passwordManager.getPassword(tab.selectedCredentialId);
+    if (!password) {
+      //console.log('[BrowserManager] No password found for credential:', tab.selectedCredentialId);
+      return;
+    }
+    
+    console.log('[BrowserManager] Auto-filling password for:', tab.selectedCredentialUsername);
+    
+    // Inject password fill script with retry logic
+    const script = `
+      (function() {
+        let attempts = 0;
+        const maxAttempts = 20;
+        
+        function tryFillPassword() {
+          const passwordFields = document.querySelectorAll('input[type="password"]');
+          const visiblePasswordField = Array.from(passwordFields).find(field => {
+            const style = window.getComputedStyle(field);
+            return style.display !== 'none' && 
+                   style.visibility !== 'hidden' && 
+                   field.offsetWidth > 0 && 
+                   field.offsetHeight > 0;
+          });
+          
+          if (visiblePasswordField) {
+            visiblePasswordField.value = '${password.replace(/'/g, "\\'")}';
+            visiblePasswordField.dispatchEvent(new Event('input', { bubbles: true }));
+            visiblePasswordField.dispatchEvent(new Event('change', { bubbles: true }));
+            
+            // Show success notification
+            const notification = document.createElement('div');
+            notification.style.cssText = 'position: fixed; top: 20px; left: 50%; transform: translateX(-50%); background: #4CAF50; color: white; padding: 12px 24px; border-radius: 6px; z-index: 999999; font-family: Arial, sans-serif; font-size: 14px; box-shadow: 0 4px 12px rgba(0,0,0,0.2);';
+            notification.textContent = 'Password auto-filled for ${tab.selectedCredentialUsername}';
+            document.body.appendChild(notification);
+            
+            setTimeout(() => notification.remove(), 3000);
+            
+            //console.log('[PasswordManager] ✅ Multi-step password auto-filled');
+          } else {
+            attempts++;
+            if (attempts < maxAttempts) {
+              setTimeout(tryFillPassword, 250);
+            } else {
+              // console.log('[PasswordManager] ❌ Password field not found after', maxAttempts, 'attempts');
+            }
+          }
+        }
+        
+        tryFillPassword();
+      })();
+    `;
+    
     try {
-      if (action.type === 'save-password') {
-        const success = await this.passwordManager.saveCredential(
-          action.origin, 
-          action.username, 
-          action.password
-        );
-        console.log('[PasswordManager] Save result:', success);
-      } else if (action.type === 'never-save') {
-        this.passwordManager.addToBlacklist(action.origin);
-        console.log('[PasswordManager] Added to blacklist:', action.origin);
-      }
+      await tab.view.webContents.executeJavaScript(script);
+      
+      // Clear selected credential after use
+      tab.selectedCredentialId = undefined;
+      tab.selectedCredentialUsername = undefined;
+      
     } catch (error) {
-      console.error('[PasswordManager] Error handling action:', error);
+      console.error('[BrowserManager] Error auto-filling password:', error);
     }
   }
 }
