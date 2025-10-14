@@ -307,7 +307,31 @@ export class ActionRecorder {
             }
           }));
         }, true);
-        let inputDebounce = {};
+        
+        // Track focused input elements and their initial values
+        let focusedInputs = new Map();
+        
+        document.addEventListener('focus', (e) => {
+          const target = e.target;
+          const tagName = target.tagName;
+          const inputType = target.type?.toLowerCase();
+          
+          if (tagName === 'INPUT' || tagName === 'TEXTAREA') {
+            const key = target.id || target.name || getSelector(target);
+            const immediateTypes = ['checkbox', 'radio', 'file', 'range', 'color'];
+            const isImmediate = immediateTypes.includes(inputType);
+            
+            if (!isImmediate) {
+              // Store the initial value when element gets focus
+              focusedInputs.set(key, {
+                element: target,
+                initialValue: target.value,
+                hasChanged: false
+              });
+            }
+          }
+        }, true);
+        
         document.addEventListener('input', (e) => {
           const target = e.target;
           const tagName = target.tagName;
@@ -320,10 +344,80 @@ export class ActionRecorder {
             if (isImmediate) {
               handleInputAction(target);
             } else {
-              clearTimeout(inputDebounce[key]);
-              inputDebounce[key] = setTimeout(() => {
+              // Mark that this focused input has changed
+              if (focusedInputs.has(key)) {
+                focusedInputs.get(key).hasChanged = true;
+              }
+            }
+          }
+        }, true);
+        
+        // Handle Enter key and form submission triggers
+        document.addEventListener('keydown', (e) => {
+          const target = e.target;
+          const tagName = target.tagName;
+          const inputType = target.type?.toLowerCase();
+          
+          if ((tagName === 'INPUT' || tagName === 'TEXTAREA') && (e.key === 'Enter' || e.key === 'Tab')) {
+            const key = target.id || target.name || getSelector(target);
+            const immediateTypes = ['checkbox', 'radio', 'file', 'range', 'color'];
+            const isImmediate = immediateTypes.includes(inputType);
+            
+            if (!isImmediate && focusedInputs.has(key)) {
+              const inputData = focusedInputs.get(key);
+              
+              // Record the text input BEFORE the key action if value changed
+              if (inputData.hasChanged && inputData.initialValue !== target.value) {
                 handleInputAction(target);
-              }, 500);
+                
+                // Update the tracking to prevent duplicate recording on blur
+                inputData.hasChanged = false;
+                inputData.initialValue = target.value;
+              }
+            }
+          }
+        }, true);
+        
+        // Handle form submissions to capture any pending input changes
+        document.addEventListener('submit', (e) => {
+          const form = e.target;
+          if (form.tagName === 'FORM') {
+            // Check all focused inputs in this form and record pending changes
+            const formInputs = form.querySelectorAll('input, textarea');
+            formInputs.forEach(input => {
+              const key = input.id || input.name || getSelector(input);
+              if (focusedInputs.has(key)) {
+                const inputData = focusedInputs.get(key);
+                if (inputData.hasChanged && inputData.initialValue !== input.value) {
+                  handleInputAction(input);
+                  inputData.hasChanged = false;
+                  inputData.initialValue = input.value;
+                }
+              }
+            });
+          }
+        }, true);
+        
+        document.addEventListener('blur', (e) => {
+          const target = e.target;
+          const tagName = target.tagName;
+          const inputType = target.type?.toLowerCase();
+          
+          if (tagName === 'INPUT' || tagName === 'TEXTAREA') {
+            const key = target.id || target.name || getSelector(target);
+            const immediateTypes = ['checkbox', 'radio', 'file', 'range', 'color'];
+            const isImmediate = immediateTypes.includes(inputType);
+            
+            if (!isImmediate && focusedInputs.has(key)) {
+              const inputData = focusedInputs.get(key);
+              
+              // Only record action if the value actually changed
+              if (inputData.hasChanged && inputData.initialValue !== target.value) {
+                handleInputAction(target);
+              }
+              
+              // Clean up the tracking
+              focusedInputs.delete(key);
             }
           }
         }, true);
