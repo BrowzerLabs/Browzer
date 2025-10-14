@@ -103,6 +103,11 @@ export class IPCHandlers {
       return this.browserManager.stopRecording();
     });
 
+    // Discard recording
+    ipcMain.handle('browser:discard-recording', async () => {
+      return this.browserManager.discardRecording();
+    });
+
     // Save recording
     ipcMain.handle('browser:save-recording', async (_, name: string, description: string, actions: RecordedAction[]) => {
       return this.browserManager.saveRecording(name, description, actions);
@@ -308,6 +313,7 @@ export class IPCHandlers {
     ipcMain.removeAllListeners('browser:set-sidebar-state');
     ipcMain.removeAllListeners('browser:start-recording');
     ipcMain.removeAllListeners('browser:stop-recording');
+    ipcMain.removeAllListeners('browser:discard-recording');
     ipcMain.removeAllListeners('browser:save-recording');
     ipcMain.removeAllListeners('browser:get-all-recordings');
     ipcMain.removeAllListeners('browser:delete-recording');

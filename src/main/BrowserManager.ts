@@ -405,6 +405,43 @@ export class BrowserManager {
   }
 
   /**
+   * Discard current recording session without saving
+   */
+  public async discardRecording(): Promise<void> {
+    if (!this.isRecording) {
+      console.warn('No recording to discard');
+      return;
+    }
+
+    try {
+      // Discard action recording
+      this.centralRecorder.discardRecording();
+      
+      // Stop and discard video recording
+      if (this.activeVideoRecorder && this.activeVideoRecorder.isActive()) {
+        await this.activeVideoRecorder.stopRecording();
+        console.log('🗑️ Video recording discarded');
+        this.activeVideoRecorder = null;
+      }
+      
+      this.isRecording = false;
+      this.recordingStartTime = 0;
+      this.recordingStartUrl = null;
+      this.currentRecordingId = null;
+      this.recordingTabs.clear();
+      
+      console.log('🗑️ Recording discarded completely');
+      
+      // Notify renderer that recording was discarded
+      if (this.agentUIView && !this.agentUIView.webContents.isDestroyed()) {
+        this.agentUIView.webContents.send('recording:discarded');
+      }
+    } catch (error) {
+      console.error('Error discarding recording:', error);
+    }
+  }
+
+  /**
    * Save recording session with video and multi-tab metadata
    */
   public async saveRecording(name: string, description: string, actions: RecordedAction[]): Promise<string> {

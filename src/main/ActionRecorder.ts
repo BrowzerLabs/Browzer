@@ -236,6 +236,55 @@ export class ActionRecorder {
   }
 
   /**
+   * Clear recorded actions
+   */
+  public clearActions(): void {
+    this.actions = [];
+    this.pendingActions.clear();
+    console.log('🧹 Actions cleared');
+  }
+
+  /**
+   * Discard current recording session
+   */
+  public discardRecording(): void {
+    if (this.isRecording) {
+      try {
+        // First, inject a script to stop the browser-side recording
+        if (this.debugger && this.debugger.isAttached()) {
+          this.debugger.sendCommand('Runtime.evaluate', {
+            expression: `
+              if (window.__browzerRecorderInstalled) {
+                window.__browzerRecorderInstalled = false;
+                console.log('🗑️ Browser-side recording disabled');
+              }
+            `,
+            includeCommandLineAPI: false
+          }).catch(() => {
+            // Ignore errors if page is navigating or closed
+          });
+          
+          this.debugger.detach();
+        }
+      } catch (error) {
+        console.warn('Error detaching debugger during discard:', error);
+      }
+    }
+
+    this.isRecording = false;
+    this.actions = [];
+    this.pendingActions.clear();
+    
+    // Reset tab context
+    this.currentTabId = null;
+    this.currentTabUrl = null;
+    this.currentTabTitle = null;
+    this.currentWebContentsId = null;
+    
+    console.log('🗑️ Recording discarded');
+  }
+
+  /**
    * Get current tab context
    */
   public getCurrentTabContext(): { tabId: string | null; tabUrl: string | null; tabTitle: string | null; webContentsId: number | null } {
@@ -312,9 +361,23 @@ export class ActionRecorder {
       (function() {
         if (window.__browzerRecorderInstalled) return;
         window.__browzerRecorderInstalled = true;
+        
+        // Helper function to check if recording is still active
+        function shouldRecordAction() {
+          return window.__browzerRecorderInstalled === true;
+        }
+        
         document.addEventListener('click', (e) => {
           const clickedElement = e.target;
           const interactiveElement = findInteractiveParent(clickedElement);
+          
+          // Skip click recording for inputs that are handled by change/input events
+          const inputType = interactiveElement.type?.toLowerCase();
+          const skipClickTypes = ['checkbox', 'radio', 'file'];
+          if (interactiveElement.tagName === 'INPUT' && skipClickTypes.includes(inputType)) {
+            return; // Let the change event handle these
+          }
+          
           const isDirectClick = interactiveElement === clickedElement;
           const targetInfo = buildElementTarget(interactiveElement);
           let clickedElementInfo = null;
@@ -329,6 +392,7 @@ export class ActionRecorder {
             openModals: document.querySelectorAll('[role="dialog"], [aria-modal="true"], .modal:not([style*="display: none"])').length
           };
           
+          if (!shouldRecordAction()) return;
           console.info('[BROWZER_ACTION]', JSON.stringify({
             type: 'click',
             timestamp: Date.now(),
@@ -352,7 +416,7 @@ export class ActionRecorder {
           
           if (tagName === 'INPUT' || tagName === 'TEXTAREA') {
             const key = target.id || target.name || getSelector(target);
-            const immediateTypes = ['checkbox', 'radio', 'file', 'range', 'color'];
+            const immediateTypes = ['range', 'color']; // Removed checkbox/radio/file - handled by change event
             const isImmediate = immediateTypes.includes(inputType);
             
             if (!isImmediate) {
@@ -372,7 +436,7 @@ export class ActionRecorder {
           const inputType = target.type?.toLowerCase();
           if (tagName === 'INPUT' || tagName === 'TEXTAREA') {
             const key = target.id || target.name || getSelector(target);
-            const immediateTypes = ['checkbox', 'radio', 'file', 'range', 'color'];
+            const immediateTypes = ['range', 'color']; // Removed checkbox/radio/file - handled by change event
             const isImmediate = immediateTypes.includes(inputType);
             
             if (isImmediate) {
@@ -394,7 +458,7 @@ export class ActionRecorder {
           
           if ((tagName === 'INPUT' || tagName === 'TEXTAREA') && (e.key === 'Enter' || e.key === 'Tab')) {
             const key = target.id || target.name || getSelector(target);
-            const immediateTypes = ['checkbox', 'radio', 'file', 'range', 'color'];
+            const immediateTypes = ['range', 'color']; // Removed checkbox/radio/file - handled by change event
             const isImmediate = immediateTypes.includes(inputType);
             
             if (!isImmediate && focusedInputs.has(key)) {
@@ -439,7 +503,7 @@ export class ActionRecorder {
           
           if (tagName === 'INPUT' || tagName === 'TEXTAREA') {
             const key = target.id || target.name || getSelector(target);
-            const immediateTypes = ['checkbox', 'radio', 'file', 'range', 'color'];
+            const immediateTypes = ['range', 'color']; // Removed checkbox/radio/file - handled by change event
             const isImmediate = immediateTypes.includes(inputType);
             
             if (!isImmediate && focusedInputs.has(key)) {
@@ -475,20 +539,14 @@ export class ActionRecorder {
           let actionType = 'input';
           let value = target.value;
           let metadata = {};
-          if (inputType === 'checkbox') {
-            actionType = 'checkbox';
-            value = target.checked;
-            metadata = { checked: target.checked };
-          } else if (inputType === 'radio') {
-            actionType = 'radio';
-            value = target.value;
-            metadata = { checked: target.checked, name: target.name };
-          } else if (inputType === 'range') {
+          // Note: checkbox and radio are now handled only by the 'change' event to avoid duplicates
+          if (inputType === 'range') {
             metadata = { min: target.min, max: target.max, step: target.step };
           } else if (inputType === 'color') {
             metadata = { colorValue: target.value };
           }
           
+          if (!shouldRecordAction()) return;
           console.info('[BROWZER_ACTION]', JSON.stringify({
             type: actionType,
             timestamp: Date.now(),
@@ -519,6 +577,7 @@ export class ActionRecorder {
             selectedTexts = [selectedOption?.text];
           }
           
+          if (!shouldRecordAction()) return;
           console.info('[BROWZER_ACTION]', JSON.stringify({
             type: 'select',
             timestamp: Date.now(),
@@ -538,6 +597,7 @@ export class ActionRecorder {
           }));
         }
         function handleCheckboxAction(target) {
+          if (!shouldRecordAction()) return;
           console.info('[BROWZER_ACTION]', JSON.stringify({
             type: 'checkbox',
             timestamp: Date.now(),
@@ -556,6 +616,7 @@ export class ActionRecorder {
           }));
         }
         function handleRadioAction(target) {
+          if (!shouldRecordAction()) return;
           console.info('[BROWZER_ACTION]', JSON.stringify({
             type: 'radio',
             timestamp: Date.now(),
@@ -576,6 +637,7 @@ export class ActionRecorder {
         }
         function handleFileUploadAction(target) {
           const files = Array.from(target.files || []);
+          if (!shouldRecordAction()) return;
           console.info('[BROWZER_ACTION]', JSON.stringify({
             type: 'file-upload',
             timestamp: Date.now(),
@@ -617,6 +679,7 @@ export class ActionRecorder {
             type: submitTrigger.type
           } : null;
           
+          if (!shouldRecordAction()) return;
           console.info('[BROWZER_ACTION]', JSON.stringify({
             type: 'submit',
             timestamp: Date.now(),
@@ -657,6 +720,7 @@ export class ActionRecorder {
               type: focusedElement.type || undefined
             } : null;
             
+            if (!shouldRecordAction()) return;
             console.info('[BROWZER_ACTION]', JSON.stringify({
               type: 'keypress',
               timestamp: Date.now(),

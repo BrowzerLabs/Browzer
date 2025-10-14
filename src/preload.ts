@@ -39,6 +39,7 @@ export interface BrowserAPI {
   // Recording Management
   startRecording: () => Promise<boolean>;
   stopRecording: () => Promise<{ actions: any[]; duration: number; startUrl: string }>;
+  discardRecording: () => Promise<void>;
   saveRecording: (name: string, description: string, actions: any[]) => Promise<string>;
   getAllRecordings: () => Promise<any[]>;
   deleteRecording: (id: string) => Promise<boolean>;
@@ -114,6 +115,7 @@ const browserAPI: BrowserAPI = {
 
   startRecording: () => ipcRenderer.invoke('browser:start-recording'),
   stopRecording: () => ipcRenderer.invoke('browser:stop-recording'),
+  discardRecording: () => ipcRenderer.invoke('browser:discard-recording'),
   saveRecording: (name: string, description: string, actions: any[]) => 
     ipcRenderer.invoke('browser:save-recording', name, description, actions),
   getAllRecordings: () => ipcRenderer.invoke('browser:get-all-recordings'),
