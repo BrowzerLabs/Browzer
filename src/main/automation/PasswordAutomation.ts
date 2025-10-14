@@ -281,7 +281,7 @@ export class PasswordAutomation {
                   
                   // Function to show autofill
                   const showAutofill = () => {
-                    // console.log('BROWZER_SHOW_AUTOFILL_DROPDOWN:' + JSON.stringify({
+                    console.log('BROWZER_SHOW_AUTOFILL_DROPDOWN:' + JSON.stringify({
                       origin: '${origin}',
                       credentials: credentials
                     }));
@@ -344,11 +344,11 @@ export class PasswordAutomation {
       const forms = await this.findLoginForms();
       
       if (forms.length === 0) {
-        // console.log('[PasswordAutomation] No login forms detected');
+        console.log('[PasswordAutomation] No login forms detected');
         return;
       }
       
-      // console.log(`[PasswordAutomation] Found ${forms.length} login forms`);
+      console.log(`[PasswordAutomation] Found ${forms.length} login forms`);
       
       // Set up monitoring for each form
       for (const form of forms) {
@@ -518,7 +518,7 @@ export class PasswordAutomation {
                     const password = form.querySelector('input[type="password"]')?.value || '';
                     
                     if (username && password) {
-                      // console.log('BROWZER_CREDENTIALS_SUBMITTED:' + JSON.stringify({
+                      console.log('BROWZER_CREDENTIALS_SUBMITTED:' + JSON.stringify({
                         username: username,
                         password: password,
                         origin: '${origin}',
@@ -604,7 +604,7 @@ export class PasswordAutomation {
                   if (document.activeElement === field) {
                     // console.log('[PasswordAutomation] Field already focused, showing autofill immediately');
                     setTimeout(() => {
-                      // console.log('BROWZER_SHOW_AUTOFILL_DROPDOWN:' + JSON.stringify({
+                      console.log('BROWZER_SHOW_AUTOFILL_DROPDOWN:' + JSON.stringify({
                         origin: '${origin}',
                         credentials: credentials
                       }));
@@ -614,7 +614,7 @@ export class PasswordAutomation {
                   // Show autofill on focus (instant)
                   field.addEventListener('focus', function() {
                     // console.log('[PasswordAutomation] Username field focused, showing autofill instantly');
-                    // console.log('BROWZER_SHOW_AUTOFILL_DROPDOWN:' + JSON.stringify({
+                    console.log('BROWZER_SHOW_AUTOFILL_DROPDOWN:' + JSON.stringify({
                       origin: '${origin}',
                       credentials: credentials
                     }));
@@ -623,7 +623,7 @@ export class PasswordAutomation {
                   // Show autofill on click (instant)
                   field.addEventListener('click', function() {
                     // console.log('[PasswordAutomation] Username field clicked, showing autofill instantly');
-                    // console.log('BROWZER_SHOW_AUTOFILL_DROPDOWN:' + JSON.stringify({
+                    console.log('BROWZER_SHOW_AUTOFILL_DROPDOWN:' + JSON.stringify({
                       origin: '${origin}',
                       credentials: credentials
                     }));
@@ -633,7 +633,7 @@ export class PasswordAutomation {
                   field.addEventListener('input', function() {
                     if (this.value.length === 0) {
                       // console.log('[PasswordAutomation] Empty field, showing autofill');
-                      // console.log('BROWZER_SHOW_AUTOFILL_DROPDOWN:' + JSON.stringify({
+                      console.log('BROWZER_SHOW_AUTOFILL_DROPDOWN:' + JSON.stringify({
                         origin: '${origin}',
                         credentials: credentials
                       }));
@@ -840,9 +840,9 @@ export class PasswordAutomation {
                 passwordField.value = '${password.replace(/'/g, "\\'")}';
                 passwordField.dispatchEvent(new Event('input', { bubbles: true }));
                 passwordField.dispatchEvent(new Event('change', { bubbles: true }));
-                // console.log('[PasswordAutomation] ✅ Password filled successfully');
+                console.log('[PasswordAutomation] ✅ Password filled successfully');
               } else {
-                // console.log('[PasswordAutomation] ❌ No password field found');
+                console.log('[PasswordAutomation] ❌ No password field found');
               }
             })();
           `
@@ -939,7 +939,7 @@ export class PasswordAutomation {
             saveBtn.textContent = 'Save';
             saveBtn.style.cssText = 'background: white !important; color: #4285f4 !important; border: none !important; padding: 10px 20px !important; border-radius: 4px !important; cursor: pointer !important; font-weight: bold !important;';
             saveBtn.onclick = function() {
-              // console.log('BROWZER_SAVE_PASSWORD:' + JSON.stringify({
+              console.log('BROWZER_SAVE_PASSWORD:' + JSON.stringify({
                 username: '${username}',
                 password: '${password}',
                 origin: '${origin}'
@@ -952,7 +952,7 @@ export class PasswordAutomation {
             neverBtn.textContent = 'Never';
             neverBtn.style.cssText = 'background: rgba(255,255,255,0.2) !important; color: white !important; border: 1px solid white !important; padding: 10px 20px !important; border-radius: 4px !important; cursor: pointer !important;';
             neverBtn.onclick = function() {
-              // console.log('BROWZER_NEVER_SAVE:' + JSON.stringify({
+              console.log('BROWZER_NEVER_SAVE:' + JSON.stringify({
                 origin: '${origin}'
               }));
               prompt.remove();
@@ -1045,7 +1045,7 @@ export class PasswordAutomation {
                 // console.log('[PasswordAutomation] Credential selected:', cred.username);
                 
                 // Store selected credential for multi-step flows
-                // console.log('BROWZER_CREDENTIAL_SELECTED:' + JSON.stringify({
+                console.log('BROWZER_CREDENTIAL_SELECTED:' + JSON.stringify({
                   credentialId: cred.id,
                   username: cred.username,
                   origin: '${origin}',
@@ -1060,7 +1060,7 @@ export class PasswordAutomation {
                 // Try to fill password on same page
                 const passwordField = document.querySelector('input[type="password"]');
                 if (passwordField) {
-                  // console.log('BROWZER_FILL_PASSWORD:' + JSON.stringify({
+                  console.log('BROWZER_FILL_PASSWORD:' + JSON.stringify({
                     credentialId: cred.id,
                     origin: '${origin}'
                   }));

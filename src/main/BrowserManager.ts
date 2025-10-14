@@ -964,7 +964,7 @@ export class BrowserManager {
       return;
     }
     
-    console.log('[BrowserManager] Auto-filling password for:', tab.selectedCredentialUsername);
+    // console.log('[BrowserManager] Auto-filling password for:', tab.selectedCredentialUsername);
     
     // Inject password fill script with retry logic
     const script = `
