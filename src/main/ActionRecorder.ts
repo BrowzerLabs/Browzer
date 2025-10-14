@@ -17,6 +17,9 @@ export class ActionRecorder {
   private currentTabUrl: string | null = null;
   private currentTabTitle: string | null = null;
   private currentWebContentsId: number | null = null;
+  
+  // Store the script identifier so we can remove it later
+  private injectedScriptId: string | null = null;
 
   private recentNetworkRequests: Array<{
     url: string;
@@ -174,6 +177,28 @@ export class ActionRecorder {
     }
 
     try {
+      // Disable browser-side monitoring script BEFORE detaching debugger
+      if (this.debugger && this.debugger.isAttached() && this.currentWebContentsId) {
+        try {
+          // Disable the current script instance
+          await this.debugger.sendCommand('Runtime.evaluate', {
+            expression: 'window.__browzerRecorderInstalled = false;'
+          });
+          console.log('🔇 Browser-side monitoring script disabled');
+          
+          // Remove the script from future document loads
+          if (this.injectedScriptId) {
+            await this.debugger.sendCommand('Page.removeScriptToEvaluateOnNewDocument', {
+              identifier: this.injectedScriptId
+            });
+            console.log('🗑️ Injected script removed from new documents');
+            this.injectedScriptId = null;
+          }
+        } catch (error) {
+          console.error('Error disabling monitoring script:', error);
+        }
+      }
+
       if (this.debugger && this.debugger.isAttached()) {
         this.debugger.detach();
       }
@@ -191,6 +216,7 @@ export class ActionRecorder {
       this.currentTabUrl = null;
       this.currentTabTitle = null;
       this.currentWebContentsId = null;
+      this.injectedScriptId = null;
       
       return [...this.actions];
     } catch (error) {
@@ -238,9 +264,22 @@ export class ActionRecorder {
   /**
    * Clear recorded actions
    */
-  public clearActions(): void {
+  public async clearActions(): Promise<void> {
     this.actions = [];
     this.pendingActions.clear();
+    
+    // Disable browser-side monitoring script if still attached
+    if (this.currentWebContentsId && this.debugger && this.debugger.isAttached()) {
+      try {
+        await this.debugger.sendCommand('Runtime.evaluate', {
+          expression: 'window.__browzerRecorderInstalled = false;'
+        });
+        console.log('🔇 Browser-side monitoring script disabled');
+      } catch (error) {
+        console.error('Error disabling monitoring script:', error);
+      }
+    }
+    
     console.log('🧹 Actions cleared');
   }
 
@@ -264,6 +303,16 @@ export class ActionRecorder {
             // Ignore errors if page is navigating or closed
           });
           
+          // Remove the script from future document loads
+          if (this.injectedScriptId) {
+            this.debugger.sendCommand('Page.removeScriptToEvaluateOnNewDocument', {
+              identifier: this.injectedScriptId
+            }).catch(() => {
+              // Ignore errors if page is navigating or closed
+            });
+            this.injectedScriptId = null;
+          }
+          
           this.debugger.detach();
         }
       } catch (error) {
@@ -280,6 +329,7 @@ export class ActionRecorder {
     this.currentTabUrl = null;
     this.currentTabTitle = null;
     this.currentWebContentsId = null;
+    this.injectedScriptId = null;
     
     console.log('🗑️ Recording discarded');
   }
@@ -345,10 +395,14 @@ export class ActionRecorder {
     if (!this.debugger) return;
 
     const script = this.generateMonitoringScript();
-    await this.debugger.sendCommand('Page.addScriptToEvaluateOnNewDocument', {
+    
+    // Add script to evaluate on new documents and store the identifier
+    const result = await this.debugger.sendCommand('Page.addScriptToEvaluateOnNewDocument', {
       source: script,
       runImmediately: true
     });
+    this.injectedScriptId = result.identifier;
+    
     await this.debugger.sendCommand('Runtime.evaluate', {
       expression: script,
       includeCommandLineAPI: false
