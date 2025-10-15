@@ -33,6 +33,9 @@ export interface BrowserAPI {
   // Sidebar Management
   setSidebarState: (visible: boolean, widthPercent: number) => Promise<boolean>;
   
+  // Window Management
+  toggleMaximize: () => Promise<void>;
+  
   // Desktop Capturer (for video recording)
   getDesktopSources: () => Promise<Array<{ id: string; name: string; thumbnail: any }>>;
 
@@ -112,6 +115,8 @@ const browserAPI: BrowserAPI = {
 
   setSidebarState: (visible: boolean, widthPercent: number) => 
     ipcRenderer.invoke('browser:set-sidebar-state', visible, widthPercent),
+
+  toggleMaximize: () => ipcRenderer.invoke('window:toggle-maximize'),
 
   startRecording: () => ipcRenderer.invoke('browser:start-recording'),
   stopRecording: () => ipcRenderer.invoke('browser:stop-recording'),

@@ -126,4 +126,16 @@
     margin: 0;
     padding: 0;
   }
+
+  /* Window dragging for tab bar */
+  .tab-bar-draggable {
+    -webkit-app-region: drag;
+  }
+
+  /* Prevent dragging on interactive elements */
+  .tab-bar-draggable button,
+  .tab-bar-draggable .tab-item,
+  .tab-bar-draggable .interactive {
+    -webkit-app-region: no-drag;
+  }
 }

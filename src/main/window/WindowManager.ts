@@ -25,6 +25,7 @@ export class WindowManager {
       trafficLightPosition: { x: 10, y: 10 },
       backgroundColor: '#fff',
       show: false,
+      fullscreenable: false, // Prevent fullscreen mode to keep traffic lights always visible
     });
 
     // Create Agent UI WebContentsView (trusted UI layer)

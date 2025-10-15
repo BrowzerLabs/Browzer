@@ -12,8 +12,15 @@ interface TabBarProps {
 }
 
 export function TabBar({ tabs, activeTabId, onTabClick, onTabClose, onNewTab }: TabBarProps) {
+  const handleDoubleClick = () => {
+    window.browserAPI.toggleMaximize();
+  };
+
   return (
-    <div className="flex items-center h-10 pl-20 pr-2 gap-1">
+    <div 
+      className="flex items-center h-10 pl-20 pr-2 gap-1 tab-bar-draggable"
+      onDoubleClick={handleDoubleClick}
+    >
       {/* Tabs */}
       {tabs.map((tab) => (
         <Tab
@@ -31,6 +38,7 @@ export function TabBar({ tabs, activeTabId, onTabClick, onTabClose, onNewTab }: 
         title="New Tab"
         size='icon-sm'
         variant='outline'
+        className="interactive"
       >
         <Plus className="w-4 h-4" />
       </Button>
@@ -55,7 +63,7 @@ function Tab({ tab, isActive, onClick, onClose }: TabProps) {
     <div
       onClick={onClick}
       className={cn(
-        'flex items-center gap-2 h-8 px-3 rounded-xl min-w-[160px] max-w-[200px] cursor-pointer group',
+        'flex items-center gap-2 h-8 px-3 rounded-xl min-w-[160px] max-w-[200px] cursor-pointer group tab-item',
         'transition-colors',
         isActive
           ? 'bg-slate-800 text-white'
@@ -78,7 +86,7 @@ function Tab({ tab, isActive, onClick, onClose }: TabProps) {
       <button
         onClick={handleClose}
         className={cn(
-          'flex items-center justify-center w-5 h-5 rounded-full hover:bg-[#3a3a3a] transition-colors',
+          'flex items-center justify-center w-5 h-5 rounded-full hover:bg-[#3a3a3a] transition-colors interactive',
           'opacity-0 group-hover:opacity-100',
           isActive && 'opacity-100'
         )}
