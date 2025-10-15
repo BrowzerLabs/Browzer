@@ -10,6 +10,7 @@ import { PasswordManager } from './PasswordManager';
 import { RecordedAction, RecordingSession, HistoryTransition, RecordingTabInfo } from '../shared/types';
 import { INTERNAL_PAGES } from './constants';
 import { stat } from 'fs/promises';
+import { jsonStringifyForJS } from './utils/jsEscape';
 
 // Data that can be sent through IPC (serializable)
 export interface TabInfo {
@@ -983,14 +984,14 @@ export class BrowserManager {
           });
           
           if (visiblePasswordField) {
-            visiblePasswordField.value = '${password.replace(/'/g, "\\'")}';
+            visiblePasswordField.value = ${jsonStringifyForJS(password)};
             visiblePasswordField.dispatchEvent(new Event('input', { bubbles: true }));
             visiblePasswordField.dispatchEvent(new Event('change', { bubbles: true }));
             
             // Show success notification
             const notification = document.createElement('div');
             notification.style.cssText = 'position: fixed; top: 20px; left: 50%; transform: translateX(-50%); background: #4CAF50; color: white; padding: 12px 24px; border-radius: 6px; z-index: 999999; font-family: Arial, sans-serif; font-size: 14px; box-shadow: 0 4px 12px rgba(0,0,0,0.2);';
-            notification.textContent = 'Password auto-filled for ${tab.selectedCredentialUsername}';
+            notification.textContent = 'Password auto-filled for ' + ${jsonStringifyForJS(tab.selectedCredentialUsername || 'user')};
             document.body.appendChild(notification);
             
             setTimeout(() => notification.remove(), 3000);
