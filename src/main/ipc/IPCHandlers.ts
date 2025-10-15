@@ -31,6 +31,7 @@ export class IPCHandlers {
     this.setupNavigationHandlers();
     this.setupSidebarHandlers();
     this.setupRecordingHandlers();
+    this.setupAgentHandlers();
     this.setupSettingsHandlers();
     this.setupUserHandlers();
     this.setupHistoryHandlers();
@@ -147,6 +148,88 @@ export class IPCHandlers {
         console.error('Failed to get video file URL:', error);
         throw error;
       }
+    });
+  }
+
+  /**
+   * Setup agent orchestration handlers
+   */
+  private setupAgentHandlers(): void {
+    // Execute agent task
+    ipcMain.handle('agent:execute-task', async (_, message: string, recordingId?: string, mode?: string) => {
+      const agentOrchestrator = this.browserManager.getAgentOrchestrator();
+      if (!agentOrchestrator) {
+        throw new Error('Agent orchestrator not initialized');
+      }
+
+      const { tabs, activeTabId } = this.browserManager.getAllTabs();
+      if (!activeTabId) {
+        throw new Error('No active tab');
+      }
+
+      // Get recording context if provided
+      let recordingContext;
+      if (recordingId) {
+        const recording = this.browserManager.getAllRecordings().find(r => r.id === recordingId);
+        if (recording) {
+          recordingContext = {
+            id: recording.id,
+            name: recording.name,
+            actions: recording.actions,
+            url: recording.url
+          };
+        }
+      }
+
+      // Execute task
+      const result = await agentOrchestrator.executeTask(message, activeTabId, {
+        mode: (mode as any) || 'autonomous',
+        recordingContext, // Pass recording context to orchestrator
+        streamingCallback: async (event) => {
+          // Forward streaming events to renderer
+          this.windowManager.sendToRenderer('agent:event', event);
+        }
+      });
+
+      return result;
+    });
+
+    // Get agent configuration
+    ipcMain.handle('agent:get-config', async () => {
+      const agentOrchestrator = this.browserManager.getAgentOrchestrator();
+      if (!agentOrchestrator) {
+        throw new Error('Agent orchestrator not initialized');
+      }
+      return agentOrchestrator.getConfig();
+    });
+
+    // Update agent configuration
+    ipcMain.handle('agent:update-config', async (_, config: any) => {
+      const agentOrchestrator = this.browserManager.getAgentOrchestrator();
+      if (!agentOrchestrator) {
+        throw new Error('Agent orchestrator not initialized');
+      }
+      agentOrchestrator.updateConfig(config);
+      return true;
+    });
+
+    // Get global stats
+    ipcMain.handle('agent:get-stats', async () => {
+      const agentOrchestrator = this.browserManager.getAgentOrchestrator();
+      if (!agentOrchestrator) {
+        throw new Error('Agent orchestrator not initialized');
+      }
+      return agentOrchestrator.getGlobalStats();
+    });
+
+    // Cancel execution
+    ipcMain.handle('agent:cancel', async (_, sessionId: string) => {
+      const agentOrchestrator = this.browserManager.getAgentOrchestrator();
+      if (!agentOrchestrator) {
+        throw new Error('Agent orchestrator not initialized');
+      }
+      agentOrchestrator.cancelExecution(sessionId);
+      return true;
     });
   }
 

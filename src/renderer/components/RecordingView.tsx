@@ -135,7 +135,7 @@ export function RecordingView() {
         />
       </TabsContent>
 
-      <TabsContent value="sessions" className="flex-1 m-0 p-0">
+      <TabsContent value="sessions">
         <SessionsListView
           sessions={sessions} 
           onRefresh={loadSessions}

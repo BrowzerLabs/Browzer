@@ -86,6 +86,13 @@ export interface BrowserAPI {
   getMostVisited: (limit?: number) => Promise<HistoryEntry[]>;
   getRecentlyVisited: (limit?: number) => Promise<HistoryEntry[]>;
 
+  // Agent Orchestration
+  executeAgentTask: (message: string, recordingId?: string, mode?: string) => Promise<any>;
+  getAgentConfig: () => Promise<any>;
+  updateAgentConfig: (config: any) => Promise<boolean>;
+  getAgentStats: () => Promise<any>;
+  cancelAgentTask: (sessionId: string) => Promise<boolean>;
+
   // Event listeners
   onTabsUpdated: (callback: (data: { tabs: TabInfo[]; activeTabId: string | null }) => void) => () => void;
   onRecordingAction: (callback: (action: any) => void) => () => void;
@@ -93,6 +100,7 @@ export interface BrowserAPI {
   onRecordingStopped: (callback: (data: { actions: any[]; duration: number; startUrl: string }) => void) => () => void;
   onRecordingSaved: (callback: (session: any) => void) => () => void;
   onRecordingDeleted: (callback: (id: string) => void) => () => void;
+  onAgentEvent: (callback: (event: any) => void) => () => void;
 }
 
 // Expose protected methods that allow the renderer process to use
@@ -164,6 +172,20 @@ const browserAPI: BrowserAPI = {
     const subscription = (_event: Electron.IpcRendererEvent, id: string) => callback(id);
     ipcRenderer.on('recording:deleted', subscription);
     return () => ipcRenderer.removeListener('recording:deleted', subscription);
+  },
+
+  // Agent API
+  executeAgentTask: (message: string, recordingId?: string, mode?: string) =>
+    ipcRenderer.invoke('agent:execute-task', message, recordingId, mode),
+  getAgentConfig: () => ipcRenderer.invoke('agent:get-config'),
+  updateAgentConfig: (config: any) => ipcRenderer.invoke('agent:update-config', config),
+  getAgentStats: () => ipcRenderer.invoke('agent:get-stats'),
+  cancelAgentTask: (sessionId: string) => ipcRenderer.invoke('agent:cancel', sessionId),
+
+  onAgentEvent: (callback) => {
+    const subscription = (_event: Electron.IpcRendererEvent, event: any) => callback(event);
+    ipcRenderer.on('agent:event', subscription);
+    return () => ipcRenderer.removeListener('agent:event', subscription);
   },
 
   // Settings API

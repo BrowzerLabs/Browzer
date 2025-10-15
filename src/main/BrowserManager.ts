@@ -8,6 +8,9 @@ import { HistoryService } from './HistoryService';
 import { RecordedAction, RecordingSession, HistoryTransition, RecordingTabInfo } from '../shared/types';
 import { INTERNAL_PAGES } from './constants';
 import { stat } from 'fs/promises';
+import { AgentOrchestrator } from './agent/AgentOrchestrator';
+import { ToolRegistry } from './tools/ToolRegistry';
+import { BrowserContextProvider } from './context/BrowserContextProvider';
 
 // Data that can be sent through IPC (serializable)
 export interface TabInfo {
@@ -56,6 +59,11 @@ export class BrowserManager {
   private lastActiveTabId: string | null = null;
   private activeVideoRecorder: VideoRecorder | null = null;
 
+  // Agent orchestration
+  private agentOrchestrator: AgentOrchestrator | null = null;
+  private toolRegistry: ToolRegistry | null = null;
+  private contextProvider: BrowserContextProvider | null = null;
+
   constructor(baseWindow: BaseWindow, chromeHeight: number, agentUIView?: WebContentsView) {
     this.baseWindow = baseWindow;
     this.agentUIHeight = chromeHeight;
@@ -67,6 +75,53 @@ export class BrowserManager {
     this.centralRecorder = new ActionRecorder();
     // Create initial tab
     this.createTab('https://www.google.com');
+    
+    // Initialize agent orchestration (will be set up when first tab is created)
+    this.initializeAgentOrchestration();
+  }
+
+  /**
+   * Initialize agent orchestration system
+   */
+  private initializeAgentOrchestration(): void {
+    try {
+      // Wait for first tab to be created, then initialize
+      setTimeout(async () => {
+        const activeTab = this.tabs.get(this.activeTabId || '');
+        if (activeTab) {
+          // Initialize tool registry
+          this.toolRegistry = new ToolRegistry(activeTab.view);
+          
+          // Initialize context provider
+          this.contextProvider = new BrowserContextProvider(activeTab.view);
+          
+          // Start monitoring browser context (attach CDP debugger)
+          try {
+            await this.contextProvider.startMonitoring();
+            console.log('✅ Browser context monitoring started');
+          } catch (monitorError) {
+            console.warn('⚠️ Failed to start context monitoring, will attach on-demand:', monitorError);
+          }
+          
+          // Initialize agent orchestrator
+          this.agentOrchestrator = new AgentOrchestrator(
+            this.toolRegistry,
+            this.contextProvider,
+            {
+              model: 'gemini-2.5-flash', // Default model (fast and cheap)
+              mode: 'autonomous',
+              maxExecutionSteps: 20,
+              enableReflection: true,
+              streamingEnabled: true
+            }
+          );
+          
+          console.log('✅ Agent orchestration initialized');
+        }
+      }, 1000);
+    } catch (error) {
+      console.error('Failed to initialize agent orchestration:', error);
+    }
   }
 
   /**
@@ -868,6 +923,13 @@ export class BrowserManager {
    */
   public getHistoryService(): HistoryService {
     return this.historyService;
+  }
+
+  /**
+   * Get agent orchestrator instance
+   */
+  public getAgentOrchestrator(): AgentOrchestrator | null {
+    return this.agentOrchestrator;
   }
 
   /**

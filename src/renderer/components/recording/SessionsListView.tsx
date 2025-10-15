@@ -1,9 +1,9 @@
 import { RefreshCw, Trash2, Video } from 'lucide-react';
-import { Badge } from '../../ui/badge';
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '../../ui/card';
-import { RecordingSession } from '../../../shared/types';
-import { Button } from '../../ui/button';
-import { formatDate, formatDuration } from '../../lib/utils';
+import { Badge } from '@/renderer/ui/badge';
+import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/renderer/ui/card';
+import { RecordingSession } from '@/shared/types';
+import { Button } from '@/renderer/ui/button';
+import { formatDate, formatDuration } from '@/renderer/lib/utils';
 
 interface SessionsListViewProps {
   sessions: RecordingSession[];
@@ -16,7 +16,7 @@ export function SessionsListView({ sessions, onRefresh, onDelete }: SessionsList
   return (
     <div className="h-full flex flex-col">
       {/* Header with refresh */}
-      <div className="flex items-center justify-between px-4 py-3">
+      <div className="flex items-center justify-between px-4 py-3 flex-shrink-0">
         <h3 className="text-sm font-medium text-black dark:text-white">Saved Recordings</h3>
         <Button
           onClick={onRefresh}
@@ -28,8 +28,8 @@ export function SessionsListView({ sessions, onRefresh, onDelete }: SessionsList
         </Button>
       </div>
 
-      {/* Sessions List */}
-      <div className="flex-1 overflow-y-auto p-3">
+      {/* Sessions List - Single scrollable container */}
+      <div className="flex-1 overflow-y-auto px-4 pb-4">
         {sessions.length === 0 ? (
           <div className="text-center py-12">
             <Video className="w-12 h-12 mx-auto text-gray-600 mb-3" />
@@ -39,13 +39,13 @@ export function SessionsListView({ sessions, onRefresh, onDelete }: SessionsList
             </p>
           </div>
         ) : (
-          <div className="space-y-2 p-2 overflow-y-auto">
+          <div className="space-y-3">
             {sessions.map((session) => (
               <Card key={session.id}>
-                <CardHeader className="pb-3">
+                <CardHeader>
                   <div className="flex items-start justify-between">
                     <div className="flex-1 min-w-0">
-                      <CardTitle className="text-sm  truncate">
+                      <CardTitle className="text-sm truncate">
                         {session.name}
                       </CardTitle>
                       {session.description && (
@@ -64,7 +64,7 @@ export function SessionsListView({ sessions, onRefresh, onDelete }: SessionsList
                     </Button>
                   </div>
                 </CardHeader>
-                <CardContent className="pt-0">
+                <CardContent>
                   <div className="flex items-center gap-2 text-xs text-gray-500">
                     <Badge className="text-xs">
                       {session.actionCount} actions

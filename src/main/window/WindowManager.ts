@@ -97,6 +97,12 @@ export class WindowManager {
     return this.CHROME_HEIGHT;
   }
 
+  public sendToRenderer(channel: string, ...args: any[]): void {
+    if (this.agentUIView && !this.agentUIView.webContents.isDestroyed()) {
+      this.agentUIView.webContents.send(channel, ...args);
+    }
+  }
+
   public destroy(): void {
     this.baseWindow?.close();
   }

@@ -1,19 +1,19 @@
 import { useState, useEffect, KeyboardEvent } from 'react';
 import { ArrowLeft, ArrowRight, RotateCw, X, Lock, Globe, Circle, Square, Settings, Clock, User, MoreVertical, Video, ChevronRight, ChevronLeft, Loader2 } from 'lucide-react';
 import type { TabInfo } from '../../preload';
-import { cn } from '../lib/utils';
-import { useSidebarStore } from '../store/useSidebarStore';
-import { useRecording } from '../hooks/useRecording';
-import { Input } from '../ui/input';
-import ThemeToggle from '../ui/theme-toggle';
-import { Button } from '../ui/button';
+import { cn } from '@/renderer/lib/utils';
+import { useSidebarStore } from '@/renderer/store/useSidebarStore';
+import { useRecording } from '@/renderer/hooks/useRecording';
+import { Input } from '@/renderer/ui/input';
+import ThemeToggle from '@/renderer/ui/theme-toggle';
+import { Button } from '@/renderer/ui/button';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from '../ui/dropdown-menu';
+} from '@/renderer/ui/dropdown-menu';
 
 interface NavigationBarProps {
   activeTab: TabInfo | null;
