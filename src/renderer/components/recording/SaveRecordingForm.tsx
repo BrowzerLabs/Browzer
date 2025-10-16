@@ -4,6 +4,7 @@ import { Textarea } from '../../ui/textarea';
 import { Button } from '../../ui/button';
 import { Label } from '../../ui/label';
 import { toast } from 'sonner';
+import { WorkflowVariables } from './WorkflowVariables';
 
 interface SaveRecordingFormProps {
   actionCount: number;
@@ -53,68 +54,73 @@ export function SaveRecordingForm({ actionCount, duration, onSave, onDiscard }: 
   };
 
   return (
-    <div className="p-6 max-w-2xl mx-auto">
-      <div className="mb-6">
-        <h3 className="text-lg font-semibold mb-2">Save Recording</h3>
-        <p className="text-sm">
-          Recorded {actionCount} actions in {formatDuration(duration)}
-        </p>
+    <div className="flex flex-col h-full">
+      <div className="p-6">
+        <div className="mb-6">
+          <h3 className="text-lg font-semibold mb-2">Save Recording</h3>
+          <p className="text-sm">
+            Recorded {actionCount} actions in {formatDuration(duration)}
+          </p>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          {/* Name Input */}
+          <div>
+            <Label htmlFor="recording-name" className="block text-sm font-medium mb-2">
+              Recording Name <span className="text-red-500">*</span>
+            </Label>
+            <Input
+              id="recording-name"
+              type="text"
+              value={name}
+              onChange={(e) => {
+                setName(e.target.value);
+                setError('');
+              }}
+              placeholder="e.g., Login Flow, Checkout Process"
+              autoFocus
+            />
+            {error && (
+              <p className="text-xs text-red-500 mt-1">{error}</p>
+            )}
+          </div>
+
+          {/* Description Input */}
+          <div>
+            <Label htmlFor="recording-description" className="block text-sm font-medium mb-2">
+              Description (Optional)
+            </Label>
+            <Textarea
+              id="recording-description"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="Add notes about this recording..."
+              rows={4}
+            />
+          </div>
+
+          {/* Workflow Variables */}
+          <WorkflowVariables className="pt-2" />
+
+          {/* Buttons */}
+          <div className="flex gap-3 justify-between pt-4">
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={handleDiscardClick}
+              className='w-1/2'
+            >
+              Discard
+            </Button>
+            <Button
+              type="submit"
+              className='w-1/2'
+            >
+              Save Recording
+            </Button>
+          </div>
+        </form>
       </div>
-
-      <form onSubmit={handleSubmit} className="space-y-4">
-        {/* Name Input */}
-        <div>
-          <Label htmlFor="recording-name" className="block text-sm font-medium mb-2">
-            Recording Name <span className="text-red-500">*</span>
-          </Label>
-          <Input
-            id="recording-name"
-            type="text"
-            value={name}
-            onChange={(e) => {
-              setName(e.target.value);
-              setError('');
-            }}
-            placeholder="e.g., Login Flow, Checkout Process"
-            autoFocus
-          />
-          {error && (
-            <p className="text-xs text-red-500 mt-1">{error}</p>
-          )}
-        </div>
-
-        {/* Description Input */}
-        <div>
-          <Label htmlFor="recording-description" className="block text-sm font-medium mb-2">
-            Description (Optional)
-          </Label>
-          <Textarea
-            id="recording-description"
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            placeholder="Add notes about this recording..."
-            rows={4}
-          />
-        </div>
-
-        {/* Buttons */}
-        <div className="flex gap-3 justify-between">
-          <Button
-            type="button"
-            variant="ghost"
-            onClick={handleDiscardClick}
-            className='w-1/2'
-          >
-            Discard
-          </Button>
-          <Button
-            type="submit"
-            className='w-1/2'
-          >
-            Save Recording
-          </Button>
-        </div>
-      </form>
     </div>
   );
 }

@@ -49,6 +49,12 @@ export interface BrowserAPI {
   isRecording: () => Promise<boolean>;
   getRecordedActions: () => Promise<any[]>;
   
+  // Variable Management
+  getCurrentRecordingVariables: () => Promise<any[]>;
+  updateCurrentRecordingVariables: (variables: any[]) => Promise<boolean>;
+  getRecordingVariables: (recordingId: string) => Promise<any[]>;
+  updateRecordingVariables: (recordingId: string, variables: any[]) => Promise<boolean>;
+  
   // Video File Operations
   openVideoFile: (videoPath: string) => Promise<void>;
   getVideoFileUrl: (videoPath: string) => Promise<string>;
@@ -135,6 +141,14 @@ const browserAPI: BrowserAPI = {
   deleteRecording: (id: string) => ipcRenderer.invoke('browser:delete-recording', id),
   isRecording: () => ipcRenderer.invoke('browser:is-recording'),
   getRecordedActions: () => ipcRenderer.invoke('browser:get-recorded-actions'),
+  
+  // Variable Management
+  getCurrentRecordingVariables: () => ipcRenderer.invoke('browser:get-current-recording-variables'),
+  updateCurrentRecordingVariables: (variables: any[]) => 
+    ipcRenderer.invoke('browser:update-current-recording-variables', variables),
+  getRecordingVariables: (recordingId: string) => ipcRenderer.invoke('browser:get-recording-variables', recordingId),
+  updateRecordingVariables: (recordingId: string, variables: any[]) => 
+    ipcRenderer.invoke('browser:update-recording-variables', recordingId, variables),
 
   onTabsUpdated: (callback) => {
     const subscription = (_event: Electron.IpcRendererEvent, data: { tabs: TabInfo[]; activeTabId: string | null }) => callback(data);

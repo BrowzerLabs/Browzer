@@ -48,6 +48,29 @@ export function RecordingCard({ recording, onPlay, onDelete, onOpenVideo }: Reco
             <span className="truncate">{recording.url}</span>
           </div>
         )}
+        {/* Variables */}
+        {recording.variables && recording.variables.length > 0 && (
+          <div className="mt-2">
+            <div className="text-xs font-semibold mb-1 text-muted-foreground">Variables</div>
+            <div className="space-y-2">
+              {recording.variables.map((variable) => (
+                <div key={variable.id} className="rounded bg-muted/40 px-3 py-2">
+                  <div className="flex items-center gap-2 mb-1">
+                    <Badge variant="outline" className="text-xs px-2 py-0.5">
+                      {variable.type}
+                    </Badge>
+                    <span className="text-xs font-medium truncate">
+                      {variable.name}
+                    </span>
+                  </div>
+                  <div className="text-xs font-mono bg-muted/50 rounded px-2 py-1 truncate">
+                    {'••••••••'}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Stats */}
         <div className="flex items-center gap-4 text-sm">

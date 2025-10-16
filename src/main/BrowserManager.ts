@@ -1,6 +1,6 @@
 import { BaseWindow, WebContentsView, Menu } from 'electron';
 import path from 'node:path';
-import { ActionRecorder, VideoRecorder, RecordingStore } from '@/main/recording';
+import { ActionRecorder, VideoRecorder, RecordingStore, VariableExtractor } from '@/main/recording';
 import { HistoryService } from '@/main/history/HistoryService';
 import { PasswordManager } from '@/main/password/PasswordManager';
 import { RecordedAction, RecordingSession, HistoryTransition, RecordingTabInfo, TabInfo } from '@/shared/types';
@@ -43,10 +43,12 @@ export class BrowserManager {
   private recordingStartUrl = '';
   private currentRecordingId: string | null = null;
   private currentSidebarWidth = 0;
+  private currentRecordingVariables: import('@/shared/types').WorkflowVariable[] | null = null;
   
 
    // Centralized recorder for multi-tab recording
   private centralRecorder: ActionRecorder;
+  private variableExtractor: VariableExtractor;
   private recordingTabs: Map<string, RecordingTabInfo> = new Map();
   private lastActiveTabId: string | null = null;
   private activeVideoRecorder: VideoRecorder | null = null;
@@ -61,6 +63,7 @@ export class BrowserManager {
     
     // Initialize centralized recorder (without view initially)
     this.centralRecorder = new ActionRecorder();
+    this.variableExtractor = new VariableExtractor();
     // Create initial tab
     this.createTab('https://www.google.com');
   }
@@ -350,6 +353,7 @@ export class BrowserManager {
       this.isRecording = true;
       this.recordingStartTime = Date.now();
       this.recordingStartUrl = tab.info.url;
+      this.currentRecordingVariables = null; // Reset variables for new recording
       
       console.log('🎬 Recording started (actions + video) on tab:', this.activeTabId);
       
@@ -397,6 +401,19 @@ export class BrowserManager {
     const duration = Date.now() - this.recordingStartTime;
     console.log('⏹️ Recording stopped. Duration:', duration, 'ms, Actions:', actions.length);
 
+    // Extract and preview workflow variables
+    const variables = this.variableExtractor.extractVariables(actions);
+    console.log(`🔧 Extracted ${variables.length} workflow variables`);
+    if (variables.length > 0) {
+      console.log('Variables found:');
+      variables.forEach(v => {
+        console.log(`  - ${v.name} (${v.type}): "${v.defaultValue}"`);
+      });
+    } else {
+      console.log('No variables detected. Action types in recording:', 
+        [...new Set(actions.map(a => a.type))].join(', '));
+    }
+
     const tabSwitchCount = this.countTabSwitchActions(actions);
     
     // Notify renderer that recording stopped (with actions for preview)
@@ -438,6 +455,7 @@ export class BrowserManager {
       this.recordingStartTime = 0;
       this.recordingStartUrl = null;
       this.currentRecordingId = null;
+      this.currentRecordingVariables = null;
       this.recordingTabs.clear();
       
       console.log('🗑️ Recording discarded completely');
@@ -485,6 +503,9 @@ export class BrowserManager {
     // Get snapshot statistics
     const snapshotStats = await this.centralRecorder.getSnapshotStats();
     
+    // Extract workflow variables (use current variables if modified, otherwise extract fresh)
+    const variables = this.currentRecordingVariables || this.variableExtractor.extractVariables(actions);
+    
     const tabSwitchCount = this.countTabSwitchActions(actions);
     const firstTab = this.recordingTabs.values().next().value;
     
@@ -512,7 +533,10 @@ export class BrowserManager {
       // Snapshot metadata
       snapshotCount: snapshotStats.count,
       snapshotsDirectory: snapshotStats.directory,
-      totalSnapshotSize: snapshotStats.totalSize
+      totalSnapshotSize: snapshotStats.totalSize,
+      
+      // Workflow variables
+      variables
     };
 
     this.recordingStore.saveRecording(session);
@@ -532,6 +556,7 @@ export class BrowserManager {
     
     // Reset recording ID
     this.currentRecordingId = null;
+    this.currentRecordingVariables = null;
     this.recordingTabs.clear();
     this.lastActiveTabId = null;
     
@@ -570,6 +595,48 @@ export class BrowserManager {
    */
   public getRecordedActions(): RecordedAction[] {
     return this.centralRecorder.getActions();
+  }
+
+  /**
+   * Extract variables from current recording actions
+   */
+  public extractVariablesFromCurrentRecording(): import('@/shared/types').WorkflowVariable[] {
+    const actions = this.getRecordedActions();
+    return this.variableExtractor.extractVariables(actions);
+  }
+
+  /**
+   * Update variables for the current recording session
+   */
+  public updateCurrentRecordingVariables(variables: import('@/shared/types').WorkflowVariable[]): void {
+    // Store the updated variables in the current recording session
+    // Allow updates even when recording is stopped (e.g., during save dialog)
+    this.currentRecordingVariables = variables;
+  }
+
+  /**
+   * Get current recording variables (either stored or freshly extracted)
+   */
+  public getCurrentRecordingVariables(): import('@/shared/types').WorkflowVariable[] {
+    if (this.currentRecordingVariables) {
+      return this.currentRecordingVariables;
+    }
+    return this.extractVariablesFromCurrentRecording();
+  }
+
+  /**
+   * Get variables for a saved recording
+   */
+  public getRecordingVariables(recordingId: string): import('@/shared/types').WorkflowVariable[] | null {
+    const recording = this.recordingStore.getRecording(recordingId);
+    return recording?.variables || null;
+  }
+
+  /**
+   * Update variables for a saved recording
+   */
+  public updateRecordingVariables(recordingId: string, variables: import('@/shared/types').WorkflowVariable[]): boolean {
+    return this.recordingStore.updateRecording(recordingId, { variables });
   }
 
   /**

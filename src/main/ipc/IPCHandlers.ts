@@ -138,6 +138,27 @@ export class IPCHandlers {
     ipcMain.handle('browser:get-recorded-actions', async () => {
       return this.browserManager.getRecordedActions();
     });
+
+    // Get variables from current recording
+    ipcMain.handle('browser:get-current-recording-variables', async () => {
+      return this.browserManager.getCurrentRecordingVariables();
+    });
+
+    // Update variables for current recording  
+    ipcMain.handle('browser:update-current-recording-variables', async (_, variables: any[]) => {
+      this.browserManager.updateCurrentRecordingVariables(variables);
+      return true;
+    });
+
+    // Get variables for a saved recording
+    ipcMain.handle('browser:get-recording-variables', async (_, recordingId: string) => {
+      return this.browserManager.getRecordingVariables(recordingId);
+    });
+
+    // Update variables for a saved recording
+    ipcMain.handle('browser:update-recording-variables', async (_, recordingId: string, variables: any[]) => {
+      return this.browserManager.updateRecordingVariables(recordingId, variables);
+    });
     
     // Video file operations
     ipcMain.handle('video:open-file', async (_, videoPath: string) => {

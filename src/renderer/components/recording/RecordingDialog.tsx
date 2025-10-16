@@ -5,6 +5,8 @@ import { Badge } from '@/renderer/ui/badge';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/renderer/ui/dialog';
 import { formatDate, formatDuration, formatFileSize } from '@/renderer/lib/utils';
 import { SnapshotGallery } from './SnapshotGallery';
+import { WorkflowVariables } from './WorkflowVariables';
+import React, { useState } from 'react';
 
 interface RecordingDialogProps {
   recording: RecordingSession | null;
@@ -98,6 +100,14 @@ export function RecordingDialog({
                   )}
                 </div>
               </div>
+
+              {/* Variables */}
+              {recording.variables && recording.variables.length > 0 && (
+                <div>
+                  <h4 className="text-sm font-semibold mb-2">Workflow Variables</h4>
+                  <WorkflowVariables variables={recording.variables} editable={true} recordingId={recording.id} />
+                </div>
+              )}
             </div>
 
             {/* Right Column - Actions List */}

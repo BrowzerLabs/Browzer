@@ -192,6 +192,33 @@ export interface RecordingTabInfo {
   actionCount: number; // Number of actions recorded in this tab
 }
 
+/**
+ * Workflow variable extracted from recorded actions
+ */
+export interface WorkflowVariable {
+  id: string; // Unique identifier
+  actionId: string; // ID of the action this variable comes from
+  actionIndex: number; // Index of the action in the actions array
+  name: string; // Variable name (e.g., "email", "password", "search_query")
+  type: 'input' | 'select' | 'checkbox' | 'radio' | 'file'; // Type of input
+  defaultValue: any; // Default value to use if user doesn't customize
+  currentValue?: any; // Current value (same as default initially)
+  
+  // Element identification for UI display
+  elementName?: string; // name attribute
+  elementId?: string; // id attribute  
+  placeholder?: string; // placeholder text
+  label?: string; // associated label text
+  
+  // Metadata
+  isRequired?: boolean; // Whether this variable is required for the workflow
+  description?: string; // Human-readable description of what this variable does
+  
+  // UI state
+  isUserEdited?: boolean; // Whether user has manually edited this variable
+  isRemoved?: boolean; // Whether user has marked this variable for removal
+}
+
 export interface RecordingSession {
   id: string;
   name: string;
@@ -217,4 +244,7 @@ export interface RecordingSession {
   snapshotCount?: number; // Number of snapshots captured
   snapshotsDirectory?: string; // Directory containing all snapshots for this session
   totalSnapshotSize?: number; // Total size of all snapshots in bytes
+  
+  // Workflow variables
+  variables?: WorkflowVariable[]; // Extracted variables that can be customized
 }

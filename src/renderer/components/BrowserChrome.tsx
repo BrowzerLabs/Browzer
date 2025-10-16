@@ -72,7 +72,7 @@ export function BrowserChrome() {
         
         {/* Sidebar - Positioned on the right */}
         {isSidebarVisible && (
-          <div className="absolute top-0 right-0 bottom-0 w-[30%] min-w-[300px] max-w-[600px] pointer-events-auto">
+          <div className="absolute top-0 right-0 bottom-0 w-[30%] min-w-[300px] max-w-[600px] pointer-events-auto h-full overflow-y-auto">
             <Sidebar />
           </div>
         )}
