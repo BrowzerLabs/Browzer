@@ -1,24 +1,13 @@
 import { BaseWindow, WebContentsView, Menu } from 'electron';
 import path from 'node:path';
-import { ActionRecorder } from './ActionRecorder';
-import { VideoRecorder } from './VideoRecorder';
-import { RecordingStore } from './RecordingStore';
-import { BrowserAutomation } from './automation/BrowserAutomation';
-import { HistoryService } from './HistoryService';
-import { RecordedAction, RecordingSession, HistoryTransition, RecordingTabInfo } from '../shared/types';
-import { INTERNAL_PAGES } from './constants';
+import { ActionRecorder, VideoRecorder, RecordingStore } from '@/main/recording';
+import { HistoryService } from '@/main/history/HistoryService';
+import { PasswordManager } from '@/main/password/PasswordManager';
+import { RecordedAction, RecordingSession, HistoryTransition, RecordingTabInfo, TabInfo } from '@/shared/types';
+import { INTERNAL_PAGES } from '@/main/constants';
 import { stat } from 'fs/promises';
-
-// Data that can be sent through IPC (serializable)
-export interface TabInfo {
-  id: string;
-  title: string;
-  url: string;
-  favicon?: string;
-  isLoading: boolean;
-  canGoBack: boolean;
-  canGoForward: boolean;
-}
+import { PasswordUtil } from '@/main/utils/PasswordUtil';
+import { BrowserAutomation, PasswordAutomation } from './automation';
 
 // Internal tab structure (includes WebContentsView)
 interface Tab {
@@ -27,6 +16,10 @@ interface Tab {
   info: TabInfo;
   videoRecorder?: VideoRecorder;
   automation?: BrowserAutomation;
+  passwordAutomation?: PasswordAutomation;
+  // Track selected credential for multi-step flows
+  selectedCredentialId?: string;
+  selectedCredentialUsername?: string;
 }
 
 /**
@@ -45,10 +38,12 @@ export class BrowserManager {
   private agentUIView?: WebContentsView;
   private recordingStore: RecordingStore;
   private historyService: HistoryService;
+  private passwordManager: PasswordManager;
   private recordingStartTime = 0;
   private recordingStartUrl = '';
   private currentRecordingId: string | null = null;
   private currentSidebarWidth = 0;
+  
 
    // Centralized recorder for multi-tab recording
   private centralRecorder: ActionRecorder;
@@ -62,6 +57,7 @@ export class BrowserManager {
     this.agentUIView = agentUIView;
     this.recordingStore = new RecordingStore();
     this.historyService = new HistoryService();
+    this.passwordManager = new PasswordManager();
     
     // Initialize centralized recorder (without view initially)
     this.centralRecorder = new ActionRecorder();
@@ -117,6 +113,13 @@ export class BrowserManager {
       info: tabInfo,
       videoRecorder: new VideoRecorder(view),
       automation: new BrowserAutomation(view),
+      passwordAutomation: new PasswordAutomation(
+        view, 
+        this.passwordManager, 
+        tabId,
+        (tabId: string, credentialId: string, username: string) => this.handleCredentialSelected(tabId, credentialId, username),
+        (tabId: string) => this.handleAutoFillPassword(tabId)
+      ),
     };
 
     // Store tab
@@ -150,6 +153,13 @@ export class BrowserManager {
 
     // Remove view from window
     this.baseWindow.contentView.removeChildView(tab.view);
+
+    // Clean up password automation
+    if (tab.passwordAutomation) {
+      tab.passwordAutomation.stop().catch(err => 
+        console.error('[BrowserManager] Error stopping password automation:', err)
+      );
+    }
 
     // Clean up
     tab.view.webContents.close();
@@ -691,7 +701,7 @@ export class BrowserManager {
       this.notifyTabsChanged();
     });
 
-    webContents.on('did-stop-loading', () => {
+    webContents.on('did-stop-loading', async () => {
       info.isLoading = false;
       info.canGoBack = webContents.navigationHistory.canGoBack();
       info.canGoForward = webContents.navigationHistory.canGoForward();
@@ -703,6 +713,15 @@ export class BrowserManager {
           HistoryTransition.LINK,
           info.favicon
         ).catch(err => console.error('Failed to add history entry:', err));
+      }
+      
+      // Start CDP-based password automation
+      if (tab.passwordAutomation && !this.isInternalPage(info.url)) {
+        try {
+          await tab.passwordAutomation.start();
+        } catch (error) {
+          console.error('[BrowserManager] Failed to start password automation:', error);
+        }
       }
       
       this.notifyTabsChanged();
@@ -778,7 +797,7 @@ export class BrowserManager {
         if (webContents.isDevToolsOpened()) {
           webContents.closeDevTools();
         } else {
-          webContents.openDevTools({ mode: 'right' });
+          webContents.openDevTools({ mode: 'right', activate: true });
         }
       }
       // Cmd/Ctrl + Shift + C to open DevTools in inspect mode
@@ -893,6 +912,15 @@ export class BrowserManager {
   }
 
   /**
+   * Check if URL is an internal page
+   */
+  private isInternalPage(url: string): boolean {
+    return url.startsWith('browzer://') || 
+           url.includes('index.html#/') ||
+           INTERNAL_PAGES.some(page => url.includes(`#/${page.path}`));
+  }
+
+  /**
    * Get automation instance for active tab
    */
   public getActiveAutomation(): BrowserAutomation | null {
@@ -908,6 +936,13 @@ export class BrowserManager {
   }
 
   /**
+   * Get password manager instance
+   */
+  public getPasswordManager(): PasswordManager {
+    return this.passwordManager;
+  }
+
+  /**
    * Notify renderer about tab changes
    */
   private notifyTabsChanged(): void {
@@ -918,5 +953,62 @@ export class BrowserManager {
         view.webContents.send('browser:tabs-updated', this.getAllTabs());
       }
     });
+  }
+
+  /**
+   * Get tab ID for a given webContents
+   */
+  private getTabIdForWebContents(webContents: any): string | null {
+    for (const [tabId, tab] of this.tabs) {
+      if (tab.view.webContents === webContents) {
+        return tabId;
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Handle credential selection for multi-step flows
+   */
+  private handleCredentialSelected(tabId: string, credentialId: string, username: string): void {
+    const tab = this.tabs.get(tabId);
+    if (tab) {
+      tab.selectedCredentialId = credentialId;
+      tab.selectedCredentialUsername = username;
+      // console.log('[BrowserManager] Stored selected credential for tab:', tabId, 'username:', username);
+    }
+  }
+
+  /**
+   * Handle auto-fill password request
+   */
+  private async handleAutoFillPassword(tabId: string): Promise<void> {
+    const tab = this.tabs.get(tabId);
+    if (!tab || !tab.selectedCredentialId) {
+      return;
+    }
+    
+    const password = this.passwordManager.getPassword(tab.selectedCredentialId);
+    if (!password) {
+      return;
+    }
+    
+    console.log('[BrowserManager] Auto-filling password for:', tab.selectedCredentialUsername);
+    
+    try {
+      // Use PasswordUtil for the actual password filling logic
+      await PasswordUtil.fillPassword(
+        tab.view,
+        password,
+        tab.selectedCredentialUsername
+      );
+      
+      // Clear selected credential after use
+      tab.selectedCredentialId = undefined;
+      tab.selectedCredentialUsername = undefined;
+      
+    } catch (error) {
+      console.error('[BrowserManager] Error auto-filling password:', error);
+    }
   }
 }

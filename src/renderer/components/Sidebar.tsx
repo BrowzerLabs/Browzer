@@ -1,8 +1,8 @@
 import { useEffect } from 'react';
 import { Bot, Video } from 'lucide-react';
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '../ui/tabs';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/renderer/ui/tabs';
 import { RecordingView } from './RecordingView';
-import { useSidebarStore } from '../store/useSidebarStore';
+import { useSidebarStore } from '@/renderer/store/useSidebarStore';
 
 /**
  * Sidebar - Agent UI with tabbed interface

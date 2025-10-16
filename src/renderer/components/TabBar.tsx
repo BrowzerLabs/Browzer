@@ -1,7 +1,7 @@
 import { X, Plus, Loader2 } from 'lucide-react';
-import type { TabInfo } from '../../preload';
-import { cn } from '../lib/utils';
-import { Button } from '../ui/button';
+import type { TabInfo } from '@/shared/types';
+import { cn } from '@/renderer/lib/utils';
+import { Button } from '@/renderer/ui/button';
 
 interface TabBarProps {
   tabs: TabInfo[];

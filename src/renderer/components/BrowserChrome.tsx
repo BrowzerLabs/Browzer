@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
-import { useBrowserAPI } from '../hooks/useBrowserAPI';
-import { useSidebarStore } from '../store/useSidebarStore';
+import { useBrowserAPI } from '@/renderer/hooks/useBrowserAPI';
+import { useSidebarStore } from '@/renderer/store/useSidebarStore';
 import { TabBar } from './TabBar';
 import { NavigationBar } from './NavigationBar';
 import { Sidebar } from './Sidebar';

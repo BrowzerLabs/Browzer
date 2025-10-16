@@ -1,7 +1,7 @@
-import { BrowserManager } from './BrowserManager';
-import { WindowManager } from './window/WindowManager';
-import { LayoutManager } from './window/LayoutManager';
-import { IPCHandlers } from './ipc/IPCHandlers';
+import { BrowserManager } from '@/main/BrowserManager';
+import { WindowManager } from '@/main/window/WindowManager';
+import { LayoutManager } from '@/main/window/LayoutManager';
+import { IPCHandlers } from '@/main/ipc/IPCHandlers';
 
 export class BrowserWindow {
   private windowManager: WindowManager;

@@ -1,7 +1,7 @@
 import Store from 'electron-store';
 import { randomUUID } from 'crypto';
 import { app } from 'electron';
-import { User, Session, SubscriptionStatus, SubscriptionPlan, UserPreferences, Subscription } from '../shared/types';
+import { User, Session, SubscriptionStatus, SubscriptionPlan, UserPreferences, Subscription } from '@/shared/types';
 
 
 /**

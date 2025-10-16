@@ -1,7 +1,7 @@
 import { WebContentsView, app } from 'electron';
 import { mkdir, writeFile, stat } from 'fs/promises';
 import path from 'path';
-import { RecordedAction } from '../shared/types';
+import { RecordedAction } from '@/shared/types';
 
 /**
  * SnapshotManager - Intelligent screenshot capture for visual context

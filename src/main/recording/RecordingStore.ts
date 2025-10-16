@@ -1,5 +1,5 @@
 import Store from 'electron-store';
-import { RecordingSession } from '../shared/types';
+import { RecordingSession } from '@/shared/types';
 import { unlink } from 'fs/promises';
 import { existsSync } from 'fs';
 

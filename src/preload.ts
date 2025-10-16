@@ -1,8 +1,8 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { contextBridge, ipcRenderer, desktopCapturer } from 'electron';
-import type { TabInfo } from './main/BrowserManager';
-import type { AppSettings } from './main/SettingsStore';
-import { User, UserPreferences, HistoryEntry, HistoryQuery, HistoryStats } from './shared/types';
+import type { TabInfo } from '@/shared/types';
+import type { AppSettings } from '@/main/settings/SettingsStore';
+import { User, UserPreferences, HistoryEntry, HistoryQuery, HistoryStats } from '@/shared/types';
 
 /**
  * Preload script for Agent UI (Browser Chrome)
@@ -52,6 +52,14 @@ export interface BrowserAPI {
   // Video File Operations
   openVideoFile: (videoPath: string) => Promise<void>;
   getVideoFileUrl: (videoPath: string) => Promise<string>;
+
+  // Password Management
+  savePassword: (origin: string, username: string, password: string) => Promise<boolean>;
+  getPasswordsForOrigin: (origin: string) => Promise<any[]>;
+  getPassword: (credentialId: string) => Promise<string | null>;
+  deletePassword: (credentialId: string) => Promise<boolean>;
+  neverSaveForSite: (origin: string) => Promise<boolean>;
+  isSiteBlacklisted: (origin: string) => Promise<boolean>;
 
   // Settings Management
   getAllSettings: () => Promise<AppSettings>;
@@ -223,6 +231,20 @@ const browserAPI: BrowserAPI = {
   // Video File Operations
   openVideoFile: (videoPath: string) => ipcRenderer.invoke('video:open-file', videoPath),
   getVideoFileUrl: (videoPath: string) => ipcRenderer.invoke('video:get-file-url', videoPath),
+
+  // Password Management API
+  savePassword: (origin: string, username: string, password: string) => 
+    ipcRenderer.invoke('password:save', origin, username, password),
+  getPasswordsForOrigin: (origin: string) => 
+    ipcRenderer.invoke('password:get-for-origin', origin),
+  getPassword: (credentialId: string) => 
+    ipcRenderer.invoke('password:get-password', credentialId),
+  deletePassword: (credentialId: string) => 
+    ipcRenderer.invoke('password:delete', credentialId),
+  neverSaveForSite: (origin: string) => 
+    ipcRenderer.invoke('password:add-to-blacklist', origin),
+  isSiteBlacklisted: (origin: string) => 
+    ipcRenderer.invoke('password:is-blacklisted', origin),
 };
 
 contextBridge.exposeInMainWorld('browserAPI', browserAPI);

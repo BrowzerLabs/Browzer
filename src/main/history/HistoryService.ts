@@ -1,6 +1,6 @@
 import Store from 'electron-store';
 import { randomUUID } from 'crypto';
-import { HistoryEntry, HistoryTransition, HistoryQuery, HistoryStats } from '../shared/types';
+import { HistoryEntry, HistoryTransition, HistoryQuery, HistoryStats } from '../../shared/types';
 
 /**
  * HistoryService
