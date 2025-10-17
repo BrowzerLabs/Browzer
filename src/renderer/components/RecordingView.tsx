@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
-import { Circle, Clock } from 'lucide-react';
+import { Circle, Clock, SparkleIcon } from 'lucide-react';
 import { RecordedAction, RecordingSession } from '@/shared/types';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/renderer/ui/tabs';
 import { LiveRecordingView, SessionsListView } from './recording';
 import { toast } from 'sonner';
 import { cn } from '@/renderer/lib/utils';
+import AgentView from './AgentView';
 
 export function RecordingView() {
   const [recordingTab, setRecordingTab] = useState('live');
@@ -108,13 +109,19 @@ export function RecordingView() {
   };
 
   return (
-    <Tabs value={recordingTab} onValueChange={setRecordingTab}>
+    <Tabs value={recordingTab} onValueChange={setRecordingTab} className='h-full'>
       <TabsList className="w-full rounded-none border-b p-0 h-auto">
         <TabsTrigger 
           value="live" 
         >
           <Circle className={cn('size-3 rounded-full bg-red-300', isRecording && 'bg-red-600 animate-pulse')} />
           Live
+        </TabsTrigger>
+         <TabsTrigger 
+          value="automation" 
+        >
+          <SparkleIcon className='size-3 text-primary' />
+          Automation
         </TabsTrigger>
         <TabsTrigger 
           value="sessions"
@@ -133,6 +140,10 @@ export function RecordingView() {
           onSave={handleSaveRecording}
           onDiscard={handleDiscardRecording}
         />
+      </TabsContent>
+
+      <TabsContent value="automation">
+        <AgentView />
       </TabsContent>
 
       <TabsContent value="sessions" className="flex-1 m-0 p-0">

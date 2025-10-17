@@ -30,6 +30,11 @@ export interface AppSettings {
   agent: {
     autoSaveRecordings: boolean;
   };
+  
+  // Automation Settings
+  automation: {
+    apiKey: string;
+  };
 }
 
 /**
@@ -53,6 +58,9 @@ const defaultSettings: AppSettings = {
   },
   agent: {
     autoSaveRecordings: true,
+  },
+  automation: {
+    apiKey: '',
   },
 };
 

@@ -159,7 +159,6 @@ export class PasswordAutomation {
     const urlChanged = newUrl !== this.lastUrl;
     
     if (urlChanged) {
-      console.log(`[PasswordAutomation] Navigation detected: ${newUrl}`);
       this.lastUrl = newUrl;
       
       // Update session tracking
@@ -167,7 +166,6 @@ export class PasswordAutomation {
       
       // Show pending save prompt on new page if exists
       if (this.pendingCredentials) {
-        console.log('[PasswordAutomation] Showing pending save prompt on new page');
         setTimeout(async () => {
           if (this.pendingCredentials) {
             await this.showSavePrompt(
@@ -181,7 +179,6 @@ export class PasswordAutomation {
       
       // Trigger auto-fill via main process callback
       if (this.onAutoFillPassword) {
-        console.log('[PasswordAutomation] Requesting auto-fill from main process');
         setTimeout(async () => {
           if (this.onAutoFillPassword) {
             await this.onAutoFillPassword(this.tabId);
@@ -207,7 +204,6 @@ export class PasswordAutomation {
       origin,
       timestamp: Date.now()
     };
-    console.log('[PasswordAutomation] Stored pending credentials for:', username);
   }
 
   /**
@@ -215,34 +211,8 @@ export class PasswordAutomation {
    */
   private clearPendingCredentials(): void {
     this.pendingCredentials = null;
-    console.log('[PasswordAutomation] Cleared pending credentials');
   }
 
-  /**
-   * Check if URL is related to the original login origin (for multi-step flows)
-   */
-  private isRelatedOrigin(originalOrigin: string, newUrl: string): boolean {
-    try {
-      const newOrigin = new URL(newUrl).origin;
-      
-      // Same origin
-      if (originalOrigin === newOrigin) return true;
-      
-      // Common multi-step patterns
-      const patterns = [
-        ['accounts.google.com', 'mail.google.com'],
-        ['login.microsoftonline.com', 'outlook.office.com'],
-        ['login.microsoftonline.com', 'sso.godaddy.com']
-      ];
-      
-      return patterns.some(pattern => 
-        (originalOrigin.includes(pattern[0]) && newUrl.includes(pattern[1])) ||
-        (originalOrigin.includes(pattern[1]) && newUrl.includes(pattern[0]))
-      );
-    } catch {
-      return false;
-    }
-  }
 
 
   /**
@@ -257,30 +227,21 @@ export class PasswordAutomation {
       const credentials = this.passwordManager.getCredentialsForOrigin(origin);
       
       if (credentials.length === 0) {
-        console.log('[PasswordAutomation] No credentials for immediate autofill on', origin);
         return;
       }
-      
-      console.log('[PasswordAutomation] Setting up immediate autofill for', credentials.length, 'credentials');
       
       await this.debugger.sendCommand('Runtime.evaluate', {
         expression: `
           (function() {
             try {
-              console.log('[PasswordAutomation] Immediate autofill setup starting');
               
               const usernameFields = document.querySelectorAll('input[type="email"], input[type="text"], input[name*="user"], input[name*="email"], input[id*="user"], input[id*="email"]');
               const credentials = ${JSON.stringify(credentials.map(c => ({ id: c.id, username: c.username })))};
-              
-              console.log('[PasswordAutomation] Found', usernameFields.length, 'fields for immediate autofill');
               
               usernameFields.forEach((field, index) => {
                 if (!field._browzerImmediateAutofill && credentials.length > 0) {
                   field._browzerImmediateAutofill = true;
                   
-                  console.log('[PasswordAutomation] Setting up immediate autofill for field', index);
-                  
-                  // Function to show autofill
                   const showAutofill = () => {
                     console.log('BROWZER_SHOW_AUTOFILL_DROPDOWN:' + JSON.stringify({
                       origin: ${jsonStringifyForJS(origin)},
@@ -290,7 +251,6 @@ export class PasswordAutomation {
                   
                   // Check if already focused and show immediately
                   if (document.activeElement === field) {
-                    console.log('[PasswordAutomation] Field', index, 'is already focused, showing autofill now');
                     setTimeout(showAutofill, 50); // Small delay to ensure DOM is ready
                   }
                   
@@ -306,8 +266,6 @@ export class PasswordAutomation {
                   });
                 }
               });
-              
-              console.log('[PasswordAutomation] ✅ Immediate autofill setup complete');
               
             } catch (error) {
               console.error('[PasswordAutomation] Error in immediate autofill setup:', error);
@@ -345,11 +303,8 @@ export class PasswordAutomation {
       const forms = await this.findLoginForms();
       
       if (forms.length === 0) {
-        console.log('[PasswordAutomation] No login forms detected');
         return;
       }
-      
-      console.log(`[PasswordAutomation] Found ${forms.length} login forms`);
       
       // Set up monitoring for each form
       for (const form of forms) {
@@ -566,7 +521,6 @@ export class PasswordAutomation {
     const credentials = this.passwordManager.getCredentialsForOrigin(origin);
     
     if (credentials.length === 0) {
-      console.log('[PasswordAutomation] No saved credentials for', origin);
       return;
     }
     
@@ -842,14 +796,10 @@ export class PasswordAutomation {
                 passwordField.dispatchEvent(new Event('input', { bubbles: true }));
                 passwordField.dispatchEvent(new Event('change', { bubbles: true }));
                 console.log('[PasswordAutomation] ✅ Password filled successfully');
-              } else {
-                console.log('[PasswordAutomation] ❌ No password field found');
               }
             })();
           `
         });
-      } else {
-        console.log('[PasswordAutomation] No password found for credential:', data.credentialId);
       }
     } catch (error) {
       console.error('[PasswordAutomation] Error filling password:', error);
@@ -1016,7 +966,6 @@ export class PasswordAutomation {
             // Find the focused username field
             const usernameField = document.activeElement;
             if (!usernameField || (usernameField.type !== 'email' && usernameField.type !== 'text')) {
-              console.log('[PasswordAutomation] No suitable username field focused');
               return;
             }
             
@@ -1065,8 +1014,6 @@ export class PasswordAutomation {
                     credentialId: cred.id,
                     origin: ${jsonStringifyForJS(origin)}
                   }));
-                } else {
-                  console.log('[PasswordAutomation] No password field on current page, will fill on next page');
                 }
                 
                 dropdown.remove();

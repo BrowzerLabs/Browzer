@@ -5,7 +5,8 @@ import { WindowManager } from '@/main/window/WindowManager';
 import { SettingsStore, AppSettings } from '@/main/settings/SettingsStore';
 import { UserService } from '@/main/user/UserService';
 import { PasswordManager } from '@/main/password/PasswordManager';
-import { RecordedAction, HistoryQuery } from '@/shared/types';
+import { AutomationService } from '@/main/automation';
+import { RecordedAction, HistoryQuery, LLMAutomationRequest } from '@/shared/types';
 
 /**
  * IPCHandlers - Centralized IPC communication setup
@@ -15,6 +16,7 @@ export class IPCHandlers {
   private settingsStore: SettingsStore;
   private userService: UserService;
   private passwordManager: PasswordManager;
+  private automationService: AutomationService;
 
   constructor(
     private browserManager: BrowserManager,
@@ -25,6 +27,7 @@ export class IPCHandlers {
     this.userService = new UserService();
     // Use the existing PasswordManager from BrowserManager instead of creating a new one
     this.passwordManager = this.browserManager.getPasswordManager();
+    this.automationService = new AutomationService();
     this.setupHandlers();
 
     console.log('IPCHandlers initialized');
@@ -40,6 +43,7 @@ export class IPCHandlers {
     this.setupHistoryHandlers();
     this.setupPasswordHandlers();
     this.setupWindowHandlers();
+    this.setupAutomationHandlers();
   }
 
   private setupTabHandlers(): void {
@@ -338,6 +342,81 @@ export class IPCHandlers {
     });
   }
 
+  private setupAutomationHandlers(): void {
+    // Initialize automation service with API key
+    ipcMain.handle('automation:initialize', async (_, apiKey: string) => {
+      try {
+        this.automationService.initialize(apiKey);
+        return { success: true };
+      } catch (error) {
+        console.error('[IPC] Failed to initialize automation:', error);
+        return { success: false, error: (error as Error).message };
+      }
+    });
+
+    // Execute automation
+    ipcMain.handle('automation:execute', async (_, request: LLMAutomationRequest) => {
+      try {
+        const automation = this.browserManager.getActiveAutomation();
+        if (!automation) {
+          return {
+            success: false,
+            error: 'No active tab for automation'
+          };
+        }
+
+        const result = await this.automationService.executeAutomation(
+          request,
+          automation,
+          (step, index, total) => {
+            // Send progress updates to renderer
+            const agentUIView = this.windowManager.getAgentUIView();
+            if (agentUIView && !agentUIView.webContents.isDestroyed()) {
+              agentUIView.webContents.send('automation:progress', {
+                step,
+                index,
+                total
+              });
+            }
+          }
+        );
+
+        return result;
+      } catch (error) {
+        console.error('[IPC] Automation execution failed:', error);
+        return {
+          success: false,
+          error: (error as Error).message
+        };
+      }
+    });
+
+    // Generate plan only (without executing)
+    ipcMain.handle('automation:generate-plan', async (_, userPrompt: string, recordingSession: any) => {
+      try {
+        const result = await this.automationService.generatePlan(userPrompt, recordingSession);
+        return result;
+      } catch (error) {
+        console.error('[IPC] Plan generation failed:', error);
+        return {
+          success: false,
+          error: (error as Error).message
+        };
+      }
+    });
+
+    // Get automation status
+    ipcMain.handle('automation:get-status', async () => {
+      return this.automationService.getStatus();
+    });
+
+    // Cancel automation
+    ipcMain.handle('automation:cancel', async () => {
+      this.automationService.cancel();
+      return { success: true };
+    });
+  }
+
   public cleanup(): void {
     ipcMain.removeAllListeners('browser:create-tab');
     ipcMain.removeAllListeners('browser:close-tab');
@@ -398,6 +477,13 @@ export class IPCHandlers {
     
     // Window handlers cleanup
     ipcMain.removeAllListeners('window:toggle-maximize');
+    
+    // Automation handlers cleanup
+    ipcMain.removeAllListeners('automation:initialize');
+    ipcMain.removeAllListeners('automation:execute');
+    ipcMain.removeAllListeners('automation:generate-plan');
+    ipcMain.removeAllListeners('automation:get-status');
+    ipcMain.removeAllListeners('automation:cancel');
   }
 
   private setupPasswordHandlers(): void {

@@ -3,6 +3,7 @@ import { Bot, Video } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/renderer/ui/tabs';
 import { RecordingView } from './RecordingView';
 import { useSidebarStore } from '@/renderer/store/useSidebarStore';
+import AgentView from './AgentView';
 
 /**
  * Sidebar - Agent UI with tabbed interface
@@ -51,33 +52,14 @@ export function Sidebar() {
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="agent">
-          <AgentView />
+        <TabsContent value="agent" className='flex items-center justify-center h-full'>
+           Agents coming soon...
         </TabsContent>
 
         <TabsContent value="recording">
           <RecordingView />
         </TabsContent>
       </Tabs>
-    </div>
-  );
-}
-
-// Agent View - AI chat and automation
-function AgentView() {
-  return (
-    <div className="space-y-4">
-      <div className="text-center py-8">
-        <Bot className="w-12 h-12 mx-auto text-gray-600 mb-3" />
-        <h3 className="text-lg font-semibold text-gray-300 mb-2">AI Agent</h3>
-        <p className="text-sm text-gray-500">
-          Chat with AI to automate tasks and analyze pages
-        </p>
-      </div>
-      
-      <div className="text-xs text-gray-600 text-center">
-        Coming soon...
-      </div>
     </div>
   );
 }
