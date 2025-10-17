@@ -13,9 +13,10 @@ interface WorkflowVariablesProps {
   variables?: WorkflowVariable[];
   editable?: boolean;
   recordingId?: string;
+  onVariablesChange?: (variables?: WorkflowVariable[]) => void;
 }
 
-export function WorkflowVariables({ className, variables: propsVariables, editable = true, recordingId }: WorkflowVariablesProps) {
+export function WorkflowVariables({ className, variables: propsVariables, editable = true, recordingId, onVariablesChange }: WorkflowVariablesProps) {
   const [variables, setVariables] = useState<WorkflowVariable[]>(propsVariables || []);
   const [loading, setLoading] = useState(!propsVariables);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -32,6 +33,13 @@ export function WorkflowVariables({ className, variables: propsVariables, editab
       setLoading(false);
     }
   }, [propsVariables]);
+
+  // Update local state when props change (only if not currently editing)
+  useEffect(() => {
+    if (propsVariables && !editingId) {
+      setVariables(propsVariables);
+    }
+  }, [propsVariables, editingId]);
 
   const loadVariables = async () => {
     try {
@@ -78,6 +86,15 @@ export function WorkflowVariables({ className, variables: propsVariables, editab
         await window.browserAPI.updateCurrentRecordingVariables(updatedVariables);
       }
       setVariables(updatedVariables);
+      if (onVariablesChange) {
+        if (recordingId) {
+          // For saved recordings, just notify that changes were made
+          onVariablesChange();
+        } else {
+          // For current recordings, pass the updated variables
+          onVariablesChange(updatedVariables);
+        }
+      }
       setEditingId(null);
       setEditName('');
       setEditValue('');
@@ -94,17 +111,27 @@ export function WorkflowVariables({ className, variables: propsVariables, editab
   };
 
   const handleRemove = async (variableId: string) => {
-    const updatedVariables = variables.map(v =>
-      v.id === variableId ? { ...v, isRemoved: true } : v
-    );
-
+    const filtered = variables.filter(v => v.id !== variableId);
+    
     try {
       if (recordingId) {
-        await window.browserAPI.updateRecordingVariables(recordingId, updatedVariables);
+        // For saved recordings, send the filtered list (completely removing the variable)
+        await window.browserAPI.updateRecordingVariables(recordingId, filtered);
       } else {
-        await window.browserAPI.updateCurrentRecordingVariables(updatedVariables);
+        // For current recording, just remove completely
+        await window.browserAPI.updateCurrentRecordingVariables(filtered);
       }
-      setVariables(updatedVariables.filter(v => !v.isRemoved));
+      
+      setVariables(filtered);
+      if (onVariablesChange) {
+        if (recordingId) {
+          // For saved recordings, just notify that changes were made
+          onVariablesChange();
+        } else {
+          // For current recordings, pass the filtered variables
+          onVariablesChange(filtered);
+        }
+      }
     } catch (error) {
       console.error('Failed to remove variable:', error);
     }

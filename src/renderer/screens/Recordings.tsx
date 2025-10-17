@@ -97,6 +97,31 @@ export function Recordings() {
     }
   };
 
+  const handleRecordingUpdated = async () => {
+    // Update the specific recording without reloading all
+    if (selectedRecording) {
+      try {
+        const updatedRecordings = await window.browserAPI.getAllRecordings();
+        const updatedRecording = updatedRecordings.find(r => r.id === selectedRecording.id);
+        if (updatedRecording) {
+          setSelectedRecording(updatedRecording);
+          // Update the recordings list
+          setRecordings(updatedRecordings.sort((a, b) => b.createdAt - a.createdAt));
+        }
+      } catch (error) {
+        console.error('Failed to update recording:', error);
+      }
+    }
+  };
+
+  const handleDialogClose = (open: boolean) => {
+    setIsPlayDialogOpen(open);
+    if (!open) {
+      // Reload all recordings when dialog is closed to ensure consistency
+      loadRecordings();
+    }
+  };
+
   const handleOpenVideo = async (videoPath: string) => {
     try {
       await window.browserAPI.openVideoFile(videoPath);
@@ -208,8 +233,9 @@ export function Recordings() {
         recording={selectedRecording}
         videoUrl={videoUrl}
         open={isPlayDialogOpen}
-        onOpenChange={setIsPlayDialogOpen}
+        onOpenChange={handleDialogClose}
         onOpenVideo={handleOpenVideo}
+        onRecordingUpdated={handleRecordingUpdated}
       />
     </div>
   );

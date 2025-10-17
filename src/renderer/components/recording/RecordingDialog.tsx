@@ -14,6 +14,7 @@ interface RecordingDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onOpenVideo: (videoPath: string) => void;
+  onRecordingUpdated?: () => void;
 }
 
 export function RecordingDialog({ 
@@ -21,7 +22,8 @@ export function RecordingDialog({
   videoUrl, 
   open, 
   onOpenChange,
-  onOpenVideo 
+  onOpenVideo,
+  onRecordingUpdated 
 }: RecordingDialogProps) {
   if (!recording) return null;
 
@@ -105,7 +107,12 @@ export function RecordingDialog({
               {recording.variables && recording.variables.length > 0 && (
                 <div>
                   <h4 className="text-sm font-semibold mb-2">Workflow Variables</h4>
-                  <WorkflowVariables variables={recording.variables} editable={true} recordingId={recording.id} />
+                  <WorkflowVariables 
+                    variables={recording.variables} 
+                    editable={true} 
+                    recordingId={recording.id}
+                    onVariablesChange={onRecordingUpdated}
+                  />
                 </div>
               )}
             </div>

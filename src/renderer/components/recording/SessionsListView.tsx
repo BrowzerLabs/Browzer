@@ -78,6 +78,22 @@ export function SessionsListView({ sessions, onRefresh, onDelete }: SessionsList
                       {session.url}
                     </div>
                   )}
+                  {session.variables && session.variables.length > 0 && (
+                    <div className="mt-2">
+                      <div className="flex gap-1 flex-wrap">
+                        {session.variables.slice(0, 3).map((variable) => (
+                          <Badge key={variable.id} variant="outline" className="text-xs">
+                            {variable.name}
+                          </Badge>
+                        ))}
+                        {session.variables.length > 3 && (
+                          <Badge variant="outline" className="text-xs">
+                            +{session.variables.length - 3} more
+                          </Badge>
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             ))}

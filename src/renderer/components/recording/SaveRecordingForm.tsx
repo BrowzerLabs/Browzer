@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Input } from '../../ui/input';
 import { Textarea } from '../../ui/textarea';
 import { Button } from '../../ui/button';
 import { Label } from '../../ui/label';
 import { toast } from 'sonner';
 import { WorkflowVariables } from './WorkflowVariables';
+import { WorkflowVariable } from '../../../shared/types';
 
 interface SaveRecordingFormProps {
   actionCount: number;
@@ -17,14 +18,36 @@ export function SaveRecordingForm({ actionCount, duration, onSave, onDiscard }: 
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [error, setError] = useState('');
+  const [variables, setVariables] = useState<WorkflowVariable[]>([]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  // Load variables when component mounts
+  useEffect(() => {
+    const loadVariables = async () => {
+      try {
+        const currentVariables = await window.browserAPI.getCurrentRecordingVariables();
+        setVariables(currentVariables || []);
+      } catch (error) {
+        console.error('Failed to load variables in SaveRecordingForm:', error);
+      }
+    };
+    loadVariables();
+  }, []);
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) {
       setError('Recording name is required');
       toast.error('Recording name is required');
       return;
     }
+    
+    // Ensure the current variables are updated in the backend before saving
+    try {
+      await window.browserAPI.updateCurrentRecordingVariables(variables);
+    } catch (error) {
+      console.error('Failed to update variables before save:', error);
+    }
+    
     onSave(name.trim(), description.trim());
     setName('');
     setDescription('');
@@ -100,7 +123,11 @@ export function SaveRecordingForm({ actionCount, duration, onSave, onDiscard }: 
           </div>
 
           {/* Workflow Variables */}
-          <WorkflowVariables className="pt-2" />
+          <WorkflowVariables 
+            className="pt-2" 
+            variables={variables.length > 0 ? variables : undefined} 
+            onVariablesChange={setVariables} 
+          />
 
           {/* Buttons */}
           <div className="flex gap-3 justify-between pt-4">
