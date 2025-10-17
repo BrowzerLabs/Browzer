@@ -115,8 +115,24 @@ export class VariableExtractor {
    */
   private createCheckboxVariable(action: RecordedAction, actionIndex: number): WorkflowVariable {
     const target = action.target;
-    const variableName = this.generateVariableName(target, 'checkbox');
-    
+    // Prefer label text or associated text for variable name
+    let variableName = '';
+    if (target?.ariaLabel && this.isDescriptiveText(target.ariaLabel)) {
+      variableName = this.sanitizeVariableName(target.ariaLabel);
+    } else if (target?.text && this.isDescriptiveText(target.text)) {
+      variableName = this.sanitizeVariableName(target.text);
+    } else if (target?.title && this.isDescriptiveText(target.title)) {
+      variableName = this.sanitizeVariableName(target.title);
+    } else if (target?.placeholder && this.isDescriptiveText(target.placeholder)) {
+      variableName = this.sanitizeVariableName(target.placeholder);
+    } else if (target?.name && this.isDescriptiveText(target.name)) {
+      variableName = this.sanitizeVariableName(target.name);
+    } else if (target?.id) {
+      const cleanId = this.cleanTechnicalName(target.id);
+      variableName = this.sanitizeVariableName(cleanId);
+    } else {
+      variableName = this.generateFallbackName('checkbox', target);
+    }
     return {
       id: `var_${actionIndex}_${variableName}`,
       actionId: `${action.type}-${action.timestamp}`,
@@ -397,11 +413,16 @@ export class VariableExtractor {
     const seen = new Set<string>();
     const unique: WorkflowVariable[] = [];
     
-    // Use element identifier (name, id, or selector) to detect duplicates
+    // For checkboxes, allow multiple variables per element (by actionIndex)
     variables.forEach(variable => {
+      if (variable.type === 'checkbox') {
+        // Use actionIndex to allow multiple distinct checkbox variables
+        unique.push(variable);
+        return;
+      }
+      // For other types, deduplicate by element identifier
       const identifier = variable.elementName || variable.elementId || variable.name;
       const key = `${variable.type}_${identifier}`;
-      
       if (!seen.has(key)) {
         seen.add(key);
         unique.push(variable);
@@ -414,7 +435,6 @@ export class VariableExtractor {
         if (existing) {
           existing.defaultValue = variable.defaultValue;
           existing.currentValue = variable.currentValue;
-          // Use the later action index (more recent interaction)
           if (variable.actionIndex > existing.actionIndex) {
             existing.actionIndex = variable.actionIndex;
             existing.actionId = variable.actionId;
@@ -422,7 +442,6 @@ export class VariableExtractor {
         }
       }
     });
-    
     return unique;
   }
   
