@@ -5,6 +5,7 @@ declare global {
     browserAPI: BrowserAPI;
     aiAPI: {
       sendClaude: (fullMessage: string, contexts?: Array<{ type: 'tab'; tabId: string; title?: string; url?: string; markdown?: string }>) => Promise<string>;
+      runOrchestrator: (query: string, tabId?: string) => Promise<string>;
     };
   }
 

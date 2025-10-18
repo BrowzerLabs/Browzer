@@ -88,10 +88,48 @@ export async function handleDoQuery(
   query: string, 
   contexts?: LLMContext[]
 ): Promise<LLMResponse> {
-  // TODO: Implement do query handling
-  console.log('Do query received:', query, contexts);
-  return {
-    content: "It's a do query",
-    success: true,
+  try {
+    // Get the tab ID from the first context if available
+    let tabId: string | undefined;
+    if (contexts && contexts.length > 0 && contexts[0].type === 'tab') {
+      tabId = contexts[0].tabId;
+    }
+
+    // Add context information to the query if available
+    let enrichedQuery = query;
+    if (contexts && contexts.length > 0) {
+      const contextText = contexts
+        .map(ctx => {
+          if (ctx.type === 'tab') {
+            const lines: string[] = [];
+            if (ctx.title) lines.push(`Title: ${ctx.title}`);
+            if (ctx.url) lines.push(`URL: ${ctx.url}`);
+            if (ctx.markdown) lines.push(`Page content: ${ctx.markdown.substring(0, 1000)}...`);
+            return lines.join('\n');
+          }
+          return '';
+        })
+        .filter(Boolean)
+        .join('\n\n');
+      
+      if (contextText) {
+        enrichedQuery = `Context:\n${contextText}\n\nTask: ${query}`;
+      }
+    }
+
+    console.log('Running orchestrator for do query:', enrichedQuery);
+    const result = await window.aiAPI.runOrchestrator(enrichedQuery, tabId);
+    
+    return {
+      content: result,
+      success: true,
+    };
+  } catch (error) {
+    console.error('Orchestrator execution failed:', error);
+    return {
+      content: '',
+      success: false,
+      error: (error as Error)?.message ?? 'Failed to execute task',
+    };
   }
 }

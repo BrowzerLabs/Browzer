@@ -424,6 +424,128 @@ Always act as a calm, capable, and insightful assistant for users exploring the 
         throw new Error(`Failed to get AI response: ${error instanceof Error ? error.message : 'Unknown error'}`);
       }
     });
+
+    ipcMain.handle('ai:orchestrator', async (_, { query, tabId }: { 
+      query: string; 
+      tabId?: string;
+    }) => {
+      try {
+        // Get the active tab if no tabId provided
+        const activeTabId = tabId || this.browserManager.getActiveTabId();
+        if (!activeTabId) {
+          throw new Error('No active tab available for orchestrator');
+        }
+
+        console.log(`🎯 Orchestrator: Using tab ${activeTabId}`);
+
+        // Get the tab's WebContentsView
+        const tab = this.browserManager.getTab(activeTabId);
+        if (!tab) {
+          throw new Error(`Tab ${activeTabId} not found`);
+        }
+
+        console.log(`🌐 Tab info: URL=${tab.info.url}, Title=${tab.info.title}`);
+
+        // Ensure WebContents is ready
+        if (tab.view.webContents.isDestroyed()) {
+          throw new Error(`WebContents for tab ${activeTabId} is destroyed`);
+        }
+
+        // Wait for WebContents to be ready
+        if (!tab.view.webContents.isLoading() && tab.view.webContents.getURL() !== '') {
+          // WebContents is ready
+        } else {
+          // Wait for WebContents to finish loading
+          await new Promise<void>((resolve, reject) => {
+            const timeout = setTimeout(() => {
+              reject(new Error('WebContents loading timeout'));
+            }, 5000);
+
+            const onReady = () => {
+              clearTimeout(timeout);
+              tab.view.webContents.removeListener('did-finish-load', onReady);
+              tab.view.webContents.removeListener('did-fail-load', onFail);
+              resolve();
+            };
+
+            const onFail = () => {
+              clearTimeout(timeout);
+              tab.view.webContents.removeListener('did-finish-load', onReady);
+              tab.view.webContents.removeListener('did-fail-load', onFail);
+              reject(new Error('WebContents failed to load'));
+            };
+
+            if (tab.view.webContents.isLoading()) {
+              tab.view.webContents.once('did-finish-load', onReady);
+              tab.view.webContents.once('did-fail-load', onFail);
+            } else {
+              resolve();
+            }
+          });
+        }
+
+        // Create CDP connection
+        const { CDPConnection } = await import('../vercel_agent/tools/cdp');
+        const cdp = new CDPConnection(tab.view);
+        
+        console.log(`🔗 Attempting CDP connection for tab ${activeTabId}`);
+        
+        // Add retry logic for CDP connection
+        let retries = 3;
+        while (retries > 0) {
+          try {
+            await cdp.connect();
+            console.log(`✅ CDP connected successfully for tab ${activeTabId}`);
+            break;
+          } catch (error) {
+            retries--;
+            console.log(`❌ CDP connection attempt failed (${4-retries}/3): ${error}`);
+            if (retries === 0) {
+              throw new Error(`Failed to connect CDP after 3 attempts: ${error}`);
+            }
+            // Wait a bit before retrying
+            await new Promise(resolve => setTimeout(resolve, 1000));
+          }
+        }
+
+        // Create getPageContext function
+        const getPageContext = async (): Promise<string> => {
+          try {
+            const screenshotResult = await cdp.sendCommand('Page.captureScreenshot', { format: 'png' });
+            const screenshot = Buffer.from(screenshotResult.data, 'base64');
+
+            const textResult = await cdp.sendCommand('Runtime.evaluate', {
+              expression: `
+                (function() {
+                  const textContent = document.body.innerText || document.body.textContent || '';
+                  return textContent.substring(0, 2000);
+                })()
+              `
+            });
+            
+            const pageText = textResult.result?.value || '';
+            
+            return `Screenshot: ${screenshot.length} bytes\nPage Text: ${pageText}`;
+          } catch (error) {
+            return `Error getting page context: ${error}`;
+          }
+        };
+
+        // Create and run orchestrator
+        const { VercelOrchestrator } = await import('../vercel_agent/orchestrator');
+        const orchestrator = new VercelOrchestrator(cdp, getPageContext);
+        
+        const result = await orchestrator.run(query);
+        
+        // Clean up CDP connection
+        await cdp.disconnect();
+
+        return result;
+      } catch (error) {
+        console.error('Orchestrator execution failed:', error);
+        throw new Error(`Failed to execute orchestrator: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      }
+    });
   }
 
   private updateLayout(): void {
@@ -499,6 +621,7 @@ Always act as a calm, capable, and insightful assistant for users exploring the 
     ipcMain.removeAllListeners('memory:query');
     ipcMain.removeAllListeners('memory:clear-all');
     ipcMain.removeAllListeners('ai:claude');
+    ipcMain.removeAllListeners('ai:orchestrator');
 
     memoryService.cleanup();
   }

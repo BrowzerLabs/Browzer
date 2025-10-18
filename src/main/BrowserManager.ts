@@ -270,6 +270,20 @@ export class BrowserManager {
   }
 
   /**
+   * Get active tab ID
+   */
+  public getActiveTabId(): string | null {
+    return this.activeTabId;
+  }
+
+  /**
+   * Get tab by ID
+   */
+  public getTab(tabId: string): Tab | undefined {
+    return this.tabs.get(tabId);
+  }
+
+  /**
    * Start recording actions and video on active tab
    */
   public async startRecording(): Promise<boolean> {

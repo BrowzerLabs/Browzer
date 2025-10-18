@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Bot, User, Loader2, Trash2 } from 'lucide-react';
+import { Send, Bot, User, Loader2, Trash2, X } from 'lucide-react';
 import { Button } from '../../ui/button';
 import { Textarea } from '../../ui/textarea';
 import { ScrollArea } from '../../ui/scroll-area';
@@ -28,6 +28,7 @@ export function ChatBox({ className }: ChatBoxProps) {
   const [mentionIndex, setMentionIndex] = useState<number | null>(null);
   const [highlightIndex, setHighlightIndex] = useState(0);
   const [selectedContexts, setSelectedContexts] = useState<LLMContext[]>([]);
+  const [isCancelled, setIsCancelled] = useState(false);
   
   const { messages, isLoading, addMessage, setLoading, clearMessages } = useChatStore();
   const { tabs, activeTab, activeTabId } = useBrowserAPI();
@@ -54,6 +55,7 @@ export function ChatBox({ className }: ChatBoxProps) {
     setIsMentionOpen(false);
     setMentionQuery('');
     setMentionIndex(null);
+    setIsCancelled(false);
     
     // Add user message
     addMessage({
@@ -101,6 +103,11 @@ export function ChatBox({ className }: ChatBoxProps) {
         response = await handleDoQuery(userMessage, contextsToSend);
       }
       
+      // Check if cancelled before processing response
+      if (isCancelled) {
+        return;
+      }
+      
       if (response.success) {
         // Add assistant response
         addMessage({
@@ -115,6 +122,10 @@ export function ChatBox({ className }: ChatBoxProps) {
         });
       }
     } catch (error) {
+      // Check if cancelled before processing error
+      if (isCancelled) {
+        return;
+      }
       addMessage({
         content: `Error: ${error instanceof Error ? error.message : 'Unknown error occurred'}`,
         role: 'assistant',
@@ -235,6 +246,12 @@ export function ChatBox({ className }: ChatBoxProps) {
     });
   };
 
+  const handleCancelRequest = () => {
+    setIsCancelled(true);
+    setLoading(false);
+    setIsTyping(false);
+  };
+
   const handleClearChat = async () => {
     if (messages.length > 0) {
       clearMessages();
@@ -284,9 +301,20 @@ export function ChatBox({ className }: ChatBoxProps) {
           ))}
           
           {isLoading && (
-            <div className="flex items-center space-x-2 text-gray-500">
-              <Loader2 className="w-4 h-4 animate-spin" />
-              <span className="text-sm">AI is thinking...</span>
+            <div className="flex items-center justify-between text-gray-500">
+              <div className="flex items-center space-x-2">
+                <Loader2 className="w-4 h-4 animate-spin" />
+                <span className="text-sm">AI is thinking...</span>
+              </div>
+              <Button
+                onClick={handleCancelRequest}
+                variant="ghost"
+                size="sm"
+                className="text-gray-400 hover:text-gray-200"
+              >
+                <X className="w-4 h-4 mr-1" />
+                Cancel
+              </Button>
             </div>
           )}
           
@@ -304,11 +332,11 @@ export function ChatBox({ className }: ChatBoxProps) {
             onKeyDown={handleKeyDown}
             placeholder="Type your message here..."
             className="flex-1 min-h-[40px] max-h-[120px] resize-none"
-            disabled={isLoading}
+            disabled={isLoading && !isCancelled}
           />
           <Button
             onClick={handleSendMessage}
-            disabled={!inputValue.trim() || isLoading}
+            disabled={!inputValue.trim() || (isLoading && !isCancelled)}
             size="icon"
             className="shrink-0"
           >

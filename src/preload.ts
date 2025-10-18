@@ -89,6 +89,7 @@ export interface BrowserAPI {
   clearMemory: () => Promise<any>;
 
   sendClaude: (fullMessage: string, contexts?: Array<{ type: 'tab'; tabId: string; title?: string; url?: string; markdown?: string }>) => Promise<string>;
+  runOrchestrator: (query: string, tabId?: string) => Promise<string>;
 
   // Event listeners
   onTabsUpdated: (callback: (data: { tabs: TabInfo[]; activeTabId: string | null }) => void) => () => void;
@@ -216,6 +217,8 @@ const browserAPI: BrowserAPI = {
 
   sendClaude: (fullMessage: string, contexts?: Array<{ type: 'tab'; tabId: string; title?: string; url?: string; markdown?: string }>) => 
     ipcRenderer.invoke('ai:claude', { fullMessage, contexts }),
+  runOrchestrator: (query: string, tabId?: string) => 
+    ipcRenderer.invoke('ai:orchestrator', { query, tabId }),
 
   getDesktopSources: () => desktopCapturer.getSources({ types: ['screen', 'window'] }),
   openVideoFile: (videoPath: string) => ipcRenderer.invoke('video:open-file', videoPath),
@@ -224,6 +227,7 @@ const browserAPI: BrowserAPI = {
 
 const aiAPI = {
   sendClaude: browserAPI.sendClaude,
+  runOrchestrator: browserAPI.runOrchestrator,
 };
 
 contextBridge.exposeInMainWorld('browserAPI', browserAPI);
