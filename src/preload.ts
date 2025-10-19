@@ -90,6 +90,7 @@ export interface BrowserAPI {
 
   sendClaude: (fullMessage: string, contexts?: Array<{ type: 'tab'; tabId: string; title?: string; url?: string; markdown?: string }>) => Promise<string>;
   runOrchestrator: (query: string, tabId?: string) => Promise<string>;
+  executeDoAgent: (instruction: string) => Promise<{ success: boolean; data?: any; error?: string; executionTime: number }>;
 
   // Event listeners
   onTabsUpdated: (callback: (data: { tabs: TabInfo[]; activeTabId: string | null }) => void) => () => void;
@@ -98,6 +99,10 @@ export interface BrowserAPI {
   onRecordingStopped: (callback: (data: { actions: any[]; duration: number; startUrl: string }) => void) => () => void;
   onRecordingSaved: (callback: (session: any) => void) => () => void;
   onRecordingDeleted: (callback: (id: string) => void) => () => void;
+
+  onDoAgentStepUpdate: (callback: (step: any) => void) => () => void;
+  onDoAgentCompleted: (callback: (result: any) => void) => () => void;
+  onDoAgentError: (callback: (error: any) => void) => () => void;
 }
 
 // Expose protected methods that allow the renderer process to use
@@ -170,6 +175,25 @@ const browserAPI: BrowserAPI = {
     return () => ipcRenderer.removeListener('recording:deleted', subscription);
   },
 
+  // DoAgent event listeners
+  onDoAgentStepUpdate: (callback) => {
+    const subscription = (_event: Electron.IpcRendererEvent, step: any) => callback(step);
+    ipcRenderer.on('do-agent:step-update', subscription);
+    return () => ipcRenderer.removeListener('do-agent:step-update', subscription);
+  },
+
+  onDoAgentCompleted: (callback) => {
+    const subscription = (_event: Electron.IpcRendererEvent, result: any) => callback(result);
+    ipcRenderer.on('do-agent:completed', subscription);
+    return () => ipcRenderer.removeListener('do-agent:completed', subscription);
+  },
+
+  onDoAgentError: (callback) => {
+    const subscription = (_event: Electron.IpcRendererEvent, error: any) => callback(error);
+    ipcRenderer.on('do-agent:error', subscription);
+    return () => ipcRenderer.removeListener('do-agent:error', subscription);
+  },
+
   // Settings API
   getAllSettings: () => ipcRenderer.invoke('settings:get-all'),
   getSettingsCategory: (category: keyof AppSettings) => ipcRenderer.invoke('settings:get-category', category),
@@ -219,6 +243,8 @@ const browserAPI: BrowserAPI = {
     ipcRenderer.invoke('ai:claude', { fullMessage, contexts }),
   runOrchestrator: (query: string, tabId?: string) => 
     ipcRenderer.invoke('ai:orchestrator', { query, tabId }),
+  executeDoAgent: (instruction: string) => 
+    ipcRenderer.invoke('ai:do-agent', { instruction }),
 
   getDesktopSources: () => desktopCapturer.getSources({ types: ['screen', 'window'] }),
   openVideoFile: (videoPath: string) => ipcRenderer.invoke('video:open-file', videoPath),
@@ -228,6 +254,7 @@ const browserAPI: BrowserAPI = {
 const aiAPI = {
   sendClaude: browserAPI.sendClaude,
   runOrchestrator: browserAPI.runOrchestrator,
+  executeDoAgent: browserAPI.executeDoAgent,
 };
 
 contextBridge.exposeInMainWorld('browserAPI', browserAPI);

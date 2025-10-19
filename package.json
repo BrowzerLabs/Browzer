@@ -58,7 +58,7 @@
     "vite": "^5.4.20"
   },
   "dependencies": {
-    "@ai-sdk/anthropic": "^2.0.32",
+    "@ai-sdk/anthropic": "^2.0.33",
     "@ai-sdk/openai": "^2.0.52",
     "@anthropic-ai/sdk": "^0.65.0",
     "@chroma-core/default-embed": "^0.1.8",

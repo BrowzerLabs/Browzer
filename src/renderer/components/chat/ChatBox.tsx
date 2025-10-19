@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Bot, User, Loader2, Trash2, X } from 'lucide-react';
+import { Send, Bot, User, Loader2, Trash2, X, CheckCircle, XCircle, Clock } from 'lucide-react';
 import { Button } from '../../ui/button';
 import { Textarea } from '../../ui/textarea';
 import { ScrollArea } from '../../ui/scroll-area';
@@ -30,8 +30,60 @@ export function ChatBox({ className }: ChatBoxProps) {
   const [selectedContexts, setSelectedContexts] = useState<LLMContext[]>([]);
   const [isCancelled, setIsCancelled] = useState(false);
   
-  const { messages, isLoading, addMessage, setLoading, clearMessages } = useChatStore();
+  const { messages, isLoading, addMessage, updateMessage, setLoading, clearMessages } = useChatStore();
   const { tabs, activeTab, activeTabId } = useBrowserAPI();
+
+  useEffect(() => {
+    const unsubscribeStepUpdate = window.browserAPI.onDoAgentStepUpdate((step) => {
+      // Check if this step already exists (by stepId)
+      const existingMessage = messages.find(msg => 
+        msg.role === 'agent-step' && msg.stepInfo?.stepId === step.stepId
+      );
+
+      if (existingMessage) {
+        // Update existing message
+        updateMessage(existingMessage.id, {
+          content: `Step: ${step.action} - ${step.description}`,
+          stepInfo: step
+        });
+      } else {
+        // Create new message for new step
+        addMessage({
+          role: 'agent-step',
+          content: `Step: ${step.action} - ${step.description}`,
+          stepInfo: step
+        });
+      }
+    });
+
+    const unsubscribeCompleted = window.browserAPI.onDoAgentCompleted((result) => {
+      // Stop loading indicator
+      setLoading(false);
+      
+      addMessage({
+        role: 'assistant',
+        content: result.success 
+          ? `✅ Task completed successfully! ${result.data ? `Result: ${JSON.stringify(result.data)}` : ''}`
+          : `❌ Task failed: ${result.error}`
+      });
+    });
+
+    const unsubscribeError = window.browserAPI.onDoAgentError((error) => {
+      // Stop loading indicator
+      setLoading(false);
+      
+      addMessage({
+        role: 'assistant',
+        content: `❌ DoAgent error: ${error.error}`
+      });
+    });
+
+    return () => {
+      unsubscribeStepUpdate();
+      unsubscribeCompleted();
+      unsubscribeError();
+    };
+  }, [addMessage, updateMessage, setLoading, messages]);
 
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
@@ -66,9 +118,11 @@ export function ChatBox({ className }: ChatBoxProps) {
     // Set loading state
     setLoading(true);
 
+    let queryType: QueryClassification = 'ask';
+    
     try {
       const classificationResult = await classifyQuery(userMessage);
-      const queryType: QueryClassification = classificationResult.success 
+      queryType = classificationResult.success 
         ? classificationResult.classification 
         : 'ask';
 
@@ -99,27 +153,43 @@ export function ChatBox({ className }: ChatBoxProps) {
       
       if (queryType === 'ask') {
         response = await handleAskQuery(userMessage, contextsToSend);
+        
+        // Check if cancelled before processing response
+        if (isCancelled) {
+          return;
+        }
+        
+        if (response.success) {
+          // Add assistant response
+          addMessage({
+            content: response.content,
+            role: 'assistant',
+          });
+        } else {
+          // Add error message
+          addMessage({
+            content: `Error: ${response.error || 'Failed to get response'}`,
+            role: 'assistant',
+          });
+        }
       } else {
+        // For DoAgent tasks, the loading state and messages are handled by event listeners
         response = await handleDoQuery(userMessage, contextsToSend);
-      }
-      
-      // Check if cancelled before processing response
-      if (isCancelled) {
-        return;
-      }
-      
-      if (response.success) {
-        // Add assistant response
-        addMessage({
-          content: response.content,
-          role: 'assistant',
-        });
-      } else {
-        // Add error message
-        addMessage({
-          content: `Error: ${response.error || 'Failed to get response'}`,
-          role: 'assistant',
-        });
+        
+        // Check if cancelled before processing response
+        if (isCancelled) {
+          return;
+        }
+        
+        if (!response.success) {
+          // Only add error message if the DoAgent failed to start
+          addMessage({
+            content: `Error: ${response.error || 'Failed to start DoAgent'}`,
+            role: 'assistant',
+          });
+          setLoading(false);
+        }
+        // If successful, the completion message will be handled by DoAgent event listeners
       }
     } catch (error) {
       // Check if cancelled before processing error
@@ -131,7 +201,10 @@ export function ChatBox({ className }: ChatBoxProps) {
         role: 'assistant',
       });
     } finally {
-      setLoading(false);
+      // Only set loading to false for non-DoAgent tasks
+      if (queryType === 'ask') {
+        setLoading(false);
+      }
       setIsTyping(false);
       setSelectedContexts([]);
     }
@@ -375,6 +448,50 @@ interface MessageBubbleProps {
 
 function MessageBubble({ message }: MessageBubbleProps) {
   const isUser = message.role === 'user';
+  const isAgentStep = message.role === 'agent-step';
+  
+  if (isAgentStep && message.stepInfo) {
+    return (
+      <div className="flex justify-start">
+        <div className="flex items-start space-x-2 max-w-[80%]">
+          <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 bg-purple-600">
+            <Clock className="w-4 h-4 text-white" />
+          </div>
+          
+          <div className="rounded-lg px-3 py-2 bg-purple-700 text-purple-100 border border-purple-600">
+            <div className="flex items-center space-x-2 mb-1">
+              <span className="text-xs font-medium text-purple-200">
+                Step {message.stepInfo.stepId}
+              </span>
+              <span className={`text-xs px-2 py-1 rounded ${
+                message.stepInfo.status === 'completed' 
+                  ? 'bg-green-600 text-white' 
+                  : message.stepInfo.status === 'failed'
+                  ? 'bg-red-600 text-white'
+                  : 'bg-yellow-600 text-white'
+              }`}>
+                {message.stepInfo.status}
+              </span>
+            </div>
+            <p className="text-sm font-medium">{message.stepInfo.description}</p>
+            {message.stepInfo.reasoning && (
+              <p className="text-xs text-purple-200 mt-1 italic">
+                {message.stepInfo.reasoning}
+              </p>
+            )}
+            {message.stepInfo.error && (
+              <p className="text-xs text-red-300 mt-1">
+                Error: {message.stepInfo.error}
+              </p>
+            )}
+            <p className="text-xs text-purple-300 mt-1">
+              {formatTime(message.timestamp)}
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
   
   return (
     <div className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}>

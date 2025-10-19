@@ -89,47 +89,25 @@ export async function handleDoQuery(
   contexts?: LLMContext[]
 ): Promise<LLMResponse> {
   try {
-    // Get the tab ID from the first context if available
-    let tabId: string | undefined;
-    if (contexts && contexts.length > 0 && contexts[0].type === 'tab') {
-      tabId = contexts[0].tabId;
-    }
-
-    // Add context information to the query if available
-    let enrichedQuery = query;
-    if (contexts && contexts.length > 0) {
-      const contextText = contexts
-        .map(ctx => {
-          if (ctx.type === 'tab') {
-            const lines: string[] = [];
-            if (ctx.title) lines.push(`Title: ${ctx.title}`);
-            if (ctx.url) lines.push(`URL: ${ctx.url}`);
-            if (ctx.markdown) lines.push(`Page content: ${ctx.markdown.substring(0, 1000)}...`);
-            return lines.join('\n');
-          }
-          return '';
-        })
-        .filter(Boolean)
-        .join('\n\n');
-      
-      if (contextText) {
-        enrichedQuery = `Context:\n${contextText}\n\nTask: ${query}`;
-      }
-    }
-
-    console.log('Running orchestrator for do query:', enrichedQuery);
-    const result = await window.aiAPI.runOrchestrator(enrichedQuery, tabId);
+    const result = await window.aiAPI.executeDoAgent(query);
     
-    return {
-      content: result,
-      success: true,
-    };
+    if (result.success) {
+      return {
+        content: `Task completed successfully! ${result.data ? `Result: ${JSON.stringify(result.data)}` : ''}`,
+        success: true
+      };
+    } else {
+      return {
+        content: `Task failed: ${result.error}`,
+        success: false,
+        error: result.error
+      };
+    }
   } catch (error) {
-    console.error('Orchestrator execution failed:', error);
     return {
       content: '',
       success: false,
-      error: (error as Error)?.message ?? 'Failed to execute task',
+      error: (error as Error)?.message ?? 'Unknown error occurred',
     };
   }
 }

@@ -7,6 +7,7 @@ import { UserService } from '../UserService';
 import { RecordedAction, HistoryQuery } from '../../shared/types';
 import memoryService from '../MemoryService';
 import Anthropic from '@anthropic-ai/sdk';
+import { DoAgent } from '../agent/DoAgent';
 
 /**
  * IPCHandlers - Centralized IPC communication setup
@@ -546,6 +547,66 @@ Always act as a calm, capable, and insightful assistant for users exploring the 
         throw new Error(`Failed to execute orchestrator: ${error instanceof Error ? error.message : 'Unknown error'}`);
       }
     });
+
+    ipcMain.handle('ai:do-agent', async (_, { instruction }: { 
+      instruction: string; 
+    }) => {
+      try {
+        // Get the active tab
+        const activeTabId = this.browserManager.getActiveTabId();
+        if (!activeTabId) {
+          throw new Error('No active tab available for DoAgent');
+        }
+        const tab = this.browserManager.getTab(activeTabId);
+        if (!tab) {
+          throw new Error(`Tab ${activeTabId} not found`);
+        }
+
+        console.log(`🤖 DoAgent: Using tab ${activeTabId} for instruction: "${instruction}"`);
+        const doAgent = new DoAgent((task, step) => {
+          console.log(`📋 DoAgent Step: ${step.action} - ${step.description}`);
+          
+          const agentUIView = this.windowManager.getAgentUIView();
+          if (agentUIView) {
+            agentUIView.webContents.send('do-agent:step-update', {
+              stepId: step.id,
+              action: step.action,
+              description: step.description,
+              status: step.status,
+              reasoning: step.reasoning,
+              result: step.result,
+              error: step.error
+            });
+          }
+        });
+        
+        const result = await doAgent.executeTask(instruction, tab.view);
+        
+        const agentUIView = this.windowManager.getAgentUIView();
+        if (agentUIView) {
+          agentUIView.webContents.send('do-agent:completed', {
+            success: result.success,
+            data: result.data,
+            error: result.error,
+            executionTime: result.executionTime
+          });
+        }
+        
+        console.log(`✅ DoAgent completed: ${result.success ? 'Success' : 'Failed'}`);
+        return result;
+      } catch (error) {
+        console.error('DoAgent execution failed:', error);
+        
+        const agentUIView = this.windowManager.getAgentUIView();
+        if (agentUIView) {
+          agentUIView.webContents.send('do-agent:error', {
+            error: error instanceof Error ? error.message : 'Unknown error'
+          });
+        }
+        
+        throw new Error(`Failed to execute DoAgent: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      }
+    });
   }
 
   private updateLayout(): void {
@@ -622,6 +683,7 @@ Always act as a calm, capable, and insightful assistant for users exploring the 
     ipcMain.removeAllListeners('memory:clear-all');
     ipcMain.removeAllListeners('ai:claude');
     ipcMain.removeAllListeners('ai:orchestrator');
+    ipcMain.removeAllListeners('ai:do-agent');
 
     memoryService.cleanup();
   }

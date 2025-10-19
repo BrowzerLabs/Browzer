@@ -6,6 +6,7 @@ declare global {
     aiAPI: {
       sendClaude: (fullMessage: string, contexts?: Array<{ type: 'tab'; tabId: string; title?: string; url?: string; markdown?: string }>) => Promise<string>;
       runOrchestrator: (query: string, tabId?: string) => Promise<string>;
+      executeDoAgent: (instruction: string) => Promise<{ success: boolean; data?: any; error?: string; executionTime: number }>;
     };
   }
 

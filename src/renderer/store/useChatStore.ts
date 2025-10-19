@@ -4,14 +4,24 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 export interface ChatMessage {
   id: string;
   content: string;
-  role: 'user' | 'assistant';
+  role: 'user' | 'assistant' | 'agent-step';
   timestamp: number;
+  stepInfo?: {
+    stepId: string;
+    action: string;
+    description: string;
+    status: string;
+    reasoning?: string;
+    result?: any;
+    error?: string;
+  };
 }
 
 interface ChatState {
   messages: ChatMessage[];
   isLoading: boolean;
   addMessage: (message: Omit<ChatMessage, 'id' | 'timestamp'>) => void;
+  updateMessage: (id: string, updates: Partial<ChatMessage>) => void;
   setLoading: (loading: boolean) => void;
   clearMessages: () => void;
 }
@@ -32,6 +42,13 @@ export const useChatStore = create<ChatState>()(
         };
         set((state) => ({
           messages: [...state.messages, newMessage],
+        }));
+      },
+      updateMessage: (id, updates) => {
+        set((state) => ({
+          messages: state.messages.map((message) =>
+            message.id === id ? { ...message, ...updates } : message
+          ),
         }));
       },
       setLoading: (loading) => set({ isLoading: loading }),
