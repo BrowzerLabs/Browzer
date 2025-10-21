@@ -1,10 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Settings } from '../screens/Settings';
-import { History } from '../screens/History';
-import { Recordings } from '../screens/Recordings';
-import { Profile } from '../screens/Profile';
-import { SignIn } from '../screens/SignIn';
-import { SignUp } from '../screens/SignUp';
+import { History, Recordings, Profile, SignIn, SignUp, Settings } from '@/renderer/screens';
 
 /**
  * Internal page routes configuration

@@ -1,41 +1,5 @@
+import { AppSettings } from '@/shared/types';
 import Store from 'electron-store';
-
-/**
- * Settings schema definition
- * This will be expanded as features are added
- */
-export interface AppSettings {
-  // General Settings
-  general: {
-    defaultSearchEngine: string;
-    homepage: string;
-    newTabPage: string;
-  };
-  
-  // Privacy & Security
-  privacy: {
-    clearCacheOnExit: boolean;
-    doNotTrack: boolean;
-    blockThirdPartyCookies: boolean;
-  };
-  
-  // Appearance
-  appearance: {
-    theme: 'light' | 'dark' | 'system';
-    fontSize: number;
-    showBookmarksBar: boolean;
-  };
-  
-  // Agent Settings
-  agent: {
-    autoSaveRecordings: boolean;
-  };
-  
-  // Automation Settings
-  automation: {
-    apiKey: string;
-  };
-}
 
 /**
  * Default settings configuration
@@ -56,11 +20,11 @@ const defaultSettings: AppSettings = {
     fontSize: 16,
     showBookmarksBar: false,
   },
-  agent: {
-    autoSaveRecordings: true,
-  },
   automation: {
-    apiKey: '',
+    defaultProvider: 'claude',
+    geminiApiKey: '',
+    claudeApiKey: '',
+    openaiApiKey: '',
   },
 };
 

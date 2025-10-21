@@ -2,11 +2,11 @@ import { ipcMain, shell } from 'electron';
 import { BrowserManager } from '@/main/BrowserManager';
 import { LayoutManager } from '@/main/window/LayoutManager';
 import { WindowManager } from '@/main/window/WindowManager';
-import { SettingsStore, AppSettings } from '@/main/settings/SettingsStore';
+import { SettingsStore } from '@/main/settings/SettingsStore';
 import { UserService } from '@/main/user/UserService';
 import { PasswordManager } from '@/main/password/PasswordManager';
 import { AutomationService } from '@/main/automation';
-import { RecordedAction, HistoryQuery, LLMAutomationRequest } from '@/shared/types';
+import { RecordedAction, HistoryQuery, LLMAutomationRequest, AppSettings } from '@/shared/types';
 
 /**
  * IPCHandlers - Centralized IPC communication setup

@@ -5,3 +5,4 @@ export * from './recording';
 export * from './history';
 export * from './user';
 export * from './automation';
+export * from './settings';
