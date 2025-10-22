@@ -60,6 +60,18 @@ export interface ElementTarget {
   interactiveParent?: ElementTarget; // If clicked element is non-interactive, this is the interactive parent
 }
 
+/**
+ * Reference to another action in the sequence
+ */
+export interface ActionReference {
+  id: number; // Index in the actions array
+  type: string; // Action type
+  timestamp: number;
+  target: string; // Target selector
+  value?: any; // Action value
+  summary: string; // Human-readable summary
+}
+
 export interface RecordedAction {
   type: 'click' | 'input' | 'navigate' | 'keypress' | 'submit' | 'select' | 'checkbox' | 'radio' | 'toggle' | 'file-upload' | 'tab-switch';
   timestamp: number;
@@ -83,6 +95,10 @@ export interface RecordedAction {
   verified?: boolean;
   verificationTime?: number;
   effects?: ClickEffects;
+
+  // Action sequence relations
+  previousAction?: ActionReference;
+  nextAction?: ActionReference;
 }
 
 /**

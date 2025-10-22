@@ -3,6 +3,7 @@
 import { WebContentsView } from "electron";
 import { RecordedAction } from '@/shared/types';
 import { SnapshotManager } from './SnapshotManager';
+import { VLMService, VLMAnalysisRequest, VLMAnalysisResponse } from '../services/VLMService';
 
 export class ActionRecorder {
   private view: WebContentsView | null = null;
@@ -11,6 +12,11 @@ export class ActionRecorder {
   private debugger: Electron.Debugger | null = null;
   public onActionCallback?: (action: RecordedAction) => void;
   private snapshotManager: SnapshotManager;
+  private vlmService: VLMService;
+
+  // VLM enhancement data
+  private vlmAnalysisResults: Map<number, VLMAnalysisResponse> = new Map();
+  private recordingScreenshots: Array<{ base64: string; timestamp: number; dimensions: any }> = [];
 
   // Tab context for current recording
   private currentTabId: string | null = null;
@@ -43,6 +49,11 @@ export class ActionRecorder {
       this.debugger = view.webContents.debugger;
     }
     this.snapshotManager = new SnapshotManager();
+    this.vlmService = VLMService.getInstance();
+    
+    // Log VLM service status
+    const vlmStatus = this.vlmService.getStatus();
+    console.log('🧠 VLM Service Status:', vlmStatus);
   }
 
   /**
@@ -149,6 +160,10 @@ export class ActionRecorder {
       this.actions = [];
       this.isRecording = true;
 
+      // Reset VLM data for new recording
+      this.vlmAnalysisResults.clear();
+      this.recordingScreenshots = [];
+
       // Set initial tab context
       if (tabId && tabUrl && tabTitle) {
         this.currentTabId = tabId;
@@ -166,6 +181,11 @@ export class ActionRecorder {
       this.setupEventListeners();
 
       console.log('🎬 Recording started');
+      console.log('📊 Enhanced metadata capture enabled:');
+      console.log('  ☑️ Checkbox/Radio: All options + group context');
+      console.log('  📋 Form Context: Field relationships + validation');
+      console.log('  🔄 Step Tracking: Previous/next field sequence');
+      console.log('  📊 Metadata analysis will be shown when recording stops');
     } catch (error) {
       console.error('Failed to start recording:', error);
       this.isRecording = false;
@@ -188,7 +208,7 @@ export class ActionRecorder {
         try {
           // Disable the current script instance
           await this.debugger.sendCommand('Runtime.evaluate', {
-            expression: 'window.__browzerRecorderInstalled = false;'
+            expression: 'window.__browzerRecorderInstalled = false; window.browzerRecordingActive = false;'
           });
           console.log('🔇 Browser-side monitoring script disabled');
           
@@ -217,6 +237,15 @@ export class ActionRecorder {
       
       console.log(`⏹️ Recording stopped. Captured ${this.actions.length} actions`);
       
+      // Add action relations (previous/next) before analysis
+      this.addActionRelations();
+      
+      // Run VLM analysis on recorded actions (Phase 1)
+      await this.runVLMAnalysis();
+      
+      // Analyze and print metadata summary
+      this.printMetadataAnalysis();
+      
       // Reset tab context
       this.currentTabId = null;
       this.currentTabUrl = null;
@@ -243,6 +272,530 @@ export class ActionRecorder {
    */
   public getActions(): RecordedAction[] {
     return [...this.actions];
+  }
+
+  /**
+   * Run VLM analysis on recorded actions (Phase 1: Variable Detection + Error Detection)
+   */
+  private async runVLMAnalysis(): Promise<void> {
+    if (!this.vlmService.isAvailable()) {
+      console.log('🧠 VLM Analysis skipped - service not available');
+      return;
+    }
+
+    console.log('🧠 Starting VLM analysis for Phase 1 enhancements...');
+    
+    try {
+      // Generate recording ID for batch analysis
+      const recordingId = `rec-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      
+      // Get context information
+      const context = {
+        url: this.currentTabUrl || 'unknown',
+        pageTitle: this.currentTabTitle || 'unknown'
+      };
+
+      // Run batch analysis for all actions
+      const analysisResults = await this.vlmService.batchAnalyzeRecording(
+        recordingId,
+        this.actions,
+        this.recordingScreenshots,
+        context
+      );
+
+      // Store results for each action
+      analysisResults.forEach((result, index) => {
+        if (result) {
+          this.vlmAnalysisResults.set(index, result);
+          
+          // Apply VLM enhancements to action metadata
+          this.applyVLMEnhancements(index, result);
+        }
+      });
+
+      console.log(`✅ VLM Analysis completed: ${analysisResults.length}/${this.actions.length} actions enhanced`);
+
+    } catch (error) {
+      console.error('❌ VLM Analysis failed:', error);
+    }
+  }
+
+  /**
+   * Check if action is eligible for smart variable enhancement
+   */
+  private isVariableEligibleAction(action: RecordedAction): boolean {
+    // Only input-related actions can become variables
+    const variableTypes = ['input', 'select', 'checkbox', 'radio'];
+    return variableTypes.includes(action.type) && 
+           action.target?.selector !== undefined &&
+           action.value !== undefined;
+  }
+
+  /**
+   * Apply VLM analysis results to action metadata
+   */
+  private applyVLMEnhancements(actionIndex: number, analysis: VLMAnalysisResponse): void {
+    const action = this.actions[actionIndex];
+    if (!action || !action.metadata) return;
+
+    // Initialize VLM metadata section
+    action.metadata.vlmEnhancements = {
+      analysisId: analysis.analysisId,
+      timestamp: analysis.timestamp,
+      confidence: analysis.confidence,
+      processingTime: analysis.processingTimeMs,
+      modelUsed: analysis.modelUsed
+    };
+
+    // Phase 1: Apply Smart Variable Detection (only for variable-eligible actions)
+    if (this.isVariableEligibleAction(action) && analysis.variableDetection) {
+      // Ensure VLM enhancement is tied to the ACTUAL action element
+      const actualSelector = action.target?.selector;
+      const actualName = action.target?.name || action.target?.id || 'unnamed-field';
+      
+      // Find VLM variable that matches our actual element (or use the first one as fallback)
+      const matchingVariable = analysis.variableDetection.variables.find(v => 
+        v.fieldSelector === actualSelector
+      ) || analysis.variableDetection.variables[0]; // Fallback to first variable
+
+      if (matchingVariable) {
+        action.metadata.vlmEnhancements.smartVariable = {
+          // Use ACTUAL element data, enhanced with VLM insights
+          actualSelector: actualSelector,
+          actualName: actualName,
+          actualType: action.target?.type || action.type,
+          
+          // VLM enhancements
+          semanticName: matchingVariable.semanticName,
+          purpose: matchingVariable.purpose,
+          businessContext: matchingVariable.businessContext,
+          substitutionHints: matchingVariable.substitutionHints,
+          dataClassification: matchingVariable.dataClassification,
+          requiredFormat: matchingVariable.requiredFormat,
+          confidence: matchingVariable.confidence,
+          
+          // Link VLM suggestion to actual element
+          vlmFieldSelector: matchingVariable.fieldSelector,
+          selectorMatch: matchingVariable.fieldSelector === actualSelector
+        };
+
+        console.log(`🎯 Enhanced variable for action ${actionIndex}: ${actualName} → ${matchingVariable.semanticName}`);
+        
+        if (matchingVariable.fieldSelector !== actualSelector) {
+          console.warn(`⚠️ VLM selector mismatch - Actual: ${actualSelector}, VLM: ${matchingVariable.fieldSelector}`);
+        }
+      }
+    }
+
+    // Phase 1: Apply Error Detection
+    if (analysis.errorDetection) {
+      action.metadata.vlmEnhancements.errorAnalysis = {
+        errorDetected: analysis.errorDetection.errorDetected,
+        errorType: analysis.errorDetection.errorType,
+        visualCues: analysis.errorDetection.visualCues,
+        errorMessage: analysis.errorDetection.errorMessage,
+        errorCause: analysis.errorDetection.errorCause,
+        recoverySuggestions: analysis.errorDetection.recoverySuggestions,
+        alternativeActions: analysis.errorDetection.alternativeActions,
+        errorSeverity: analysis.errorDetection.errorSeverity,
+        confidence: analysis.errorDetection.confidence
+      };
+
+      if (analysis.errorDetection.errorDetected) {
+        console.log(`🚨 Error detected in action ${actionIndex}: ${analysis.errorDetection.errorType}`);
+      }
+    }
+  }
+
+  /**
+   * Capture screenshot for VLM analysis during recording
+   */
+  private async captureScreenshotForVLM(): Promise<{ base64: string; timestamp: number; dimensions: any } | null> {
+    if (!this.view || !this.vlmService.isAvailable()) return null;
+
+    try {
+      const image = await this.view.webContents.capturePage();
+      const base64 = image.toDataURL().replace(/^data:image\/png;base64,/, '');
+      
+      const screenshot = {
+        base64,
+        timestamp: Date.now(),
+        dimensions: {
+          width: image.getSize().width,
+          height: image.getSize().height
+        }
+      };
+
+      // Store screenshot for batch analysis
+      this.recordingScreenshots.push(screenshot);
+      
+      return screenshot;
+      
+    } catch (error) {
+      console.error('Failed to capture screenshot for VLM:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Add previous/next action relations to provide better workflow context
+   */
+  private addActionRelations(): void {
+    console.log('🔗 Adding action relations...');
+    
+    for (let i = 0; i < this.actions.length; i++) {
+      const currentAction = this.actions[i];
+      
+      // Add reference to previous action
+      if (i > 0) {
+        const previousAction = this.actions[i - 1];
+        currentAction.previousAction = {
+          id: i - 1, // Use array index as ID
+          type: previousAction.type,
+          timestamp: previousAction.timestamp,
+          target: previousAction.target?.selector || 'unknown',
+          value: previousAction.value,
+          summary: this.getActionSummary(previousAction)
+        };
+      }
+      
+      // Add reference to next action
+      if (i < this.actions.length - 1) {
+        const nextAction = this.actions[i + 1];
+        currentAction.nextAction = {
+          id: i + 1, // Use array index as ID
+          type: nextAction.type,
+          timestamp: nextAction.timestamp,
+          target: nextAction.target?.selector || 'unknown',
+          value: nextAction.value,
+          summary: this.getActionSummary(nextAction)
+        };
+      }
+    }
+    
+    console.log(`✅ Added relations for ${this.actions.length} actions`);
+  }
+
+  /**
+   * Generate a human-readable summary for an action
+   */
+  private getActionSummary(action: RecordedAction): string {
+    switch (action.type) {
+      case 'input':
+        const fieldName = action.target?.name || action.target?.id || 'field';
+        const inputType = action.target?.type || 'text';
+        return `Enter ${inputType === 'password' ? 'password' : 'text'} in ${fieldName}`;
+      
+      case 'click':
+        const clickTarget = action.target?.selector || 'element';
+        return `Click on ${clickTarget}`;
+      
+      case 'select':
+        const selectValue = action.value || 'option';
+        return `Select "${selectValue}"`;
+      
+      case 'checkbox':
+        const checked = action.value ? 'checked' : 'unchecked';
+        const checkboxName = action.target?.name || action.target?.id || 'checkbox';
+        return `Set ${checkboxName} to ${checked}`;
+      
+      case 'radio':
+        const radioValue = action.value || 'option';
+        const radioName = action.target?.name || 'radio group';
+        return `Select "${radioValue}" in ${radioName}`;
+      
+      case 'submit':
+        return 'Submit form';
+      
+      case 'navigate':
+        return 'Navigate to new page';
+      
+      case 'keypress':
+        const key = action.value || 'key';
+        return `Press ${key}`;
+      
+      default:
+        return `Perform ${action.type} action`;
+    }
+  }
+
+  /**
+   * Print VLM enhancements summary
+   */
+  private printVLMEnhancementsSummary(): void {
+    const enhancedActions = this.actions.filter(action => action.metadata?.vlmEnhancements);
+    
+    if (enhancedActions.length === 0) {
+      console.log(`\n🧠 VLM ENHANCEMENTS: None (feature disabled or not available)`);
+      return;
+    }
+
+    console.log(`\n🧠 VLM ENHANCEMENTS SUMMARY:`);
+    console.log(`Enhanced Actions: ${enhancedActions.length}/${this.actions.length}`);
+    
+    // Count smart variables found
+    let totalSmartVariables = 0;
+    let errorDetections = 0;
+    let selectorMatches = 0;
+    
+    enhancedActions.forEach(action => {
+      const vlm = action.metadata?.vlmEnhancements;
+      if (vlm?.smartVariable) {
+        totalSmartVariables++;
+        if (vlm.smartVariable.selectorMatch) {
+          selectorMatches++;
+        }
+      }
+      if (vlm?.errorAnalysis?.errorDetected) {
+        errorDetections++;
+      }
+    });
+
+    console.log(`Smart Variables Detected: ${totalSmartVariables}`);
+    console.log(`Selector Accuracy: ${selectorMatches}/${totalSmartVariables} exact matches`);
+    console.log(`Error States Detected: ${errorDetections}`);
+    
+    if (totalSmartVariables > 0) {
+      console.log(`\n📝 SMART VARIABLES FOUND:`);
+      enhancedActions.forEach((action) => {
+        const vlm = action.metadata?.vlmEnhancements;
+        if (vlm?.smartVariable) {
+          const variable = vlm.smartVariable;
+          console.log(`  • ${variable.semanticName} (${variable.purpose})`);
+          console.log(`    Element: ${variable.actualSelector}`);
+          console.log(`    Original: ${variable.actualName} → Enhanced: ${variable.semanticName}`);
+          console.log(`    Suggestions: ${variable.substitutionHints.join(', ')}`);
+          console.log(`    Match Quality: ${variable.selectorMatch ? '✅ Exact' : '⚠️ Approximated'}`);
+        }
+      });
+    }
+
+    if (errorDetections > 0) {
+      console.log(`\n🚨 ERROR STATES DETECTED:`);
+      enhancedActions.forEach(action => {
+        const vlm = action.metadata?.vlmEnhancements;
+        if (vlm?.errorAnalysis?.errorDetected) {
+          console.log(`  • ${vlm.errorAnalysis.errorType}: ${vlm.errorAnalysis.errorMessage}`);
+          console.log(`    Recovery: ${vlm.errorAnalysis.recoverySuggestions.join(', ')}`);
+        }
+      });
+    }
+  }
+
+  /**
+   * Print comprehensive metadata analysis of recorded actions
+   */
+  private printMetadataAnalysis(): void {
+    console.log('\n' + '='.repeat(80));
+    console.log('📊 METADATA ANALYSIS REPORT');
+    console.log('='.repeat(80));
+    
+    if (this.actions.length === 0) {
+      console.log('No actions recorded to analyze.');
+      return;
+    }
+
+    // Group actions by type
+    const actionsByType: { [key: string]: RecordedAction[] } = {};
+    const formContexts: Set<string> = new Set();
+    const validationRules: any[] = [];
+    let checkboxGroups: any[] = [];
+    let radioGroups: any[] = [];
+    let selectOptions: any[] = [];
+
+    this.actions.forEach(action => {
+      const type = action.type;
+      if (!actionsByType[type]) {
+        actionsByType[type] = [];
+      }
+      actionsByType[type].push(action);
+
+      // Collect form contexts
+      if (action.metadata?.formContext?.hasForm) {
+        const formId = action.metadata.formContext.formId || 'unnamed-form';
+        formContexts.add(`${formId} (${action.metadata.formContext.fieldCount} fields)`);
+      }
+
+      // Collect validation rules
+      if (action.metadata?.validation) {
+        const validation = action.metadata.validation;
+        if (validation.required || validation.pattern || validation.minLength > 0) {
+          validationRules.push({
+            field: action.target?.name || action.target?.id || 'unnamed',
+            type: action.type,
+            rules: validation
+          });
+        }
+      }
+
+      // Collect enhanced checkbox data
+      if (action.type === 'checkbox' && action.metadata?.allOptions) {
+        checkboxGroups.push({
+          groupName: action.metadata.groupName || 'unnamed-group',
+          totalOptions: action.metadata.totalOptions,
+          selectedCount: action.metadata.selectedCount,
+          options: action.metadata.allOptions
+        });
+      }
+
+      // Collect enhanced radio data  
+      if (action.type === 'radio' && action.metadata?.allOptions) {
+        radioGroups.push({
+          groupName: action.metadata.groupName || 'unnamed-group',
+          totalOptions: action.metadata.totalOptions,
+          selectedOption: action.metadata.selectedOption,
+          allOptions: action.metadata.allOptions
+        });
+      }
+
+      // Collect enhanced select data
+      if (action.type === 'select' && action.metadata?.allOptions) {
+        selectOptions.push({
+          field: action.target?.name || action.target?.id || 'unnamed',
+          totalOptions: action.metadata.optionCount,
+          isMultiple: action.metadata.isMultiple,
+          allOptions: action.metadata.allOptions
+        });
+      }
+    });
+
+    // Print summary
+    console.log(`\n📈 SUMMARY:`);
+    console.log(`Total Actions: ${this.actions.length}`);
+    console.log(`Action Types: ${Object.keys(actionsByType).join(', ')}`);
+    console.log(`Forms Detected: ${formContexts.size}`);
+    
+    // Print workflow sequence
+    console.log(`\n🔄 WORKFLOW SEQUENCE:`);
+    this.actions.forEach((action, index) => {
+      const summary = this.getActionSummary(action);
+      const connector = index < this.actions.length - 1 ? ' → ' : '';
+      console.log(`  [${index + 1}] ${summary}${connector}`);
+    });
+
+    // Print action breakdown
+    console.log(`\n🎯 ACTION BREAKDOWN:`);
+    Object.entries(actionsByType).forEach(([type, actions]) => {
+      console.log(`  ${type}: ${actions.length} actions`);
+    });
+
+    // Print form contexts
+    if (formContexts.size > 0) {
+      console.log(`\n📋 FORM CONTEXTS:`);
+      formContexts.forEach(context => {
+        console.log(`  • ${context}`);
+      });
+    }
+
+    // Print validation rules
+    if (validationRules.length > 0) {
+      console.log(`\n✅ VALIDATION RULES DETECTED:`);
+      validationRules.forEach(rule => {
+        const validations = [];
+        if (rule.rules.required) validations.push('required');
+        if (rule.rules.pattern) validations.push(`pattern: ${rule.rules.pattern}`);
+        if (rule.rules.minLength > 0) validations.push(`minLength: ${rule.rules.minLength}`);
+        if (rule.rules.maxLength > 0) validations.push(`maxLength: ${rule.rules.maxLength}`);
+        console.log(`  • ${rule.field} (${rule.type}): ${validations.join(', ')}`);
+      });
+    }
+
+    // Print enhanced checkbox metadata
+    if (checkboxGroups.length > 0) {
+      console.log(`\n☑️ CHECKBOX GROUPS:`);
+      checkboxGroups.forEach(group => {
+        console.log(`  • ${group.groupName}: ${group.selectedCount}/${group.totalOptions} selected`);
+        group.options.forEach((option: any) => {
+          console.log(`    - ${option.label}: ${option.checked ? '✓' : '○'} (${option.value})`);
+        });
+      });
+    }
+
+    // Print enhanced radio metadata
+    if (radioGroups.length > 0) {
+      console.log(`\n🔘 RADIO GROUPS:`);
+      radioGroups.forEach(group => {
+        console.log(`  • ${group.groupName}: ${group.totalOptions} options`);
+        group.allOptions.forEach((option: any) => {
+          console.log(`    - ${option.label}: ${option.checked ? '●' : '○'} (${option.value})`);
+        });
+      });
+    }
+
+    // Print enhanced select metadata
+    if (selectOptions.length > 0) {
+      console.log(`\n📋 SELECT FIELDS:`);
+      selectOptions.forEach(select => {
+        console.log(`  • ${select.field}: ${select.totalOptions} options${select.isMultiple ? ' (multiple)' : ''}`);
+        select.allOptions.forEach((option: any) => {
+          console.log(`    - ${option.text}: ${option.selected ? '✓' : '○'} (${option.value})`);
+        });
+      });
+    }
+
+    // Print VLM enhancements summary
+    this.printVLMEnhancementsSummary();
+
+    // Print detailed actions with metadata
+    console.log(`\n🔍 DETAILED ACTION LOG:`);
+    this.actions.forEach((action, index) => {
+      console.log(`\n[${index + 1}] ${action.type.toUpperCase()} at ${new Date(action.timestamp).toLocaleTimeString()}`);
+      console.log(`  Target: ${action.target?.selector || 'unknown'}`);
+      console.log(`  Value: ${action.value}`);
+      
+      // Show action relations
+      if (action.previousAction || action.nextAction) {
+        console.log(`  🔗 Action Relations:`);
+        if (action.previousAction) {
+          console.log(`    ← Previous: [${action.previousAction.id + 1}] ${action.previousAction.summary}`);
+        }
+        if (action.nextAction) {
+          console.log(`    → Next: [${action.nextAction.id + 1}] ${action.nextAction.summary}`);
+        }
+      }
+
+      // Show VLM enhancements
+      if (action.metadata?.vlmEnhancements) {
+        console.log(`  🧠 VLM Enhancements:`);
+        const vlm = action.metadata.vlmEnhancements;
+        console.log(`    Confidence: ${vlm.confidence}, Model: ${vlm.modelUsed}`);
+        
+        if (vlm.smartVariable) {
+          console.log(`    📝 Smart Variable Enhancement:`);
+          const variable = vlm.smartVariable;
+          console.log(`      • ${variable.actualName} → ${variable.semanticName}`);
+          console.log(`        Selector: ${variable.actualSelector}`);
+          console.log(`        Purpose: ${variable.purpose}`);
+          console.log(`        Context: ${variable.businessContext}`);
+          console.log(`        Hints: ${variable.substitutionHints.join(', ')}`);
+          console.log(`        Confidence: ${variable.confidence}`);
+          
+          if (!variable.selectorMatch) {
+            console.log(`        ⚠️ Selector Mismatch: VLM suggested ${variable.vlmFieldSelector}`);
+          }
+        }
+
+        if (vlm.errorAnalysis && vlm.errorAnalysis.errorDetected) {
+          console.log(`    🚨 Error Analysis:`);
+          console.log(`      Type: ${vlm.errorAnalysis.errorType}`);
+          console.log(`      Message: ${vlm.errorAnalysis.errorMessage}`);
+          console.log(`      Recovery: ${vlm.errorAnalysis.recoverySuggestions.join(', ')}`);
+        }
+      }
+      
+      if (action.metadata) {
+        // Filter out VLM enhancements from main metadata display to avoid duplication
+        const filteredMetadata = { ...action.metadata };
+        delete filteredMetadata.vlmEnhancements;
+        if (Object.keys(filteredMetadata).length > 0) {
+          console.log(`  📋 Standard Metadata:`, JSON.stringify(filteredMetadata, null, 2));
+        }
+      }
+    });
+
+    console.log('\n' + '='.repeat(80));
+    console.log('✅ METADATA ANALYSIS COMPLETE');
+    console.log('='.repeat(80) + '\n');
   }
 
   /**
@@ -421,10 +974,57 @@ export class ActionRecorder {
       (function() {
         if (window.__browzerRecorderInstalled) return;
         window.__browzerRecorderInstalled = true;
+        window.browzerRecordingActive = true;
         
         // Helper function to check if recording is still active
         function shouldRecordAction() {
-          return window.__browzerRecorderInstalled === true;
+          return window.browzerRecordingActive === true;
+        }
+        
+        function getFormContext(element) {
+          const parentForm = element.closest('form');
+          if (!parentForm) {
+            return {
+              hasForm: false,
+              fieldCount: 0
+            };
+          }
+          
+          // Get form metadata
+          const formInputs = parentForm.querySelectorAll('input, select, textarea');
+          const formAction = parentForm.action || '';
+          const formMethod = parentForm.method || 'get';
+          
+          // Find field position and neighboring fields
+          const formElements = Array.from(formInputs);
+          const currentIndex = formElements.indexOf(element);
+          
+          const previousField = currentIndex > 0 ? formElements[currentIndex - 1] : null;
+          const nextField = currentIndex < formElements.length - 1 ? formElements[currentIndex + 1] : null;
+          
+          // Get field labels and context
+          const getFieldInfo = function(field) {
+            if (!field) return null;
+            return {
+              name: field.name || '',
+              type: field.type || field.tagName.toLowerCase(),
+              id: field.id || '',
+              label: field.labels && field.labels[0] ? field.labels[0].innerText : 
+                     (field.getAttribute('aria-label') || field.placeholder || '')
+            };
+          };
+          
+          return {
+            hasForm: true,
+            formAction: formAction,
+            formMethod: formMethod,
+            fieldCount: formElements.length,
+            fieldPosition: currentIndex + 1,
+            previousField: getFieldInfo(previousField),
+            nextField: getFieldInfo(nextField),
+            formId: parentForm.id || '',
+            formName: parentForm.name || ''
+          };
         }
         
         document.addEventListener('click', (e) => {
@@ -599,12 +1199,27 @@ export class ActionRecorder {
           let actionType = 'input';
           let value = target.value;
           let metadata = {};
+          
           // Note: checkbox and radio are now handled only by the 'change' event to avoid duplicates
           if (inputType === 'range') {
             metadata = { min: target.min, max: target.max, step: target.step };
           } else if (inputType === 'color') {
             metadata = { colorValue: target.value };
           }
+          
+          // Get form context for all input types
+          const formContext = getFormContext(target);
+          metadata.formContext = formContext;
+          
+          // Add validation context
+          metadata.validation = {
+            required: target.required || false,
+            pattern: target.pattern || '',
+            minLength: target.minLength || 0,
+            maxLength: target.maxLength || 0,
+            min: target.min || '',
+            max: target.max || ''
+          };
           
           if (!shouldRecordAction()) return;
           console.info('[BROWZER_ACTION]', JSON.stringify({
@@ -637,6 +1252,17 @@ export class ActionRecorder {
             selectedTexts = [selectedOption?.text];
           }
           
+          // Get all available options for enhanced metadata
+          const allOptions = Array.from(target.options).map(function(opt, index) {
+            return {
+              value: opt.value,
+              text: opt.text,
+              selected: opt.selected,
+              index: index,
+              disabled: opt.disabled
+            };
+          });
+          
           if (!shouldRecordAction()) return;
           console.info('[BROWZER_ACTION]', JSON.stringify({
             type: 'select',
@@ -652,12 +1278,42 @@ export class ActionRecorder {
             metadata: {
               selectedTexts: selectedTexts,
               optionCount: target.options.length,
-              isMultiple: isMultiple
+              isMultiple: isMultiple,
+              // Enhanced metadata: all available options
+              allOptions: allOptions,
+              selectedIndices: isMultiple ? 
+                Array.from(target.selectedOptions).map(function(opt) { return opt.index; }) :
+                [target.selectedIndex],
+              // Form context
+              formContext: getFormContext(target)
             }
           }));
         }
         function handleCheckboxAction(target) {
           if (!shouldRecordAction()) return;
+          
+          // Find all related checkboxes with the same name (checkbox group)
+          let allOptions = [];
+          if (target.name) {
+            const relatedCheckboxes = document.querySelectorAll('input[type="checkbox"][name="' + target.name + '"]');
+            allOptions = Array.from(relatedCheckboxes).map(cb => ({
+              value: cb.value || cb.id || 'on',
+              label: cb.labels?.[0]?.innerText || cb.getAttribute('aria-label') || cb.nextElementSibling?.textContent?.trim() || cb.value,
+              checked: cb.checked,
+              id: cb.id,
+              selector: getSelector(cb)
+            }));
+          } else {
+            // Single checkbox
+            allOptions = [{
+              value: target.value || target.id || 'on',
+              label: target.labels?.[0]?.innerText || target.getAttribute('aria-label') || target.nextElementSibling?.textContent?.trim() || target.value,
+              checked: target.checked,
+              id: target.id,
+              selector: getSelector(target)
+            }];
+          }
+          
           console.info('[BROWZER_ACTION]', JSON.stringify({
             type: 'checkbox',
             timestamp: Date.now(),
@@ -671,12 +1327,62 @@ export class ActionRecorder {
             value: target.checked,
             metadata: {
               checked: target.checked,
-              label: target.labels?.[0]?.innerText || undefined
+              label: target.labels && target.labels[0] ? target.labels[0].innerText : undefined,
+              // Enhanced metadata: all available options
+              allOptions: allOptions,
+              groupName: target.name,
+              totalOptions: allOptions.length,
+              selectedCount: allOptions.filter(function(opt) { return opt.checked; }).length,
+              // Form context
+              formContext: getFormContext(target)
             }
           }));
         }
         function handleRadioAction(target) {
           if (!shouldRecordAction()) return;
+          
+          // Find all radio buttons in the same group
+          let allOptions = [];
+          if (target.name) {
+            const relatedRadios = document.querySelectorAll('input[type="radio"][name="' + target.name + '"]');
+            allOptions = Array.from(relatedRadios).map(function(radio) {
+              return {
+                value: radio.value || radio.id || '',
+                label: radio.labels && radio.labels[0] ? radio.labels[0].innerText : 
+                       (radio.getAttribute('aria-label') || 
+                        (radio.nextElementSibling && radio.nextElementSibling.textContent ? radio.nextElementSibling.textContent.trim() : '') ||
+                        radio.value),
+                checked: radio.checked,
+                id: radio.id,
+                selector: getSelector(radio)
+              };
+            });
+          } else {
+            // Single radio (unusual but handle it)
+            allOptions = [{
+              value: target.value || target.id || '',
+              label: target.labels && target.labels[0] ? target.labels[0].innerText : 
+                     (target.getAttribute('aria-label') || 
+                      (target.nextElementSibling && target.nextElementSibling.textContent ? target.nextElementSibling.textContent.trim() : '') ||
+                      target.value),
+              checked: target.checked,
+              id: target.id,
+              selector: getSelector(target)
+            }];
+          }
+          
+          // Get group context
+          let groupContext = '';
+          const parentFieldset = target.closest('fieldset');
+          const parentForm = target.closest('form');
+          
+          if (parentFieldset) {
+            const legend = parentFieldset.querySelector('legend');
+            groupContext = legend ? (legend.textContent ? legend.textContent.trim() : '') : '';
+          } else if (parentForm) {
+            groupContext = parentForm.getAttribute('aria-label') || parentForm.title || 'Radio group';
+          }
+          
           console.info('[BROWZER_ACTION]', JSON.stringify({
             type: 'radio',
             timestamp: Date.now(),
@@ -691,7 +1397,14 @@ export class ActionRecorder {
             metadata: {
               checked: target.checked,
               groupName: target.name,
-              label: target.labels?.[0]?.innerText || undefined
+              label: target.labels && target.labels[0] ? target.labels[0].innerText : undefined,
+              // Enhanced metadata: all available options
+              allOptions: allOptions,
+              groupContext: groupContext,
+              totalOptions: allOptions.length,
+              selectedOption: allOptions.find(function(opt) { return opt.checked; }) || null,
+              // Form context
+              formContext: getFormContext(target)
             }
           }));
         }
@@ -1210,6 +1923,11 @@ export class ActionRecorder {
             enrichedAction.snapshotPath = snapshotPath;
           }
         }).catch(err => console.error('Snapshot capture failed:', err));
+
+        // Capture screenshot for VLM analysis (if enabled)
+        this.captureScreenshotForVLM().catch(err => 
+          console.error('VLM screenshot capture failed:', err)
+        );
       }
       
       this.actions.push(enrichedAction);
