@@ -40,3 +40,10 @@ export function formatFileSize(bytes: number): string {
   
   return `${(bytes / Math.pow(k, i)).toFixed(1)} ${sizes[i]}`;
 }
+
+export function formatTime(timestamp: number) {
+  return new Date(timestamp).toLocaleTimeString([], { 
+    hour: '2-digit', 
+    minute: '2-digit' 
+  });
+}
