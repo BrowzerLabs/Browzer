@@ -4,6 +4,8 @@ import { WebContentsView } from "electron";
 import { RecordedAction } from '@/shared/types';
 import { SnapshotManager } from './SnapshotManager';
 import { VLMService, VLMAnalysisRequest, VLMAnalysisResponse } from '../services/VLMService';
+import { ActionAnalyzer } from './ActionAnalyzer';
+import { ActionCleanup } from './ActionCleanup';
 
 export class ActionRecorder {
   private view: WebContentsView | null = null;
@@ -13,6 +15,8 @@ export class ActionRecorder {
   public onActionCallback?: (action: RecordedAction) => void;
   private snapshotManager: SnapshotManager;
   private vlmService: VLMService;
+  private actionAnalyzer: ActionAnalyzer;
+  private actionCleanup: ActionCleanup;
 
   // VLM enhancement data
   private vlmAnalysisResults: Map<number, VLMAnalysisResponse> = new Map();
@@ -26,6 +30,15 @@ export class ActionRecorder {
   
   // Store the script identifier so we can remove it later
   private injectedScriptId: string | null = null;
+  
+  // Callback for when VLM analysis completes
+  private onVLMAnalysisComplete?: (enhancedActions: RecordedAction[], recordingId: string) => void;
+  
+  // VLM analysis cancellation tracking
+  private vlmAnalysisAbortController?: AbortController;
+  
+  // Track which recording ID this VLM analysis belongs to
+  private vlmAnalysisRecordingId?: string;
 
   private recentNetworkRequests: Array<{
     url: string;
@@ -50,10 +63,18 @@ export class ActionRecorder {
     }
     this.snapshotManager = new SnapshotManager();
     this.vlmService = VLMService.getInstance();
+    this.actionAnalyzer = new ActionAnalyzer();
+    this.actionCleanup = new ActionCleanup();
     
-    // Log VLM service status
-    const vlmStatus = this.vlmService.getStatus();
+    // VLM server and model loading now happens automatically at startup
+    // Log current VLM service status
+    const vlmStatus = this.vlmService.getVLMStatus();
     console.log('🧠 VLM Service Status:', vlmStatus);
+    
+    // Show model loading progress to user
+    if (vlmStatus.enabled && !vlmStatus.modelLoaded) {
+      console.log('🧠 VLM model is loading in background... Analysis will be faster once loaded.');
+    }
   }
 
   /**
@@ -61,6 +82,33 @@ export class ActionRecorder {
    */
   public setActionCallback(callback: (action: RecordedAction) => void): void {
     this.onActionCallback = callback;
+  }
+
+  /**
+   * Set callback for when VLM analysis completes
+   */
+  public setVLMAnalysisCallback(callback: (enhancedActions: RecordedAction[], recordingId: string) => void): void {
+    this.onVLMAnalysisComplete = callback;
+  }
+
+  /**
+   * Set the recording ID for VLM analysis tracking
+   */
+  public setVLMAnalysisRecordingId(recordingId: string): void {
+    this.vlmAnalysisRecordingId = recordingId;
+  }
+
+  /**
+   * Cancel ongoing VLM analysis (useful when user discards recording)
+   */
+  public cancelVLMAnalysis(): void {
+    if (this.vlmAnalysisAbortController && !this.vlmAnalysisAbortController.signal.aborted) {
+      console.log('🛑 Cancelling VLM analysis...');
+      this.vlmAnalysisAbortController.abort();
+      this.vlmAnalysisAbortController = undefined;
+    }
+    // Clear recording ID since analysis is cancelled
+    this.vlmAnalysisRecordingId = undefined;
   }
 
   /**
@@ -240,11 +288,14 @@ export class ActionRecorder {
       // Add action relations (previous/next) before analysis
       this.addActionRelations();
       
-      // Run VLM analysis on recorded actions (Phase 1)
-      await this.runVLMAnalysis();
+      // Run immediate action cleanup to remove unnecessary actions
+      await this.runImmediateActionCleanup();
       
-      // Analyze and print metadata summary
+      // Analyze and print immediate metadata summary (without VLM)
       this.printMetadataAnalysis();
+      
+      // Run VLM analysis asynchronously in background (non-blocking)
+      this.runVLMAnalysisAsync();
       
       // Reset tab context
       this.currentTabId = null;
@@ -275,6 +326,172 @@ export class ActionRecorder {
   }
 
   /**
+   * Cleanup resources (call when app is shutting down)
+   */
+  public async cleanup(): Promise<void> {
+    try {
+      if (this.isRecording) {
+        await this.stopRecording();
+      }
+      
+      // Stop VLM server
+      await this.vlmService.stopVLMServer();
+      
+      console.log('✅ ActionRecorder cleanup completed');
+    } catch (error) {
+      console.error('❌ ActionRecorder cleanup failed:', error);
+    }
+  }
+
+  /**
+   * Run VLM analysis asynchronously in background (non-blocking)
+   */
+  private runVLMAnalysisAsync(): void {
+    console.log('🔄 Starting background VLM analysis...');
+    
+    // Create abort controller for this analysis session
+    this.vlmAnalysisAbortController = new AbortController();
+    
+    this.runVLMAnalysis().then(() => {
+      // Check if analysis was cancelled
+      if (this.vlmAnalysisAbortController?.signal.aborted) {
+        console.log('🧠 VLM analysis was cancelled before completion');
+        return;
+      }
+      
+      console.log('✨ Background VLM analysis completed - enhanced metadata available');
+      
+      // Print enhanced metadata summary
+      console.log('\n' + '='.repeat(80));
+      console.log('🧠 VLM ENHANCED METADATA REPORT (Background Analysis Complete)');
+      console.log('='.repeat(80));
+      this.printVLMEnhancementsSummary();
+      console.log('='.repeat(80));
+      
+      // Run action cleanup to remove unnecessary actions
+      this.runActionCleanup();
+      
+      // Always notify callback if set (handles both saved and unsaved recordings)
+      if (this.onVLMAnalysisComplete) {
+        if (this.vlmAnalysisRecordingId) {
+          console.log('🧠 Notifying VLM analysis completion callback with enhanced actions for recording:', this.vlmAnalysisRecordingId);
+          this.onVLMAnalysisComplete([...this.actions], this.vlmAnalysisRecordingId);
+          this.vlmAnalysisRecordingId = undefined; // Clear after callback
+        } else {
+          console.log('🧠 VLM analysis completed for unsaved recording - notifying UI to refresh variables');
+          this.onVLMAnalysisComplete([...this.actions], ''); // Empty string indicates unsaved recording
+        }
+      }
+      
+      // Log available enhanced metadata
+      this.updateSavedRecordingsWithEnhancements();
+    }).catch((error) => {
+      if (error.name === 'AbortError' || this.vlmAnalysisAbortController?.signal.aborted) {
+        console.log('🧠 VLM analysis was cancelled');
+      } else {
+        console.error('❌ Background VLM analysis failed:', error);
+      }
+    });
+  }
+
+  /**
+   * Run immediate action cleanup (called right after recording stops)
+   */
+  private async runImmediateActionCleanup(): Promise<void> {
+    console.log('🧹 Running immediate action cleanup...');
+    
+    try {
+      // Step 1: Analyze actions for usefulness
+      const analyzedActions = this.actionAnalyzer.analyzeActionUsefulness(this.actions);
+      
+      // Update actions array with usefulness analysis
+      this.actions = analyzedActions;
+      
+      // Step 2: Clean up unnecessary actions
+      const snapshotDirectory = this.getSnapshotDirectoryFromActions(this.actions);
+      const cleanupResult = await this.actionCleanup.cleanupActions(
+        this.actions, 
+        snapshotDirectory
+      );
+      
+      // Update actions array with cleaned actions
+      this.actions = cleanupResult.cleanedActions;
+      
+      // Step 3: Re-apply action relations since indices changed
+      this.addActionRelations();
+      
+      // Log cleanup summary
+      if (cleanupResult.removedCount > 0) {
+        console.log(`✅ Immediate cleanup complete: Removed ${cleanupResult.removedCount} unnecessary actions`);
+        console.log(`🗑️ Cleaned up ${cleanupResult.cleanedScreenshots.length} associated screenshots`);
+      } else {
+        console.log('✨ No unnecessary actions found - recording is already clean');
+      }
+      
+    } catch (error) {
+      console.error('❌ Immediate action cleanup failed:', error);
+    }
+  }
+
+  /**
+   * Run action cleanup to remove unnecessary actions and fix dependencies (called after VLM analysis)
+   */
+  private async runActionCleanup(): Promise<void> {
+    console.log('🧹 Post-VLM action cleanup (checking for additional cleanup after VLM enhancement)...');
+    
+    try {
+      // Step 1: Re-analyze actions for usefulness (VLM might have enhanced some actions)
+      const analyzedActions = this.actionAnalyzer.analyzeActionUsefulness(this.actions);
+      
+      // Check if any new actions were flagged as unnecessary
+      const newUnnecessaryCount = analyzedActions.filter(a => a.metadata?.unnecessary).length;
+      const currentUnnecessaryCount = this.actions.filter(a => a.metadata?.unnecessary).length;
+      
+      if (newUnnecessaryCount === currentUnnecessaryCount) {
+        console.log('✨ No additional unnecessary actions found after VLM analysis');
+        return;
+      }
+      
+      console.log(`🔍 Found ${newUnnecessaryCount - currentUnnecessaryCount} additional unnecessary actions after VLM enhancement`);
+      
+      // Update actions array with usefulness analysis
+      this.actions = analyzedActions;
+      
+      // Step 2: Clean up unnecessary actions
+      // Extract snapshot directory from existing snapshot paths
+      const snapshotDirectory = this.getSnapshotDirectoryFromActions(this.actions);
+      const cleanupResult = await this.actionCleanup.cleanupActions(
+        this.actions, 
+        snapshotDirectory
+      );
+      
+      // Update actions array with cleaned actions
+      this.actions = cleanupResult.cleanedActions;
+      
+      // Step 3: Re-apply action relations since indices changed
+      this.addActionRelations();
+      
+      // Step 4: Validate cleanup
+      const validation = this.actionCleanup.validateCleanup(analyzedActions, cleanupResult.cleanedActions);
+      if (!validation.isValid) {
+        console.warn('⚠️ Action cleanup validation issues:', validation.issues);
+      }
+      
+      // Log cleanup summary
+      if (cleanupResult.removedCount > 0) {
+        console.log(`✅ Action cleanup complete: Removed ${cleanupResult.removedCount} unnecessary actions`);
+        console.log(`🗑️ Cleaned up ${cleanupResult.cleanedScreenshots.length} associated screenshots`);
+      } else {
+        console.log('✨ No cleanup needed - all actions are useful');
+      }
+      
+    } catch (error) {
+      console.error('❌ Action cleanup failed:', error);
+      // Don't fail the entire process - continue with original actions
+    }
+  }
+
+  /**
    * Run VLM analysis on recorded actions (Phase 1: Variable Detection + Error Detection)
    */
   private async runVLMAnalysis(): Promise<void> {
@@ -286,6 +503,20 @@ export class ActionRecorder {
     console.log('🧠 Starting VLM analysis for Phase 1 enhancements...');
     
     try {
+      // Check if analysis was cancelled before starting
+      if (this.vlmAnalysisAbortController?.signal.aborted) {
+        throw new Error('VLM analysis was cancelled');
+      }
+      
+      // Validate screenshot-action alignment before analysis
+      const coverage = this.validateScreenshotCoverage();
+      console.log(`📸 Screenshot coverage: ${coverage.covered}/${coverage.total} actions (${coverage.missingCount} missing)`);
+
+      // Check if analysis was cancelled
+      if (this.vlmAnalysisAbortController?.signal.aborted) {
+        throw new Error('VLM analysis was cancelled');
+      }
+
       // Generate recording ID for batch analysis
       const recordingId = `rec-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
       
@@ -295,7 +526,7 @@ export class ActionRecorder {
         pageTitle: this.currentTabTitle || 'unknown'
       };
 
-      // Run batch analysis for all actions
+      // Run batch analysis for all actions (handles missing screenshots with fallbacks)
       const analysisResults = await this.vlmService.batchAnalyzeRecording(
         recordingId,
         this.actions,
@@ -313,11 +544,61 @@ export class ActionRecorder {
         }
       });
 
+      // Generate and log summary
+      const summary = this.generateVLMSummary();
       console.log(`✅ VLM Analysis completed: ${analysisResults.length}/${this.actions.length} actions enhanced`);
+      console.log(`📊 Enhancement Summary:`, summary);
 
     } catch (error) {
       console.error('❌ VLM Analysis failed:', error);
     }
+  }
+
+  /**
+   * Generate VLM enhancement summary for debugging and monitoring
+   */
+  private generateVLMSummary(): any {
+    const enhancedActions = this.actions.filter(a => a.metadata?.vlmEnhancements);
+    const fallbackActions = enhancedActions.filter(a => a.metadata?.vlmEnhancements?.fallbackUsed);
+    const variableActions = enhancedActions.filter(a => a.metadata?.vlmEnhancements?.smartVariable);
+    const errorActions = enhancedActions.filter(a => a.metadata?.vlmEnhancements?.errorAnalysis?.errorDetected);
+    const coverage = this.validateScreenshotCoverage();
+
+    return {
+      total: this.actions.length,
+      enhanced: enhancedActions.length,
+      fallbackUsed: fallbackActions.length,
+      smartVariables: variableActions.length,
+      errorsDetected: errorActions.length,
+      screenshotCoverage: `${coverage.covered}/${coverage.total}`,
+      enhancementRate: `${Math.round((enhancedActions.length / this.actions.length) * 100)}%`,
+      fallbackRate: enhancedActions.length > 0 ? `${Math.round((fallbackActions.length / enhancedActions.length) * 100)}%` : '0%',
+      reliability: coverage.missingCount === 0 ? 'Full Visual Analysis' : `${fallbackActions.length} Fallback Analysis`
+    };
+  }
+
+  /**
+   * Validate screenshot coverage for all actions
+   */
+  private validateScreenshotCoverage(): { total: number; covered: number; missingCount: number; missingActions: string[] } {
+    const total = this.actions.length;
+    const screenshotCount = this.recordingScreenshots.filter(s => s.base64 && s.base64.length > 0).length;
+    const missingActions: string[] = [];
+    
+    // Check for actions without corresponding valid screenshots
+    this.actions.forEach((action, index) => {
+      const screenshot = this.recordingScreenshots[index];
+      if (!screenshot || !screenshot.base64 || screenshot.base64.length === 0) {
+        missingActions.push(`${action.type}-${index}`);
+      }
+    });
+
+    return {
+      total,
+      covered: total - missingActions.length,
+      missingCount: missingActions.length,
+      missingActions
+    };
   }
 
   /**
@@ -344,7 +625,8 @@ export class ActionRecorder {
       timestamp: analysis.timestamp,
       confidence: analysis.confidence,
       processingTime: analysis.processingTimeMs,
-      modelUsed: analysis.modelUsed
+      modelUsed: analysis.modelUsed,
+      fallbackUsed: analysis.modelUsed === 'fallback_metadata_analysis'
     };
 
     // Phase 1: Apply Smart Variable Detection (only for variable-eligible actions)
@@ -402,7 +684,56 @@ export class ActionRecorder {
       };
 
       if (analysis.errorDetection.errorDetected) {
-        console.log(`🚨 Error detected in action ${actionIndex}: ${analysis.errorDetection.errorType}`);
+        const fallbackNote = action.metadata.vlmEnhancements.fallbackUsed ? ' (fallback analysis)' : '';
+        console.log(`🚨 Error detected in action ${actionIndex}: ${analysis.errorDetection.errorType}${fallbackNote}`);
+      }
+    }
+
+    // Log fallback usage if applicable
+    if (action.metadata.vlmEnhancements.fallbackUsed) {
+      console.log(`🔄 Fallback analysis used for action ${actionIndex} (${action.type}) - screenshot unavailable`);
+    }
+  }
+
+  /**
+   * Update saved recordings with VLM-enhanced metadata
+   */
+  private updateSavedRecordingsWithEnhancements(): void {
+    // Get the recording ID that was most recently saved
+    // This is a simplified approach - in a real implementation you'd want to track
+    // which recording this analysis belongs to more precisely
+    
+    console.log('🔄 Checking if any recent recordings need VLM metadata updates...');
+    
+    // For now, just log that enhanced metadata is available
+    // The enhanced variables are already in this.actions so they'll be included
+    // in any future saves or exports
+    
+    const enhancedVariables = this.actions
+      .filter(action => action.metadata?.vlmEnhancements?.smartVariable)
+      .map(action => ({
+        selector: action.target?.selector,
+        original: action.metadata?.vlmEnhancements?.smartVariable?.actualName,
+        enhanced: action.metadata?.vlmEnhancements?.smartVariable?.semanticName,
+        purpose: action.metadata?.vlmEnhancements?.smartVariable?.purpose
+      }));
+
+    if (enhancedVariables.length > 0) {
+      console.log('✨ Enhanced variables now available for future saves:');
+      enhancedVariables.forEach(v => {
+        console.log(`  • ${v.original} → ${v.enhanced} (${v.purpose})`);
+      });
+    }
+    
+    // Notify that VLM analysis is complete and pass enhanced actions
+    if (this.onVLMAnalysisComplete) {
+      const enhancedActions = this.actions.filter(action => 
+        action.metadata?.vlmEnhancements?.smartVariable
+      );
+      
+      if (enhancedActions.length > 0 && this.onVLMAnalysisComplete && this.vlmAnalysisRecordingId) {
+        console.log('🎯 Notifying BrowserManager of VLM analysis completion for recording:', this.vlmAnalysisRecordingId);
+        this.onVLMAnalysisComplete(this.actions, this.vlmAnalysisRecordingId); // Pass all actions with metadata
       }
     }
   }
@@ -410,10 +741,18 @@ export class ActionRecorder {
   /**
    * Capture screenshot for VLM analysis during recording
    */
-  private async captureScreenshotForVLM(): Promise<{ base64: string; timestamp: number; dimensions: any } | null> {
+  private async captureScreenshotForVLM(actionType?: string, actionId?: string): Promise<{ base64: string; timestamp: number; dimensions: any; actionContext?: any } | null> {
     if (!this.view || !this.vlmService.isAvailable()) return null;
 
+    // Check if this is a critical action type that requires screenshot
+    const isCriticalAction = this.isCriticalActionForVLM(actionType);
+
     try {
+      // For critical actions, add a small delay to ensure page stability
+      if (isCriticalAction) {
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+
       const image = await this.view.webContents.capturePage();
       const base64 = image.toDataURL().replace(/^data:image\/png;base64,/, '');
       
@@ -423,18 +762,95 @@ export class ActionRecorder {
         dimensions: {
           width: image.getSize().width,
           height: image.getSize().height
-        }
+        },
+        actionContext: actionType ? {
+          actionType,
+          actionId,
+          actionCount: this.actions.length,
+          url: this.currentTabUrl,
+          isCritical: isCriticalAction
+        } : undefined
       };
 
       // Store screenshot for batch analysis
       this.recordingScreenshots.push(screenshot);
       
+      console.log(`📸 VLM screenshot captured for ${actionType || 'action'}${isCriticalAction ? ' (CRITICAL)' : ''} (${screenshot.dimensions.width}x${screenshot.dimensions.height})`);
       return screenshot;
       
     } catch (error) {
-      console.error('Failed to capture screenshot for VLM:', error);
+      console.error(`Failed to capture VLM screenshot for ${actionType || 'action'}:`, error);
+      
+      // For critical actions, try alternative capture method
+      if (isCriticalAction) {
+        console.log('🔄 Attempting alternative screenshot method for critical action...');
+        try {
+          await new Promise(resolve => setTimeout(resolve, 200)); // Wait longer
+          const retryImage = await this.view.webContents.capturePage();
+          const retryBase64 = retryImage.toDataURL().replace(/^data:image\/png;base64,/, '');
+          
+          const retryScreenshot = {
+            base64: retryBase64,
+            timestamp: Date.now(),
+            dimensions: {
+              width: retryImage.getSize().width,
+              height: retryImage.getSize().height
+            },
+            actionContext: {
+              actionType,
+              actionId,
+              actionCount: this.actions.length,
+              url: this.currentTabUrl,
+              isCritical: true,
+              retryAttempt: true
+            }
+          };
+
+          this.recordingScreenshots.push(retryScreenshot);
+          console.log(`✅ Retry screenshot successful for critical action ${actionType}`);
+          return retryScreenshot;
+          
+        } catch (retryError) {
+          console.error(`❌ Retry screenshot also failed for critical action ${actionType}:`, retryError);
+        }
+      }
+      
+      // Add placeholder for missing screenshot
+      const placeholder = {
+        base64: '', // Empty base64 indicates missing screenshot
+        timestamp: Date.now(),
+        dimensions: { width: 0, height: 0 },
+        actionContext: actionType ? {
+          actionType,
+          actionId,
+          actionCount: this.actions.length,
+          url: this.currentTabUrl,
+          captureError: error.message,
+          isCritical: isCriticalAction
+        } : undefined
+      };
+      this.recordingScreenshots.push(placeholder);
       return null;
     }
+  }
+
+  /**
+   * Determine if action type is critical for VLM analysis
+   */
+  private isCriticalActionForVLM(actionType?: string): boolean {
+    if (!actionType) return false;
+    
+    // Critical actions that need visual context for proper analysis
+    const criticalTypes = [
+      'click',      // Click effects need visual verification
+      'input',      // Form field context crucial for variable detection
+      'submit',     // Form submission - high error potential
+      'navigation', // Page changes - error states common
+      'select',     // Dropdown selections - context important
+      'keypress'    // Key interactions in forms
+    ];
+    
+    return criticalTypes.includes(actionType);
   }
 
   /**
@@ -594,6 +1010,10 @@ export class ActionRecorder {
       console.log('No actions recorded to analyze.');
       return;
     }
+
+    // VLM Status indicator
+    console.log('🔄 VLM Analysis: Running in background - enhanced metadata will be available shortly');
+    console.log('');
 
     // Group actions by type
     const actionsByType: { [key: string]: RecordedAction[] } = {};
@@ -821,6 +1241,22 @@ export class ActionRecorder {
   }
 
   /**
+   * Extract snapshot directory from existing action snapshot paths
+   */
+  private getSnapshotDirectoryFromActions(actions: RecordedAction[]): string | undefined {
+    // Find first action with a snapshot path
+    const actionWithSnapshot = actions.find(action => action.snapshotPath);
+    
+    if (actionWithSnapshot?.snapshotPath) {
+      // Extract directory from the full path
+      const path = require('path');
+      return path.dirname(actionWithSnapshot.snapshotPath);
+    }
+    
+    return undefined;
+  }
+
+  /**
    * Clear recorded actions
    */
   public async clearActions(): Promise<void> {
@@ -882,6 +1318,9 @@ export class ActionRecorder {
     this.isRecording = false;
     this.actions = [];
     this.pendingActions.clear();
+    
+    // Cancel any ongoing VLM analysis
+    this.cancelVLMAnalysis();
     
     // Reset tab context
     this.currentTabId = null;
@@ -1925,7 +2364,8 @@ export class ActionRecorder {
         }).catch(err => console.error('Snapshot capture failed:', err));
 
         // Capture screenshot for VLM analysis (if enabled)
-        this.captureScreenshotForVLM().catch(err => 
+        const actionId = `${actionData.type}-${actionData.timestamp}`;
+        this.captureScreenshotForVLM(actionData.type, actionId).catch(err => 
           console.error('VLM screenshot capture failed:', err)
         );
       }
@@ -1973,13 +2413,18 @@ export class ActionRecorder {
       effects
     };
     
-    // Capture snapshot asynchronously for verified click actions
+    // Capture snapshot and VLM screenshot asynchronously for verified actions
     if (this.view) {
       this.snapshotManager.captureSnapshot(this.view, verifiedAction).then(snapshotPath => {
         if (snapshotPath) {
           verifiedAction.snapshotPath = snapshotPath;
         }
       }).catch(err => console.error('Snapshot capture failed:', err));
+
+      // Capture screenshot for VLM analysis (critical for error detection)
+      this.captureScreenshotForVLM(verifiedAction.type, actionId).catch(err => 
+        console.error('VLM screenshot capture failed for verified action:', err)
+      );
     }
     
     this.actions.push(verifiedAction);

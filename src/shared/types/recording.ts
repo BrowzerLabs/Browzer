@@ -263,4 +263,8 @@ export interface RecordingSession {
   
   // Workflow variables
   variables?: WorkflowVariable[]; // Extracted variables that can be customized
+  
+  // VLM enhancement metadata
+  vlmUpdated?: boolean; // Whether this recording has been enhanced by VLM
+  vlmUpdatedAt?: number; // Timestamp when VLM enhancement was completed
 }

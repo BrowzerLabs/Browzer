@@ -58,6 +58,10 @@ export interface BrowserAPI {
   neverSaveForSite: (origin: string) => Promise<boolean>;
   isSiteBlacklisted: (origin: string) => Promise<boolean>;
 
+  // Debug & Testing
+  testVLMParsing: () => Promise<boolean>;
+  updateRecordingWithVLM: (enhancedActions: any[]) => Promise<boolean>;
+
   // Settings Management
   getAllSettings: () => Promise<AppSettings>;
   getSettingsCategory: (category: keyof AppSettings) => Promise<any>;
@@ -106,6 +110,7 @@ export interface BrowserAPI {
   onRecordingStopped: (callback: (data: { actions: any[]; duration: number; startUrl: string }) => void) => () => void;
   onRecordingSaved: (callback: (session: any) => void) => () => void;
   onRecordingDeleted: (callback: (id: string) => void) => () => void;
+  onVLMAnalysisComplete: (callback: () => void) => () => void;
   onAutomationProgress: (callback: (data: any) => void) => () => void;
 }
 
@@ -188,6 +193,16 @@ const browserAPI: BrowserAPI = {
     ipcRenderer.on('recording:deleted', subscription);
     return () => ipcRenderer.removeListener('recording:deleted', subscription);
   },
+
+  onVLMAnalysisComplete: (callback: () => void) => {
+    const subscription = (_event: Electron.IpcRendererEvent) => callback();
+    ipcRenderer.on('recording:vlm-analysis-complete', subscription);
+    return () => ipcRenderer.removeListener('recording:vlm-analysis-complete', subscription);
+  },
+
+  // Debug & Testing API
+  testVLMParsing: () => ipcRenderer.invoke('debug:test-vlm-parsing'),
+  updateRecordingWithVLM: (enhancedActions: any[]) => ipcRenderer.invoke('browser:update-recording-with-vlm', enhancedActions),
 
   // Settings API
   getAllSettings: () => ipcRenderer.invoke('settings:get-all'),

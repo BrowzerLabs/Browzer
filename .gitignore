@@ -48,6 +48,11 @@ python-bundle*/
 builder-effective-config.yaml
 builder-debug.yml
 latest-mac.yml
+
+# VLM Model files (large files - don't commit to git)
+vlm-models/
+vlm-models/**
+!vlm-models/.gitkeep
 *.blockmap
 
 # OS generated files

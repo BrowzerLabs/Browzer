@@ -24,6 +24,12 @@ export function RecordingCard({ recording, onPlay, onDelete, onOpenVideo }: Reco
             </CardDescription>
           </div>
           <div className="flex gap-1 shrink-0">
+            {recording.vlmUpdated && (
+              <Badge variant="secondary" className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
+                <span className="w-2 h-2 bg-green-500 rounded-full mr-1"></span>
+                Enhanced
+              </Badge>
+            )}
             {recording.videoPath && (
               <Badge variant="secondary" className="bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">
                 <Video className="w-3 h-3 mr-1" />

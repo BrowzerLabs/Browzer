@@ -163,6 +163,37 @@ export class IPCHandlers {
     ipcMain.handle('browser:update-recording-variables', async (_, recordingId: string, variables: any[]) => {
       return this.browserManager.updateRecordingVariables(recordingId, variables);
     });
+
+    // Debug: Test VLM parsing (faster than full analysis)
+    ipcMain.handle('debug:test-vlm-parsing', async () => {
+      try {
+        // Try multiple paths to access VLM service
+        let vlmService = (this.browserManager as any).centralRecorder?.vlmService;
+        
+        if (!vlmService) {
+          // Import VLMService directly and use singleton
+          const { VLMService } = require('../services/VLMService');
+          vlmService = VLMService.getInstance();
+        }
+        
+        if (vlmService && vlmService.testVLMParsing) {
+          console.log('🧠 Running VLM parsing test...');
+          await vlmService.testVLMParsing();
+          return true;
+        } else {
+          console.log('VLM service not available for testing - service:', !!vlmService, 'method:', !!(vlmService?.testVLMParsing));
+          return false;
+        }
+      } catch (error) {
+        console.error('VLM test failed:', error);
+        return false;
+      }
+    });
+
+    // Update recording with VLM enhancements
+    ipcMain.handle('browser:update-recording-with-vlm', async (_, recordingId: string, enhancedActions: any[]) => {
+      return this.browserManager.updateRecordingWithVLMEnhancements(recordingId, enhancedActions);
+    });
     
     // Video file operations
     ipcMain.handle('video:open-file', async (_, videoPath: string) => {

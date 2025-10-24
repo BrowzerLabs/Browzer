@@ -18,6 +18,16 @@ export function Recordings() {
 
   useEffect(() => {
     loadRecordings();
+    
+    // Listen for VLM analysis completion to refresh recordings list
+    const handleVLMAnalysisComplete = () => {
+      console.log('🧠 VLM analysis completed - refreshing recordings list');
+      loadRecordings();
+    };
+
+    const removeListener = window.browserAPI.onVLMAnalysisComplete(handleVLMAnalysisComplete);
+
+    return removeListener;
   }, []);
 
   useEffect(() => {

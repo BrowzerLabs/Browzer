@@ -20,7 +20,7 @@ export function SaveRecordingForm({ actionCount, duration, onSave, onDiscard }: 
   const [error, setError] = useState('');
   const [variables, setVariables] = useState<WorkflowVariable[]>([]);
 
-  // Load variables when component mounts
+  // Load variables when component mounts and listen for VLM analysis completion
   useEffect(() => {
     const loadVariables = async () => {
       try {
@@ -30,7 +30,20 @@ export function SaveRecordingForm({ actionCount, duration, onSave, onDiscard }: 
         console.error('Failed to load variables in SaveRecordingForm:', error);
       }
     };
+    
     loadVariables();
+
+    // Listen for VLM analysis completion to refresh variables in real-time (for unsaved recordings)
+    const handleVLMAnalysisComplete = () => {
+      console.log('🧠 VLM analysis completed - refreshing variables in SaveRecordingForm');
+      loadVariables();
+    };
+
+    // Add the event listener
+    const removeListener = window.browserAPI.onVLMAnalysisComplete(handleVLMAnalysisComplete);
+
+    // Cleanup listener on unmount
+    return removeListener;
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {

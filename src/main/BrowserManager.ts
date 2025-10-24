@@ -64,6 +64,20 @@ export class BrowserManager {
     // Initialize centralized recorder (without view initially)
     this.centralRecorder = new ActionRecorder();
     this.variableExtractor = new VariableExtractor();
+    
+    // Set up VLM analysis completion callback  
+    this.centralRecorder.setVLMAnalysisCallback((enhancedActions: RecordedAction[], recordingId: string) => {
+      if (recordingId && recordingId !== '') {
+        // Post-save update: Update saved recording
+        this.updateRecordingWithVLMEnhancements(recordingId, enhancedActions);
+      } else {
+        // Pre-save update: Just refresh current variables for SaveRecordingForm
+        console.log('🧠 VLM analysis completed for unsaved recording - variables enhanced in memory');
+      }
+      
+      // Always notify renderer that VLM analysis is complete and variables may have been updated
+      this.agentUIView?.webContents.send('recording:vlm-analysis-complete');
+    });
     // Create initial tab
     this.createTab('https://www.google.com');
   }
@@ -554,6 +568,9 @@ export class BrowserManager {
       this.agentUIView.webContents.send('recording:saved', session);
     }
     
+    // Set recording ID for VLM analysis before clearing current recording ID
+    this.centralRecorder.setVLMAnalysisRecordingId(session.id);
+    
     // Reset recording ID
     this.currentRecordingId = null;
     this.currentRecordingVariables = null;
@@ -637,6 +654,67 @@ export class BrowserManager {
    */
   public updateRecordingVariables(recordingId: string, variables: import('@/shared/types').WorkflowVariable[]): boolean {
     return this.recordingStore.updateRecording(recordingId, { variables });
+  }
+
+  /**
+   * Update specific recording with VLM-enhanced variables
+   */
+  public updateRecordingWithVLMEnhancements(recordingId: string, enhancedActions: RecordedAction[]): boolean {
+    if (!recordingId) {
+      console.log('⚠️ No recording ID provided to update with VLM enhancements');
+      return false;
+    }
+
+    // Check if recording still exists (might have been deleted)
+    const existingRecording = this.recordingStore.getRecording(recordingId);
+    if (!existingRecording) {
+      console.log(`⚠️ Recording ${recordingId} no longer exists - skipping VLM enhancement update`);
+      return false;
+    }
+
+    try {
+      // Extract VLM-enhanced variables from actions
+      const enhancedVariables: import('@/shared/types').WorkflowVariable[] = [];
+      
+      enhancedActions.forEach((action, index) => {
+        const vlmEnhancement = action.metadata?.vlmEnhancements?.smartVariable;
+        if (vlmEnhancement && action.target) {
+          enhancedVariables.push({
+            id: `vlm-var-${index}`,
+            actionId: `${action.type}-${action.timestamp}`,
+            actionIndex: index,
+            name: vlmEnhancement.semanticName || vlmEnhancement.actualName,
+            type: (action.target.type === 'password' ? 'input' : action.target.type || 'input') as any,
+            defaultValue: action.value || '',
+            currentValue: action.value || '',
+            elementName: action.target.name,
+            elementId: action.target.id,
+            placeholder: action.target.placeholder,
+            isRequired: false
+          });
+        }
+      });
+
+      if (enhancedVariables.length > 0) {
+        console.log(`🎯 Updating recording ${recordingId} with ${enhancedVariables.length} VLM-enhanced variables`);
+        enhancedVariables.forEach(v => {
+          console.log(`  • ${v.elementName || v.elementId} → ${v.name} (enhanced by VLM)`);
+        });
+        
+        // Update recording with enhanced variables, cleaned actions, and VLM metadata
+        return this.recordingStore.updateRecording(recordingId, { 
+          actions: enhancedActions, // Include cleaned actions
+          variables: enhancedVariables,
+          vlmUpdated: true,
+          vlmUpdatedAt: Date.now()
+        });
+      }
+      
+      return true;
+    } catch (error) {
+      console.error('❌ Failed to update recording with VLM enhancements:', error);
+      return false;
+    }
   }
 
   /**
