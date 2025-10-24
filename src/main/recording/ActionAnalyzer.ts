@@ -18,6 +18,7 @@ export class ActionAnalyzer {
     
     // Mark actions as unnecessary based on various criteria
     this.detectAccidentalClicks(analyzedActions);
+    this.detectEmptyClickSequences(analyzedActions);
     this.detectUselessClicks(analyzedActions);
     this.detectFailedAttempts(analyzedActions);
     this.detectRedundantActions(analyzedActions);
@@ -65,6 +66,75 @@ export class ActionAnalyzer {
   }
   
   /**
+   * Detect empty click sequences - pattern where empty click is followed by meaningful click
+   */
+  private detectEmptyClickSequences(actions: RecordedAction[]): void {
+    for (let i = 0; i < actions.length - 1; i++) {
+      const current = actions[i];
+      const next = actions[i + 1];
+      
+      // Skip if already marked or not clicks
+      if (current.metadata?.unnecessary || current.type !== 'click' || next.type !== 'click') continue;
+      
+      const timeDiff = next.timestamp - current.timestamp;
+      
+      // Look for pattern: empty/useless click followed quickly by meaningful click
+      if (timeDiff < 2000) { // Within 2 seconds
+        const currentIsEmpty = this.isEmptyClick(current);
+        const currentIsUseless = this.isUselessClickTarget(current);
+        const nextIsMeaningful = this.isMeaningfulClick(next);
+        
+        if ((currentIsEmpty || currentIsUseless) && nextIsMeaningful) {
+          const currentSelector = current.target?.selector || 'unknown';
+          const nextSelector = next.target?.selector || 'unknown';
+          
+          console.log(`🎯 Empty click sequence detected:`);
+          console.log(`   Current: ${currentSelector} (empty: ${currentIsEmpty}, useless: ${currentIsUseless})`);
+          console.log(`   Next: ${nextSelector} (meaningful: ${nextIsMeaningful})`);
+          console.log(`   Time gap: ${timeDiff}ms`);
+          
+          this.markAsUnnecessary(current, 'empty_click_sequence', 
+            `Empty/useless click followed by meaningful click on ${nextSelector} after ${timeDiff}ms`);
+        }
+      }
+    }
+  }
+
+  /**
+   * Check if this is a meaningful click (on interactive elements)
+   */
+  private isMeaningfulClick(action: RecordedAction): boolean {
+    if (action.type !== 'click') return false;
+    
+    const target = action.target;
+    if (!target) return false;
+    
+    // Interactive elements are meaningful
+    const interactiveTags = ['input', 'button', 'a', 'select', 'textarea'];
+    if (interactiveTags.includes(target.tagName?.toLowerCase() || '')) {
+      return true;
+    }
+    
+    // Elements with interactive roles
+    const interactiveRoles = ['button', 'link', 'tab', 'menuitem'];
+    if (interactiveRoles.includes(target.role?.toLowerCase() || '')) {
+      return true;
+    }
+    
+    // Elements with IDs (often interactive)
+    if (target.id && target.id.length > 0) {
+      return true;
+    }
+    
+    // Elements with meaningful text/labels
+    if (target.text || target.ariaLabel) {
+      return true;
+    }
+    
+    return false;
+  }
+
+  /**
    * Detect standalone useless clicks (clicks on non-interactive elements with no effects)
    */
   private detectUselessClicks(actions: RecordedAction[]): void {
@@ -74,21 +144,31 @@ export class ActionAnalyzer {
       // Skip if already marked or not a click
       if (action.metadata?.unnecessary || action.type !== 'click') continue;
       
-      // Check if it's a click on a useless element with no effects
+      // Enhanced empty click detection
+      const isEmpty = this.isEmptyClick(action);
       const isUseless = this.isUselessClickTarget(action);
       const hasEffects = this.hasSignificantEffect(action);
       
-      if (isUseless) {
-        const tagName = action.target?.tagName?.toLowerCase() || 'unknown';
-        const className = action.target?.className || '';
-        const elementInfo = className ? `${tagName}.${className}` : tagName;
-        
-        console.log(`🔍 Detected potential useless click on ${elementInfo} - Effects: ${hasEffects ? 'YES' : 'NO'}`);
-        
-        if (!hasEffects) {
-          this.markAsUnnecessary(action, 'useless_element_click', 
-            `Click on non-interactive ${elementInfo} with no effects`);
-        }
+      // Log detailed analysis for debugging
+      const selector = action.target?.selector || 'no-selector';
+      const tagName = action.target?.tagName?.toLowerCase() || 'unknown';
+      const className = action.target?.className || '';
+      const elementInfo = className ? `${tagName}.${className}` : tagName;
+      
+      console.log(`🔍 Analyzing click on ${elementInfo} (${selector})`);
+      console.log(`   Empty: ${isEmpty}, Useless: ${isUseless}, Has Effects: ${hasEffects}`);
+      
+      // Flag as unnecessary if it's empty OR (useless AND no effects) OR (div with undefined value and no effects)
+      if (isEmpty) {
+        this.markAsUnnecessary(action, 'empty_click', 
+          `Empty click with undefined value on ${elementInfo}`);
+      } else if (isUseless && !hasEffects) {
+        this.markAsUnnecessary(action, 'useless_element_click', 
+          `Click on non-interactive ${elementInfo} with no effects`);
+      } else if (tagName === 'div' && action.value === undefined && !hasEffects) {
+        // Special case: div clicks with undefined value and no effects (even if not flagged as "useless")
+        this.markAsUnnecessary(action, 'ineffective_div_click', 
+          `Div click with undefined value and no measurable effects`);
       }
     }
   }
@@ -176,7 +256,27 @@ export class ActionAnalyzer {
    */
   private hasSignificantEffect(action: RecordedAction): boolean {
     const effects = action.effects;
-    if (!effects) return false;
+    
+    // If no effects data at all, check metadata for clues
+    if (!effects) {
+      // Look at standard metadata for effect indicators
+      const metadata = action.metadata as any;
+      if (metadata) {
+        // Check if focus changed (indicates interaction)
+        if (metadata.preClickState && metadata.postClickState) {
+          const focusChanged = metadata.preClickState.activeElement !== metadata.postClickState?.activeElement;
+          if (focusChanged) return true;
+        }
+        
+        // Check if it's a direct click with actual element interaction
+        if (metadata.isDirectClick && metadata.clickedElement) {
+          return true;
+        }
+      }
+      
+      // No effects data and no metadata indicators = likely no effects
+      return false;
+    }
     
     // Check for obvious significant effects
     const hasObviousEffects = !!(
@@ -199,8 +299,8 @@ export class ActionAnalyzer {
       return false;
     }
     
-    // If we have any effect summary, assume it's somewhat significant
-    return summary.length > 0;
+    // If we have any effect summary that's not "none", assume it's somewhat significant
+    return summary.length > 0 && summary !== 'none';
   }
   
   /**
@@ -233,6 +333,70 @@ export class ActionAnalyzer {
   }
   
   /**
+   * Check if this is an empty/meaningless click
+   */
+  private isEmptyClick(action: RecordedAction): boolean {
+    if (action.type !== 'click') return false;
+    
+    const target = action.target;
+    if (!target) return true;
+    
+    const tagName = target.tagName?.toLowerCase() || '';
+    const selector = target.selector || '';
+    const className = target.className || '';
+    
+    console.log(`   🔍 isEmptyClick analysis:`);
+    console.log(`      Value: ${action.value} (${typeof action.value})`);
+    console.log(`      TagName: ${tagName}`);
+    console.log(`      Selector: ${selector}`);
+    console.log(`      ClassName: ${className}`);
+    
+    // Check for undefined/null values which indicate empty clicks
+    const hasUndefinedValue = action.value === undefined || action.value === null;
+    console.log(`      Has undefined value: ${hasUndefinedValue}`);
+    
+    if (hasUndefinedValue) {
+      // Clicks on html/body are almost always empty/accidental
+      if (tagName === 'html' || tagName === 'body') {
+        console.log(`      -> Detected as empty: html/body click`);
+        return true;
+      }
+      
+      // Clicks on generic divs with complex nth-child selectors are suspicious
+      if (tagName === 'div' && selector.includes(':nth-child(')) {
+        // Check if it has any interactive indicators
+        const hasInteractiveIndicators = !!(
+          target.role ||
+          target.ariaLabel ||
+          target.text ||
+          (className && (
+            className.includes('btn') ||
+            className.includes('button') ||
+            className.includes('click') ||
+            className.includes('interactive')
+          ))
+        );
+        
+        console.log(`      -> Generic div with nth-child, interactive indicators: ${hasInteractiveIndicators}`);
+        
+        if (!hasInteractiveIndicators) {
+          console.log(`      -> Detected as empty: generic div with no interactive purpose`);
+          return true; // Generic div with no interactive purpose
+        }
+      }
+      
+      // Clicks with no target information are empty
+      if (!selector || selector.trim() === '') {
+        console.log(`      -> Detected as empty: no selector`);
+        return true;
+      }
+    }
+    
+    console.log(`      -> Not detected as empty`);
+    return false;
+  }
+
+  /**
    * Check if click target is a useless/non-interactive element
    */
   private isUselessClickTarget(action: RecordedAction): boolean {
@@ -245,6 +409,13 @@ export class ActionAnalyzer {
     const className = target.className?.toLowerCase() || '';
     const id = target.id?.toLowerCase() || '';
     const text = target.text?.toLowerCase() || '';
+    const selector = target.selector || '';
+    
+    console.log(`   🔍 isUselessClickTarget analysis:`);
+    console.log(`      TagName: ${tagName}`);
+    console.log(`      ClassName: ${className}`);
+    console.log(`      Selector: ${selector}`);
+    console.log(`      Text: ${text}`);
     
     // Useless elements that typically shouldn't be clicked
     const uselessTags = ['div', 'span', 'p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'section', 'article', 'main', 'aside', 'header', 'footer', 'nav', 'ul', 'li', 'ol'];
@@ -254,15 +425,19 @@ export class ActionAnalyzer {
     
     // If it's an interactive element, it's probably useful
     if (interactiveTags.includes(tagName || '')) {
+      console.log(`      -> Not useless: interactive tag (${tagName})`);
       return false;
     }
     
     // If it's a useless tag, check for interactive indicators
     if (uselessTags.includes(tagName || '')) {
+      console.log(`      -> Potentially useless tag: ${tagName}`);
+      
       // Check for interactive roles
       const role = target.role?.toLowerCase() || '';
       const interactiveRoles = ['button', 'link', 'tab', 'menuitem', 'option', 'checkbox', 'radio', 'switch', 'slider'];
       if (interactiveRoles.includes(role)) {
+        console.log(`      -> Not useless: has interactive role (${role})`);
         return false; // Has interactive role, probably useful
       }
       
@@ -278,6 +453,7 @@ export class ActionAnalyzer {
       );
       
       if (hasInteractiveClass) {
+        console.log(`      -> Not useless: has interactive class pattern`);
         return false; // Has interactive class, probably useful
       }
       
@@ -286,24 +462,56 @@ export class ActionAnalyzer {
       const hasInteractiveText = interactiveTextPatterns.some(pattern => text.includes(pattern));
       
       if (hasInteractiveText) {
+        console.log(`      -> Not useless: has interactive text`);
         return false; // Has interactive text, probably useful
       }
       
       // Check if it has click handlers (from selector analysis)
-      const selector = target.selector || '';
       if (selector.includes('[onclick]') || selector.includes('.js-') || selector.includes('[data-action]') || 
           selector.includes('[data-click]') || selector.includes('[data-handler]')) {
+        console.log(`      -> Not useless: likely has JavaScript handlers`);
         return false; // Likely has JavaScript handlers
       }
       
-      // Check for ARIA attributes that indicate interactivity
-      const ariaAttributes = ['aria-expanded', 'aria-pressed', 'aria-selected', 'aria-checked'];
-      // Note: We'd need to enhance the target capture to include more ARIA attributes
+      // Special case: Generic div containers with complex selectors and no clear purpose
+      if (tagName === 'div') {
+        // Complex nth-child selectors often indicate layout containers
+        if (selector.includes(':nth-child(')) {
+          console.log(`      -> Detected as useless: generic div with nth-child selector`);
+          return true;
+        }
+        
+        // Divs with only generic class names like "BDEI9 LZgQXe" (random/generated)
+        const classNames = className.split(' ').filter(c => c.length > 0);
+        if (classNames.length > 0) {
+          const hasRandomClasses = classNames.every(cls => {
+            // Check if class looks generated/random (mix of letters/numbers, no clear meaning)
+            // Patterns like: BDEI9, LZgQXe, etc.
+            return /^[A-Za-z0-9]{4,8}$/.test(cls) && 
+                   !/btn|button|click|menu|nav|content|header|footer|main|form|input|field/.test(cls.toLowerCase());
+          });
+          
+          console.log(`      -> Class analysis: ${classNames.join(', ')} - Random classes: ${hasRandomClasses}`);
+          
+          if (hasRandomClasses) {
+            console.log(`      -> Detected as useless: div with generated/random class names`);
+            return true;
+          }
+        }
+        
+        // Empty div (no text, no meaningful content)
+        if (!text || text.trim().length === 0) {
+          console.log(`      -> Detected as useless: empty div with no text content`);
+          return true;
+        }
+      }
       
-      // If we get here, it's probably a useless div/span/etc with no interactive purpose
+      // If we get here with a useless tag and no interactive indicators, it's useless
+      console.log(`      -> Detected as useless: no interactive indicators found`);
       return true;
     }
     
+    console.log(`      -> Not useless: unknown element, assuming useful`);
     return false; // Unknown element, assume it's useful to be safe
   }
 

@@ -108,17 +108,19 @@ export class LLMService {
   }
 
   /**
-   * Build system prompt with recorded context
+   * Build system prompt with recorded context including VLM enhancements
    */
   private buildSystemPrompt(session: RecordingSession): string {
     console.log("actions: ", this.formatRecordedActions(session.actions));
 
-    return `You are an expert browser automation assistant. Your task is to generate a COMPLETE sequence of browser automation actions based on a user's request and a previously recorded workflow.
+    return `You are an expert browser automation assistant. Your task is to generate a COMPLETE sequence of browser automation actions based on a user's request and a previously recorded workflow enhanced with AI-powered semantic understanding.
 
 ## YOUR ROLE
 You will receive:
 1. A recorded browser workflow showing how a similar task was performed
-2. A user's request for what they want to automate
+2. A user's request for what they want to automate  
+3. VLM-enhanced metadata providing semantic understanding of UI elements
+4. Extracted workflow variables for dynamic data substitution
 
 You must generate a COMPLETE, DETAILED sequence of ALL automation actions needed to accomplish the user's goal in a SINGLE response. Do not generate just one step - generate the ENTIRE plan from start to finish.
 
@@ -130,6 +132,10 @@ This is a recording of how a user previously performed a similar task. Use it as
 **Duration:** ${Math.round(session.duration / 1000)}s
 **Actions:** ${session.actionCount}
 **URL:** ${session.url || 'N/A'}
+**VLM Enhanced:** ${session.vlmUpdated ? 'Yes' : 'No'}
+
+### Workflow Variables Available:
+${this.formatWorkflowVariables(session.variables || [])}
 
 ### Recorded Actions:
 ${this.formatRecordedActions(session.actions)}
@@ -142,30 +148,43 @@ ${this.formatRecordedActions(session.actions)}
 - Use multiple tool calls in sequence to build the complete automation
 - Do NOT try to explain or describe actions - just use the tools
 
-### 2. Selector Strategy
+### 2. Selector Strategy (Enhanced by VLM Analysis)
 - Prefer IDs when available (most reliable)
-- Use data-testid or aria-label for better stability
+- Use VLM-enhanced semantic selectors when provided
+- Leverage VLM confidence scores - higher confidence = more reliable
+- Use data-testid or aria-label for better stability  
 - Use text content for buttons and links
-- Keep selectors simple and specific
+- When VLM provides business context, use it to find equivalent elements
 - Look at the recorded actions for selector patterns
 
-### 3. Optimization
+### 3. Variable Substitution (VLM-Enhanced)
+- Use workflow variables for dynamic data substitution
+- Replace recorded values with user-provided or parameterized data
+- VLM semantic names help identify what data goes where
+- Follow VLM substitution hints for realistic test data
+- Respect data classification requirements (personal vs public data)
+
+### 4. Optimization  
 - Skip unnecessary intermediate steps when you know the direct path
 - If you know the exact URL, navigate directly instead of searching
 - Consolidate multiple similar actions when possible
+- Use VLM error detection insights to avoid known failure patterns
 - BUT: Never skip authentication, validation, or state-dependent steps
 
-### 4. Reliability
+### 5. Reliability (VLM-Enhanced)
 - Always wait for elements before interacting (use waitForElement)
-- Add appropriate waits after navigation or async operations
-- Use the most reliable selectors from the recording
+- Add appropriate waits after navigation or async operations  
+- Prioritize selectors with higher VLM confidence scores
+- Use VLM business context to understand element purpose
 - Handle dynamic content with proper waits
+- Consider VLM-detected error patterns and alternative approaches
 
-### 5. Adaptation
+### 6. Adaptation (Semantic Understanding)
 - The recorded workflow is a TEMPLATE, not a script
-- Adapt selectors and values to match the user's specific request
-- Maintain the same logical flow but update the specifics
-- If the user's request differs significantly, use your judgment
+- Use VLM semantic understanding to adapt to different contexts
+- Maintain the same logical flow but update specifics based on user request
+- Leverage VLM purpose descriptions to find equivalent functionality
+- If user request differs significantly, use VLM context to guide adaptation
 
 ## EXAMPLE WORKFLOW
 
@@ -205,7 +224,7 @@ Generate ALL these steps in your response, not just the first one.`;
   }
 
   /**
-   * Format recorded actions for context with rich details
+   * Format recorded actions for context with rich details including VLM enhancements
    */
   private formatRecordedActions(actions: RecordedAction[]): string {
     if (!actions || actions.length === 0) {
@@ -215,27 +234,43 @@ Generate ALL these steps in your response, not just the first one.`;
     return actions.slice(0, 50).map((action, index) => {
       let description = `${index + 1}. [${action.type}]`;
 
-      switch (action.type) {
-        case 'click':
-          description += ` Click on ${this.formatTarget(action.target)}`;
-          break;
-        case 'input':
-          description += ` Type "${action.value}" into ${this.formatTarget(action.target)}`;
-          break;
-        case 'navigate':
-          description += ` Navigate to ${action.url || action.tabUrl || 'new page'}`;
-          break;
-        case 'select':
-          description += ` Select "${action.value}" from ${this.formatTarget(action.target)}`;
-          break;
-        case 'checkbox':
-          description += ` ${action.value ? 'Check' : 'Uncheck'} ${this.formatTarget(action.target)}`;
-          break;
-        case 'submit':
-          description += ` Submit form`;
-          break;
-        default:
-          description += ` ${action.type}`;
+      // Use VLM enhanced semantic understanding if available, otherwise fallback to basic description
+      if (action.metadata?.vlmEnhancements?.smartVariable?.semanticName) {
+        const variable = action.metadata.vlmEnhancements.smartVariable;
+        description += ` ${variable.purpose} (semantic: ${variable.semanticName})`;
+      } else {
+        switch (action.type) {
+          case 'click':
+            description += ` Click on ${this.formatTarget(action.target)}`;
+            break;
+          case 'input':
+            description += ` Type "${action.value}" into ${this.formatTarget(action.target)}`;
+            break;
+          case 'navigate':
+            description += ` Navigate to ${action.url || action.tabUrl || 'new page'}`;
+            break;
+          case 'select':
+            description += ` Select "${action.value}" from ${this.formatTarget(action.target)}`;
+            break;
+          case 'checkbox':
+            description += ` ${action.value ? 'Check' : 'Uncheck'} ${this.formatTarget(action.target)}`;
+            break;
+          case 'submit':
+            description += ` Submit form`;
+            break;
+          default:
+            description += ` ${action.type}`;
+        }
+      }
+
+      // Add VLM-detected semantic variables for better context
+      if (action.metadata?.vlmEnhancements?.smartVariable) {
+        const variable = action.metadata.vlmEnhancements.smartVariable;
+        description += `\n   📋 Smart Variable: ${variable.semanticName} (${variable.dataClassification})`;
+        description += `\n   🎯 Purpose: ${variable.purpose}`;
+        if (variable.substitutionHints?.length > 0) {
+          description += `\n   � Hints: ${variable.substitutionHints.join(', ')}`;
+        }
       }
 
       // Add detailed selector info for better automation
@@ -259,12 +294,42 @@ Generate ALL these steps in your response, not just the first one.`;
       if (action.target?.text && action.target.text.length < 50) {
         details.push(`Text: "${action.target.text}"`);
       }
+
+      // Add VLM semantic context for better element understanding
+      if (action.metadata?.vlmEnhancements?.smartVariable?.businessContext) {
+        details.push(`Context: ${action.metadata.vlmEnhancements.smartVariable.businessContext}`);
+      }
       
       if (details.length > 0) {
-        description += `\n   ${details.join(' | ')}`;
+        description += `\n   🎯 ${details.join(' | ')}`;
+      }
+
+      // Add VLM confidence and reliability info
+      if (action.metadata?.vlmEnhancements?.confidence !== undefined) {
+        description += `\n   🔍 VLM Confidence: ${Math.round(action.metadata.vlmEnhancements.confidence * 100)}%`;
+        if (action.metadata.vlmEnhancements.fallbackUsed) {
+          description += ` (fallback analysis)`;
+        }
       }
 
       return description;
+    }).join('\n\n');
+  }
+
+  /**
+   * Format workflow variables for context
+   */
+  private formatWorkflowVariables(variables: any[]): string {
+    if (!variables || variables.length === 0) {
+      return 'No workflow variables detected.';
+    }
+
+    return variables.map((variable, index) => {
+      return `${index + 1}. ${variable.name} (${variable.type})
+   Purpose: ${variable.description || 'Input field'}
+   Default Value: "${variable.defaultValue || ''}"
+   Element: ${variable.elementName || variable.elementId || 'N/A'}
+   Required: ${variable.isRequired ? 'Yes' : 'No'}`;
     }).join('\n\n');
   }
 

@@ -9,6 +9,7 @@
 [![React](https://img.shields.io/badge/React-19.2.0-61DAFB?logo=react)](https://reactjs.org/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-4.5.5-3178C6?logo=typescript)](https://www.typescriptlang.org/)
 [![Vite](https://img.shields.io/badge/Vite-5.4.20-646CFF?logo=vite)](https://vitejs.dev/)
+[![Python](https://img.shields.io/badge/Python-3.10.19-275379?logo=python)](https://www.python.org/)
 
 [Features](#-features) • [Installation](#-installation) • [Usage](#-usage) • [Architecture](#-architecture) • [Documentation](#-documentation) • [Contributing](#-contributing)
 
@@ -48,11 +49,33 @@
 - **Navigation tracking** - Records page transitions and redirects
 - **Real-time action preview** - See actions as they're recorded
 
-### 🤖 AI-Powered Automation *(In Development)*
+### 🤖 AI-Powered Automation *(In Development - Enhanced with VLM)*
 - **LLM orchestration** for intelligent task replication
-- **Adaptive replay** - Handles UI changes and variations
-- **Context-aware execution** - Understands workflow goals
-- **Error recovery** - Smart handling of failures
+- **Visual understanding** - VLM analyzes screenshots for better automation
+- **Smart action cleanup** - Automatically removes meaningless clicks and actions
+- **Adaptive replay** - Handles UI changes and variations using visual context
+- **Context-aware execution** - Understands workflow goals through semantic analysis
+- **Error recovery** - Smart handling of failures with visual feedback
+
+#### VLM Setup (Optional Enhancement)
+
+To enable VLM features:
+
+1. **Create Python environment**: `python3.10 -m venv venv && source venv/bin/activate`
+2. **Clone Apple ML-FastVLM**: `git clone https://github.com/apple/ml-fastvlm.git`
+3. **Install**: `pip install -e ml-fastvlm/`
+4. **Create model directory**: `mkdir -p vlm-models/checkpoints`
+5. **Download model**: `cd vlm-models/checkpoints && wget https://ml-site.cdn-apple.com/datasets/fastvlm/llava-fastvithd_1.5b_stage3.zip && unzip llava-fastvithd_1.5b_stage3.zip && rm llava-fastvithd_1.5b_stage3.zip`
+
+Configure `.env.vlm`:
+```env
+VLM_ENABLED=true
+VLM_MODEL_PATH=./vlm-models/checkpoints/llava-fastvithd_1.5b_stage3
+VLM_ML_PATH=./vlm-models
+VLM_TIMEOUT_MS=30000
+VLM_MAX_NEW_TOKENS=128
+VLM_TEMPERATURE=0.0
+```
 
 ### 👤 User Management
 - **Authentication system** with sign-in/sign-up
@@ -170,22 +193,23 @@ pnpm make
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│                     Frontend (Renderer)                  │
-│  React 19 + TypeScript + Vite + Tailwind + shadcn/ui   │
-│  - Modern UI components                                  │
+│                     Frontend (Renderer)                 │
+│  React 19 + TypeScript + Vite + Tailwind + shadcn/ui    │
+│  - Modern UI components                                 │
 │  - State management (Zustand)                           │
 │  - Routing (React Router)                               │
 └────────────────────┬────────────────────────────────────┘
                      │ IPC Communication
 ┌────────────────────┴────────────────────────────────────┐
-│                  Backend (Main Process)                  │
-│  Electron 38 + TypeScript + Node.js                     │
-│  - BrowserManager (Tab management)                       │
-│  - ActionRecorder (Workflow capture)                     │
-│  - HistoryService (Browsing history)                     │
-│  - UserService (Authentication)                          │
-│  - SettingsStore (Configuration)                         │
-└──────────────────────────────────────────────────────────┘
+│                  Backend (Main Process)                 │
+│  Electron 38 + TypeScript + Node.js + Python            │
+│  - BrowserManager (Tab management)                      │
+│  - ActionRecorder (Workflow capture)                    │
+│  - HistoryService (Browsing history)                    │
+│  - UserService (Authentication)                         │
+│  - SettingsStore (Configuration)                        │
+│  - VLMService (VLM integration)                         │
+└─────────────────────────────────────────────────────────┘
 ```
 
 ### Project Structure
@@ -229,6 +253,10 @@ browzer/
 │   ├── HISTORY_SERVICE.md
 │   └── USER_SERVICE_BACKEND.md
 │
+├── vlm-models/                  # VLM model files (optional)
+│   └── checkpoints/             # Downloaded model checkpoints
+│       └── llava-fastvithd_1.5b_stage3/
+│
 ├── forge.config.ts              # Electron Forge config
 ├── vite.*.config.ts             # Vite configurations
 ├── tailwind.config.js           # Tailwind CSS config
@@ -251,7 +279,7 @@ class BrowserManager {
 ```
 
 #### 2. ActionRecorder
-Captures user interactions semantically using Chrome DevTools Protocol.
+Captures user interactions semantically using Chrome DevTools Protocol with VLM enhancements.
 
 ```typescript
 class ActionRecorder {
@@ -259,6 +287,7 @@ class ActionRecorder {
   stopRecording(): RecordedAction[]
   getActions(): RecordedAction[]
   // Captures: clicks, typing, navigation, forms, etc.
+  // VLM Features: Screenshot capture, action analysis, cleanup
 }
 ```
 
@@ -352,6 +381,11 @@ Comprehensive documentation is available in the `/docs` directory:
 - **[Authentication System](./docs/AUTHENTICATION_SYSTEM.md)** - User management & sessions
 - **[History Service](./docs/HISTORY_SERVICE.md)** - Browsing history implementation
 - **[Backend Integration](./docs/USER_SERVICE_BACKEND.md)** - Future cloud sync plans
+- **[Recordings Implementation](./docs/RECORDINGS_PAGE_IMPLEMENTATION.md)** - Recording system details
+- **[Video Recording](./docs/VIDEO_RECORDING_SYSTEM.md)** - Video capture functionality
+- **[VLM Implementation](./docs/VLM_IMPLEMENTATION.md)** - Vision language model integration and metadata enhancement
+- **[Workflow Variables](./docs/WORKFLOW_VARIABLES.md)** - Variable system for dynamic automation
+- **[TODO & Roadmap](./TODO.md)** - Future improvements and contributing priorities
 
 ### API Reference
 
@@ -421,20 +455,49 @@ Scale: 4px base (0.25rem)
 
 ---
 
+## 🆕 Recent Enhancements
+
+### VLM Integration & Action Intelligence
+- **Screenshot System**: Automatic capture for 95% of user actions with strategic omissions for navigation/synthetic actions
+- **Action Cleanup**: Multi-stage cleanup system that removes meaningless clicks, empty interactions, and redundant actions
+- **Empty Click Detection**: Advanced analysis to identify clicks with no visible effect or undefined target values
+- **VLM-Enhanced Planning**: Automation workflows now use visual context and semantic understanding for better reliability
+- **Action Analysis**: Real-time detection of useless interactions with comprehensive element and effect analysis
+
+### Automation Improvements
+- **Immediate Cleanup**: Actions are cleaned as they're recorded to prevent accumulation of noise
+- **Post-VLM Enhancement**: Secondary cleanup after visual analysis provides additional context
+- **Smart Element Detection**: Multiple selector strategies ensure robust element targeting
+- **Error Recovery**: Visual feedback helps identify and recover from automation failures
+- **Confidence Scoring**: VLM provides confidence metrics for action reliability
+
+### Architecture Updates
+- **Modular Cleanup System**: Separate immediate and post-analysis cleanup phases
+- **Enhanced Logging**: Comprehensive debugging information for action analysis
+- **Metadata Integration**: VLM insights are preserved and used in automation planning
+- **Performance Optimization**: Strategic screenshot capture balances functionality with performance
+
+---
+
 ## 🛣️ Roadmap
 
 ### ✅ Completed
 - [x] Core browser functionality
 - [x] Multi-tab support
-- [x] Smart workflow recording
+- [x] Smart workflow recording with VLM integration
+- [x] Screenshot capture system (95% action coverage)
+- [x] Automated action cleanup and analysis
+- [x] Empty click detection and removal
 - [x] Browsing history
 - [x] User authentication
 - [x] Settings management
 - [x] Modern UI with shadcn/ui
+- [x] VLM-enhanced automation planning
+- [x] Visual action understanding
 
 ### 🚧 In Progress
-- [ ] LLM-powered automation engine
-- [ ] Workflow replay with AI adaptation
+- [ ] Full workflow replay with AI adaptation
+- [ ] Advanced error recovery with visual feedback
 - [ ] Cloud sync for recordings
 - [ ] Browser extensions support
 
@@ -568,10 +631,16 @@ A: It has core browsing features, but it's primarily designed for workflow autom
 A: We use Chrome DevTools Protocol to capture semantic actions, not just DOM events.
 
 **Q: Is LLM automation available?**  
-A: It's currently in development. Basic recording works, AI replay is coming soon.
+A: Basic automation with VLM enhancement is working. Full AI replay is in development.
+
+**Q: How do I set up VLM features?**  
+A: See the [VLM Setup section](#vlm-setup-optional-enhancement) and [VLM Implementation documentation](./docs/VLM_IMPLEMENTATION.md).
+
+**Q: What if VLM setup fails?**  
+A: Browzer works without VLM - you'll have basic recording. VLM adds intelligent action cleanup and visual understanding.
 
 **Q: Can I contribute?**  
-A: Absolutely! Check the [Contributing](#-contributing) section.
+A: Absolutely! Check the [Contributing](#-contributing) section and [TODO.md](./TODO.md) for priority items.
 
 ---
 

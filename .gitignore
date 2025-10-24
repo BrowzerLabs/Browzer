@@ -14,6 +14,7 @@ crash-log.txt
 .env.development.local
 .env.test.local
 .env.production.local
+.env.vlm
 
 # Python virtual environments
 venv/
