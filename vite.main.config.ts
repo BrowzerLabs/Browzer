@@ -9,22 +9,11 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
-      '@/main': path.resolve(__dirname, './src/main'),
-      '@/renderer': path.resolve(__dirname, './src/renderer'),
-      '@/shared': path.resolve(__dirname, './src/shared'),
     },
   },
   build: {
-    sourcemap: true,
-    minify: false,
     rollupOptions: {
       external: ['better-sqlite3'],
-      output: {
-        // Preserve module structure for better debugging
-        manualChunks: undefined,
-      },
     },
-  },
-  // Enable better error messages
-  clearScreen: false,
+  }
 });

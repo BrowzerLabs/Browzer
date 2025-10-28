@@ -45,7 +45,7 @@ export function AppearanceSettings({ settings, onUpdate, onReset }: AppearanceSe
             Theme
           </FieldLabel>
           <Select value={settings.theme} onValueChange={handleThemeChange}>
-            <SelectTrigger>
+            <SelectTrigger className='max-w-32'>
               <SelectValue placeholder='Select theme' />
             </SelectTrigger>
             <SelectContent>

@@ -320,35 +320,59 @@ export class IPCHandlers {
   }
 
    private setupPasswordHandlers(): void {
-    // Save password
+    ipcMain.handle('password:get-all', async () => {
+      return this.passwordManager.getAllCredentials();
+    });
+
     ipcMain.handle('password:save', async (_, origin: string, username: string, password: string) => {
       return this.passwordManager.saveCredential(origin, username, password);
     });
 
-    // Get credentials for origin
     ipcMain.handle('password:get-for-origin', async (_, origin: string) => {
       return this.passwordManager.getCredentialsForOrigin(origin);
     });
 
-    // Get decrypted password
     ipcMain.handle('password:get-password', async (_, credentialId: string) => {
       return this.passwordManager.getPassword(credentialId);
     });
+    ipcMain.handle('password:update', async (_, credentialId: string, username: string, password: string) => {
+      return this.passwordManager.updateCredential(credentialId, username, password);
+    });
 
-    // Delete credential
     ipcMain.handle('password:delete', async (_, credentialId: string) => {
       return this.passwordManager.deleteCredential(credentialId);
     });
+    ipcMain.handle('password:delete-multiple', async (_, credentialIds: string[]) => {
+      return this.passwordManager.deleteMultipleCredentials(credentialIds);
+    });
 
-    // Add to blacklist
+    ipcMain.handle('password:search', async (_, query: string) => {
+      return this.passwordManager.searchCredentials(query);
+    });
+    ipcMain.handle('password:get-blacklist', async () => {
+      return this.passwordManager.getBlacklist();
+    });
+
     ipcMain.handle('password:add-to-blacklist', async (_, origin: string) => {
       this.passwordManager.addToBlacklist(origin);
       return true;
     });
+    ipcMain.handle('password:remove-from-blacklist', async (_, origin: string) => {
+      this.passwordManager.removeFromBlacklist(origin);
+      return true;
+    });
 
-    // Check if blacklisted
     ipcMain.handle('password:is-blacklisted', async (_, origin: string) => {
       return this.passwordManager.isBlacklisted(origin);
+    });
+    ipcMain.handle('password:export', async () => {
+      return this.passwordManager.exportPasswords();
+    });
+    ipcMain.handle('password:import', async (_, data: string) => {
+      return this.passwordManager.importPasswords(data);
+    });
+    ipcMain.handle('password:get-stats', async () => {
+      return this.passwordManager.getStats();
     });
   }
 
@@ -360,7 +384,6 @@ export class IPCHandlers {
      return await this.browserManager.executeIterativeAutomation(userGoal, recordedSessionId);
     });
     
-    // Session management handlers
     ipcMain.handle('automation:load-session', async (_, sessionId: string) => {
       return await this.browserManager.loadAutomationSession(sessionId);
     });
@@ -437,12 +460,21 @@ export class IPCHandlers {
     ipcMain.removeAllListeners('history:get-recently-visited');
     
     // Password manager cleanup
+    ipcMain.removeAllListeners('password:get-all');
     ipcMain.removeAllListeners('password:save');
     ipcMain.removeAllListeners('password:get-for-origin');
     ipcMain.removeAllListeners('password:get-password');
+    ipcMain.removeAllListeners('password:update');
     ipcMain.removeAllListeners('password:delete');
+    ipcMain.removeAllListeners('password:delete-multiple');
+    ipcMain.removeAllListeners('password:search');
+    ipcMain.removeAllListeners('password:get-blacklist');
     ipcMain.removeAllListeners('password:add-to-blacklist');
+    ipcMain.removeAllListeners('password:remove-from-blacklist');
     ipcMain.removeAllListeners('password:is-blacklisted');
+    ipcMain.removeAllListeners('password:export');
+    ipcMain.removeAllListeners('password:import');
+    ipcMain.removeAllListeners('password:get-stats');
     
     // Window handlers cleanup
     ipcMain.removeAllListeners('window:toggle-maximize');

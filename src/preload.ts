@@ -45,12 +45,21 @@ export interface BrowserAPI {
   getVideoFileUrl: (videoPath: string) => Promise<string>;
 
   // Password Management
+  getAllPasswords: () => Promise<any[]>;
   savePassword: (origin: string, username: string, password: string) => Promise<boolean>;
   getPasswordsForOrigin: (origin: string) => Promise<any[]>;
   getPassword: (credentialId: string) => Promise<string | null>;
+  updatePassword: (credentialId: string, username: string, password: string) => Promise<boolean>;
   deletePassword: (credentialId: string) => Promise<boolean>;
+  deleteMultiplePasswords: (credentialIds: string[]) => Promise<boolean>;
+  searchPasswords: (query: string) => Promise<any[]>;
+  getPasswordBlacklist: () => Promise<string[]>;
   neverSaveForSite: (origin: string) => Promise<boolean>;
+  removeFromBlacklist: (origin: string) => Promise<boolean>;
   isSiteBlacklisted: (origin: string) => Promise<boolean>;
+  exportPasswords: () => Promise<{ credentials: any[]; blacklist: string[] }>;
+  importPasswords: (data: string) => Promise<{ success: boolean; imported: number; errors: number }>;
+  getPasswordStats: () => Promise<{ totalPasswords: number; blacklistedSites: number; mostUsedSites: Array<{ origin: string; count: number }> }>;
 
   // Settings Management
   getAllSettings: () => Promise<AppSettings>;
@@ -251,18 +260,36 @@ const browserAPI: BrowserAPI = {
   getVideoFileUrl: (videoPath: string) => ipcRenderer.invoke('video:get-file-url', videoPath),
 
   // Password Management API
+  getAllPasswords: () => 
+    ipcRenderer.invoke('password:get-all'),
   savePassword: (origin: string, username: string, password: string) => 
     ipcRenderer.invoke('password:save', origin, username, password),
   getPasswordsForOrigin: (origin: string) => 
     ipcRenderer.invoke('password:get-for-origin', origin),
   getPassword: (credentialId: string) => 
     ipcRenderer.invoke('password:get-password', credentialId),
+  updatePassword: (credentialId: string, username: string, password: string) => 
+    ipcRenderer.invoke('password:update', credentialId, username, password),
   deletePassword: (credentialId: string) => 
     ipcRenderer.invoke('password:delete', credentialId),
+  deleteMultiplePasswords: (credentialIds: string[]) => 
+    ipcRenderer.invoke('password:delete-multiple', credentialIds),
+  searchPasswords: (query: string) => 
+    ipcRenderer.invoke('password:search', query),
+  getPasswordBlacklist: () => 
+    ipcRenderer.invoke('password:get-blacklist'),
   neverSaveForSite: (origin: string) => 
     ipcRenderer.invoke('password:add-to-blacklist', origin),
+  removeFromBlacklist: (origin: string) => 
+    ipcRenderer.invoke('password:remove-from-blacklist', origin),
   isSiteBlacklisted: (origin: string) => 
     ipcRenderer.invoke('password:is-blacklisted', origin),
+  exportPasswords: () => 
+    ipcRenderer.invoke('password:export'),
+  importPasswords: (data: string) => 
+    ipcRenderer.invoke('password:import', data),
+  getPasswordStats: () => 
+    ipcRenderer.invoke('password:get-stats'),
 
   // LLM Automation API
   executeLLMAutomation: (userGoal: string, recordedSessionId: string) =>

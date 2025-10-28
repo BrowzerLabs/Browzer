@@ -215,13 +215,181 @@ export class PasswordManager {
    */
   public getAllCredentials(): CredentialInfo[] {
     const credentials = this.store.get('credentials');
-    return credentials.map(c => ({
-      id: c.id,
-      origin: c.origin,
-      username: c.username,
-      lastUsed: c.lastUsed,
-      timesUsed: c.timesUsed
-    }));
+    return credentials
+      .sort((a, b) => b.lastUsed - a.lastUsed)
+      .map(c => ({
+        id: c.id,
+        origin: c.origin,
+        username: c.username,
+        lastUsed: c.lastUsed,
+        timesUsed: c.timesUsed
+      }));
+  }
+
+  /**
+   * Update an existing credential
+   */
+  public async updateCredential(credentialId: string, username: string, password: string): Promise<boolean> {
+    try {
+      const credentials = this.store.get('credentials');
+      const index = credentials.findIndex(c => c.id === credentialId);
+      
+      if (index === -1) {
+        return false;
+      }
+
+      const encrypted = safeStorage.encryptString(password);
+      credentials[index] = {
+        ...credentials[index],
+        username,
+        encryptedPassword: encrypted,
+        lastUsed: Date.now()
+      };
+
+      this.store.set('credentials', credentials);
+      console.log(`[PasswordManager] Updated credential ${credentialId}`);
+      return true;
+    } catch (error) {
+      console.error('[PasswordManager] Failed to update credential:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Delete multiple credentials
+   */
+  public deleteMultipleCredentials(credentialIds: string[]): boolean {
+    try {
+      const credentials = this.store.get('credentials');
+      const filteredCredentials = credentials.filter(c => !credentialIds.includes(c.id));
+      
+      this.store.set('credentials', filteredCredentials);
+      console.log(`[PasswordManager] Deleted ${credentials.length - filteredCredentials.length} credentials`);
+      return true;
+    } catch (error) {
+      console.error('[PasswordManager] Failed to delete credentials:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Search credentials by origin or username
+   */
+  public searchCredentials(query: string): CredentialInfo[] {
+    const credentials = this.store.get('credentials');
+    const lowerQuery = query.toLowerCase();
+    
+    return credentials
+      .filter(c => 
+        c.origin.toLowerCase().includes(lowerQuery) ||
+        c.username.toLowerCase().includes(lowerQuery)
+      )
+      .sort((a, b) => b.lastUsed - a.lastUsed)
+      .map(c => ({
+        id: c.id,
+        origin: c.origin,
+        username: c.username,
+        lastUsed: c.lastUsed,
+        timesUsed: c.timesUsed
+      }));
+  }
+
+  /**
+   * Get blacklist
+   */
+  public getBlacklist(): string[] {
+    return this.store.get('blacklistedSites');
+  }
+
+  /**
+   * Remove origin from blacklist
+   */
+  public removeFromBlacklist(origin: string): void {
+    const blacklistedSites = this.store.get('blacklistedSites');
+    const filtered = blacklistedSites.filter(site => site !== origin);
+    this.store.set('blacklistedSites', filtered);
+    console.log(`[PasswordManager] Removed ${origin} from blacklist`);
+  }
+
+  /**
+   * Export passwords (without decryption - for backup)
+   */
+  public exportPasswords(): { credentials: CredentialInfo[]; blacklist: string[] } {
+    const credentials = this.getAllCredentials();
+    const blacklist = this.getBlacklist();
+    
+    return {
+      credentials,
+      blacklist
+    };
+  }
+
+  /**
+   * Import passwords
+   */
+  public async importPasswords(data: string): Promise<{ success: boolean; imported: number; errors: number }> {
+    try {
+      const parsed = JSON.parse(data);
+      let imported = 0;
+      let errors = 0;
+
+      if (parsed.credentials && Array.isArray(parsed.credentials)) {
+        for (const cred of parsed.credentials) {
+          try {
+            // Note: This assumes the import data has plain passwords
+            // In a real scenario, you'd need to handle this differently
+            if (cred.origin && cred.username && cred.password) {
+              await this.saveCredential(cred.origin, cred.username, cred.password);
+              imported++;
+            }
+          } catch (error) {
+            errors++;
+            console.error('[PasswordManager] Failed to import credential:', error);
+          }
+        }
+      }
+
+      if (parsed.blacklist && Array.isArray(parsed.blacklist)) {
+        const currentBlacklist = this.getBlacklist();
+        const newBlacklist = [...new Set([...currentBlacklist, ...parsed.blacklist])];
+        this.store.set('blacklistedSites', newBlacklist);
+      }
+
+      return { success: true, imported, errors };
+    } catch (error) {
+      console.error('[PasswordManager] Failed to import passwords:', error);
+      return { success: false, imported: 0, errors: 1 };
+    }
+  }
+
+  /**
+   * Get password manager statistics
+   */
+  public getStats(): {
+    totalPasswords: number;
+    blacklistedSites: number;
+    mostUsedSites: Array<{ origin: string; count: number }>;
+  } {
+    const credentials = this.store.get('credentials');
+    const blacklistedSites = this.store.get('blacklistedSites');
+
+    // Calculate most used sites
+    const siteUsage = new Map<string, number>();
+    credentials.forEach(cred => {
+      const current = siteUsage.get(cred.origin) || 0;
+      siteUsage.set(cred.origin, current + cred.timesUsed);
+    });
+
+    const mostUsedSites = Array.from(siteUsage.entries())
+      .map(([origin, count]) => ({ origin, count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 10);
+
+    return {
+      totalPasswords: credentials.length,
+      blacklistedSites: blacklistedSites.length,
+      mostUsedSites
+    };
   }
 
   /**

@@ -1,7 +1,8 @@
 import { WebContentsView } from 'electron';
 import { TabInfo } from '@/shared/types';
 import { VideoRecorder } from '@/main/recording';
-import { PasswordAutomation, BrowserAutomationExecutor } from '@/main/automation';
+import { BrowserAutomationExecutor } from '@/main/automation';
+import { PasswordAutomation } from '@/main/password';
 
 /**
  * Internal tab structure with WebContentsView and associated services
@@ -24,7 +25,6 @@ export interface Tab {
 export interface TabEventHandlers {
   onTabsChanged: () => void;
   onCredentialSelected: (tabId: string, credentialId: string, username: string) => void;
-  onAutoFillPassword: (tabId: string) => Promise<void>;
 }
 
 /**

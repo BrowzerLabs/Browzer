@@ -5,8 +5,9 @@ import { GeneralSettings } from '@/renderer/components/settings/GeneralSettings'
 import { PrivacySettings } from '@/renderer/components/settings/PrivacySettings';
 import { AppearanceSettings } from '@/renderer/components/settings/AppearanceSettings';
 import { AutomationSettings } from '@/renderer/components/settings/AutomationSettings';
+import { PasswordSettings } from '@/renderer/components/settings/PasswordSettings';
 import { AppSettings } from '@/shared/types';
-import { Settings as SettingsIcon, Shield, Palette, Sparkles, Loader2Icon } from 'lucide-react';
+import { Settings as SettingsIcon, Shield, Palette, Sparkles, Loader2Icon, Key } from 'lucide-react';
 import { toast } from 'sonner';
 
 export function Settings() {
@@ -103,6 +104,13 @@ export function Settings() {
                   <span>General</span>
                 </TabsTrigger>
                 <TabsTrigger
+                  value='passwords'
+                  className='justify-start gap-3 rounded-md px-4 py-2.5 data-[state=active]:bg-accent data-[state=active]:shadow-none'
+                >
+                  <Key className='h-4 w-4' />
+                  <span>Passwords</span>
+                </TabsTrigger>
+                <TabsTrigger
                   value='privacy'
                   className='justify-start gap-3 rounded-md px-4 py-2.5 data-[state=active]:bg-accent data-[state=active]:shadow-none'
                 >
@@ -136,6 +144,10 @@ export function Settings() {
                     onUpdate={(key, value) => handleUpdateSetting('general', key, value)}
                     onReset={() => handleResetCategory('general')}
                   />
+                </TabsContent>
+
+                <TabsContent value='passwords'>
+                  <PasswordSettings />
                 </TabsContent>
 
                 <TabsContent value='privacy'>

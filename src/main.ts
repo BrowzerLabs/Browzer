@@ -30,12 +30,14 @@ app.whenReady().then(() => {
   });
   
   createWindow();
+}).catch((error) => {
+  console.error('Failed to start app:', error);
 });
 
 let mainBrowserWindow: BrowserWindow | null = null;
 
 const createWindow = () => {
-  mainBrowserWindow = new BrowserWindow();
+ mainBrowserWindow = new BrowserWindow();
 };
 
 app.on('window-all-closed', () => {
