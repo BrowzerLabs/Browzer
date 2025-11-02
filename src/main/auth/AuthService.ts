@@ -1,4 +1,4 @@
-import { BrowserWindow } from 'electron';
+import { BrowserWindow, session } from 'electron';
 import Store from 'electron-store';
 import {
   User,
@@ -132,9 +132,13 @@ export class AuthService {
         };
       }
 
-      const oauthUrl = urlResponse.data.url;
+      let oauthUrl = urlResponse.data.url;
+      
+      const urlObj = new URL(oauthUrl);
+      urlObj.searchParams.set('prompt', 'select_account');
+      oauthUrl = urlObj.toString();
 
-      // Step 3: Open OAuth window
+      // Step 3: Open OAuth window 
       return new Promise((resolve) => {
         this.authWindow = new BrowserWindow({
           width: 500,
@@ -148,12 +152,10 @@ export class AuthService {
           show: false,
         });
 
-        // Show window when ready
         this.authWindow.once('ready-to-show', () => {
-          this.authWindow.show();
+          this.authWindow?.show();
         });
 
-        // Handle window close
         this.authWindow.on('closed', () => {
           this.authWindow = null;
           resolve({
@@ -165,33 +167,25 @@ export class AuthService {
           });
         });
 
-        // Step 3: Listen for callback URL
         this.authWindow.webContents.on('will-redirect', async (event, url) => {
-          console.log('[AuthService] will-redirect:', url);
           if (url.startsWith('browzer://')) {
             event.preventDefault(); // Prevent the redirect
             await this.handleOAuthCallback(url, resolve);
           }
         });
 
-        // Also handle navigation (some OAuth flows use navigation instead of redirect)
         this.authWindow.webContents.on('did-navigate', async (event, url) => {
-          console.log('[AuthService] did-navigate:', url);
           if (url.startsWith('browzer://')) {
             await this.handleOAuthCallback(url, resolve);
           }
         });
-        
-        // Handle navigation in case will-redirect doesn't fire
         this.authWindow.webContents.on('will-navigate', async (event, url) => {
-          console.log('[AuthService] will-navigate:', url);
           if (url.startsWith('browzer://')) {
-            event.preventDefault(); // Prevent the navigation
+            event.preventDefault();
             await this.handleOAuthCallback(url, resolve);
           }
         });
 
-        // Load OAuth URL
         this.authWindow.loadURL(oauthUrl);
       });
     } catch (error: any) {
@@ -213,77 +207,76 @@ export class AuthService {
     url: string,
     resolve: (value: AuthResponse) => void
   ): Promise<void> {
-    // Check if this is our callback URL
-    if (url.startsWith('browzer://auth/callback') || url.startsWith('browzer://profile')) {
-      console.log('[AuthService] Processing OAuth callback:', url);
-      
-      try {
-        // Extract code from URL (could be in query params)
-        const urlObj = new URL(url);
-        const code = urlObj.searchParams.get('code');
 
-        if (!code) {
-          console.error('[AuthService] No code in callback URL');
-          this.authWindow?.close();
-          resolve({
-            success: false,
-            error: {
-              code: 'OAUTH_NO_CODE',
-              message: 'No authorization code received',
-            },
-          });
-          return;
-        }
+    try {
+      const urlObj = new URL(url);
+      const code = urlObj.searchParams.get('code');
+      const error = urlObj.searchParams.get('error');
 
-        console.log('[AuthService] Exchanging code for session...');
-        
-        // Step 4: Exchange code for session
-        const response = await api.post<AuthResponse>('/auth/oauth/callback', {
-          code,
-        });
-
-        console.log('[AuthService] Exchange response:', response.success);
-
-        if (!response.success || !response.data) {
-          console.error('[AuthService] Exchange failed:', response.error);
-          this.authWindow?.close();
-          resolve({
-            success: false,
-            error: {
-              code: 'OAUTH_EXCHANGE_FAILED',
-              message: response.error || 'Failed to exchange code for session',
-            },
-          });
-          return;
-        }
-
-        const authResponse = response.data;
-
-        // If successful, persist session
-        if (authResponse.success && authResponse.session) {
-          console.log('[AuthService] Persisting session...');
-          this.persistSession(authResponse.session);
-          this.scheduleTokenRefresh(authResponse.session);
-        }
-
-        // Close OAuth window AFTER persisting session
-        this.authWindow?.close();
-        this.authWindow = null;
-        
-        console.log('[AuthService] OAuth flow complete');
-        resolve(authResponse);
-      } catch (error: any) {
-        console.error('[AuthService] OAuth callback exception:', error);
+      // Handle OAuth errors
+      if (error) {
         this.authWindow?.close();
         this.authWindow = null;
         resolve({
           success: false,
           error: {
-            code: 'OAUTH_CALLBACK_EXCEPTION',
-            message: error.message || 'Error processing OAuth callback',
+            code: 'OAUTH_ERROR',
+            message: urlObj.searchParams.get('error_description') || error,
           },
         });
+        return;
       }
+
+      if (!code) {
+        this.authWindow?.close();
+        this.authWindow = null;
+        resolve({
+          success: false,
+          error: {
+            code: 'OAUTH_NO_CODE',
+            message: 'No authorization code received',
+          },
+        });
+        return;
+      }
+
+      // Exchange code for session
+      const response = await api.post<AuthResponse>('/auth/oauth/callback', { code });
+
+      if (!response.success || !response.data) {
+        this.authWindow?.close();
+        this.authWindow = null;
+        resolve({
+          success: false,
+          error: {
+            code: 'OAUTH_EXCHANGE_FAILED',
+            message: response.error || 'Failed to exchange code for session',
+          },
+        });
+        return;
+      }
+
+      const authResponse = response.data;
+
+      // Persist session if successful
+      if (authResponse.success && authResponse.session) {
+        this.persistSession(authResponse.session);
+        this.scheduleTokenRefresh(authResponse.session);
+      }
+
+      this.authWindow?.close();
+      this.authWindow = null;
+      resolve(authResponse);
+    } catch (error: any) {
+      this.authWindow?.close();
+      this.authWindow = null;
+      resolve({
+        success: false,
+        error: {
+          code: 'OAUTH_CALLBACK_EXCEPTION',
+          message: error.message || 'Error processing OAuth callback',
+        },
+      });
     }
   }
 
