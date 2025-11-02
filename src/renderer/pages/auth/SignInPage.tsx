@@ -88,7 +88,7 @@ export function SignInPage() {
                 <Label htmlFor="password">Password</Label>
                 <Link 
                   to="/auth/forgot-password" 
-                  className="text-xs text-primary hover:text-primary/80 mb-2"
+                  className="text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 text-xs"
                 >
                   Forgot Password?
                 </Link>
