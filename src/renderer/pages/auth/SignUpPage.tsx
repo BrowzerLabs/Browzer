@@ -62,7 +62,14 @@ export function SignUpPage() {
   };
 
   const handleGoogleSignUp = async () => {
-    await signInWithGoogle();
+    await signInWithGoogle().then(() => {
+      setTimeout(() => {
+        navigate('/');
+      }, 700)
+    }).catch((error) => {
+      toast.error(error.message);
+      console.log(error);
+    })
   };
 
   return (
