@@ -33,7 +33,7 @@ export function SignInPage() {
     }
     
     await signIn({ email, password }).then(() => {
-      toast.success('Signed in successfully, redirecting...');
+      toast.success('Signed in successfully');
       setTimeout(() => {
         navigate('/');
       }, 700)
@@ -44,7 +44,14 @@ export function SignInPage() {
   };
 
   const handleGoogleSignIn = async () => {
-    await signInWithGoogle();
+    await signInWithGoogle().then(() => {
+      setTimeout(() => {
+        navigate('/');
+      }, 700)
+    }).catch((error) => {
+      toast.error(error.message);
+      console.log(error);
+    })
   };
 
   

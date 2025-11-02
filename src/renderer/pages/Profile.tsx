@@ -14,20 +14,13 @@ import {
   Shield, 
   Loader2, 
   Check,
-  LogOut,
   Trash2,
   CheckCircle2Icon
 } from 'lucide-react';
 import { toast } from 'sonner';
 
-/**
- * Profile Page
- * Route: browzer://profile
- * 
- * User profile management with modern, minimalist design
- */
 export default function Profile() {
-  const { user, signOut, updateProfile, loading } = useAuth();
+  const { user, updateProfile, loading } = useAuth();
   
   const [display_name, setdisplay_name] = useState('');
   const [isEditing, setIsEditing] = useState(false);
@@ -82,7 +75,7 @@ export default function Profile() {
   if (loading || !user) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+        <Loader2 className="size-7 animate-spin" />
       </div>
     );
   }

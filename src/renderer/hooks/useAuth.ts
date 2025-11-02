@@ -45,7 +45,6 @@ export function useAuth() {
       
       if (session) {
         console.log('[Auth] Session found:', session);
-        toast.success(`Welcome back to Browzer!`);
         store.setAuthData(session.user, session);
       } else {
         console.log('[Auth] No session found');
@@ -279,40 +278,6 @@ export function useAuth() {
     []
   );
 
-  /**
-   * Reset password
-   */
-  const resetPassword = useCallback(
-    async (email: string): Promise<{ success: boolean; error?: string }> => {
-      const store = useAuthStore.getState();
-      
-      try {
-        store.setLoading(true);
-        store.setError(null);
-
-        const result = await window.authAPI.resetPassword(email);
-
-        if (result.success) {
-          toast.success('Password reset email sent');
-        } else if (result.error) {
-          store.setError(result.error);
-          toast.error(result.error);
-        }
-
-        return result;
-      } catch (error: any) {
-        const message = error.message || 'Password reset failed';
-        store.setError(message);
-        toast.error(message);
-        
-        return { success: false, error: message };
-      } finally {
-        store.setLoading(false);
-      }
-    },
-    []
-  );
-
   // Return state and actions
   return {
     // State (read-only)
@@ -329,7 +294,6 @@ export function useAuth() {
     signOut,
     refreshSession,
     updateProfile,
-    resetPassword,
     initialize,
   };
 }

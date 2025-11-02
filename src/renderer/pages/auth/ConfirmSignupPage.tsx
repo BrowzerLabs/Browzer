@@ -1,23 +1,17 @@
 import { useEffect, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/renderer/ui/card';
 import { Button } from '@/renderer/ui/button';
-import { Loader2, CheckCircle2, XCircle } from 'lucide-react';
+import { Loader2, CheckCircle2 } from 'lucide-react';
 import { AuthLayout } from './AuthLayout';
 import { toast } from 'sonner';
-
-/**
- * Email Confirmation Page
- * 
- * Handles magic link verification for email confirmation
- * URL: browzer://auth/confirm-signup?token_hash=xxx&type=signup
- */
+import { FaRegFaceSadTear } from "react-icons/fa6";
 
 type VerificationState = 'verifying' | 'success' | 'error';
 
 export function ConfirmSignupPage() {
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
+  const location = useLocation();
   const [state, setState] = useState<VerificationState>('verifying');
   const [error, setError] = useState<string>('');
 
@@ -27,9 +21,13 @@ export function ConfirmSignupPage() {
 
   const verifyEmail = async () => {
     try {
+      // Parse hash fragment for Supabase auth tokens
+      const hash = location.hash.substring(1); // Remove leading #
+      const params = new URLSearchParams(hash);
+      
       // Check for error from Supabase
-      const error = searchParams.get('error');
-      const errorDescription = searchParams.get('error_description');
+      const error = params.get('error');
+      const errorDescription = params.get('error_description');
       
       if (error) {
         setState('error');
@@ -39,8 +37,8 @@ export function ConfirmSignupPage() {
       }
 
       // Supabase sends session directly in URL hash (implicit flow)
-      const accessToken = searchParams.get('access_token');
-      const refreshToken = searchParams.get('refresh_token');
+      const accessToken = params.get('access_token');
+      const refreshToken = params.get('refresh_token');
 
       if (!accessToken || !refreshToken) {
         setState('error');
@@ -56,6 +54,7 @@ export function ConfirmSignupPage() {
         navigate('/');
       }, 2000);
     } catch (err) {
+      console.error('[ConfirmSignupPage] Error:', err);
       setState('error');
       setError('An unexpected error occurred');
       toast.error('Verification failed');
@@ -102,13 +101,13 @@ export function ConfirmSignupPage() {
 
           {state === 'error' && (
             <div className="flex flex-col items-center justify-center py-8 space-y-6">
-              <XCircle className="h-12 w-12 text-destructive" />
+              <FaRegFaceSadTear className="h-12 w-12 text-destructive" />
               <div className="text-center space-y-2">
                 <p className="font-medium text-destructive">Verification Failed</p>
                 <p className="text-sm text-muted-foreground">{error}</p>
               </div>
               <div className="flex flex-col gap-2 w-full">
-                <Button onClick={handleResend} variant="outline">
+                <Button onClick={handleResend}>
                   Resend Confirmation Email
                 </Button>
                 <Button onClick={() => navigate('/auth/signin')} variant="ghost">
