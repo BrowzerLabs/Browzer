@@ -81,7 +81,6 @@ export class ConnectionManager extends EventEmitter {
 
       // Step 2: Initialize SSE connection
       if (sse_url) {
-        console.log('[ConnectionManager] Initializing SSE...');
         await this.initializeSSE(sse_url);
       }
 

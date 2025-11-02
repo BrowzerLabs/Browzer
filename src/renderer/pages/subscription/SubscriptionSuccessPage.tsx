@@ -2,8 +2,10 @@ import { useEffect, useState } from 'react';
 import { Button } from '@/renderer/ui/button';
 import { Card } from '@/renderer/ui/card';
 import { CheckCircle, Loader2 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
 export function SubscriptionSuccessPage() {
+  const navigate = useNavigate();
   const [syncing, setSyncing] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -30,14 +32,14 @@ export function SubscriptionSuccessPage() {
   };
 
   const handleViewSubscription = () => {
-    window.location.hash = '/subscription';
+    navigate('/');
   };
 
   if (syncing) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-green-50 to-blue-50 dark:from-gray-900 dark:to-gray-800">
         <Card className="p-12 max-w-md text-center">
-          <Loader2 className="w-16 h-16 text-blue-600 mx-auto mb-6 animate-spin" />
+          <Loader2 className="size-7 mb-6 animate-spin" />
           <h1 className="text-2xl font-bold mb-2">Processing Payment...</h1>
           <p className="text-gray-600 dark:text-gray-400">
             Please wait while we confirm your subscription
@@ -52,7 +54,7 @@ export function SubscriptionSuccessPage() {
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-red-50 to-orange-50 dark:from-gray-900 dark:to-gray-800">
         <Card className="p-12 max-w-md text-center">
           <div className="w-16 h-16 bg-red-100 dark:bg-red-900/20 rounded-full flex items-center justify-center mx-auto mb-6">
-            <CheckCircle className="w-10 h-10 text-red-600" />
+            <CheckCircle className="w-10 h-10 text-orange-600" />
           </div>
           <h1 className="text-2xl font-bold mb-2">Sync Error</h1>
           <p className="text-gray-600 dark:text-gray-400 mb-6">

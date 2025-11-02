@@ -101,8 +101,6 @@ export class SSEClient extends EventEmitter {
       // Setup event listeners
       this.setupEventListeners();
 
-      console.log('[SSEClient] Connecting to SSE stream...');
-
     } catch (error) {
       console.error('[SSEClient] Connection failed:', error);
       this.setState(SSEConnectionState.ERROR);
@@ -119,7 +117,6 @@ export class SSEClient extends EventEmitter {
 
     // Connection opened
     this.eventSource.onopen = () => {
-      console.log('[SSEClient] Connected to SSE stream');
       this.setState(SSEConnectionState.CONNECTED);
       this.reconnectAttempts = 0;
       this.lastHeartbeat = Date.now();
