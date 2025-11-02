@@ -21,19 +21,21 @@ export class BrowserWindow {
     
     const baseWindow = this.windowManager.getWindow();
     const browserUIView = this.windowManager.getAgentUIView();
-
-    if (!baseWindow || !browserUIView) {
-      throw new Error('Failed to initialize window');
-    }
+    
     this.layoutManager = new LayoutManager(baseWindow);
 
     // 2. Initialize browser manager (tabs + recording)
     this.browserManager = new BrowserManager(baseWindow, browserUIView);
 
-    // 3. Initialize AuthService
+    // 3. Initialize deep link service
+    this.deepLinkService = DeepLinkService.getInstance();
+     // 4. Set deep link service window
+    this.deepLinkService.setWindow(baseWindow, browserUIView.webContents);
+
+    // 5. Initialize AuthService
     this.authService = new AuthService(this.browserManager);
 
-    // 4. Initialize connection manager callbacks
+    // 6. Initialize connection manager callbacks
     const connectionConfig: ConnectionManagerConfig = {
       apiBaseURL: process.env.BACKEND_API_URL || 'http://localhost:8080',
       apiKey: process.env.BACKEND_API_KEY || '',
@@ -44,7 +46,12 @@ export class BrowserWindow {
     this.connectionManager = new ConnectionManager(connectionConfig);
     this.connectionManager.initialize();
 
-    // 5. Setup IPC communication
+    // 7. Initialize AuthService after API client is ready
+    this.authService.initialize().catch(err => {
+      console.error('Failed to initialize AuthService:', err);
+    });
+
+    // 8. Setup IPC communication
     this.ipcHandlers = new IPCHandlers(
       this.browserManager,
       this.layoutManager,
@@ -52,12 +59,13 @@ export class BrowserWindow {
       this.authService
     );
 
-    // 6. Initialize deep link service
-    this.deepLinkService = DeepLinkService.getInstance();
-    this.deepLinkService.setWindow(baseWindow, browserUIView.webContents);
-
-    // 7. Initial layout
+    // 9. Initial layout
     this.updateLayout();
+
+    // 10. Listen for window resize
+    baseWindow.on('resize', () => {
+      this.updateLayout();
+    });
   }
 
   /**

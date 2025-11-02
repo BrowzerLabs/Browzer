@@ -31,8 +31,6 @@ export class ConnectionManager extends EventEmitter {
   private apiClient: ApiClient;
   private sseClient: SSEClient | null = null;
   private status: ConnectionStatus = ConnectionStatus.DISCONNECTED;
-  private healthCheckInterval: number;
-  private healthCheckTimer: NodeJS.Timeout | null = null;
   private getAccessToken: () => string | null;
   private clearSession: () => void;
 
