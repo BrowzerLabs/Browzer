@@ -121,6 +121,7 @@ export function useAuth() {
 
       if (response.success && response.user && response.session) {
         store.setAuthData(response.user, response.session);
+        toast.success('Signed in successfully');
       } else if (response.error) {
         store.setError(response.error.message);
         toast.error(response.error.message);

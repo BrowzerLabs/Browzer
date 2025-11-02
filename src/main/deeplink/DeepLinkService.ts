@@ -78,6 +78,7 @@ export class DeepLinkService {
   }
 
   private handleDeepLink(url: string): void {
+    console.log('[DeepLinkService] Handling deep link:', url);
     const data = this.parseDeepLink(url);
     if (!data) return;
 

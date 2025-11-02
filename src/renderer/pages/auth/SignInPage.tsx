@@ -33,7 +33,6 @@ export function SignInPage() {
     }
     
     await signIn({ email, password }).then(() => {
-      toast.success('Signed in successfully');
       setTimeout(() => {
         navigate('/');
       }, 700)

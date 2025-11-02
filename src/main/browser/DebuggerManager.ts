@@ -20,7 +20,6 @@ export class DebuggerManager {
       // Attach debugger if not already attached
       if (!cdpDebugger.isAttached()) {
         cdpDebugger.attach('1.3');
-        console.log(`✅ [Debugger] Attached to tab: ${tabId}`);
       }
       
       // Enable all required CDP domains for all services
@@ -35,9 +34,6 @@ export class DebuggerManager {
       
       // Get initial document
       await cdpDebugger.sendCommand('DOM.getDocument', { depth: -1 });
-      
-      console.log(`✅ [Debugger] CDP domains enabled for tab: ${tabId}`);
-      
     } catch (error) {
       console.error(`[Debugger] Failed to initialize for tab ${tabId}:`, error);
       throw error;
@@ -53,7 +49,6 @@ export class DebuggerManager {
     
     if (cdpDebugger.isAttached()) {
       cdpDebugger.detach();
-      console.log(`✅ [Debugger] Detached from tab: ${tabId}`);
     }
   }
 }

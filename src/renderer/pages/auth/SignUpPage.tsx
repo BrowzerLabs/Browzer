@@ -25,8 +25,8 @@ export function SignUpPage() {
   const [showPassword, setShowPassword] = useState(false);
 
   const validatePassword = (pass: string) => {
-    if (pass.length < 6) {
-      setPasswordError('Password must be at least 6 characters');
+    if (pass.length < 8) {
+      setPasswordError('Password must be at least 8 characters');
       return false;
     }
     setPasswordError('');
@@ -42,7 +42,7 @@ export function SignUpPage() {
     }
 
     if (!validatePassword(password)) {
-      toast.error(passwordError);
+      toast.error(`Please enter a password of at least 8 characters`);
       return;
     }
 
@@ -142,7 +142,7 @@ export function SignUpPage() {
             </button>
           </div>
           <p className="text-xs text-slate-500">
-            Must be at least 6 characters
+            Must be at least 8 characters
           </p>
         </div>
 

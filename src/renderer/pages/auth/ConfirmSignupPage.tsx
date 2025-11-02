@@ -52,7 +52,7 @@ export function ConfirmSignupPage() {
       // Wait a moment then redirect to app
       setTimeout(() => {
         navigate('/');
-      }, 2000);
+      }, 4000);
     } catch (err) {
       console.error('[ConfirmSignupPage] Error:', err);
       setState('error');
@@ -93,7 +93,7 @@ export function ConfirmSignupPage() {
               <div className="text-center space-y-2">
                 <p className="font-medium">Email verified!</p>
                 <p className="text-sm text-muted-foreground">
-                  Redirecting you to the app...
+                  Please Sign In with correct credentials to continue
                 </p>
               </div>
             </div>
