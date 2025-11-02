@@ -1,8 +1,5 @@
 /**
  * Authentication related types
- * 
- * IMPORTANT: All types use snake_case to match backend (FastAPI/Supabase)
- * This ensures consistent property names across the entire stack
  */
 
 export interface User {
