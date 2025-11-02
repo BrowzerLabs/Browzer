@@ -1,110 +1,112 @@
-/**
- * SINGLE SOURCE OF TRUTH for all internal routes
- * 
- * This file defines ALL routes in the application:
- * - Auth routes (fullscreen, no tabs)
- * - Internal routes (in-tab, with browzer:// protocol)
- */
-
 export interface RouteConfig {
   path: string;
   title: string;
-  showInTab: boolean; // true = load in tab, false = fullscreen
+  params?: string;
+  fragment?: string;
 }
-
-/**
- * Auth routes - Always fullscreen, no tabs visible
- */
-export const AUTH_ROUTES: Record<string, RouteConfig> = {
-  'confirm-signup': {
-    path: '/auth/confirm-signup',
-    title: 'Confirm Email',
-    showInTab: false,
-  },
-  'reset-password': {
-    path: '/auth/reset-password',
-    title: 'Reset Password',
-    showInTab: false,
-  },
-};
 
 /**
  * Internal routes - Load in tabs with browzer:// protocol
  */
-export const INTERNAL_ROUTES: Record<string, RouteConfig> = {
+export const ROUTES: Record<string, RouteConfig> = {
+  'auth/confirm-signup': {
+    path: '/auth/confirm-signup',
+    title: 'Confirm Email',
+  },
+  'auth/reset-password': {
+    path: '/auth/reset-password',
+    title: 'Reset Password',
+  },
+  'auth/callback': {
+    path: '/auth/callback',
+    title: 'OAuth Callback',
+  },
   settings: {
     path: '/settings',
     title: 'Settings',
-    showInTab: true,
   },
   history: {
     path: '/history',
     title: 'History',
-    showInTab: true,
   },
   recordings: {
     path: '/recordings',
     title: 'Recordings',
-    showInTab: true,
   },
   automation: {
     path: '/automation',
     title: 'Automation',
-    showInTab: true,
   },
   profile: {
     path: '/profile',
     title: 'Profile',
-    showInTab: true,
   },
 };
 
-/**
- * All routes combined
- */
-export const ALL_ROUTES = {
-  ...AUTH_ROUTES,
-  ...INTERNAL_ROUTES,
-};
-
-/**
- * Get route config from browzer:// URL
- * Example: browzer://settings -> { path: '/settings', title: 'Settings', showInTab: true }
- * Handles both query params (?) and hash fragments (#)
- */
 export function getRouteFromURL(url: string): RouteConfig | null {
-  // Extract route from browzer://route or browzer://auth/route
-  // Match until query params (?) or hash fragment (#) or end of string
-  const match = url.match(/^browzer:\/\/(.+?)(?:[?#]|$)/);
-  if (!match) return null;
+  try {
+    if (!url.startsWith('browzer://')) return null;
 
-  const routePath = match[1];
-  
-  // Check internal routes first
-  if (INTERNAL_ROUTES[routePath]) {
-    return INTERNAL_ROUTES[routePath];
+    const urlWithoutProtocol = url.replace('browzer://', '');
+    const hashIndex = urlWithoutProtocol.indexOf('#');
+    const queryIndex = urlWithoutProtocol.indexOf('?');
+    
+    let pathPart: string;
+    let queryPart = '';
+    let fragmentPart = '';
+    
+    if (hashIndex !== -1 && (queryIndex === -1 || hashIndex < queryIndex)) {
+      // Has fragment, might have query after it
+      pathPart = urlWithoutProtocol.substring(0, hashIndex);
+      const afterHash = urlWithoutProtocol.substring(hashIndex + 1);
+      const queryInFragment = afterHash.indexOf('?');
+      if (queryInFragment !== -1) {
+        fragmentPart = afterHash.substring(0, queryInFragment);
+        queryPart = afterHash.substring(queryInFragment + 1);
+      } else {
+        fragmentPart = afterHash;
+      }
+    } else if (queryIndex !== -1) {
+      // Has query, might have fragment after it
+      pathPart = urlWithoutProtocol.substring(0, queryIndex);
+      const afterQuery = urlWithoutProtocol.substring(queryIndex + 1);
+      const fragmentInQuery = afterQuery.indexOf('#');
+      if (fragmentInQuery !== -1) {
+        queryPart = afterQuery.substring(0, fragmentInQuery);
+        fragmentPart = afterQuery.substring(fragmentInQuery + 1);
+      } else {
+        queryPart = afterQuery;
+      }
+    } else {
+      pathPart = urlWithoutProtocol;
+    }
+    
+    // Remove trailing slash
+    pathPart = pathPart.replace(/\/$/, '');
+    
+    // Try to match the full path first (e.g., "auth/confirm-signup")
+    // If not found, try the last segment (e.g., "confirm-signup")
+    let route = ROUTES[pathPart];
+    
+    if (!route) {
+      const segments = pathPart.split('/');
+      const lastSegment = segments[segments.length - 1];
+      route = ROUTES[lastSegment];
+    }
+    
+    if (!route) {
+      console.warn('[getRouteFromURL] No route found for:', pathPart);
+      return null;
+    }
+    
+    // Return route with preserved params and fragment
+    return {
+      ...route,
+      params: queryPart || undefined,
+      fragment: fragmentPart || undefined,
+    };
+  } catch (error) {
+    console.error('[getRouteFromURL] Parse error:', error);
+    return null;
   }
-  
-  // Check auth routes (e.g., auth/confirm-signup -> confirm-signup)
-  const authKey = routePath.replace('auth/', '');
-  if (AUTH_ROUTES[authKey]) {
-    return AUTH_ROUTES[authKey];
-  }
-  
-  return null;
-}
-
-/**
- * Check if route should show tabs
- */
-export function shouldShowTabs(url: string): boolean {
-  const route = getRouteFromURL(url);
-  return route?.showInTab ?? false;
-}
-
-/**
- * Get all internal route paths for NavigationManager
- */
-export function getInternalRoutePaths(): string[] {
-  return Object.keys(INTERNAL_ROUTES);
 }

@@ -1,30 +1,14 @@
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getRouteFromURL } from '@/shared/routes';
 
-/**
- * Global deep link handler
- * 
- * Two behaviors:
- * 1. showInTab=false (auth) → Hide tabs, navigate with React Router
- * 2. showInTab=true (settings) → Show tabs, load in WebContentsView tab
- */
 export function useDeepLink() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    const unsubscribe = window.browserAPI.onDeepLink(async (data) => {
-      const route = getRouteFromURL(data.url);
-      if (!route) return;
-
-      if (data.showInTab) {
-        navigate('/');
-        await window.browserAPI.showAllTabs();
-        await window.browserAPI.navigateToTab(data.url);
-      } else {
-        await window.browserAPI.hideAllTabs();
-        navigate(route.path);
-      }
+    const unsubscribe = window.browserAPI.onDeepLink(async (path: string) => {
+      
+      await window.browserAPI.hideAllTabs();
+      navigate(path);
     });
 
     return unsubscribe;
