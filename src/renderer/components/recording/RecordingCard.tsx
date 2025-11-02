@@ -19,9 +19,13 @@ export function RecordingCard({ recording, onPlay, onDelete, onOpenVideo, onExpo
       <CardHeader className="pb-3">
         <div className="flex items-start justify-between gap-2">
           <div className="flex-1 min-w-0">
-            <CardTitle className="text-lg truncate">{recording.name}</CardTitle>
+            <CardTitle className="text-lg truncate">{recording.name.substring(0, 20)}{
+              recording.name.length > 20 && '...'
+            }</CardTitle>
             <CardDescription className="line-clamp-2 mt-1">
-              {recording.description || 'No description'}
+              {recording.description.substring(0, 20)}{
+                recording.description.length > 20 && '...'
+              }
             </CardDescription>
           </div>
           <div className="flex gap-1 shrink-0">

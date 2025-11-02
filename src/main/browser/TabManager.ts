@@ -3,12 +3,12 @@ import path from 'node:path';
 import { TabInfo, HistoryTransition } from '@/shared/types';
 import { VideoRecorder } from '@/main/recording';
 import { PasswordManager } from '@/main/password/PasswordManager';
-import { PasswordAutomation, BrowserAutomationExecutor } from '@/main/automation';
+import { BrowserAutomationExecutor } from '@/main/automation';
 import { HistoryService } from '@/main/history/HistoryService';
-import { PasswordUtil } from '@/main/utils/PasswordUtil';
 import { Tab, TabEventHandlers } from './types';
 import { NavigationManager } from './NavigationManager';
 import { DebuggerManager } from './DebuggerManager';
+import { PasswordAutomation } from '@/main/password';
 
 /**
  * TabManager - Manages tab lifecycle and state
@@ -81,8 +81,7 @@ export class TabManager {
         view, 
         this.passwordManager, 
         tabId,
-        this.eventHandlers.onCredentialSelected,
-        this.eventHandlers.onAutoFillPassword
+        this.eventHandlers.onCredentialSelected
       ),
       automationExecutor: new BrowserAutomationExecutor(view, tabId),
     };
@@ -442,38 +441,6 @@ export class TabManager {
     if (tab) {
       tab.selectedCredentialId = credentialId;
       tab.selectedCredentialUsername = username;
-    }
-  }
-
-  /**
-   * Handle auto-fill password request
-   */
-  public async handleAutoFillPassword(tabId: string): Promise<void> {
-    const tab = this.tabs.get(tabId);
-    if (!tab || !tab.selectedCredentialId) {
-      return;
-    }
-    
-    const password = this.passwordManager.getPassword(tab.selectedCredentialId);
-    if (!password) {
-      return;
-    }
-    
-    console.log('[TabManager] Auto-filling password for:', tab.selectedCredentialUsername);
-    
-    try {
-      await PasswordUtil.fillPassword(
-        tab.view,
-        password,
-        tab.selectedCredentialUsername
-      );
-      
-      // Clear selected credential after use
-      tab.selectedCredentialId = undefined;
-      tab.selectedCredentialUsername = undefined;
-      
-    } catch (error) {
-      console.error('[TabManager] Error auto-filling password:', error);
     }
   }
 
