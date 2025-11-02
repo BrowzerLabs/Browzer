@@ -9,8 +9,7 @@ export class LayoutManager {
   private sidebarWidthPercent = 30;
 
   constructor(
-    private baseWindow: BaseWindow,
-    private chromeHeight: number
+    private baseWindow: BaseWindow
   ) {}
 
   public setSidebarState(visible: boolean, widthPercent: number): void {
@@ -30,34 +29,11 @@ export class LayoutManager {
     const windowWidth = bounds.width;
     const windowHeight = bounds.height;
 
-    if (this.sidebarVisible) {
-      // When sidebar is visible, Agent UI takes the right portion (full height)
-      return {
-        x: 0,
-        y: 0,
-        width: windowWidth,
-        height: windowHeight,
-      };
-    }
-
     return {
       x: 0,
       y: 0,
       width: windowWidth,
-      height: this.chromeHeight,
-    };
-  }
-
-  public calculateBrowserBounds(): { x: number; y: number; width: number; height: number } {
-    const bounds = this.baseWindow.getBounds();
-    const windowWidth = bounds.width;
-    const windowHeight = bounds.height;
-
-    return {
-      x: 0,
-      y: this.chromeHeight,
-      width: windowWidth,
-      height: windowHeight - this.chromeHeight,
+      height: windowHeight,
     };
   }
 }

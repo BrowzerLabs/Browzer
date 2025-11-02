@@ -19,7 +19,7 @@ export class AutomationManager {
   constructor(
     private recordingStore: RecordingStore,
     private sessionManager: SessionManager,
-    private agentUIView?: WebContentsView
+    private browserUIView?: WebContentsView
   ) {}
 
   /**
@@ -58,8 +58,8 @@ export class AutomationManager {
 
     // Set up progress event forwarding
     llmService.on('progress', (event) => {
-      if (this.agentUIView && !this.agentUIView.webContents.isDestroyed()) {
-        this.agentUIView.webContents.send('automation:progress', {
+      if (this.browserUIView && !this.browserUIView.webContents.isDestroyed()) {
+        this.browserUIView.webContents.send('automation:progress', {
           sessionId,
           event
         });
@@ -69,8 +69,8 @@ export class AutomationManager {
     // Handle automation completion/error (non-blocking)
     automationPromise
       .then(result => {
-        if (this.agentUIView && !this.agentUIView.webContents.isDestroyed()) {
-          this.agentUIView.webContents.send('automation:complete', {
+        if (this.browserUIView && !this.browserUIView.webContents.isDestroyed()) {
+          this.browserUIView.webContents.send('automation:complete', {
             sessionId,
             result
           });
@@ -81,8 +81,8 @@ export class AutomationManager {
       .catch(error => {
         console.error('[AutomationManager] LLM automation failed:', error);
         
-        if (this.agentUIView && !this.agentUIView.webContents.isDestroyed()) {
-          this.agentUIView.webContents.send('automation:error', {
+        if (this.browserUIView && !this.browserUIView.webContents.isDestroyed()) {
+          this.browserUIView.webContents.send('automation:error', {
             sessionId,
             error: error instanceof Error ? error.message : 'Unknown error'
           });

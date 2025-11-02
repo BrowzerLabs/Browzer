@@ -1,7 +1,4 @@
 export * from './History'
 export * from './Recordings'
 export * from './Automation'
-export * from './Profile'
-export * from './SignIn'
-export * from './SignUp'
 export * from './Settings'

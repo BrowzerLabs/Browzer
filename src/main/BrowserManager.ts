@@ -38,8 +38,7 @@ export class BrowserManager {
 
   constructor(
     private baseWindow: BaseWindow,
-    agentUIHeight: number,
-    agentUIView?: WebContentsView
+    browserUIView?: WebContentsView
   ) {
     // Initialize services
     this.recordingStore = new RecordingStore();
@@ -60,7 +59,6 @@ export class BrowserManager {
 
     this.tabManager = new TabManager(
       baseWindow,
-      agentUIHeight,
       this.passwordManager,
       this.historyService,
       this.navigationManager,
@@ -70,17 +68,21 @@ export class BrowserManager {
 
     this.recordingManager = new RecordingManager(
       this.recordingStore,
-      agentUIView
+      browserUIView
     );
 
     this.automationManager = new AutomationManager(
       this.recordingStore,
       this.sessionManager,
-      agentUIView
+      browserUIView
     );
+  }
 
-    // Create initial tab
-    this.tabManager.createTab('https://www.google.com');
+  public initializeAfterAuth(): void {
+    const { tabs } = this.getAllTabs();
+    if (tabs.length === 0) {
+      this.tabManager.createTab('https://www.google.com');
+    }
   }
 
   // ============================================================================
@@ -260,6 +262,34 @@ export class BrowserManager {
 
   public updateLayout(_windowWidth: number, _windowHeight: number, sidebarWidth = 0): void {
     this.tabManager.updateLayout(sidebarWidth);
+  }
+
+  /**
+   * Hide all tabs (for fullscreen routes like auth pages)
+   */
+  public hideAllTabs(): void {
+    this.tabManager.hideAllTabs();
+  }
+
+  /**
+   * Show all tabs (restore normal browsing mode)
+   */
+  public showAllTabs(): void {
+    this.tabManager.showAllTabs();
+  }
+
+  /**
+   * Navigate active tab or create new tab with browzer:// URL
+   */
+  public navigateToBrowzerURL(url: string): void {
+    const activeTab = this.tabManager.getActiveTab();
+    if (activeTab) {
+      // Navigate existing tab
+      this.navigate(activeTab.id, url);
+    } else {
+      // Create new tab with this URL
+      this.createTab(url);
+    }
   }
 
   // ============================================================================

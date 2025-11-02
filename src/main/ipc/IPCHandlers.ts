@@ -4,9 +4,11 @@ import { BrowserManager } from '@/main/BrowserManager';
 import { LayoutManager } from '@/main/window/LayoutManager';
 import { WindowManager } from '@/main/window/WindowManager';
 import { SettingsStore } from '@/main/settings/SettingsStore';
-import { UserService } from '@/main/user/UserService';
 import { PasswordManager } from '@/main/password/PasswordManager';
-import { RecordedAction, HistoryQuery, AppSettings } from '@/shared/types';
+import { AuthService } from '@/main/auth';
+import { SubscriptionService } from '@/main/subscription/SubscriptionService';
+import { RecordedAction, HistoryQuery, AppSettings, SignUpCredentials, SignInCredentials, UpdateProfileRequest } from '@/shared/types';
+import { CheckoutSessionRequest, PortalSessionRequest } from '@/shared/types/subscription';
 
 /**
  * IPCHandlers - Centralized IPC communication setup
@@ -14,21 +16,21 @@ import { RecordedAction, HistoryQuery, AppSettings } from '@/shared/types';
  */
 export class IPCHandlers {
   private settingsStore: SettingsStore;
-  private userService: UserService;
   private passwordManager: PasswordManager;
+  private authService: AuthService;
+  private subscriptionService: SubscriptionService;
 
   constructor(
     private browserManager: BrowserManager,
     private layoutManager: LayoutManager,
-    private windowManager: WindowManager
+    private windowManager: WindowManager,
+    authService: AuthService,
   ) {
     this.settingsStore = new SettingsStore();
-    this.userService = new UserService();
-    // Use the existing PasswordManager from BrowserManager instead of creating a new one
     this.passwordManager = this.browserManager.getPasswordManager();
+    this.authService = authService;
+    this.subscriptionService = new SubscriptionService();
     this.setupHandlers();
-
-    console.log('IPCHandlers initialized');
   }
 
   private setupHandlers(): void {
@@ -37,14 +39,21 @@ export class IPCHandlers {
     this.setupSidebarHandlers();
     this.setupRecordingHandlers();
     this.setupSettingsHandlers();
-    this.setupUserHandlers();
     this.setupHistoryHandlers();
     this.setupPasswordHandlers();
     this.setupWindowHandlers();
     this.setupAutomationHandlers();
+    this.setupAuthHandlers();
+    this.setupSubscriptionHandlers();
+    this.setupDeepLinkHandlers();
   }
 
   private setupTabHandlers(): void {
+    ipcMain.handle('browser:initialize', async () => {
+      this.browserManager.initializeAfterAuth();
+      return true;
+    });
+
     ipcMain.handle('browser:create-tab', async (_, url?: string) => {
       return this.browserManager.createTab(url);
     });
@@ -101,47 +110,30 @@ export class IPCHandlers {
   }
 
   private setupRecordingHandlers(): void {
-    // Start recording
     ipcMain.handle('browser:start-recording', async () => {
       return this.browserManager.startRecording();
     });
-
-    // Stop recording - returns actions
     ipcMain.handle('browser:stop-recording', async () => {
       return this.browserManager.stopRecording();
     });
-
-    // Save recording
     ipcMain.handle('browser:save-recording', async (_, name: string, description: string, actions: RecordedAction[]) => {
       return this.browserManager.saveRecording(name, description, actions);
     });
-
-    // Get all recordings
     ipcMain.handle('browser:get-all-recordings', async () => {
       return this.browserManager.getRecordingStore().getAllRecordings();
     });
-
-    // Delete recording
     ipcMain.handle('browser:delete-recording', async (_, id: string) => {
       return this.browserManager.deleteRecording(id);
     });
-
-    // Check if recording is active
     ipcMain.handle('browser:is-recording', async () => {
       return this.browserManager.isRecordingActive();
     });
-
-    // Get recorded actions
     ipcMain.handle('browser:get-recorded-actions', async () => {
       return this.browserManager.getRecordedActions();
     });
-
-    // Export recording as JSON
     ipcMain.handle('browser:export-recording', async (_, id: string) => {
       return await this.browserManager.getRecordingStore().exportRecording(id);
     });
-    
-    // Video file operations
     ipcMain.handle('video:open-file', async (_, videoPath: string) => {
       try {
         await shell.openPath(videoPath);
@@ -153,7 +145,6 @@ export class IPCHandlers {
     
     ipcMain.handle('video:get-file-url', async (_, videoPath: string) => {
       try {
-        // Use custom protocol that Electron can serve
         return `video-file://${encodeURIComponent(videoPath)}`;
       } catch (error) {
         console.error('Failed to get video file URL:', error);
@@ -197,44 +188,6 @@ export class IPCHandlers {
 
     ipcMain.handle('settings:import', async (_, jsonString: string) => {
       return this.settingsStore.importSettings(jsonString);
-    });
-  }
-
-  private setupUserHandlers(): void {
-    ipcMain.handle('user:get-current', async () => {
-      return this.userService.getCurrentUser();
-    });
-
-    ipcMain.handle('user:is-authenticated', async () => {
-      return this.userService.isAuthenticated();
-    });
-
-    ipcMain.handle('user:sign-in', async (_, email: string, password?: string) => {
-      return this.userService.signIn(email, password);
-    });
-
-    ipcMain.handle('user:sign-out', async () => {
-      return this.userService.signOut();
-    });
-
-    ipcMain.handle('user:create', async (_, data: { email: string; name: string; password?: string }) => {
-      return this.userService.createUser(data);
-    });
-
-    ipcMain.handle('user:update-profile', async (_, updates: Parameters<typeof this.userService.updateProfile>[0]) => {
-      return this.userService.updateProfile(updates);
-    });
-
-    ipcMain.handle('user:update-preferences', async (_, preferences: Parameters<typeof this.userService.updatePreferences>[0]) => {
-      return this.userService.updatePreferences(preferences);
-    });
-
-    ipcMain.handle('user:delete-account', async () => {
-      return this.userService.deleteAccount();
-    });
-
-    ipcMain.handle('user:create-guest', async () => {
-      return this.userService.createGuestUser();
     });
   }
 
@@ -287,7 +240,7 @@ export class IPCHandlers {
   }
 
   private updateLayout(): void {
-    const agentUIView = this.windowManager.getAgentUIView();
+    const browserUIView = this.windowManager.getAgentUIView();
     const baseWindow = this.windowManager.getWindow();
     
     if (!baseWindow) return;
@@ -298,9 +251,9 @@ export class IPCHandlers {
       ? Math.floor(bounds.width * (sidebarState.widthPercent / 100))
       : 0;
 
-    if (agentUIView) {
-      const agentUIBounds = this.layoutManager.calculateAgentUIBounds();
-      agentUIView.setBounds(agentUIBounds);
+    if (browserUIView) {
+      const browserUIBounds = this.layoutManager.calculateAgentUIBounds();
+      browserUIView.setBounds(browserUIBounds);
     }
     
     this.browserManager.updateLayout(bounds.width, bounds.height, sidebarWidth);
@@ -323,29 +276,24 @@ export class IPCHandlers {
     ipcMain.handle('password:get-all', async () => {
       return this.passwordManager.getAllCredentials();
     });
-
     ipcMain.handle('password:save', async (_, origin: string, username: string, password: string) => {
       return this.passwordManager.saveCredential(origin, username, password);
     });
-
     ipcMain.handle('password:get-for-origin', async (_, origin: string) => {
       return this.passwordManager.getCredentialsForOrigin(origin);
     });
-
     ipcMain.handle('password:get-password', async (_, credentialId: string) => {
       return this.passwordManager.getPassword(credentialId);
     });
     ipcMain.handle('password:update', async (_, credentialId: string, username: string, password: string) => {
       return this.passwordManager.updateCredential(credentialId, username, password);
     });
-
     ipcMain.handle('password:delete', async (_, credentialId: string) => {
       return this.passwordManager.deleteCredential(credentialId);
     });
     ipcMain.handle('password:delete-multiple', async (_, credentialIds: string[]) => {
       return this.passwordManager.deleteMultipleCredentials(credentialIds);
     });
-
     ipcMain.handle('password:search', async (_, query: string) => {
       return this.passwordManager.searchCredentials(query);
     });
@@ -383,7 +331,6 @@ export class IPCHandlers {
     ipcMain.handle('automation:execute-llm', async (_, userGoal: string, recordedSessionId: string) => {
      return await this.browserManager.executeIterativeAutomation(userGoal, recordedSessionId);
     });
-    
     ipcMain.handle('automation:load-session', async (_, sessionId: string) => {
       return await this.browserManager.loadAutomationSession(sessionId);
     });
@@ -409,81 +356,94 @@ export class IPCHandlers {
     });
   }
 
+  private setupAuthHandlers(): void {
+    ipcMain.handle('auth:sign-up', async (_, credentials: SignUpCredentials) => {
+      return this.authService.signUp(credentials);
+    });
+    ipcMain.handle('auth:sign-in', async (_, credentials: SignInCredentials) => {
+      return this.authService.signIn(credentials);
+    });
+    ipcMain.handle('auth:sign-in-google', async () => {
+      return this.authService.signInWithGoogle();
+    });
+    ipcMain.handle('auth:sign-out', async () => {
+      return this.authService.signOut();
+    });
+    ipcMain.handle('auth:get-session', async () => {
+      return this.authService.getCurrentSession();
+    });
+    ipcMain.handle('auth:get-user', async () => {
+      return this.authService.getCurrentUser();
+    });
+    ipcMain.handle('auth:refresh-session', async () => {
+      return this.authService.refreshSession();
+    });
+    ipcMain.handle('auth:update-profile', async (_, updates: UpdateProfileRequest) => {
+      return this.authService.updateProfile(updates);
+    });
+    ipcMain.handle('auth:verify-token', async (_, tokenHash: string, type: string) => {
+      return this.authService.verifyToken(tokenHash, type);
+    });
+    ipcMain.handle('auth:resend-confirmation', async (_, email: string) => {
+      return this.authService.resendConfirmation(email);
+    });
+    ipcMain.handle('auth:send-password-reset', async (_, email: string) => {
+      return this.authService.sendPasswordReset(email);
+    });
+    ipcMain.handle('auth:update-password', async (_, newPassword: string, accessToken: string) => {
+      return this.authService.updatePassword(newPassword, accessToken);
+    });
+  }
+
+  private setupSubscriptionHandlers(): void {
+    ipcMain.handle('subscription:get-plans', async () => {
+      return this.subscriptionService.getPlans();
+    });
+
+    ipcMain.handle('subscription:get-current', async () => {
+      return this.subscriptionService.getCurrentSubscription();
+    });
+
+    ipcMain.handle('subscription:create-checkout', async (_, request: CheckoutSessionRequest) => {
+      return this.subscriptionService.createCheckoutSession(request);
+    });
+
+    ipcMain.handle('subscription:create-portal', async (_, request: PortalSessionRequest) => {
+      return this.subscriptionService.createPortalSession(request);
+    });
+
+    ipcMain.handle('subscription:use-credits', async (_, creditsToUse: number) => {
+      return this.subscriptionService.useCredits(creditsToUse);
+    });
+
+    ipcMain.handle('subscription:sync', async () => {
+      return this.subscriptionService.syncSubscription();
+    });
+    ipcMain.handle('subscription:has-credits', async (_, creditsNeeded: number) => {
+      return this.subscriptionService.hasCredits(creditsNeeded);
+    });
+
+    ipcMain.handle('subscription:get-credits-remaining', async () => {
+      return this.subscriptionService.getCreditsRemaining();
+    });
+  }
+
+  private setupDeepLinkHandlers(): void {
+    ipcMain.handle('deeplink:hide-tabs', async () => {
+      this.browserManager.hideAllTabs();
+      return true;
+    });
+    ipcMain.handle('deeplink:show-tabs', async () => {
+      this.browserManager.showAllTabs();
+      return true;
+    });
+    ipcMain.handle('deeplink:navigate-tab', async (_, url: string) => {
+      this.browserManager.navigateToBrowzerURL(url);
+      return true;
+    });
+  }
+
   public cleanup(): void {
-    ipcMain.removeAllListeners('browser:create-tab');
-    ipcMain.removeAllListeners('browser:close-tab');
-    ipcMain.removeAllListeners('browser:switch-tab');
-    ipcMain.removeAllListeners('browser:get-tabs');
-    ipcMain.removeAllListeners('browser:navigate');
-    ipcMain.removeAllListeners('browser:go-back');
-    ipcMain.removeAllListeners('browser:go-forward');
-    ipcMain.removeAllListeners('browser:reload');
-    ipcMain.removeAllListeners('browser:stop');
-    ipcMain.removeAllListeners('browser:can-go-back');
-    ipcMain.removeAllListeners('browser:can-go-forward');
-    ipcMain.removeAllListeners('browser:set-sidebar-state');
-    ipcMain.removeAllListeners('browser:start-recording');
-    ipcMain.removeAllListeners('browser:stop-recording');
-    ipcMain.removeAllListeners('browser:save-recording');
-    ipcMain.removeAllListeners('browser:get-all-recordings');
-    ipcMain.removeAllListeners('browser:delete-recording');
-    ipcMain.removeAllListeners('browser:is-recording');
-    ipcMain.removeAllListeners('browser:get-recorded-actions');
-    ipcMain.removeAllListeners('browser:export-recording');
-    ipcMain.removeAllListeners('settings:get-all');
-    ipcMain.removeAllListeners('settings:get-category');
-    ipcMain.removeAllListeners('settings:update');
-    ipcMain.removeAllListeners('settings:update-category');
-    ipcMain.removeAllListeners('settings:reset-all');
-    ipcMain.removeAllListeners('settings:reset-category');
-    ipcMain.removeAllListeners('settings:export');
-    ipcMain.removeAllListeners('settings:import');
-    ipcMain.removeAllListeners('user:get-current');
-    ipcMain.removeAllListeners('user:is-authenticated');
-    ipcMain.removeAllListeners('user:sign-in');
-    ipcMain.removeAllListeners('user:sign-out');
-    ipcMain.removeAllListeners('user:create');
-    ipcMain.removeAllListeners('user:update-profile');
-    ipcMain.removeAllListeners('user:update-preferences');
-    ipcMain.removeAllListeners('user:delete-account');
-    ipcMain.removeAllListeners('user:create-guest');
-    ipcMain.removeAllListeners('history:get-all');
-    ipcMain.removeAllListeners('history:search');
-    ipcMain.removeAllListeners('history:get-today');
-    ipcMain.removeAllListeners('history:get-last-n-days');
-    ipcMain.removeAllListeners('history:delete-entry');
-    ipcMain.removeAllListeners('history:delete-entries');
-    ipcMain.removeAllListeners('history:delete-by-date-range');
-    ipcMain.removeAllListeners('history:clear-all');
-    ipcMain.removeAllListeners('history:get-stats');
-    ipcMain.removeAllListeners('history:get-most-visited');
-    ipcMain.removeAllListeners('history:get-recently-visited');
-    
-    // Password manager cleanup
-    ipcMain.removeAllListeners('password:get-all');
-    ipcMain.removeAllListeners('password:save');
-    ipcMain.removeAllListeners('password:get-for-origin');
-    ipcMain.removeAllListeners('password:get-password');
-    ipcMain.removeAllListeners('password:update');
-    ipcMain.removeAllListeners('password:delete');
-    ipcMain.removeAllListeners('password:delete-multiple');
-    ipcMain.removeAllListeners('password:search');
-    ipcMain.removeAllListeners('password:get-blacklist');
-    ipcMain.removeAllListeners('password:add-to-blacklist');
-    ipcMain.removeAllListeners('password:remove-from-blacklist');
-    ipcMain.removeAllListeners('password:is-blacklisted');
-    ipcMain.removeAllListeners('password:export');
-    ipcMain.removeAllListeners('password:import');
-    ipcMain.removeAllListeners('password:get-stats');
-    
-    // Window handlers cleanup
-    ipcMain.removeAllListeners('window:toggle-maximize');
-    
-    // Automation handlers cleanup
-    ipcMain.removeAllListeners('automation:initialize');
-    ipcMain.removeAllListeners('automation:execute');
-    ipcMain.removeAllListeners('automation:generate-plan');
-    ipcMain.removeAllListeners('automation:get-status');
-    ipcMain.removeAllListeners('automation:cancel');
+    ipcMain.removeAllListeners();
   }
 }

@@ -1,14 +1,12 @@
 import path from 'node:path';
-import { INTERNAL_PAGES } from '@/main/constants';
+import { getRouteFromURL } from '@/shared/routes';
 
 /**
- * NavigationManager - Handles URL normalization and internal page routing
+ * NavigationManager - URL normalization and browzer:// protocol handler
  * 
- * Responsibilities:
- * - Normalize user input to valid URLs
- * - Handle internal browzer:// protocol
- * - Generate internal page URLs with hash routing
- * - Detect internal pages from URLs
+ * Simple responsibilities:
+ * 1. Normalize user input to valid URLs
+ * 2. Convert browzer:// to internal URLs
  */
 export class NavigationManager {
   /**
@@ -37,19 +35,15 @@ export class NavigationManager {
 
   /**
    * Handle internal browzer:// URLs
-   * Supports: settings, history, recordings, downloads, etc.
    */
   private handleInternalURL(url: string): string {
-    const internalPath = url.replace('browzer://', '');
-    
-    const validPages = INTERNAL_PAGES.map(page => page.path);
-    
-    if (validPages.includes(internalPath)) {
-      return this.generateInternalPageURL(internalPath);
+    const route = getRouteFromURL(url);
+    if (!route) {
+      console.warn('Unknown browzer:// URL:', url);
+      return 'https://www.google.com';
     }
     
-    console.warn(`Unknown internal page: ${internalPath}`);
-    return 'https://www.google.com';
+    return this.generateInternalPageURL(route.path.replace('/', ''));
   }
 
   /**
@@ -68,18 +62,23 @@ export class NavigationManager {
 
   /**
    * Get internal page info from URL
-   * Returns null if not an internal page
    */
   public getInternalPageInfo(url: string): { url: string; title: string } | null {
-    for (const page of INTERNAL_PAGES) {
-      if (url.includes(`#/${page.path}`)) {
-        return {
-          url: `browzer://${page.path}`,
-          title: page.title,
-        };
-      }
+    // Check if URL contains hash route
+    const hashMatch = url.match(/#\/([^?]+)/);
+    if (!hashMatch) return null;
+    
+    const routePath = hashMatch[1];
+    const browzerUrl = `browzer://${routePath}`;
+    const route = getRouteFromURL(browzerUrl);
+    
+    if (route) {
+      return {
+        url: browzerUrl,
+        title: route.title,
+      };
     }
-
+    
     return null;
   }
 
@@ -95,8 +94,15 @@ export class NavigationManager {
    * Check if URL is an internal page
    */
   public isInternalPage(url: string): boolean {
-    return url.startsWith('browzer://') || 
-           url.includes('index.html#/') ||
-           INTERNAL_PAGES.some(page => url.includes(`#/${page.path}`));
+    if (url.startsWith('browzer://')) return true;
+    if (url.includes('index.html#/')) return true;
+    
+    const hashMatch = url.match(/#\/([^?]+)/);
+    if (hashMatch) {
+      const browzerUrl = `browzer://${hashMatch[1]}`;
+      return getRouteFromURL(browzerUrl) !== null;
+    }
+    
+    return false;
   }
 }

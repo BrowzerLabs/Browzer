@@ -29,7 +29,7 @@ export class RecordingManager {
 
   constructor(
     private recordingStore: RecordingStore,
-    private agentUIView?: WebContentsView
+    private browserUIView?: WebContentsView
   ) {
     this.centralRecorder = new ActionRecorder();
   }
@@ -76,16 +76,16 @@ export class RecordingManager {
           tabInfo.actionCount++;
         }
         
-        if (this.agentUIView && !this.agentUIView.webContents.isDestroyed()) {
-          this.agentUIView.webContents.send('recording:action-captured', action);
+        if (this.browserUIView && !this.browserUIView.webContents.isDestroyed()) {
+          this.browserUIView.webContents.send('recording:action-captured', action);
         }
       });
       
       this.centralRecorder.setMaxActionsCallback(() => {
         console.log('🛑 Max actions limit reached, triggering auto-stop');
         // Notify renderer to show save form immediately
-        if (this.agentUIView && !this.agentUIView.webContents.isDestroyed()) {
-          this.agentUIView.webContents.send('recording:max-actions-reached');
+        if (this.browserUIView && !this.browserUIView.webContents.isDestroyed()) {
+          this.browserUIView.webContents.send('recording:max-actions-reached');
         }
       });
 
@@ -113,8 +113,8 @@ export class RecordingManager {
       
       console.log('🎬 Recording started (actions + video) on tab:', activeTab.id);
       
-      if (this.agentUIView && !this.agentUIView.webContents.isDestroyed()) {
-        this.agentUIView.webContents.send('recording:started');
+      if (this.browserUIView && !this.browserUIView.webContents.isDestroyed()) {
+        this.browserUIView.webContents.send('recording:started');
       }
       
       return true;
@@ -166,8 +166,8 @@ export class RecordingManager {
     const tabSwitchCount = this.countTabSwitchActions(actions);
     
     // Notify renderer that recording stopped
-    if (this.agentUIView && !this.agentUIView.webContents.isDestroyed()) {
-      this.agentUIView.webContents.send('recording:stopped', {
+    if (this.browserUIView && !this.browserUIView.webContents.isDestroyed()) {
+      this.browserUIView.webContents.send('recording:stopped', {
         actions,
         duration,
         startUrl: this.recordingState.startUrl,
@@ -261,8 +261,8 @@ export class RecordingManager {
     }
     
     // Notify renderer
-    if (this.agentUIView && !this.agentUIView.webContents.isDestroyed()) {
-      this.agentUIView.webContents.send('recording:saved', session);
+    if (this.browserUIView && !this.browserUIView.webContents.isDestroyed()) {
+      this.browserUIView.webContents.send('recording:saved', session);
     }
     
     // Reset recording state
@@ -370,8 +370,8 @@ export class RecordingManager {
   public async deleteRecording(id: string): Promise<boolean> {
     const success = await this.recordingStore.deleteRecording(id);
     
-    if (success && this.agentUIView && !this.agentUIView.webContents.isDestroyed()) {
-      this.agentUIView.webContents.send('recording:deleted', id);
+    if (success && this.browserUIView && !this.browserUIView.webContents.isDestroyed()) {
+      this.browserUIView.webContents.send('recording:deleted', id);
     }
     
     return success;

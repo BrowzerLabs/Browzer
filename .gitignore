@@ -179,3 +179,5 @@ typings/
 
 # Electron-Forge
 out/
+
+docs/

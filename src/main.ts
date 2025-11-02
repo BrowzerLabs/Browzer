@@ -7,6 +7,21 @@ if (started) {
   app.quit();
 }
 
+// Set as default protocol client for browzer:// URLs
+if (process.defaultApp) {
+  if (process.argv.length >= 2) {
+    app.setAsDefaultProtocolClient('browzer', process.execPath, [path.resolve(process.argv[1])]);
+  }
+} else {
+  app.setAsDefaultProtocolClient('browzer');
+}
+
+// Ensure single instance (required for deep links on Windows/Linux)
+const gotTheLock = app.requestSingleInstanceLock();
+if (!gotTheLock) {
+  app.quit();
+}
+
 protocol.registerSchemesAsPrivileged([
   {
     scheme: 'video-file',
@@ -15,6 +30,16 @@ protocol.registerSchemesAsPrivileged([
       supportFetchAPI: true,
       bypassCSP: false,
       stream: true
+    }
+  },
+  {
+    scheme: 'browzer',
+    privileges: {
+      standard: true,
+      secure: true,
+      supportFetchAPI: true,
+      allowServiceWorkers: true,
+      corsEnabled: true,
     }
   }
 ]);
@@ -30,14 +55,12 @@ app.whenReady().then(() => {
   });
   
   createWindow();
-}).catch((error) => {
-  console.error('Failed to start app:', error);
 });
 
 let mainBrowserWindow: BrowserWindow | null = null;
 
 const createWindow = () => {
- mainBrowserWindow = new BrowserWindow();
+  mainBrowserWindow = new BrowserWindow();
 };
 
 app.on('window-all-closed', () => {

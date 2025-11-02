@@ -1,9 +1,21 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { contextBridge, ipcRenderer, desktopCapturer } from 'electron';
-import { User, UserPreferences, HistoryEntry, HistoryQuery, HistoryStats, TabInfo, AppSettings } from '@/shared/types';
+import { HistoryEntry, HistoryQuery, HistoryStats, TabInfo, AppSettings, SignUpCredentials, SignInCredentials, AuthResponse, AuthSession, User, UpdateProfileRequest } from '@/shared/types';
+import { 
+  PlansResponse, 
+  SubscriptionResponse, 
+  CheckoutSessionRequest, 
+  CheckoutSessionResponse, 
+  PortalSessionRequest, 
+  PortalSessionResponse, 
+  CreditUsageResponse 
+} from '@/shared/types/subscription';
 
 
 export interface BrowserAPI {
+  // Initialization
+  initializeBrowser: () => Promise<boolean>;
+  
   // Tab Management
   createTab: (url?: string) => Promise<TabInfo>;
   closeTab: (tabId: string) => Promise<boolean>;
@@ -71,16 +83,6 @@ export interface BrowserAPI {
   exportSettings: () => Promise<string>;
   importSettings: (jsonString: string) => Promise<boolean>;
 
-  // User Management
-  getCurrentUser: () => Promise<User | null>;
-  isAuthenticated: () => Promise<boolean>;
-  signIn: (email: string, password?: string) => Promise<User>;
-  signOut: () => Promise<void>;
-  createUser: (data: { email: string; name: string; password?: string }) => Promise<User>;
-  updateProfile: (updates: any) => Promise<User>;
-  updateUserPreferences: (preferences: UserPreferences) => Promise<User>;
-  deleteAccount: () => Promise<void>;
-  createGuestUser: () => Promise<User>;
 
   // History Management
   getAllHistory: (limit?: number) => Promise<HistoryEntry[]>;
@@ -123,11 +125,58 @@ export interface BrowserAPI {
   onAutomationProgress: (callback: (data: { sessionId: string; event: any }) => void) => () => void;
   onAutomationComplete: (callback: (data: { sessionId: string; result: any }) => void) => () => void;
   onAutomationError: (callback: (data: { sessionId: string; error: string }) => void) => () => void;
+  
+  // Deep Link event listeners
+  onDeepLink: (callback: (path: string) => void) => () => void;
+  
+  // Deep Link actions
+  hideAllTabs: () => Promise<boolean>;
+  showAllTabs: () => Promise<boolean>;
+  navigateToTab: (url: string) => Promise<boolean>;
 }
 
-// Expose protected methods that allow the renderer process to use
-// ipcRenderer without exposing the entire object
+export interface AuthAPI {
+  // Authentication
+  signUp: (credentials: SignUpCredentials) => Promise<AuthResponse>;
+  signIn: (credentials: SignInCredentials) => Promise<AuthResponse>;
+  signInWithGoogle: () => Promise<AuthResponse>;
+  signOut: () => Promise<{ success: boolean; error?: string }>;
+  
+  // Session Management
+  getCurrentSession: () => Promise<AuthSession | null>;
+  getCurrentUser: () => Promise<User | null>;
+  refreshSession: () => Promise<AuthResponse>;
+  
+  // Profile Management
+  updateProfile: (updates: UpdateProfileRequest) => Promise<AuthResponse>;
+  
+  // Magic Link Verification
+  verifyToken: (tokenHash: string, type: string) => Promise<AuthResponse>;
+  resendConfirmation: (email: string) => Promise<{ success: boolean; error?: string }>;
+  
+  // Password Reset
+  sendPasswordReset: (email: string) => Promise<{ success: boolean; error?: string }>;
+  updatePassword: (newPassword: string, accessToken: string) => Promise<AuthResponse>;
+}
+
+export interface SubscriptionAPI {
+  // Plans
+  getPlans: () => Promise<PlansResponse>;
+  
+  // Subscription Management
+  getCurrentSubscription: () => Promise<SubscriptionResponse>;
+  createCheckoutSession: (request: CheckoutSessionRequest) => Promise<CheckoutSessionResponse>;
+  createPortalSession: (request: PortalSessionRequest) => Promise<PortalSessionResponse>;
+  syncSubscription: () => Promise<SubscriptionResponse>;
+  
+  // Credit Management
+  useCredits: (creditsToUse: number) => Promise<CreditUsageResponse>;
+  hasCredits: (creditsNeeded: number) => Promise<boolean>;
+  getCreditsRemaining: () => Promise<number>;
+}
+
 const browserAPI: BrowserAPI = {
+  initializeBrowser: () => ipcRenderer.invoke('browser:initialize'),
   createTab: (url?: string) => ipcRenderer.invoke('browser:create-tab', url),
   closeTab: (tabId: string) => ipcRenderer.invoke('browser:close-tab', tabId),
   switchTab: (tabId: string) => ipcRenderer.invoke('browser:switch-tab', tabId),
@@ -215,18 +264,6 @@ const browserAPI: BrowserAPI = {
     ipcRenderer.invoke('settings:reset-category', category),
   exportSettings: () => ipcRenderer.invoke('settings:export'),
   importSettings: (jsonString: string) => ipcRenderer.invoke('settings:import', jsonString),
-
-  // User API
-  getCurrentUser: () => ipcRenderer.invoke('user:get-current'),
-  isAuthenticated: () => ipcRenderer.invoke('user:is-authenticated'),
-  signIn: (email: string, password?: string) => ipcRenderer.invoke('user:sign-in', email, password),
-  signOut: () => ipcRenderer.invoke('user:sign-out'),
-  createUser: (data: { email: string; name: string; password?: string }) => 
-    ipcRenderer.invoke('user:create', data),
-  updateProfile: (updates: any) => ipcRenderer.invoke('user:update-profile', updates),
-  updateUserPreferences: (preferences: any) => ipcRenderer.invoke('user:update-preferences', preferences),
-  deleteAccount: () => ipcRenderer.invoke('user:delete-account'),
-  createGuestUser: () => ipcRenderer.invoke('user:create-guest'),
 
   // History API
   getAllHistory: (limit?: number) => ipcRenderer.invoke('history:get-all', limit),
@@ -325,9 +362,53 @@ const browserAPI: BrowserAPI = {
     ipcRenderer.on('automation:error', subscription);
     return () => ipcRenderer.removeListener('automation:error', subscription);
   },
+  
+  // Deep Link event listener
+  onDeepLink: (callback) => {
+    const subscription = (_: any, path: string) => callback(path);
+    ipcRenderer.on('deeplink:navigate', subscription);
+    return () => ipcRenderer.removeListener('deeplink:navigate', subscription);
+  },
+  
+  // Deep Link actions
+  hideAllTabs: () => ipcRenderer.invoke('deeplink:hide-tabs'),
+  showAllTabs: () => ipcRenderer.invoke('deeplink:show-tabs'),
+  navigateToTab: (url: string) => ipcRenderer.invoke('deeplink:navigate-tab', url),
+};
+
+// Auth API implementation
+const authAPI: AuthAPI = {
+  signUp: (credentials: SignUpCredentials) => ipcRenderer.invoke('auth:sign-up', credentials),
+  signIn: (credentials: SignInCredentials) => ipcRenderer.invoke('auth:sign-in', credentials),
+  signInWithGoogle: () => ipcRenderer.invoke('auth:sign-in-google'),
+  signOut: () => ipcRenderer.invoke('auth:sign-out'),
+  getCurrentSession: () => ipcRenderer.invoke('auth:get-session'),
+  getCurrentUser: () => ipcRenderer.invoke('auth:get-user'),
+  refreshSession: () => ipcRenderer.invoke('auth:refresh-session'),
+  updateProfile: (updates: UpdateProfileRequest) => 
+    ipcRenderer.invoke('auth:update-profile', updates),
+  verifyToken: (tokenHash: string, type: string) => 
+    ipcRenderer.invoke('auth:verify-token', tokenHash, type),
+  resendConfirmation: (email: string) => ipcRenderer.invoke('auth:resend-confirmation', email),
+  sendPasswordReset: (email: string) => ipcRenderer.invoke('auth:send-password-reset', email),
+  updatePassword: (newPassword: string, accessToken: string) => 
+    ipcRenderer.invoke('auth:update-password', newPassword, accessToken),
+};
+
+// Subscription API implementation
+const subscriptionAPI: SubscriptionAPI = {
+  getPlans: () => ipcRenderer.invoke('subscription:get-plans'),
+  getCurrentSubscription: () => ipcRenderer.invoke('subscription:get-current'),
+  createCheckoutSession: (request: CheckoutSessionRequest) => 
+    ipcRenderer.invoke('subscription:create-checkout', request),
+  createPortalSession: (request: PortalSessionRequest) => 
+    ipcRenderer.invoke('subscription:create-portal', request),
+  syncSubscription: () => ipcRenderer.invoke('subscription:sync'),
+  useCredits: (creditsToUse: number) => ipcRenderer.invoke('subscription:use-credits', creditsToUse),
+  hasCredits: (creditsNeeded: number) => ipcRenderer.invoke('subscription:has-credits', creditsNeeded),
+  getCreditsRemaining: () => ipcRenderer.invoke('subscription:get-credits-remaining'),
 };
 
 contextBridge.exposeInMainWorld('browserAPI', browserAPI);
-contextBridge.exposeInMainWorld('electronAPI', {
-  getDesktopSources: browserAPI.getDesktopSources
-});
+contextBridge.exposeInMainWorld('authAPI', authAPI);
+contextBridge.exposeInMainWorld('subscriptionAPI', subscriptionAPI);

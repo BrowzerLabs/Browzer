@@ -1,12 +1,14 @@
 import { useState, useEffect, KeyboardEvent } from 'react';
-import { ArrowLeft, ArrowRight, RotateCw, X, Lock, Globe, Circle, Square, Settings, Clock, User, MoreVertical, Video, ChevronRight, ChevronLeft, Loader2 } from 'lucide-react';
+import { ArrowLeft, ArrowRight, RotateCw, X, Lock, Globe, Circle, Square, Settings, Clock, User, MoreVertical, Video, ChevronRight, ChevronLeft, Loader2, LogOut } from 'lucide-react';
 import type { TabInfo } from '@/shared/types';
 import { cn } from '@/renderer/lib/utils';
 import { useSidebarStore } from '@/renderer/store/useSidebarStore';
 import { useRecording } from '@/renderer/hooks/useRecording';
+import { useAuth } from '@/renderer/hooks/useAuth';
 import { Input } from '@/renderer/ui/input';
 import ThemeToggle from '@/renderer/ui/theme-toggle';
 import { Button } from '@/renderer/ui/button';
+import { Avatar, AvatarFallback, AvatarImage } from '@/renderer/ui/avatar';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -36,6 +38,7 @@ export function NavigationBar({
   const [isEditing, setIsEditing] = useState(false);
   const { isVisible: isSidebarVisible, toggleSidebar } = useSidebarStore();
   const { isRecording, isLoading, toggleRecording } = useRecording();
+  const { user, signOut, loading } = useAuth();
 
   // Update URL input when active tab changes
   useEffect(() => {
@@ -54,6 +57,10 @@ export function NavigationBar({
       setIsEditing(false);
       (e.target as HTMLInputElement).blur();
     }
+  };
+
+  const handleSignOut = async () => {
+    await signOut();
   };
 
   const isSecure = activeTab?.url.startsWith('https://');
@@ -154,36 +161,62 @@ export function NavigationBar({
       </Button>
 
       {/* Menu Dropdown */}
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button variant="outline" size="icon" title="More options">
-            <MoreVertical className="w-4 h-4" />
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-56">
-          <DropdownMenuItem onClick={() => onNavigate('browzer://recordings')}>
-            <Video className="w-4 h-4 mr-2" />
-            Recordings
-          </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => onNavigate('browzer://history')}>
-            <Clock className="w-4 h-4 mr-2" />
-            History
-          </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => onNavigate('browzer://automation')}>
-            <Clock className="w-4 h-4 mr-2" />
-            Automation
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={() => onNavigate('browzer://profile')}>
-            <User className="w-4 h-4 mr-2" />
-            Profile
-          </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => onNavigate('browzer://settings')}>
-            <Settings className="w-4 h-4 mr-2" />
-            Settings
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
+      {
+        isSidebarVisible && (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="icon" title="More options">
+                <MoreVertical className="w-4 h-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56">
+              <DropdownMenuItem onClick={() => onNavigate('browzer://profile')}>
+                <Avatar className="size-7">
+                  <AvatarImage src={user?.photo_url || undefined} />
+                  <AvatarFallback className="bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-400 text-sm">
+                    {user?.display_name 
+                      ? user.display_name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
+                      : user?.email?.slice(0, 2).toUpperCase() || 'U'}
+                  </AvatarFallback>
+                </Avatar>
+                {user?.display_name || 'Profile'}
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => onNavigate('browzer://settings')}>
+                <Settings className="w-4 h-4 mr-2" />
+                Settings
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => onNavigate('browzer://history')}>
+                <Clock className="w-4 h-4 mr-2" />
+                History
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => onNavigate('browzer://recordings')}>
+                <Video className="w-4 h-4 mr-2" />
+                Recordings
+              </DropdownMenuItem>
+              
+              <DropdownMenuItem onClick={() => onNavigate('browzer://automation')}>
+                <Clock className="w-4 h-4 mr-2" />
+                Automation
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem 
+                onClick={handleSignOut}
+                disabled={loading}
+                variant='destructive'
+              >
+                {loading ? (
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                ) : (
+                  <LogOut className="w-4 h-4 mr-2" />
+                )}
+                Sign Out
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )
+      }
     </div>
   );
 }
