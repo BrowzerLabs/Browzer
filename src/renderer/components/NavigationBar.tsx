@@ -161,62 +161,66 @@ export function NavigationBar({
       </Button>
 
       {/* Menu Dropdown */}
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button variant="outline" size="icon" title="More options">
-            <MoreVertical className="w-4 h-4" />
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-56">
-          <DropdownMenuItem onClick={() => onNavigate('browzer://profile')}>
-             <Avatar className="size-7">
-              <AvatarImage src={user?.photo_url || undefined} />
-              <AvatarFallback className="bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-400 text-sm">
-                {user?.display_name 
-                  ? user.display_name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
-                  : user?.email?.slice(0, 2).toUpperCase() || 'U'}
-              </AvatarFallback>
-            </Avatar>
-            {user?.display_name || 'Profile'}
-          </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => onNavigate('browzer://subscription')}>
-            <DiamondIcon className="w-4 h-4 mr-2" />
-            Subscription
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={() => onNavigate('browzer://settings')}>
-            <Settings className="w-4 h-4 mr-2" />
-            Settings
-          </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => onNavigate('browzer://history')}>
-            <Clock className="w-4 h-4 mr-2" />
-            History
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={() => onNavigate('browzer://recordings')}>
-            <Video className="w-4 h-4 mr-2" />
-            Recordings
-          </DropdownMenuItem>
-          
-          <DropdownMenuItem onClick={() => onNavigate('browzer://automation')}>
-            <Clock className="w-4 h-4 mr-2" />
-            Automation
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem 
-            onClick={handleSignOut}
-            disabled={loading}
-            variant='destructive'
-          >
-            {loading ? (
-              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-            ) : (
-              <LogOut className="w-4 h-4 mr-2" />
-            )}
-            Sign Out
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
+      {
+        isSidebarVisible && (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="icon" title="More options">
+                <MoreVertical className="w-4 h-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56">
+              <DropdownMenuItem onClick={() => onNavigate('browzer://profile')}>
+                <Avatar className="size-7">
+                  <AvatarImage src={user?.photo_url || undefined} />
+                  <AvatarFallback className="bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-400 text-sm">
+                    {user?.display_name 
+                      ? user.display_name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
+                      : user?.email?.slice(0, 2).toUpperCase() || 'U'}
+                  </AvatarFallback>
+                </Avatar>
+                {user?.display_name || 'Profile'}
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => onNavigate('browzer://subscription')}>
+                <DiamondIcon className="w-4 h-4 mr-2" />
+                Subscription
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => onNavigate('browzer://settings')}>
+                <Settings className="w-4 h-4 mr-2" />
+                Settings
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => onNavigate('browzer://history')}>
+                <Clock className="w-4 h-4 mr-2" />
+                History
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => onNavigate('browzer://recordings')}>
+                <Video className="w-4 h-4 mr-2" />
+                Recordings
+              </DropdownMenuItem>
+              
+              <DropdownMenuItem onClick={() => onNavigate('browzer://automation')}>
+                <Clock className="w-4 h-4 mr-2" />
+                Automation
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem 
+                onClick={handleSignOut}
+                disabled={loading}
+                variant='destructive'
+              >
+                {loading ? (
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                ) : (
+                  <LogOut className="w-4 h-4 mr-2" />
+                )}
+                Sign Out
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )
+      }
     </div>
   );
 }

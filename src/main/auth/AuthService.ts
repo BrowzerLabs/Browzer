@@ -22,15 +22,10 @@ export class AuthService {
     browserManager: BrowserManager,
   ) {
     this.browserManager = browserManager;
-
-    // Initialize secure session storage
     this.sessionStore = new Store({
       name: 'auth-session',
       encryptionKey: 'browzer-auth-encryption-key', // In production, use env variable
     });
-
-    // Restore session on startup
-    this.restoreSession();
   }
 
   /**
@@ -114,16 +109,175 @@ export class AuthService {
 
   /**
    * Sign in with Google OAuth
-   * TODO: Implement OAuth flow through backend
+   * Opens OAuth window and handles callback
    */
   async signInWithGoogle(): Promise<AuthResponse> {
-    return {
-      success: false,
-      error: {
-        code: 'NOT_IMPLEMENTED',
-        message: 'Google OAuth not yet implemented with backend',
-      },
-    };
+    try {
+      // Step 1: Get OAuth URL from backend
+      const urlResponse = await api.post<{ success: boolean; url?: string; error?: string }>(
+        '/auth/oauth/url',
+        {
+          provider: 'google',
+          redirect_url: 'browzer://auth/callback',
+        }
+      );
+
+      if (!urlResponse.success || !urlResponse.data || !urlResponse.data.url) {
+        return {
+          success: false,
+          error: {
+            code: 'OAUTH_URL_FAILED',
+            message: urlResponse.error || 'Failed to get OAuth URL',
+          },
+        };
+      }
+
+      let oauthUrl = urlResponse.data.url;
+      
+      const urlObj = new URL(oauthUrl);
+      urlObj.searchParams.set('prompt', 'select_account');
+      oauthUrl = urlObj.toString();
+
+      // Step 3: Open OAuth window 
+      return new Promise((resolve) => {
+        this.authWindow = new BrowserWindow({
+          width: 500,
+          height: 700,
+          webPreferences: {
+            nodeIntegration: false,
+            contextIsolation: true,
+          },
+          title: 'Sign in with Google',
+          modal: true,
+          show: false,
+        });
+
+        this.authWindow.once('ready-to-show', () => {
+          this.authWindow?.show();
+        });
+
+        this.authWindow.on('closed', () => {
+          this.authWindow = null;
+          resolve({
+            success: false,
+            error: {
+              code: 'OAUTH_CANCELLED',
+              message: 'OAuth window was closed',
+            },
+          });
+        });
+
+        this.authWindow.webContents.on('will-redirect', async (event, url) => {
+          if (url.startsWith('browzer://')) {
+            event.preventDefault(); // Prevent the redirect
+            await this.handleOAuthCallback(url, resolve);
+          }
+        });
+
+        this.authWindow.webContents.on('did-navigate', async (event, url) => {
+          if (url.startsWith('browzer://')) {
+            await this.handleOAuthCallback(url, resolve);
+          }
+        });
+        this.authWindow.webContents.on('will-navigate', async (event, url) => {
+          if (url.startsWith('browzer://')) {
+            event.preventDefault();
+            await this.handleOAuthCallback(url, resolve);
+          }
+        });
+
+        this.authWindow.loadURL(oauthUrl);
+      });
+    } catch (error: any) {
+      return {
+        success: false,
+        error: {
+          code: 'OAUTH_EXCEPTION',
+          message: error.message || 'An unexpected error occurred during OAuth',
+        },
+      };
+    }
+  }
+
+  /**
+   * Handle OAuth callback URL
+   * Extracts code and exchanges it for session
+   */
+  private async handleOAuthCallback(
+    url: string,
+    resolve: (value: AuthResponse) => void
+  ): Promise<void> {
+
+    try {
+      const urlObj = new URL(url);
+      const code = urlObj.searchParams.get('code');
+      const error = urlObj.searchParams.get('error');
+
+      // Handle OAuth errors
+      if (error) {
+        this.authWindow?.close();
+        this.authWindow = null;
+        resolve({
+          success: false,
+          error: {
+            code: 'OAUTH_ERROR',
+            message: urlObj.searchParams.get('error_description') || error,
+          },
+        });
+        return;
+      }
+
+      if (!code) {
+        this.authWindow?.close();
+        this.authWindow = null;
+        resolve({
+          success: false,
+          error: {
+            code: 'OAUTH_NO_CODE',
+            message: 'No authorization code received',
+          },
+        });
+        return;
+      }
+
+      // Exchange code for session
+      const response = await api.post<AuthResponse>('/auth/oauth/callback', { code });
+
+      if (!response.success || !response.data) {
+        this.authWindow?.close();
+        this.authWindow = null;
+        resolve({
+          success: false,
+          error: {
+            code: 'OAUTH_EXCHANGE_FAILED',
+            message: response.error || 'Failed to exchange code for session',
+          },
+        });
+        return;
+      }
+
+      const authResponse = response.data;
+
+      // Persist session if successful
+      if (authResponse.success && authResponse.session) {
+        this.persistSession(authResponse.session);
+        this.scheduleTokenRefresh(authResponse.session);
+      }
+
+      this.authWindow?.close();
+      this.authWindow = null;
+      resolve(authResponse);
+    } catch (error: any) {
+      this.authWindow?.close();
+      this.authWindow = null;
+      resolve({
+        success: false,
+        error: {
+          code: 'OAUTH_CALLBACK_EXCEPTION',
+          message: error.message || 'Error processing OAuth callback',
+        },
+      });
+    }
   }
 
   /**
@@ -459,6 +613,10 @@ export class AuthService {
     }
   }
 
+  public async initialize(): Promise<void> {
+    await this.restoreSession();
+  }
+
   /**
    * Restore session from storage
    */
@@ -467,14 +625,11 @@ export class AuthService {
       const storedSession = this.getStoredSession();
       
       if (storedSession && storedSession.access_token) {
-        // Validate session with backend
         const user = await this.getCurrentUser();
         
         if (user) {
-          console.log('Session restored successfully');
           this.scheduleTokenRefresh(storedSession);
         } else {
-          console.log('Stored session is invalid');
           this.clearSession();
         }
       }
@@ -489,6 +644,7 @@ export class AuthService {
    */
   public clearSession(): void {
     this.sessionStore.delete('session');
+    this.cancelTokenRefresh();
   }
 
   /**
@@ -498,7 +654,6 @@ export class AuthService {
     this.cancelTokenRefresh();
 
     if (session.expires_at) {
-      // Refresh 5 minutes before expiry
       const expiresIn = session.expires_at * 1000 - Date.now() - 5 * 60 * 1000;
       
       if (expiresIn > 0) {

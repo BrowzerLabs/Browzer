@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/renderer/ui/card';
 import { Button } from '@/renderer/ui/button';
 import { Input } from '@/renderer/ui/input';
@@ -8,24 +8,12 @@ import { Loader2, CheckCircle2, XCircle } from 'lucide-react';
 import { AuthLayout } from './AuthLayout';
 import { toast } from 'sonner';
 
-/**
- * Password Reset Callback Page
- * 
- * Handles magic link verification for password reset
- * URL: browzer://auth/reset-password?token_hash=xxx&type=recovery
- * 
- * Flow:
- * 1. Verify magic link token
- * 2. Show password reset form
- * 3. Update password
- * 4. Redirect to sign in
- */
 
 type PageState = 'verifying' | 'reset_form' | 'success' | 'error';
 
 export function ResetPasswordCallbackPage() {
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
+  const location = useLocation();
   const [state, setState] = useState<PageState>('verifying');
   const [error, setError] = useState<string>('');
   const [accessToken, setAccessToken] = useState<string>('');
@@ -35,27 +23,39 @@ export function ResetPasswordCallbackPage() {
 
   useEffect(() => {
     verifyToken();
-  }, []);
+  }, [location.hash]);
 
   const verifyToken = async () => {
     try {
+      // Parse URL hash (Supabase sends data in fragment)
+      const hash = location.hash.substring(1); // Remove leading #
+      const params = new URLSearchParams(hash);
+      
       // Check for error from Supabase
-      const error = searchParams.get('error');
-      const errorDescription = searchParams.get('error_description');
+      const error = params.get('error');
+      const errorDescription = params.get('error_description');
       
       if (error) {
         setState('error');
-        setError(errorDescription || error);
-        toast.error('Verification failed');
+        setError(decodeURIComponent(errorDescription || error).replace(/\+/g, ' '));
+        toast.error('Reset link invalid or expired');
         return;
       }
 
-      // Supabase sends session directly in URL hash (implicit flow)
-      const accessToken = searchParams.get('access_token');
+      // Extract access token from hash
+      const accessToken = params.get('access_token');
+      const tokenType = params.get('type');
 
       if (!accessToken) {
         setState('error');
         setError('Invalid reset link - missing access token');
+        return;
+      }
+
+      // Verify this is a recovery token
+      if (tokenType !== 'recovery') {
+        setState('error');
+        setError('Invalid reset link - wrong token type');
         return;
       }
 

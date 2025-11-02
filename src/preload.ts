@@ -118,7 +118,7 @@ export interface BrowserAPI {
   onAutomationError: (callback: (data: { sessionId: string; error: string }) => void) => () => void;
   
   // Deep Link event listeners
-  onDeepLink: (callback: (data: { url: string; showInTab: boolean }) => void) => () => void;
+  onDeepLink: (callback: (path: string) => void) => () => void;
   
   // Deep Link actions
   hideAllTabs: () => Promise<boolean>;
@@ -341,7 +341,7 @@ const browserAPI: BrowserAPI = {
   
   // Deep Link event listener
   onDeepLink: (callback) => {
-    const subscription = (_: any, data: any) => callback(data);
+    const subscription = (_: any, path: string) => callback(path);
     ipcRenderer.on('deeplink:navigate', subscription);
     return () => ipcRenderer.removeListener('deeplink:navigate', subscription);
   },

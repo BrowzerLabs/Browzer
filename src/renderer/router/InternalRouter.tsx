@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import { History, Recordings, Automation, Settings } from '@/renderer/screens';
 import Profile from '@/renderer/pages/Profile';
+import { ROUTES } from '@/shared/routes';
 import { SubscriptionPage } from '@/renderer/pages/SubscriptionPage';
-import { INTERNAL_ROUTES as ROUTES } from '@/shared/routes';
 
 /**
  * Internal page routes - Maps route names to React components

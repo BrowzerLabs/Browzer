@@ -33,7 +33,6 @@ export function SignInPage() {
     }
     
     await signIn({ email, password }).then(() => {
-      toast.success('Signed in successfully, redirecting...');
       setTimeout(() => {
         navigate('/');
       }, 700)
@@ -44,7 +43,14 @@ export function SignInPage() {
   };
 
   const handleGoogleSignIn = async () => {
-    await signInWithGoogle();
+    await signInWithGoogle().then(() => {
+      setTimeout(() => {
+        navigate('/');
+      }, 700)
+    }).catch((error) => {
+      toast.error(error.message);
+      console.log(error);
+    })
   };
 
   
@@ -82,7 +88,7 @@ export function SignInPage() {
                 <Label htmlFor="password">Password</Label>
                 <Link 
                   to="/auth/forgot-password" 
-                  className="text-xs text-primary hover:text-primary/80 mb-2"
+                  className="text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 text-xs"
                 >
                   Forgot Password?
                 </Link>
