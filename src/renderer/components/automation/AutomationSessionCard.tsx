@@ -49,7 +49,7 @@ export function AutomationSessionCard({ session, onView, onResume, onDelete }: A
         <div className="flex items-start justify-between gap-2">
           <div className="flex-1 min-w-0">
             <h3 className="font-semibold text-sm text-gray-900 dark:text-white truncate" title={session.userGoal}>
-              {session.userGoal}
+              {session.userGoal.substring(0, 20)}...
             </h3>
             <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
               {formatDistanceToNow(session.createdAt, { addSuffix: true })}

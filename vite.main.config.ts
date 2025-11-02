@@ -9,9 +9,6 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
-      '@/main': path.resolve(__dirname, './src/main'),
-      '@/renderer': path.resolve(__dirname, './src/renderer'),
-      '@/shared': path.resolve(__dirname, './src/shared'),
     },
   },
   build: {
@@ -24,7 +21,5 @@ export default defineConfig({
         manualChunks: undefined,
       },
     },
-  },
-  // Enable better error messages
-  clearScreen: false,
+  }
 });

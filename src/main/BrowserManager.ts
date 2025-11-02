@@ -54,9 +54,7 @@ export class BrowserManager {
     const tabEventHandlers: TabEventHandlers = {
       onTabsChanged: () => this.notifyTabsChanged(),
       onCredentialSelected: (tabId, credentialId, username) => 
-        this.tabManager.handleCredentialSelected(tabId, credentialId, username),
-      onAutoFillPassword: (tabId) => 
-        this.tabManager.handleAutoFillPassword(tabId)
+        this.tabManager.handleCredentialSelected(tabId, credentialId, username)
     };
 
     this.tabManager = new TabManager(

@@ -274,6 +274,9 @@ export class IPCHandlers {
   }
 
    private setupPasswordHandlers(): void {
+    ipcMain.handle('password:get-all', async () => {
+      return this.passwordManager.getAllCredentials();
+    });
     ipcMain.handle('password:save', async (_, origin: string, username: string, password: string) => {
       return this.passwordManager.saveCredential(origin, username, password);
     });
@@ -283,15 +286,42 @@ export class IPCHandlers {
     ipcMain.handle('password:get-password', async (_, credentialId: string) => {
       return this.passwordManager.getPassword(credentialId);
     });
+    ipcMain.handle('password:update', async (_, credentialId: string, username: string, password: string) => {
+      return this.passwordManager.updateCredential(credentialId, username, password);
+    });
     ipcMain.handle('password:delete', async (_, credentialId: string) => {
       return this.passwordManager.deleteCredential(credentialId);
     });
+    ipcMain.handle('password:delete-multiple', async (_, credentialIds: string[]) => {
+      return this.passwordManager.deleteMultipleCredentials(credentialIds);
+    });
+    ipcMain.handle('password:search', async (_, query: string) => {
+      return this.passwordManager.searchCredentials(query);
+    });
+    ipcMain.handle('password:get-blacklist', async () => {
+      return this.passwordManager.getBlacklist();
+    });
+
     ipcMain.handle('password:add-to-blacklist', async (_, origin: string) => {
       this.passwordManager.addToBlacklist(origin);
       return true;
     });
+    ipcMain.handle('password:remove-from-blacklist', async (_, origin: string) => {
+      this.passwordManager.removeFromBlacklist(origin);
+      return true;
+    });
+
     ipcMain.handle('password:is-blacklisted', async (_, origin: string) => {
       return this.passwordManager.isBlacklisted(origin);
+    });
+    ipcMain.handle('password:export', async () => {
+      return this.passwordManager.exportPasswords();
+    });
+    ipcMain.handle('password:import', async (_, data: string) => {
+      return this.passwordManager.importPasswords(data);
+    });
+    ipcMain.handle('password:get-stats', async () => {
+      return this.passwordManager.getStats();
     });
   }
 
