@@ -8,7 +8,6 @@ export interface ApiConfig {
   baseURL: string;
   apiKey: string;
   timeout?: number;
-  retryAttempts?: number;
   getAccessToken: () => string | null;
   clearSession: () => void;
 }
@@ -23,7 +22,6 @@ export interface ApiResponse<T = any> {
 export class ApiClient {
   private axios: AxiosInstance;
   private apiKey: string;
-  private retryAttempts: number;
   private electronId: string;
 
   private getAccessToken: () => string | null;
@@ -32,7 +30,6 @@ export class ApiClient {
 
   constructor(config: ApiConfig) {
     this.apiKey = config.apiKey;
-    this.retryAttempts = config.retryAttempts || 2;
     this.electronId = this.generateElectronId();
 
     this.getAccessToken = config.getAccessToken;
@@ -91,28 +88,12 @@ export class ApiClient {
         return response;
       },
       async (error: AxiosError) => {
-        const config = error.config as AxiosRequestConfig & { _retry?: number };
-
+        console.error('[ApiClient] Request failed:', error);
         if (error.response?.status === 401) {
           console.warn('[ApiClient] 401 Unauthorized - access token may be expired');
           this.clearSession();
         }
-
-        // Retry logic
-        if (!config || !config._retry) {
-          config._retry = 0;
-        }
-
-        if (config._retry < this.retryAttempts) {
-          config._retry += 1;
-          const delay = Math.min(1000 * Math.pow(2, config._retry), 10000);
-          
-          console.log(`[ApiClient] Retrying request (attempt ${config._retry}) in ${delay}ms...`);
-          
-          await new Promise((resolve) => setTimeout(resolve, delay));
-          return this.axios.request(config);
-        }
-
+        
         return Promise.reject(error);
       }
     );

@@ -1,15 +1,3 @@
-/**
- * SSE (Server-Sent Events) Client for real-time server-to-client communication
- * 
- * Features:
- * - Automatic reconnection with exponential backoff
- * - Event-based message handling
- * - Connection state management
- * - Heartbeat monitoring
- * - Error handling and recovery
- * - Type-safe event emitters
- */
-
 import { EventEmitter } from 'events';
 import { EventSource } from 'eventsource';
 
@@ -134,7 +122,6 @@ export class SSEClient extends EventEmitter {
       }
     };
 
-    // Error handler
     this.eventSource.onerror = (error: any) => {
       console.error('[SSEClient] SSE error:', error);
       
@@ -153,7 +140,6 @@ export class SSEClient extends EventEmitter {
       }
     };
 
-    // Listen for specific event types
     this.setupCustomEventListeners();
   }
 
@@ -174,27 +160,6 @@ export class SSEClient extends EventEmitter {
       }
     });
 
-    // Heartbeat event
-    this.eventSource.addEventListener('heartbeat', (event: MessageEvent) => {
-      try {
-        const data = JSON.parse(event.data);
-        this.lastHeartbeat = Date.now();
-        this.emit('heartbeat', data);
-      } catch (error) {
-        console.error('[SSEClient] Failed to parse heartbeat event:', error);
-      }
-    });
-
-    // Automation progress event
-    this.eventSource.addEventListener('automation_progress', (event: MessageEvent) => {
-      try {
-        const data = JSON.parse(event.data);
-        this.emit('automation_progress', data);
-      } catch (error) {
-        console.error('[SSEClient] Failed to parse automation_progress event:', error);
-      }
-    });
-
     // Notification event
     this.eventSource.addEventListener('notification', (event: MessageEvent) => {
       try {
@@ -202,37 +167,6 @@ export class SSEClient extends EventEmitter {
         this.emit('notification', data);
       } catch (error) {
         console.error('[SSEClient] Failed to parse notification event:', error);
-      }
-    });
-
-    // Command event
-    this.eventSource.addEventListener('command', (event: MessageEvent) => {
-      try {
-        const data = JSON.parse(event.data);
-        this.emit('command', data);
-      } catch (error) {
-        console.error('[SSEClient] Failed to parse command event:', error);
-      }
-    });
-
-    // Sync event
-    this.eventSource.addEventListener('sync', (event: MessageEvent) => {
-      try {
-        const data = JSON.parse(event.data);
-        this.emit('sync', data);
-      } catch (error) {
-        console.error('[SSEClient] Failed to parse sync event:', error);
-      }
-    });
-
-    // Error event
-    this.eventSource.addEventListener('error', (event: MessageEvent) => {
-      try {
-        const data = JSON.parse(event.data);
-        console.error('[SSEClient] Server error:', data);
-        this.emit('server_error', data);
-      } catch (error) {
-        console.error('[SSEClient] Failed to parse error event:', error);
       }
     });
   }
@@ -243,12 +177,10 @@ export class SSEClient extends EventEmitter {
   private handleMessage(message: any): void {
     const { type, ...data } = message;
 
-    // Emit type-specific event
     if (type) {
       this.emit(type, data);
     }
 
-    // Emit generic message event
     this.emit('message', message);
   }
 

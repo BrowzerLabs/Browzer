@@ -46,7 +46,6 @@ export class PasswordAutomation {
     if (this.isEnabled) return;
     
     try {
-      console.log('[PasswordAutomation] Starting...');
       
       // Check if debugger is attached
       if (!this.debugger.isAttached()) {
@@ -57,11 +56,8 @@ export class PasswordAutomation {
       this.setupEventListeners();
       await this.scanPage();
       this.isEnabled = true;
-      console.log('[PasswordAutomation] ✅ Started');
     } catch (error) {
       console.error('[PasswordAutomation] Failed to start:', error);
-      // Don't throw - just log the error to prevent app crash
-      console.error('[PasswordAutomation] Stack:', error.stack);
     }
   }
 
@@ -74,7 +70,6 @@ export class PasswordAutomation {
       this.autofillService.reset();
       this.promptService.reset();
       this.isEnabled = false;
-      console.log('[PasswordAutomation] Stopped');
     } catch (error) {
       console.error('[PasswordAutomation] Error stopping:', error);
     }
@@ -122,7 +117,6 @@ export class PasswordAutomation {
 
       if (forms.length === 0) return;
 
-      console.log(`[PasswordAutomation] Detected ${forms.length} forms`);
       await this.autofillService.setupAutofill(forms);
       await this.setupFormSubmissionMonitoring(forms);
     } catch (error) {
@@ -253,8 +247,6 @@ export class PasswordAutomation {
       if (form) {
         await this.autofillService.fillCredentials(credentialId, form);
       }
-
-      console.log('[PasswordAutomation] Credential filled:', username);
     } catch (error) {
       console.error('[PasswordAutomation] Error handling autofill select:', error);
     }
@@ -281,8 +273,6 @@ export class PasswordAutomation {
       setTimeout(async () => {
         await this.promptService.handleFormSubmission(submission);
       }, 1500);
-
-      console.log('[PasswordAutomation] Form submitted:', data.username);
     } catch (error) {
       console.error('[PasswordAutomation] Error handling form submit:', error);
       console.error('[PasswordAutomation] Message was:', message);

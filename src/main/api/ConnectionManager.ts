@@ -44,7 +44,6 @@ export class ConnectionManager extends EventEmitter {
       baseURL: config.apiBaseURL,
       apiKey: config.apiKey,
       timeout: 30000,
-      retryAttempts: 3,
       getAccessToken: this.getAccessToken,
       clearSession: this.clearSession,
     };
