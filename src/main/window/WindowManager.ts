@@ -37,7 +37,7 @@ export class WindowManager {
     });
 
     this.baseWindow.contentView.addChildView(this.browserUIView);
-    this.setupAgentUI();
+    this.setupBrowserUI();
     this.setupWindowEvents();
 
     // Show window after loading
@@ -51,7 +51,7 @@ export class WindowManager {
     // }
   }
 
-  private setupAgentUI(): void {
+  private setupBrowserUI(): void {
     if (!this.browserUIView) return;
 
     // Load the agent UI (React app)
@@ -86,7 +86,7 @@ export class WindowManager {
     return this.baseWindow;
   }
 
-  public getAgentUIView(): WebContentsView | null {
+  public getBrowserUIView(): WebContentsView | null {
     return this.browserUIView;
   }
 

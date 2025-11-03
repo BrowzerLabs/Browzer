@@ -88,7 +88,7 @@ export class ApiClient {
         return response;
       },
       async (error: AxiosError) => {
-        console.error('[ApiClient] Request failed:', error);
+        console.error('[ApiClient] Request failed:', error.message);
         if (error.response?.status === 401) {
           console.warn('[ApiClient] 401 Unauthorized - access token may be expired');
           this.clearSession();

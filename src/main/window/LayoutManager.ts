@@ -24,7 +24,7 @@ export class LayoutManager {
     };
   }
 
-  public calculateAgentUIBounds(): { x: number; y: number; width: number; height: number } {
+  public calculateBrowserUIBounds(): { x: number; y: number; width: number; height: number } {
     const bounds = this.baseWindow.getBounds();
     const windowWidth = bounds.width;
     const windowHeight = bounds.height;

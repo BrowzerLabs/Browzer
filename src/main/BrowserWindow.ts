@@ -20,7 +20,7 @@ export class BrowserWindow {
     this.windowManager = new WindowManager();
     
     const baseWindow = this.windowManager.getWindow();
-    const browserUIView = this.windowManager.getAgentUIView();
+    const browserUIView = this.windowManager.getBrowserUIView();
     
     this.layoutManager = new LayoutManager(baseWindow);
 
@@ -37,13 +37,11 @@ export class BrowserWindow {
 
     // 6. Initialize connection manager callbacks
     const connectionConfig: ConnectionManagerConfig = {
-      apiBaseURL: process.env.BACKEND_API_URL || 'http://localhost:8080',
-      apiKey: process.env.BACKEND_API_KEY || '',
       getAccessToken: () => this.authService.getAccessToken(),
       clearSession: () => this.authService.clearSession(),
     };
     
-    this.connectionManager = new ConnectionManager(connectionConfig);
+    this.connectionManager = new ConnectionManager(connectionConfig, browserUIView.webContents);
     this.connectionManager.initialize();
 
     // 7. Initialize AuthService after API client is ready
@@ -72,7 +70,7 @@ export class BrowserWindow {
    * Update layout when sidebar state or window size changes
    */
   private updateLayout(): void {
-    const browserUIView = this.windowManager.getAgentUIView();
+    const browserUIView = this.windowManager.getBrowserUIView();
     const baseWindow = this.windowManager.getWindow();
     
     if (!baseWindow) return;
@@ -85,7 +83,7 @@ export class BrowserWindow {
 
     // Update agent UI bounds
     if (browserUIView) {
-      const browserUIBounds = this.layoutManager.calculateAgentUIBounds();
+      const browserUIBounds = this.layoutManager.calculateBrowserUIBounds();
       browserUIView.setBounds(browserUIBounds);
     }
 
@@ -97,8 +95,8 @@ export class BrowserWindow {
     return this.windowManager.getWindow();
   }
 
-  public getAgentUIView() {
-    return this.windowManager.getAgentUIView();
+  public getBrowserUIView() {
+    return this.windowManager.getBrowserUIView();
   }
 
   public destroy(): void {

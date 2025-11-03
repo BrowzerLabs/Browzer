@@ -8,14 +8,13 @@
  * - Provide unified interface for backend communication
  */
 
+import { WebContents } from 'electron';
 import { ApiClient, ApiConfig } from './ApiClient';
 import { SSEClient, SSEConfig, SSEConnectionState } from './SSEClient';
 import { initializeApi } from './api';
 import { EventEmitter } from 'events';
 
 export interface ConnectionManagerConfig {
-  apiBaseURL: string;
-  apiKey: string;
   getAccessToken: () => string | null;
   clearSession: () => void;
 }
@@ -31,18 +30,28 @@ export class ConnectionManager extends EventEmitter {
   private apiClient: ApiClient;
   private sseClient: SSEClient | null = null;
   private status: ConnectionStatus = ConnectionStatus.DISCONNECTED;
+  private apiKey: string;
+  private apiBaseURL: string;
+
+  private browserUIWebContents: WebContents;
   private getAccessToken: () => string | null;
   private clearSession: () => void;
 
-  constructor(config: ConnectionManagerConfig) {
+  constructor(
+    config: ConnectionManagerConfig,
+    browserUIWebContents: WebContents
+  ) {
     super();
-    
+    this.apiKey = process.env.BACKEND_API_KEY || '';
+    this.apiBaseURL = process.env.BACKEND_API_URL || 'http://localhost:8080';    
+    this.browserUIWebContents = browserUIWebContents;
+
     this.getAccessToken = config.getAccessToken;
     this.clearSession = config.clearSession;
-    
+
     const apiConfig: ApiConfig = {
-      baseURL: config.apiBaseURL,
-      apiKey: config.apiKey,
+      baseURL: this.apiBaseURL,
+      apiKey: this.apiKey,
       timeout: 30000,
       getAccessToken: this.getAccessToken,
       clearSession: this.clearSession,
@@ -68,7 +77,6 @@ export class ConnectionManager extends EventEmitter {
 
     try {
       // Step 1: Establish API connection
-      console.log('[ConnectionManager] Establishing API connection...');
       const response = await this.apiClient.connect();
 
       if (!response.success || !response.data) {
@@ -76,7 +84,6 @@ export class ConnectionManager extends EventEmitter {
       }
 
       const { sse_url } = response.data;
-      console.log('[ConnectionManager] Electron app verified with backend');
 
       // Step 2: Initialize SSE connection
       if (sse_url) {
@@ -105,58 +112,16 @@ export class ConnectionManager extends EventEmitter {
     const sseConfig: SSEConfig = {
       url,
       electronId: this.apiClient.getElectronId(),
-      apiKey: this.apiClient['apiKey'], // Access private field
+      apiKey: this.apiKey,
       getAccessToken: this.getAccessToken,
       reconnectInterval: 5000,
-      maxReconnectAttempts: 10,
-      heartbeatTimeout: 60000,
+      maxReconnectAttempts: 3,
+      heartbeatTimeout: 60000, // 60 seconds
+      browserUIWebContents: this.browserUIWebContents,
     };
 
     this.sseClient = new SSEClient(sseConfig);
 
-    // Forward SSE events
-    this.sseClient.on('connected', () => {
-      console.log('[ConnectionManager] SSE connected');
-      this.emit('sse:connected');
-    });
-
-    this.sseClient.on('disconnected', () => {
-      console.log('[ConnectionManager] SSE disconnected');
-      this.emit('sse:disconnected');
-    });
-
-    this.sseClient.on('error', (error: any) => {
-      console.error('[ConnectionManager] SSE error:', error);
-      this.emit('sse:error', error);
-    });
-
-    this.sseClient.on('state_change', (state: SSEConnectionState) => {
-      console.log('[ConnectionManager] SSE state changed:', state);
-      this.emit('sse:state_change', state);
-    });
-
-    // Forward all SSE message events
-    this.sseClient.on('message', (message: any) => {
-      this.emit('sse:message', message);
-    });
-
-    this.sseClient.on('automation_progress', (data: any) => {
-      this.emit('automation_progress', data);
-    });
-
-    this.sseClient.on('notification', (data: any) => {
-      this.emit('notification', data);
-    });
-
-    this.sseClient.on('command', (data: any) => {
-      this.emit('command', data);
-    });
-
-    this.sseClient.on('sync', (data: any) => {
-      this.emit('sync', data);
-    });
-
-    // Connect
     await this.sseClient.connect();
   }
 
@@ -164,8 +129,6 @@ export class ConnectionManager extends EventEmitter {
    * Disconnect from backend
    */
   async disconnect(): Promise<void> {
-    console.log('[ConnectionManager] Disconnecting...');
-
     // Disconnect SSE
     if (this.sseClient) {
       this.sseClient.disconnect();

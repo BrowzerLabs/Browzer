@@ -1,3 +1,4 @@
+import { WebContents } from 'electron';
 import { EventEmitter } from 'events';
 import { EventSource } from 'eventsource';
 
@@ -9,6 +10,7 @@ export interface SSEConfig {
   reconnectInterval?: number;
   maxReconnectAttempts?: number;
   heartbeatTimeout?: number;
+  browserUIWebContents: WebContents;
 }
 
 export enum SSEConnectionState {
@@ -24,7 +26,10 @@ export class SSEClient extends EventEmitter {
   private url: string;
   private electronId: string;
   private apiKey: string;
+  private browserUIWebContents: WebContents;
+
   private getAccessToken: () => string | null;
+
   private reconnectInterval: number;
   private maxReconnectAttempts: number;
   private heartbeatTimeout: number;
@@ -40,7 +45,10 @@ export class SSEClient extends EventEmitter {
     this.url = config.url;
     this.electronId = config.electronId;
     this.apiKey = config.apiKey;
+    this.browserUIWebContents = config.browserUIWebContents;
+
     this.getAccessToken = config.getAccessToken || (() => null);
+    
     this.reconnectInterval = config.reconnectInterval || 5000;
     this.maxReconnectAttempts = config.maxReconnectAttempts || 5;
     this.heartbeatTimeout = config.heartbeatTimeout || 60000; // 60 seconds
@@ -116,6 +124,7 @@ export class SSEClient extends EventEmitter {
     this.eventSource.onmessage = (event: any) => {
       try {
         const data = JSON.parse(event.data);
+        console.log("Generic message handler: ", data);
         this.handleMessage(data);
       } catch (error) {
         console.error('[SSEClient] Failed to parse message:', error);
@@ -147,27 +156,29 @@ export class SSEClient extends EventEmitter {
    * Setup listeners for custom event types
    */
   private setupCustomEventListeners(): void {
-    if (!this.eventSource) return;
-
     // Connection established event
     this.eventSource.addEventListener('connection_established', (event: MessageEvent) => {
-      try {
         const data = JSON.parse(event.data);
         console.log('[SSEClient] Connection established:', data.message);
         this.emit('connection_established', data);
-      } catch (error) {
-        console.error('[SSEClient] Failed to parse connection_established event:', error);
-      }
+    });
+
+    // Heartbeat event
+    this.eventSource.addEventListener('heartbeat', (event: MessageEvent) => {
+      this.lastHeartbeat = Date.now();
     });
 
     // Notification event
     this.eventSource.addEventListener('notification', (event: MessageEvent) => {
-      try {
+        console.log('[SSEClient] Notification:', event);
+        this.browserUIWebContents.send('notification', event);
+    });
+
+    this.eventSource.addEventListener('subscription_update', (event: MessageEvent) => {
         const data = JSON.parse(event.data);
-        this.emit('notification', data);
-      } catch (error) {
-        console.error('[SSEClient] Failed to parse notification event:', error);
-      }
+        console.log('[SSEClient] Subscription update:', data);
+        this.emit('subscription_update', data);
+        this.browserUIWebContents.send('subscription_update', data);
     });
   }
 
@@ -182,6 +193,7 @@ export class SSEClient extends EventEmitter {
     }
 
     this.emit('message', message);
+    this.browserUIWebContents.send('sse:message', message);
   }
 
   /**
@@ -261,7 +273,7 @@ export class SSEClient extends EventEmitter {
         this.emit('heartbeat_timeout');
         this.scheduleReconnect();
       }
-    }, 10000); // Check every 10 seconds
+    }, 100000); // Check every 100 seconds
   }
 
   /**
