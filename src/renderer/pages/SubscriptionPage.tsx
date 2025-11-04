@@ -7,9 +7,7 @@ import { Separator } from '@/renderer/ui/separator';
 import { Alert } from '@/renderer/ui/alert';
 import {
   Check,
-  Zap,
   Crown,
-  Sparkles,
   CreditCard,
   Calendar,
   TrendingUp,
@@ -17,8 +15,6 @@ import {
   ExternalLink,
   RefreshCw,
   Loader2Icon,
-  DiamondIcon,
-  Diamond,
 } from 'lucide-react';
 import {
   UserSubscription,
@@ -27,7 +23,6 @@ import {
   SubscriptionStatus,
 } from '@/shared/types/subscription';
 import { toast } from 'sonner';
-import { cn } from '@/renderer/lib/utils';
 
 export function SubscriptionPage() {
   const [subscription, setSubscription] = useState<UserSubscription | null>(null);
@@ -47,9 +42,7 @@ export function SubscriptionPage() {
       const response = await window.subscriptionAPI.getCurrentSubscription();
       if (response.success && response.subscription) {
         setSubscription(response.subscription);
-        if (response.plan_details) {
-          setCurrentPlan(response.plan_details);
-        }
+        setCurrentPlan(response.plan_details);
       }
     } catch (error) {
       console.error('Failed to load subscription:', error);
@@ -79,8 +72,7 @@ export function SubscriptionPage() {
       });
 
       if (response.success && response.checkout_url) {
-        // Open Stripe checkout in external browser
-        await window.subscriptionAPI.openExternal(response.checkout_url);
+        await window.browserAPI.createTab(response.checkout_url);
       } else {
         alert(`Failed to create checkout: ${response.error}`);
       }
@@ -99,7 +91,7 @@ export function SubscriptionPage() {
       });
 
       if (response.success && response.portal_url) {
-        await window.subscriptionAPI.openExternal(response.portal_url);
+        await window.browserAPI.createTab(response.portal_url);
       } else {
         alert(`Failed to open portal: ${response.error}`);
       }
