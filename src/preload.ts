@@ -215,11 +215,7 @@ const browserAPI: BrowserAPI = {
   onTabsUpdated: (callback) => {
     const subscription = (_event: Electron.IpcRendererEvent, data: { tabs: TabInfo[]; activeTabId: string | null }) => callback(data);
     ipcRenderer.on('browser:tabs-updated', subscription);
-    
-    // Return unsubscribe function
-    return () => {
-      ipcRenderer.removeListener('browser:tabs-updated', subscription);
-    };
+    return () => ipcRenderer.removeListener('browser:tabs-updated', subscription);
   },
 
   onRecordingAction: (callback) => {

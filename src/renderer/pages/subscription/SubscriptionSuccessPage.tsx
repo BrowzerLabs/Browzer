@@ -69,6 +69,8 @@ export function SubscriptionSuccessPage() {
 
   const handleViewSubscription = () => {
     navigate('/');
+    window.browserAPI.showAllTabs();
+    window.browserAPI.navigateToTab('browzer://subscription');
   };
 
   // Show processing state
@@ -91,7 +93,7 @@ export function SubscriptionSuccessPage() {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-green-50 to-blue-50 dark:from-gray-900 dark:to-gray-800">
         <Card className="p-12 max-w-md text-center">
-          <Loader2 className="size-7 mb-6 animate-spin" />
+          <Loader2 className="size-7 mb-6 animate-spin mx-auto" />
           <h1 className="text-2xl font-bold mb-4">Processing Subscription</h1>
           <div className="space-y-3">
             <div className="flex items-center justify-center gap-3 text-base">
