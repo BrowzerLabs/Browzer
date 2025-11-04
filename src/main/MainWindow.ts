@@ -6,7 +6,7 @@ import { DeepLinkService } from '@/main/deeplink/DeepLinkService';
 import { ConnectionManager } from './api';
 import { AuthService } from '@/main/auth/AuthService';
 
-export class BrowserWindow {
+export class MainWindow {
   private windowManager: WindowManager;
   private layoutManager: LayoutManager;
   private browserManager: BrowserManager;

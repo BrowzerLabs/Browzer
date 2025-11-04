@@ -1,6 +1,6 @@
 import { app, protocol, net } from 'electron';
 import started from 'electron-squirrel-startup';
-import { BrowserWindow } from './main/BrowserWindow';
+import { MainWindow } from './main/MainWindow';
 import path from 'path';
 
 if (started) {
@@ -57,10 +57,10 @@ app.whenReady().then(() => {
   createWindow();
 });
 
-let mainBrowserWindow: BrowserWindow | null = null;
+let mainWindow: MainWindow | null = null;
 
 const createWindow = () => {
-  mainBrowserWindow = new BrowserWindow();
+  mainWindow = new MainWindow();
 };
 
 app.on('window-all-closed', () => {
@@ -70,7 +70,7 @@ app.on('window-all-closed', () => {
 });
 
 app.on('activate', () => {
-  if (mainBrowserWindow === null) {
+  if (mainWindow === null) {
     createWindow();
   }
 });
