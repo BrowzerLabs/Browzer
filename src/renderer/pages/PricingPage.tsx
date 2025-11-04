@@ -35,7 +35,7 @@ export function PricingPage() {
 
   const getPlanIcon = (tier: SubscriptionTier) => {
     switch (tier) {
-      case SubscriptionTier.FREEMIUM:
+      case SubscriptionTier.FREE:
         return <Sparkles className="w-8 h-8" />;
       case SubscriptionTier.PRO:
         return <Zap className="w-8 h-8" />;
@@ -46,7 +46,7 @@ export function PricingPage() {
 
   const getPlanColor = (tier: SubscriptionTier) => {
     switch (tier) {
-      case SubscriptionTier.FREEMIUM:
+      case SubscriptionTier.FREE:
         return 'from-gray-500 to-gray-600';
       case SubscriptionTier.PRO:
         return 'from-blue-500 to-blue-600';
@@ -132,7 +132,7 @@ export function PricingPage() {
                     {plan.credits_per_month === null
                       ? 'Unlimited'
                       : `${plan.credits_per_month}${
-                          plan.tier === SubscriptionTier.FREEMIUM ? '/day' : '/month'
+                          plan.tier === SubscriptionTier.FREE ? '/day' : '/month'
                         }`}
                   </p>
                 </div>
@@ -161,7 +161,7 @@ export function PricingPage() {
                   }`}
                   size="lg"
                 >
-                  {plan.tier === SubscriptionTier.FREEMIUM
+                  {plan.tier === SubscriptionTier.FREE
                     ? 'Get Started'
                     : 'Upgrade Now'}
                 </Button>

@@ -70,7 +70,7 @@ export function useSubscription() {
     return subscription.credits_remaining;
   }, [subscription]);
 
-  const isFreemium = subscription?.tier === SubscriptionTier.FREEMIUM;
+  const isFree = subscription?.tier === SubscriptionTier.FREE;
   const isPro = subscription?.tier === SubscriptionTier.PRO;
   const isBusiness = subscription?.tier === SubscriptionTier.BUSINESS;
 
@@ -87,7 +87,7 @@ export function useSubscription() {
     syncSubscription,
     hasCredits,
     getCreditsRemaining,
-    isFreemium,
+    isFree,
     isPro,
     isBusiness,
   };

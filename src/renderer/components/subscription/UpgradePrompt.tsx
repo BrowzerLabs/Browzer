@@ -14,7 +14,7 @@ interface UpgradePromptProps {
  * Shows when user runs out of credits or needs premium features
  */
 export function UpgradePrompt({ message, onUpgrade }: UpgradePromptProps) {
-  const { subscription, isFreemium } = useSubscription();
+  const { subscription, isFree } = useSubscription();
 
   const handleUpgrade = () => {
     if (onUpgrade) {
@@ -51,7 +51,7 @@ export function UpgradePrompt({ message, onUpgrade }: UpgradePromptProps) {
             size="sm"
             className="bg-blue-600 hover:bg-blue-700 gap-2"
           >
-            {isFreemium ? (
+            {isFree ? (
               <>
                 <Zap className="w-4 h-4" />
                 Upgrade to Pro

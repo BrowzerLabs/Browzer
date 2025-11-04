@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Button } from '@/renderer/ui/button';
 import { Card } from '@/renderer/ui/card';
-import { CheckCircle, Loader2, AlertCircle } from 'lucide-react';
+import { CheckCircle, Loader2, AlertCircle, CreditCard, Settings, Database } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 interface SubscriptionUpdate {
@@ -36,11 +36,10 @@ export function SubscriptionSuccessPage() {
       }
     });
 
-    // Fallback: If no SSE update after 30 seconds, try polling
+    // Fallback: If no SSE update after 10 seconds, try polling
     const fallbackTimer = setTimeout(() => {
-      console.log('[SubscriptionSuccessPage] No SSE update received, falling back to polling');
       syncSubscriptionFallback();
-    }, 30000);
+    }, 10000);
 
     return () => {
       unsubscribe();
@@ -74,19 +73,30 @@ export function SubscriptionSuccessPage() {
 
   // Show processing state
   if (!isComplete && !error) {
+    const getStepIcon = () => {
+      switch (currentStep) {
+        case 'payment_confirmed':
+          return <CheckCircle className="w-5 h-5 text-green-600" />;
+        case 'creating_subscription':
+          return <Settings className="w-5 h-5 text-blue-600 animate-spin" />;
+        case 'syncing_database':
+          return <Database className="w-5 h-5 text-blue-600 animate-pulse" />;
+        case 'polling':
+          return <Loader2 className="w-5 h-5 text-blue-600 animate-spin" />;
+        default:
+          return <CreditCard className="w-5 h-5 text-blue-600 animate-pulse" />;
+      }
+    };
+
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-green-50 to-blue-50 dark:from-gray-900 dark:to-gray-800">
         <Card className="p-12 max-w-md text-center">
-          <Loader2 className="size-16 mb-6 animate-spin mx-auto text-blue-600" />
+          <Loader2 className="size-7 mb-6 animate-spin" />
           <h1 className="text-2xl font-bold mb-4">Processing Subscription</h1>
           <div className="space-y-3">
-            <div className="flex items-center justify-center gap-2 text-lg">
-              {currentStep === 'payment_confirmed' && '✅'}
-              {currentStep === 'creating_subscription' && '⏳'}
-              {currentStep === 'syncing_database' && '⏳'}
-              {currentStep === 'waiting' && '⏳'}
-              {currentStep === 'polling' && '⏳'}
-              <span className="font-medium">{currentMessage}</span>
+            <div className="flex items-center justify-center gap-3 text-base">
+              {getStepIcon()}
+              <span className="font-medium text-gray-700 dark:text-gray-300">{currentMessage}</span>
             </div>
             <p className="text-sm text-gray-500 dark:text-gray-400">
               This usually takes just a few seconds

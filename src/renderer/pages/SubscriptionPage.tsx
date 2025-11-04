@@ -17,6 +17,8 @@ import {
   ExternalLink,
   RefreshCw,
   Loader2Icon,
+  DiamondIcon,
+  Diamond,
 } from 'lucide-react';
 import {
   UserSubscription,
@@ -24,6 +26,8 @@ import {
   SubscriptionTier,
   SubscriptionStatus,
 } from '@/shared/types/subscription';
+import { toast } from 'sonner';
+import { cn } from '@/renderer/lib/utils';
 
 export function SubscriptionPage() {
   const [subscription, setSubscription] = useState<UserSubscription | null>(null);
@@ -111,12 +115,12 @@ export function SubscriptionPage() {
       const response = await window.subscriptionAPI.syncSubscription();
       if (response.success && response.subscription) {
         setSubscription(response.subscription);
-        if (response.plan_details) {
-          setCurrentPlan(response.plan_details);
-        }
+        setCurrentPlan(response.plan_details);
       }
+      toast.success('Subscription synced successfully');
     } catch (error) {
       console.error('Failed to sync:', error);
+      toast.error('Failed to sync subscription');
     } finally {
       setSyncing(false);
     }
@@ -139,12 +143,12 @@ export function SubscriptionPage() {
 
   const getStatusBadge = (status: SubscriptionStatus) => {
     const variants: Record<SubscriptionStatus, string> = {
-      [SubscriptionStatus.ACTIVE]: 'bg-green-500',
-      [SubscriptionStatus.TRIALING]: 'bg-blue-500',
-      [SubscriptionStatus.PAST_DUE]: 'bg-yellow-500',
-      [SubscriptionStatus.CANCELED]: 'bg-red-500',
-      [SubscriptionStatus.UNPAID]: 'bg-red-500',
-      [SubscriptionStatus.INCOMPLETE]: 'bg-gray-500',
+      [SubscriptionStatus.ACTIVE]: 'bg-teal-600',
+      [SubscriptionStatus.TRIALING]: 'bg-blue-600',
+      [SubscriptionStatus.PAST_DUE]: 'bg-yellow-600',
+      [SubscriptionStatus.CANCELED]: 'bg-red-600',
+      [SubscriptionStatus.UNPAID]: 'bg-red-600',
+      [SubscriptionStatus.INCOMPLETE]: 'bg-gray-600',
       [SubscriptionStatus.INCOMPLETE_EXPIRED]: 'bg-gray-500',
       [SubscriptionStatus.PAUSED]: 'bg-gray-500',
     };
@@ -156,32 +160,19 @@ export function SubscriptionPage() {
     );
   };
 
-  const getPlanIcon = (tier: SubscriptionTier) => {
-    switch (tier) {
-      case SubscriptionTier.FREEMIUM:
-        return <Sparkles className="w-6 h-6" />;
-      case SubscriptionTier.PRO:
-        return <Zap className="w-6 h-6" />;
-      case SubscriptionTier.BUSINESS:
-        return <Crown className="w-6 h-6" />;
-    }
-  };
-
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
-       <Loader2Icon className='size-7 animate-spin' />
+      <div className="min-h-screen flex items-center justify-center bg-teal-50 dark:bg-slate-900">
+        <Loader2Icon className='size-7 animate-spin text-teal-500 dark:text-teal-400' />
       </div>
     );
   }
 
   if (!subscription || !currentPlan) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
-        <Alert>
-          <AlertCircle className="h-4 w-4" />
-          <p>Failed to load subscription. Please try again.</p>
-        </Alert>
+      <div className="min-h-screen flex flex-col gap-4 items-center justify-center bg-red-50 dark:bg-slate-900">
+        <p className="text-red-600 dark:text-red-400">Failed to load subscription. Please try again.</p>
+        <Button onClick={loadSubscription} className="mt-4" variant='outline'>Retry</Button>
       </div>
     );
   }
@@ -189,17 +180,16 @@ export function SubscriptionPage() {
   const availableUpgrades = allPlans.filter(
     (plan) =>
       plan.tier !== subscription.tier &&
-      plan.tier !== SubscriptionTier.FREEMIUM
+      plan.tier !== SubscriptionTier.FREE
   );
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-8">
-      <div className="max-w-6xl mx-auto space-y-8">
-        {/* Header */}
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-900">
+       <div className="max-w-5xl mx-auto px-6 py-8 space-y-4">
         <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-4xl font-bold mb-2">Subscription</h1>
-            <p className="text-gray-600 dark:text-gray-400">
+          <div ml-2>
+            <h1 className="text-2xl font-semibold mb-2">Subscription</h1>
+            <p className="text-gray-600 dark:text-gray-400 text-sm">
               Manage your plan and billing
             </p>
           </div>
@@ -214,33 +204,26 @@ export function SubscriptionPage() {
           </Button>
         </div>
 
-        {/* Current Plan Card */}
         <Card className="p-8">
           <div className="flex items-start justify-between mb-6">
-            <div className="flex items-center gap-4">
-              <div className="w-16 h-16 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white">
-                {getPlanIcon(subscription.tier)}
-              </div>
-              <div>
-                <h2 className="text-2xl font-bold">{currentPlan.name}</h2>
-                <p className="text-gray-600 dark:text-gray-400">
-                  ${currentPlan.price_monthly}/month
-                </p>
-              </div>
+            <div>
+              <h2 className="text-xl font-semibold">{currentPlan.name}</h2>
+              <p className="text-gray-600 dark:text-gray-400">
+                ${currentPlan.price_monthly}/month
+              </p>
             </div>
             {getStatusBadge(subscription.status)}
           </div>
 
-          <Separator className="my-6" />
+          <Separator />
 
-          {/* Credits Section */}
           <div className="space-y-4">
             <div className="flex items-center justify-between">
-              <h3 className="text-lg font-semibold flex items-center gap-2">
+              <h3 className="font-semibold flex items-center gap-2">
                 <TrendingUp className="w-5 h-5" />
                 Automation Credits
               </h3>
-              <span className="text-2xl font-bold">
+              <span className="font-semibold">
                 {subscription.credits_limit === null
                   ? '∞'
                   : `${subscription.credits_remaining} / ${subscription.credits_limit}`}
@@ -249,7 +232,7 @@ export function SubscriptionPage() {
 
             {subscription.credits_limit !== null && (
               <div>
-                <Progress value={getCreditsPercentage()} className="h-3" />
+                <Progress value={getCreditsPercentage()} className="h-2" />
                 <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">
                   {subscription.credits_used} credits used this period
                 </p>
@@ -266,9 +249,8 @@ export function SubscriptionPage() {
             )}
           </div>
 
-          <Separator className="my-6" />
+          <Separator />
 
-          {/* Billing Period */}
           <div className="grid md:grid-cols-2 gap-6">
             <div>
               <div className="flex items-center gap-2 text-gray-600 dark:text-gray-400 mb-2">
@@ -309,35 +291,28 @@ export function SubscriptionPage() {
             </Alert>
           )}
         </Card>
-
-        {/* Upgrade Options */}
         {availableUpgrades.length > 0 && (
           <div>
-            <h2 className="text-2xl font-bold mb-4">
-              {subscription.tier === SubscriptionTier.FREEMIUM
+            <h2 className="text-2xl font-semibold mb-4 ml-2">
+              {subscription.tier === SubscriptionTier.FREE
                 ? 'Upgrade Your Plan'
                 : 'Available Upgrades'}
             </h2>
             <div className="grid md:grid-cols-2 gap-6">
               {availableUpgrades.map((plan) => (
-                <Card key={plan.tier} className="p-6">
-                  <div className="flex items-center gap-3 mb-4">
-                    <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white">
-                      {getPlanIcon(plan.tier)}
-                    </div>
-                    <div>
-                      <h3 className="text-xl font-bold">{plan.name}</h3>
+                <Card key={plan.tier} className="m-2 p-6 hover:bg-slate-100 dark:hover:bg-slate-800 hover:z-20 hover:shadow-lg shadow-slate-200 dark:shadow-slate-800 transition-all">
+                   <div>
+                      <h3 className="text-xl font-semibold">{plan.name}</h3>
                       <p className="text-gray-600 dark:text-gray-400">
                         ${plan.price_monthly}/month
                       </p>
                     </div>
-                  </div>
 
                   <div className="mb-4 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
                     <p className="text-sm text-gray-600 dark:text-gray-400">
                       Automation Credits
                     </p>
-                    <p className="text-xl font-bold">
+                    <p className="text-xl font-semibold">
                       {plan.credits_per_month === null
                         ? 'Unlimited'
                         : `${plan.credits_per_month}/month`}
@@ -345,7 +320,7 @@ export function SubscriptionPage() {
                   </div>
 
                   <ul className="space-y-2 mb-6">
-                    {plan.features.slice(0, 4).map((feature, index) => (
+                    {plan.features.slice(0, 5).map((feature, index) => (
                       <li key={index} className="flex items-start text-sm">
                         <Check className="w-4 h-4 text-green-500 mr-2 flex-shrink-0 mt-0.5" />
                         <span className="text-gray-700 dark:text-gray-300">
@@ -358,9 +333,8 @@ export function SubscriptionPage() {
                   <Button
                     onClick={() => handleUpgrade(plan.tier)}
                     disabled={upgrading}
-                    className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
                   >
-                    {upgrading ? 'Processing...' : `Upgrade to ${plan.name}`}
+                    Upgrade to {plan.name}
                   </Button>
                 </Card>
               ))}
@@ -368,9 +342,8 @@ export function SubscriptionPage() {
           </div>
         )}
 
-        {/* Features List */}
-        <Card className="p-8">
-          <h3 className="text-xl font-bold mb-4">Your Plan Includes</h3>
+        <Card className="p-8 mt-6">
+          <h3 className="text-xl font-semibold mb-4">Your Plan Includes</h3>
           <div className="grid md:grid-cols-2 gap-4">
             {currentPlan.features.map((feature, index) => (
               <div key={index} className="flex items-start">
@@ -380,7 +353,7 @@ export function SubscriptionPage() {
             ))}
           </div>
         </Card>
-      </div>
+       </div>
     </div>
   );
 }
