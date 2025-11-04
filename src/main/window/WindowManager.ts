@@ -26,7 +26,7 @@ export class WindowManager {
       fullscreenable: false, // Prevent fullscreen mode to keep traffic lights always visible
     });
 
-    // Create Agent UI WebContentsView (trusted UI layer)
+    // Create Browser UI WebContentsView (main browser UI)
     this.browserUIView = new WebContentsView({
       webPreferences: {
         preload: path.join(__dirname, 'preload.js'),
@@ -45,7 +45,6 @@ export class WindowManager {
       this.baseWindow.show();
     }, 100);
 
-    // Open DevTools in development
     // if (process.env.NODE_ENV === 'development') {
     //  this.browserUIView.webContents.openDevTools({ mode: 'detach' });
     // }
@@ -54,7 +53,7 @@ export class WindowManager {
   private setupBrowserUI(): void {
     if (!this.browserUIView) return;
 
-    // Load the agent UI (React app)
+    // Load the browser UI (React app)
     if (MAIN_WINDOW_VITE_DEV_SERVER_URL) {
       this.browserUIView.webContents.loadURL(MAIN_WINDOW_VITE_DEV_SERVER_URL);
     } else {

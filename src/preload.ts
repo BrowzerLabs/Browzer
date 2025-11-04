@@ -174,6 +174,9 @@ export interface SubscriptionAPI {
   hasCredits: (creditsNeeded: number) => Promise<boolean>;
   getCreditsRemaining: () => Promise<number>;
   
+  // Event Listeners
+  onSubscriptionUpdate: (callback: (data: any) => void) => () => void;
+  
   // Utility
   openExternal: (url: string) => Promise<void>;
 }
@@ -410,6 +413,14 @@ const subscriptionAPI: SubscriptionAPI = {
   useCredits: (creditsToUse: number) => ipcRenderer.invoke('subscription:use-credits', creditsToUse),
   hasCredits: (creditsNeeded: number) => ipcRenderer.invoke('subscription:has-credits', creditsNeeded),
   getCreditsRemaining: () => ipcRenderer.invoke('subscription:get-credits-remaining'),
+  
+  // Event listener for real-time subscription updates
+  onSubscriptionUpdate: (callback) => {
+    const subscription = (_event: Electron.IpcRendererEvent, data: any) => callback(data);
+    ipcRenderer.on('subscription_update', subscription);
+    return () => ipcRenderer.removeListener('subscription_update', subscription);
+  },
+  
   openExternal: (url: string) => ipcRenderer.invoke('shell:open-external', url),
 };
 

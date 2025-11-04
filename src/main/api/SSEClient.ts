@@ -159,7 +159,6 @@ export class SSEClient extends EventEmitter {
     // Connection established event
     this.eventSource.addEventListener('connection_established', (event: MessageEvent) => {
         const data = JSON.parse(event.data);
-        console.log('[SSEClient] Connection established:', data.message);
         this.emit('connection_established', data);
     });
 
@@ -170,14 +169,12 @@ export class SSEClient extends EventEmitter {
 
     // Notification event
     this.eventSource.addEventListener('notification', (event: MessageEvent) => {
-        console.log('[SSEClient] Notification:', event);
-        this.browserUIWebContents.send('notification', event);
+      const data = JSON.parse(event.data);
+      this.browserUIWebContents.send('notification', data);
     });
 
     this.eventSource.addEventListener('subscription_update', (event: MessageEvent) => {
         const data = JSON.parse(event.data);
-        console.log('[SSEClient] Subscription update:', data);
-        this.emit('subscription_update', data);
         this.browserUIWebContents.send('subscription_update', data);
     });
   }
