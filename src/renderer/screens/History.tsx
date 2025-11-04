@@ -189,7 +189,7 @@ export function History() {
           <div>
             <h1 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-3">
               <Clock className="w-5 h-5 text-blue-600" />
-              Browsing History
+             History
             </h1>
             {stats && (
               <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">
@@ -218,7 +218,7 @@ export function History() {
 
         {/* Search and Filters */}
         <div className="flex gap-4">
-          <div className="flex-1 relative bg-white">
+          <div className="flex-1 relative bg-white dark:bg-black rounded-md">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
             <Input
               type="text"
@@ -230,7 +230,7 @@ export function History() {
             {searchQuery && (
               <button
                 onClick={() => setSearchQuery('')}
-                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-800 hover:text-gray-600"
+                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-800 hover:text-gray-600 dark:text-gray-400 dark:hover:text-gray-300"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -367,10 +367,15 @@ export function History() {
                       )}
 
                       <div className="flex-1 min-w-0">
-                          <h3 className="text-sm text-gray-900 dark:text-white truncate hover:text-blue-600 dark:hover:text-blue-400">
+                          <h3 className="text-sm text-gray-900 dark:text-white truncate">
                             {entry.title}
                           </h3>
-                          <p className="text-xs text-gray-600 dark:text-gray-400 truncate">
+                          <p 
+                            className="text-xs text-gray-600 dark:text-gray-400 truncate cursor-pointer hover:text-blue-600 dark:hover:text-blue-400"
+                            onClick={() => {
+                              window.browserAPI.createTab(entry.url)
+                            }}
+                          >
                             {entry.url}
                           </p>
                       </div>
