@@ -29,6 +29,10 @@ export const ROUTES: Record<string, RouteConfig> = {
     path: '/subscription/cancel',
     title: 'Checkout Cancelled',
   },
+  pricing: {
+    path: '/pricing',
+    title: 'Pricing',
+  },
   settings: {
     path: '/settings',
     title: 'Settings',

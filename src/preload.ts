@@ -372,7 +372,7 @@ const browserAPI: BrowserAPI = {
     return () => ipcRenderer.removeListener('deeplink:navigate', subscription);
   },
   
-  // Deep Link actions
+  // tab actions
   hideAllTabs: () => ipcRenderer.invoke('deeplink:hide-tabs'),
   showAllTabs: () => ipcRenderer.invoke('deeplink:show-tabs'),
   navigateToTab: (url: string) => ipcRenderer.invoke('deeplink:navigate-tab', url),
