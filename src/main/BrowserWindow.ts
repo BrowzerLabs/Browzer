@@ -3,7 +3,7 @@ import { WindowManager } from '@/main/window/WindowManager';
 import { LayoutManager } from '@/main/window/LayoutManager';
 import { IPCHandlers } from '@/main/ipc/IPCHandlers';
 import { DeepLinkService } from '@/main/deeplink/DeepLinkService';
-import { ConnectionManager, ConnectionManagerConfig } from './api';
+import { ConnectionManager } from './api';
 import { AuthService } from '@/main/auth/AuthService';
 
 export class BrowserWindow {
@@ -16,7 +16,6 @@ export class BrowserWindow {
   private deepLinkService: DeepLinkService;
 
   constructor() {
-    // 1. Initialize window and views
     this.windowManager = new WindowManager();
     
     const baseWindow = this.windowManager.getWindow();
@@ -24,32 +23,20 @@ export class BrowserWindow {
     
     this.layoutManager = new LayoutManager(baseWindow);
 
-    // 2. Initialize browser manager (tabs + recording)
     this.browserManager = new BrowserManager(baseWindow, browserUIView);
 
-    // 3. Initialize deep link service
-    this.deepLinkService = DeepLinkService.getInstance();
-     // 4. Set deep link service window
-    this.deepLinkService.setWindow(baseWindow, browserUIView.webContents);
+    this.deepLinkService = new DeepLinkService(baseWindow, browserUIView.webContents);
 
-    // 5. Initialize AuthService
     this.authService = new AuthService(this.browserManager);
-
-    // 6. Initialize connection manager callbacks
-    const connectionConfig: ConnectionManagerConfig = {
-      getAccessToken: () => this.authService.getAccessToken(),
-      clearSession: () => this.authService.clearSession(),
-    };
-    
-    this.connectionManager = new ConnectionManager(connectionConfig, browserUIView.webContents);
-    this.connectionManager.initialize();
-
-    // 7. Initialize AuthService after API client is ready
-    this.authService.initialize().catch(err => {
+    this.authService.restoreSession().catch(err => {
       console.error('Failed to initialize AuthService:', err);
     });
 
-    // 8. Setup IPC communication
+    this.connectionManager = new ConnectionManager(browserUIView.webContents);
+    
+    // Set refresh callback for automatic token refresh
+    this.connectionManager.setRefreshCallback(() => this.authService.refreshSession());
+    
     this.ipcHandlers = new IPCHandlers(
       this.browserManager,
       this.layoutManager,
@@ -57,10 +44,10 @@ export class BrowserWindow {
       this.authService
     );
 
-    // 9. Initial layout
+    // Initial layout
     this.updateLayout();
 
-    // 10. Listen for window resize
+    // Listen for window resize
     baseWindow.on('resize', () => {
       this.updateLayout();
     });

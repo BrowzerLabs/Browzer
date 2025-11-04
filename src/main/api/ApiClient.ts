@@ -3,13 +3,12 @@ import axios, { AxiosInstance, AxiosRequestConfig, AxiosError } from 'axios';
 import { app } from 'electron';
 import { randomUUID } from 'crypto';
 import os from 'os';
+import { tokenManager } from '../auth/TokenManager';
 
 export interface ApiConfig {
   baseURL: string;
   apiKey: string;
   timeout?: number;
-  getAccessToken: () => string | null;
-  clearSession: () => void;
 }
 
 export interface ApiResponse<T = any> {
@@ -23,20 +22,12 @@ export class ApiClient {
   private axios: AxiosInstance;
   private apiKey: string;
   private electronId: string;
-
-  private getAccessToken: () => string | null;
-  private clearSession: () => void;
-  
+  private refreshCallback: (() => Promise<boolean>) | null = null;
 
   constructor(config: ApiConfig) {
     this.apiKey = config.apiKey;
     this.electronId = this.generateElectronId();
-
-    this.getAccessToken = config.getAccessToken;
-    this.clearSession = config.clearSession;
     
-
-    // Create axios instance with base configuration
     this.axios = axios.create({
       baseURL: config.baseURL,
       timeout: config.timeout || 30000,
@@ -46,31 +37,29 @@ export class ApiClient {
       },
     });
 
-    // Setup interceptors
     this.setupInterceptors();
   }
 
   /**
-   * Generate a unique identifier for this Electron instance
+   * Set refresh callback (called by AuthService)
    */
+  public setRefreshCallback(callback: () => Promise<boolean>): void {
+    this.refreshCallback = callback;
+  }
+
   private generateElectronId(): string {
     const machineId = os.hostname();
     const instanceId = randomUUID();
     return `${machineId}-${instanceId}`;
   }
 
-  /**
-   * Setup axios interceptors for auth and error handling
-   */
   private setupInterceptors(): void {
-    // Request interceptor - Add auth headers
     this.axios.interceptors.request.use(
       (config) => {
-        // Add API key and Electron ID to all requests
         config.headers['X-API-Key'] = this.apiKey;
         config.headers['X-Electron-ID'] = this.electronId;
 
-        const accessToken = this.getAccessToken();
+        const accessToken = tokenManager.getAccessToken();
         if (accessToken) {
           config.headers['Authorization'] = `Bearer ${accessToken}`;
         }
@@ -82,16 +71,68 @@ export class ApiClient {
       }
     );
 
-    // Response interceptor - Handle errors and retry
     this.axios.interceptors.response.use(
       (response) => {
         return response;
       },
       async (error: AxiosError) => {
-        console.error('[ApiClient] Request failed:', error.message);
-        if (error.response?.status === 401) {
-          console.warn('[ApiClient] 401 Unauthorized - access token may be expired');
-          this.clearSession();
+        const originalRequest = error.config as AxiosRequestConfig & { _retry?: boolean };
+
+        // Handle 401 Unauthorized - attempt token refresh
+        if (error.response?.status === 401 && !originalRequest._retry) {
+          console.warn('[ApiClient] 401 Unauthorized - attempting token refresh');
+
+          // Check if refresh is already in progress
+          if (tokenManager.isRefreshInProgress()) {
+            console.log('[ApiClient] Refresh already in progress, waiting...');
+            const success = await tokenManager.waitForRefresh();
+            
+            if (success) {
+              // Retry original request with new token
+              const newToken = tokenManager.getAccessToken();
+              if (newToken && originalRequest.headers) {
+                originalRequest.headers['Authorization'] = `Bearer ${newToken}`;
+              }
+              return this.axios.request(originalRequest);
+            } else {
+              console.error('[ApiClient] Token refresh failed, clearing session');
+              tokenManager.clearTokens();
+              return Promise.reject(error);
+            }
+          }
+
+          // Mark request as retried to prevent infinite loops
+          originalRequest._retry = true;
+
+          // Attempt to refresh token
+          if (this.refreshCallback) {
+            try {
+              const refreshPromise = this.refreshCallback();
+              tokenManager.setRefreshing(refreshPromise);
+              const success = await refreshPromise;
+
+              if (success) {
+                console.log('[ApiClient] Token refreshed successfully, retrying request');
+                
+                // Retry original request with new token
+                const newToken = tokenManager.getAccessToken();
+                if (newToken && originalRequest.headers) {
+                  originalRequest.headers['Authorization'] = `Bearer ${newToken}`;
+                }
+                
+                return this.axios.request(originalRequest);
+              } else {
+                console.error('[ApiClient] Token refresh failed');
+                tokenManager.clearTokens();
+              }
+            } catch (refreshError) {
+              console.error('[ApiClient] Token refresh exception:', refreshError);
+              tokenManager.clearTokens();
+            }
+          } else {
+            console.error('[ApiClient] No refresh callback available');
+            tokenManager.clearTokens();
+          }
         }
         
         return Promise.reject(error);
@@ -150,7 +191,7 @@ export class ApiClient {
   async disconnect(): Promise<ApiResponse> {
     try {
       const response = await this.axios.post('/connection/disconnect');
-      this.clearSession();
+      tokenManager.clearTokens();
       console.log('[ApiClient] Disconnected successfully');
       
       return {
@@ -286,7 +327,7 @@ export class ApiClient {
    * Check if user is authenticated (has access token)
    */
   isAuthenticated(): boolean {
-    return this.getAccessToken() !== null;
+    return tokenManager.getAccessToken() !== null;
   }
 
   /**

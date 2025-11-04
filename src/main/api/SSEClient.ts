@@ -1,12 +1,12 @@
 import { WebContents } from 'electron';
 import { EventEmitter } from 'events';
 import { EventSource } from 'eventsource';
+import { tokenManager } from '../auth/TokenManager';
 
 export interface SSEConfig {
   url: string;
   electronId: string;
   apiKey: string;
-  getAccessToken: () => string | null;
   reconnectInterval?: number;
   maxReconnectAttempts?: number;
   heartbeatTimeout?: number;
@@ -28,8 +28,6 @@ export class SSEClient extends EventEmitter {
   private apiKey: string;
   private browserUIWebContents: WebContents;
 
-  private getAccessToken: () => string | null;
-
   private reconnectInterval: number;
   private maxReconnectAttempts: number;
   private heartbeatTimeout: number;
@@ -46,8 +44,6 @@ export class SSEClient extends EventEmitter {
     this.electronId = config.electronId;
     this.apiKey = config.apiKey;
     this.browserUIWebContents = config.browserUIWebContents;
-
-    this.getAccessToken = config.getAccessToken || (() => null);
     
     this.reconnectInterval = config.reconnectInterval || 5000;
     this.maxReconnectAttempts = config.maxReconnectAttempts || 5;
@@ -67,17 +63,14 @@ export class SSEClient extends EventEmitter {
     this.shouldReconnect = true;
 
     try {
-      // Build SSE URL with authentication
       const sseUrl = `${this.url}?electron_id=${encodeURIComponent(this.electronId)}`;
 
-      // Create EventSource with custom fetch for headers (eventsource v4.x pattern)
       const headers: Record<string, string> = {
         'X-API-Key': this.apiKey,
         'X-Electron-ID': this.electronId,
       };
       
-      // Add access token if available (fetched dynamically)
-      const accessToken = this.getAccessToken();
+      const accessToken = tokenManager.getAccessToken();
       if (accessToken) {
         headers['Authorization'] = `Bearer ${accessToken}`;
       }
@@ -94,7 +87,6 @@ export class SSEClient extends EventEmitter {
         }
       });
 
-      // Setup event listeners
       this.setupEventListeners();
 
     } catch (error) {
@@ -105,18 +97,14 @@ export class SSEClient extends EventEmitter {
     }
   }
 
-  /**
-   * Setup EventSource event listeners
-   */
   private setupEventListeners(): void {
     if (!this.eventSource) return;
 
-    // Connection opened
     this.eventSource.onopen = () => {
       this.setState(SSEConnectionState.CONNECTED);
       this.reconnectAttempts = 0;
       this.lastHeartbeat = Date.now();
-      this.emit('connected');
+      console.log('✅ [SSEClient] Connected');
       this.startHeartbeatMonitor();
     };
 
