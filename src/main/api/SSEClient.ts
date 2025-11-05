@@ -258,7 +258,7 @@ export class SSEClient extends EventEmitter {
         this.emit('heartbeat_timeout');
         this.scheduleReconnect();
       }
-    }, 100000); // Check every 100 seconds
+    }, 18000); // Check every 18 seconds
   }
 
   /**
