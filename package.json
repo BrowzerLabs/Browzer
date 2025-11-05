@@ -6,8 +6,6 @@
   "main": ".vite/build/main.js",
   "scripts": {
     "start": "electron-forge start",
-    "start:debug": "ELECTRON_ENABLE_LOGGING=1 electron-forge start -- --inspect=9229 --remote-debugging-port=9222",
-    "start:debug-brk": "ELECTRON_ENABLE_LOGGING=1 electron-forge start -- --inspect-brk=9229 --remote-debugging-port=9222",
     "package": "electron-forge package",
     "make": "electron-forge make",
     "publish": "electron-forge publish",
