@@ -10,6 +10,7 @@ import { BrowserChrome } from '@/renderer/components/BrowserChrome';
 import { InternalRouter, useIsInternalPage } from './InternalRouter';
 import { useDeepLink } from '@/renderer/hooks/useDeepLink';
 import NotFound from '@/renderer/pages/not-found';
+import { NotificationProvider } from '@/renderer/providers/NotificationProvider';
 
 function MainApp() {
   const isInternalPage = useIsInternalPage();
@@ -72,7 +73,9 @@ function AppRoutes() {
 export function AppRouter() {
   return (
     <BrowserRouter>
-      <AppRoutes />
+      <NotificationProvider>
+        <AppRoutes />
+      </NotificationProvider>
     </BrowserRouter>
   );
 }

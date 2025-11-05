@@ -10,6 +10,7 @@ import {
   PortalSessionResponse, 
   CreditUsageResponse 
 } from '@/shared/types/subscription';
+import { NotificationPayload } from '@/shared/types/notification';
 
 
 export interface BrowserAPI {
@@ -179,6 +180,10 @@ export interface SubscriptionAPI {
   
   // Utility
   openExternal: (url: string) => Promise<void>;
+}
+
+export interface NotificationAPI {
+  onNotification: (callback: (notification: NotificationPayload) => void) => () => void;
 }
 
 const browserAPI: BrowserAPI = {
@@ -420,6 +425,16 @@ const subscriptionAPI: SubscriptionAPI = {
   openExternal: (url: string) => ipcRenderer.invoke('shell:open-external', url),
 };
 
+// Notification API implementation
+const notificationAPI: NotificationAPI = {
+  onNotification: (callback) => {
+    const subscription = (_event: Electron.IpcRendererEvent, notification: NotificationPayload) => callback(notification);
+    ipcRenderer.on('notification', subscription);
+    return () => ipcRenderer.removeListener('notification', subscription);
+  },
+};
+
 contextBridge.exposeInMainWorld('browserAPI', browserAPI);
 contextBridge.exposeInMainWorld('authAPI', authAPI);
 contextBridge.exposeInMainWorld('subscriptionAPI', subscriptionAPI);
+contextBridge.exposeInMainWorld('notificationAPI', notificationAPI);

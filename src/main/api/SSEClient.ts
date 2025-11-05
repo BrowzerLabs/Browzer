@@ -1,7 +1,7 @@
 import { WebContents } from 'electron';
 import { EventEmitter } from 'events';
 import { EventSource } from 'eventsource';
-import { tokenManager } from '../auth/TokenManager';
+import { tokenManager } from '@/main/auth/TokenManager';
 
 export interface SSEConfig {
   url: string;
