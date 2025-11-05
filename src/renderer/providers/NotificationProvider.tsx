@@ -5,6 +5,10 @@ import {
   NotificationPayload,
   NotificationType,
 } from '@/shared/types/notification';
+import { 
+  registerAppNotificationCallbacks, 
+  unregisterAppNotificationCallbacks 
+} from '@/renderer/notification/notificationCallbacks';
 
 interface NotificationProviderProps {
   children: React.ReactNode;
@@ -146,12 +150,15 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
   useEffect(() => {
     // Subscribe to notification events
     unsubscribeRef.current = window.notificationAPI.onNotification(handleNotification);
+    registerAppNotificationCallbacks();
 
     // Cleanup on unmount
     return () => {
       if (unsubscribeRef.current) {
         unsubscribeRef.current();
       }
+      
+      unregisterAppNotificationCallbacks();
     };
   }, [handleNotification]);
 
