@@ -51,7 +51,6 @@ export class ConnectionManager extends EventEmitter {
     }
 
     this.status = ConnectionStatus.CONNECTING;
-    this.emit('status', this.status);
 
     try {
       const response = await this.apiClient.connect();
@@ -83,7 +82,6 @@ export class ConnectionManager extends EventEmitter {
       electronId: this.apiClient.getElectronId(),
       apiKey: this.apiKey,
       reconnectInterval: 5000,
-      maxReconnectAttempts: 3,
       heartbeatTimeout: 60000, // 60 seconds
       browserUIWebContents: this.browserUIWebContents,
     };
@@ -117,5 +115,13 @@ export class ConnectionManager extends EventEmitter {
 
   getSSEClient(): SSEClient | null {
     return this.sseClient;
+  }
+
+  async reconnectSSEWithAuth(): Promise<void> {
+    if (this.sseClient) {
+      await this.sseClient.reconnectWithAuth();
+    } else {
+      console.warn('[ConnectionManager] No SSE client to reconnect');
+    }
   }
 }

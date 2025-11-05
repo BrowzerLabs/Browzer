@@ -27,12 +27,12 @@ export class MainWindow {
 
     this.deepLinkService = new DeepLinkService(baseWindow, browserUIView.webContents);
 
-    this.authService = new AuthService(this.browserManager);
+    this.connectionManager = new ConnectionManager(browserUIView.webContents);
+
+    this.authService = new AuthService(this.browserManager, this.connectionManager);
     this.authService.restoreSession().catch(err => {
       console.error('Failed to initialize AuthService:', err);
     });
-
-    this.connectionManager = new ConnectionManager(browserUIView.webContents);
     
     // Set refresh callback for automatic token refresh
     this.connectionManager.setRefreshCallback(() => this.authService.refreshSession());

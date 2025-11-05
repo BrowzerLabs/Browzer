@@ -11,16 +11,20 @@ import {
 import { BrowserManager } from '@/main/BrowserManager';
 import { api } from '@/main/api';
 import { tokenManager } from './TokenManager';
+import { ConnectionManager } from '@/main/api';
 
 export class AuthService {
   private currentUser: User | null = null;
   private authWindow: BrowserWindow | null = null;
   private readonly browserManager: BrowserManager;
+  private readonly connectionManager: ConnectionManager;
 
   constructor(
     browserManager: BrowserManager,
+    connectionManager: ConnectionManager,
   ) {
     this.browserManager = browserManager;
+    this.connectionManager = connectionManager;
     
     app.on('token-refresh-needed' as any, () => {
       this.handleTokenRefresh();
@@ -84,7 +88,7 @@ export class AuthService {
 
       // If sign in successful, persist session
       if (authResponse.success && authResponse.session) {
-        this.persistSession(authResponse.session);
+        await this.persistSession(authResponse.session);
       }
 
       return authResponse;
@@ -239,7 +243,7 @@ export class AuthService {
       const authResponse = response.data;
 
       if (authResponse.success && authResponse.session) {
-        this.persistSession(authResponse.session);
+        await this.persistSession(authResponse.session);
       }
 
       this.authWindow?.close();
@@ -370,7 +374,7 @@ export class AuthService {
 
       // Persist new session
       if (authResponse.success && authResponse.session) {
-        this.persistSession(authResponse.session);
+        await this.persistSession(authResponse.session);
         console.log('[AuthService] Session refreshed successfully');
         return true;
       }
@@ -446,7 +450,7 @@ export class AuthService {
 
       // If verification successful, persist session
       if (authResponse.success && authResponse.session) {
-        this.persistSession(authResponse.session);
+        await this.persistSession(authResponse.session);
       }
 
       return authResponse;
@@ -557,7 +561,7 @@ export class AuthService {
     }
   }
 
-  private persistSession(session: AuthSession): void {
+  private async persistSession(session: AuthSession): Promise<void> {
     tokenManager.saveTokens(
       session.access_token,
       session.refresh_token,
@@ -565,6 +569,10 @@ export class AuthService {
     );
     
     this.currentUser = session.user;
+    
+    await this.connectionManager.reconnectSSEWithAuth().catch(err => {
+      console.error('[AuthService] Failed to reconnect SSE:', err);
+    });
   }
 
 
