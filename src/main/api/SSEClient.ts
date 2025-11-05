@@ -163,11 +163,6 @@ export class SSEClient extends EventEmitter {
       const data = JSON.parse(event.data);
       this.browserUIWebContents.send('notification', data);
     });
-
-    this.eventSource.addEventListener('subscription_update', (event: MessageEvent) => {
-        const data = JSON.parse(event.data);
-        this.browserUIWebContents.send('subscription_update', data);
-    });
   }
 
   /**

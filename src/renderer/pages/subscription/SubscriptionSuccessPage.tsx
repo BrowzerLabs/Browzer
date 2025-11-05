@@ -3,14 +3,15 @@ import { Button } from '@/renderer/ui/button';
 import { Card } from '@/renderer/ui/card';
 import { CheckCircle, Loader2, AlertCircle, CreditCard, Settings, Database } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { subscriptionProcessingState } from '@/renderer/notification/notificationCallbacks';
 
 interface SubscriptionUpdate {
-  type: string;
   step: string;
   message: string;
   tier?: string;
   credits_limit?: number;
-  timestamp: string;
+  event?: string;
+  [key: string]: any;
 }
 
 export function SubscriptionSuccessPage() {
@@ -22,24 +23,27 @@ export function SubscriptionSuccessPage() {
   const [tier, setTier] = useState<string | null>(null);
 
   useEffect(() => {
-    // Listen for real-time subscription updates via SSE
-    const unsubscribe = window.subscriptionAPI.onSubscriptionUpdate((data: SubscriptionUpdate) => {
+    const unsubscribe = subscriptionProcessingState.subscribe((data: SubscriptionUpdate) => {
+      console.log('[SubscriptionSuccessPage] Received update:', data);
       
-      setCurrentStep(data.step);
-      setCurrentMessage(data.message);
+      if (data.step) {
+        setCurrentStep(data.step);
+        setCurrentMessage(data.message || '');
 
-      if (data.step === 'complete') {
-        setIsComplete(true);
-        setTier(data.tier || null);
-      } else if (data.step === 'error') {
-        setError(data.message);
+        if (data.step === 'complete') {
+          setIsComplete(true);
+          setTier(data.tier || null);
+        } else if (data.step === 'error') {
+          setError(data.message || 'An error occurred');
+        }
+      } else if (data.event) {
+        console.log('[SubscriptionSuccessPage] Subscription event:', data.event);
       }
     });
 
-    // Fallback: If no SSE update after 10 seconds, try polling
     const fallbackTimer = setTimeout(() => {
       syncSubscriptionFallback();
-    }, 10000);
+    }, 27000);
 
     return () => {
       unsubscribe();
@@ -73,7 +77,6 @@ export function SubscriptionSuccessPage() {
     window.browserAPI.navigateToTab('browzer://subscription');
   };
 
-  // Show processing state
   if (!isComplete && !error) {
     const getStepIcon = () => {
       switch (currentStep) {

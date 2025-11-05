@@ -71,7 +71,8 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
 
   const handleDialogNotification = useCallback(async (notification: NotificationPayload) => {
     const { title, message } = notification;
-    alert(title);
+    toast.info(title)
+    alert(message);
   }, []);
 
   const handleNavigationNotification = useCallback((notification: NotificationPayload) => {
@@ -80,12 +81,12 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
     if (navigate_to) {
       toast.info(title, {
         description: message,
-        duration: 3000,
       });
 
       setTimeout(() => {
+        window.browserAPI.hideAllTabs();
         navigate(navigate_to);
-      }, 500);
+      }, 200);
     }
   }, [navigate]);
 
@@ -99,13 +100,11 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
         
         toast.success(title, {
           description: message,
-          duration: 3000,
         });
       } else {
         console.warn(`[NotificationProvider] No handler registered for callback: ${callback_name}`);
         toast.error('Action Failed', {
           description: `No handler found for: ${callback_name}`,
-          duration: 5000,
         });
       }
     }
