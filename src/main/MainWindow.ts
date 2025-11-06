@@ -3,14 +3,14 @@ import { WindowManager } from '@/main/window/WindowManager';
 import { LayoutManager } from '@/main/window/LayoutManager';
 import { IPCHandlers } from '@/main/ipc/IPCHandlers';
 import { DeepLinkService } from '@/main/deeplink/DeepLinkService';
-import { ConnectionManager } from './api';
+import { ConnectionService } from './api';
 import { AuthService } from '@/main/auth/AuthService';
 
 export class MainWindow {
   private windowManager: WindowManager;
   private layoutManager: LayoutManager;
   private browserManager: BrowserManager;
-  private connectionManager: ConnectionManager;
+  private connectionService: ConnectionService;
   private authService: AuthService;
   private ipcHandlers: IPCHandlers;
   private deepLinkService: DeepLinkService;
@@ -27,15 +27,15 @@ export class MainWindow {
 
     this.deepLinkService = new DeepLinkService(baseWindow, browserUIView.webContents);
 
-    this.connectionManager = new ConnectionManager(browserUIView.webContents);
+    this.connectionService = new ConnectionService(browserUIView.webContents);
 
-    this.authService = new AuthService(this.browserManager, this.connectionManager);
+    this.authService = new AuthService(this.browserManager, this.connectionService);
     this.authService.restoreSession().catch(err => {
       console.error('Failed to initialize AuthService:', err);
     });
     
     // Set refresh callback for automatic token refresh
-    this.connectionManager.setRefreshCallback(() => this.authService.refreshSession());
+    this.connectionService.setRefreshCallback(() => this.authService.refreshSession());
     
     this.ipcHandlers = new IPCHandlers(
       this.browserManager,

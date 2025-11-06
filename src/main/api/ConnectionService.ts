@@ -11,7 +11,7 @@ export enum ConnectionStatus {
   ERROR = 'error',
 }
 
-export class ConnectionManager extends EventEmitter {
+export class ConnectionService extends EventEmitter {
   private apiClient: ApiClient;
   private sseClient: SSEClient | null = null;
   private status: ConnectionStatus = ConnectionStatus.DISCONNECTED;
@@ -37,13 +37,13 @@ export class ConnectionManager extends EventEmitter {
     initializeApi(this.apiClient);
     
     this.initialize().catch(err => {
-      console.error('Failed to initialize ConnectionManager:', err);
+      console.error('Failed to initialize ConnectionService:', err);
     });
   }
 
   async initialize(): Promise<boolean> {
     if (this.status === ConnectionStatus.CONNECTING || this.status === ConnectionStatus.CONNECTED) {
-      console.log('[ConnectionManager] Already connected or connecting');
+      console.log('[ConnectionService] Already connected or connecting');
       return true;
     }
 
@@ -67,7 +67,7 @@ export class ConnectionManager extends EventEmitter {
       return true;
 
     } catch (error: any) {
-      console.error('[ConnectionManager] Connection failed:', error);
+      console.error('[ConnectionService] Connection failed:', error);
       this.status = ConnectionStatus.ERROR;
       return false;
     }
@@ -117,7 +117,7 @@ export class ConnectionManager extends EventEmitter {
     if (this.sseClient) {
       await this.sseClient.reconnectWithAuth();
     } else {
-      console.warn('[ConnectionManager] No SSE client to reconnect');
+      console.warn('[ConnectionService] No SSE client to reconnect');
     }
   }
 }

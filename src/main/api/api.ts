@@ -9,7 +9,7 @@ export function initializeApi(client: ApiClient): void {
 }
 function getApiClient(): ApiClient {
   if (!apiClientInstance) {
-    throw new Error('API client not initialized. Ensure ConnectionManager is initialized first.');
+    throw new Error('API client not initialized. Ensure ConnectionService is initialized first.');
   }
   return apiClientInstance;
 }
