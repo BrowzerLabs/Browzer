@@ -15,7 +15,6 @@ export class ConnectionManager extends EventEmitter {
   private apiClient: ApiClient;
   private sseClient: SSEClient | null = null;
   private status: ConnectionStatus = ConnectionStatus.DISCONNECTED;
-  private apiKey: string;
   private apiBaseURL: string;
 
   private browserUIWebContents: WebContents;
@@ -24,13 +23,11 @@ export class ConnectionManager extends EventEmitter {
     browserUIWebContents: WebContents
   ) {
     super();
-    this.apiKey = process.env.BACKEND_API_KEY || '';
     this.apiBaseURL = process.env.BACKEND_API_URL || 'http://localhost:8080';    
     this.browserUIWebContents = browserUIWebContents;
 
     const apiConfig: ApiConfig = {
       baseURL: this.apiBaseURL,
-      apiKey: this.apiKey,
       timeout: 30000,
     };
 
@@ -80,7 +77,6 @@ export class ConnectionManager extends EventEmitter {
     const sseConfig: SSEConfig = {
       url,
       electronId: this.apiClient.getElectronId(),
-      apiKey: this.apiKey,
       reconnectInterval: 5000,
       heartbeatTimeout: 60000, // 60 seconds
       browserUIWebContents: this.browserUIWebContents,

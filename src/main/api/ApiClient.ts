@@ -7,7 +7,6 @@ import { tokenManager } from '../auth/TokenManager';
 
 export interface ApiConfig {
   baseURL: string;
-  apiKey: string;
   timeout?: number;
 }
 
@@ -20,12 +19,10 @@ export interface ApiResponse<T = any> {
 
 export class ApiClient {
   private axios: AxiosInstance;
-  private apiKey: string;
   private electronId: string;
   private refreshCallback: (() => Promise<boolean>) | null = null;
 
   constructor(config: ApiConfig) {
-    this.apiKey = config.apiKey;
     this.electronId = this.generateElectronId();
     
     this.axios = axios.create({
@@ -56,7 +53,6 @@ export class ApiClient {
   private setupInterceptors(): void {
     this.axios.interceptors.request.use(
       (config) => {
-        config.headers['X-API-Key'] = this.apiKey;
         config.headers['X-Electron-ID'] = this.electronId;
 
         const accessToken = tokenManager.getAccessToken();
