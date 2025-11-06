@@ -6,7 +6,6 @@ import { tokenManager } from '@/main/auth/TokenManager';
 export interface SSEConfig {
   url: string;
   electronId: string;
-  apiKey: string;
   reconnectInterval?: number;
   heartbeatTimeout?: number;
   browserUIWebContents: WebContents;
@@ -24,7 +23,6 @@ export class SSEClient extends EventEmitter {
   private eventSource: EventSource | null = null;
   private url: string;
   private electronId: string;
-  private apiKey: string;
   private browserUIWebContents: WebContents;
 
   private reconnectInterval: number;
@@ -41,7 +39,6 @@ export class SSEClient extends EventEmitter {
     super();
     this.url = config.url;
     this.electronId = config.electronId;
-    this.apiKey = config.apiKey;
     this.browserUIWebContents = config.browserUIWebContents;
     
     this.reconnectInterval = config.reconnectInterval || 5000;
@@ -65,7 +62,6 @@ export class SSEClient extends EventEmitter {
       const sseUrl = `${this.url}?electron_id=${encodeURIComponent(this.electronId)}`;
 
       const headers: Record<string, string> = {
-        'X-API-Key': this.apiKey,
         'X-Electron-ID': this.electronId,
       };
       

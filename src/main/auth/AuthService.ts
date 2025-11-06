@@ -11,20 +11,20 @@ import {
 import { BrowserManager } from '@/main/BrowserManager';
 import { api } from '@/main/api';
 import { tokenManager } from './TokenManager';
-import { ConnectionManager } from '@/main/api';
+import { ConnectionService } from '@/main/api';
 
 export class AuthService {
   private currentUser: User | null = null;
   private authWindow: BrowserWindow | null = null;
   private readonly browserManager: BrowserManager;
-  private readonly connectionManager: ConnectionManager;
+  private readonly connectionService: ConnectionService;
 
   constructor(
     browserManager: BrowserManager,
-    connectionManager: ConnectionManager,
+    connectionService: ConnectionService,
   ) {
     this.browserManager = browserManager;
-    this.connectionManager = connectionManager;
+    this.connectionService = connectionService;
     
     app.on('token-refresh-needed' as any, () => {
       this.handleTokenRefresh();
@@ -570,7 +570,7 @@ export class AuthService {
     
     this.currentUser = session.user;
     
-    await this.connectionManager.reconnectSSEWithAuth().catch(err => {
+    await this.connectionService.reconnectSSEWithAuth().catch(err => {
       console.error('[AuthService] Failed to reconnect SSE:', err);
     });
   }
