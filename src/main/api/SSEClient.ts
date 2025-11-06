@@ -43,7 +43,7 @@ export class SSEClient extends EventEmitter {
     
     this.reconnectInterval = config.reconnectInterval || 5000;
     this.heartbeatTimeout = config.heartbeatTimeout || 60000; // 60 seconds
-    this.maxReconnectAttempts = Number(process.env.MAX_SSE_RECONNECT_ATTEMPTS ?? 15) 
+    this.maxReconnectAttempts = 20 
   }
 
   /**
