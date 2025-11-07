@@ -2,178 +2,101 @@
   "name": "browzer",
   "productName": "Browzer",
   "version": "1.0.0",
-  "description": "AI-powered browser with agent-based capabilities",
-  "main": "dist/src/main/main.js",
-  "homepage": "https://github.com/BrowzerLabs/Browzer",
-  "author": {
-    "name": "Browzer Labs",
-    "email": "contact@browzerlabs.com"
-  },
+  "description": "My Electron application description",
+  "main": ".vite/build/main.js",
   "scripts": {
-    "dev": "npx webpack --config webpack.renderer.config.js && npx tsc && node scripts/copy-python-files.js && electron .",
-    "start": "electron .",
-    "prepare-python": "./scripts/prepare-python-bundle.sh",
-    "copy-python": "node scripts/copy-python-files.js",
-    "clean": "rm -rf dist releases",
-    "build": "electron-builder",
-    "build:mac": "electron-builder --mac",
-    "build:mac:signed": "electron-builder --mac --publish=never",
-    "build:mac:unsigned": "CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --mac",
-    "build:mac:fast": "CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --mac --config.mac.target=dir",
-    "build:mac:single-arch": "electron-builder --mac --config.mac.target.arch=arm64",
-    "build:linux": "electron-builder --linux",
-    "build:win": "electron-builder --win",
-    "build:all": "electron-builder --mac --linux --win",
-    "build:prod:mac": "NODE_ENV=production node scripts/build-production.js --mac",
-    "build:prod:linux": "NODE_ENV=production node scripts/build-production.js --linux",
-    "build:prod:win": "NODE_ENV=production node scripts/build-production.js --win",
-    "dist": "npm run build",
-    "pack": "electron-builder --dir",
-    "rebuild": "electron-rebuild"
+    "start": "electron-forge start",
+    "start:debug": "ELECTRON_ENABLE_LOGGING=1 electron-forge start -- --inspect=9229 --remote-debugging-port=9222",
+    "start:debug-brk": "ELECTRON_ENABLE_LOGGING=1 electron-forge start -- --inspect-brk=9229 --remote-debugging-port=9222",
+    "package": "electron-forge package",
+    "make": "electron-forge make",
+    "publish": "electron-forge publish",
+    "lint": "eslint --ext .ts,.tsx ."
   },
-  "build": {
-    "appId": "com.browzer.app",
-    "productName": "Browzer",
-    "directories": {
-      "output": "releases"
-    },
-    "files": [
-      "dist/**/*",
-      "src/renderer/settings.html",
-      "src/renderer/styles.css",
-      "extensions/**/*",
-      "extensions-framework/**/*",
-      "scripts/prepare-python-bundle.sh",
-      "assets/**/*",
-      "node_modules/**/*",
-      "!node_modules/*/{README.md,readme.md,CHANGELOG.md,changelog.md}",
-      "!node_modules/**/*.md",
-      "!node_modules/**/*.txt",
-      "!node_modules/**/docs/**",
-      "!node_modules/**/test/**",
-      "!node_modules/**/tests/**",
-      "!node_modules/**/*.map",
-      "!**/*.pyc",
-      "!**/__pycache__",
-      "!**/.env",
-      "!**/.DS_Store"
-    ],
-    "asarUnpack": [
-      "extensions/**/*",
-      "extensions-framework/**/*",
-      "src/renderer/*.html",
-      "src/renderer/*.css",
-      "scripts/prepare-python-bundle.sh"
-    ],
-    "extraFiles": [],
-    "mac": {
-      "category": "public.app-category.productivity",
-      "icon": "assets/icon.icns",
-      "target": [
-        {
-          "target": "dmg",
-          "arch": [
-            "x64",
-            "arm64"
-          ]
-        },
-        {
-          "target": "zip",
-          "arch": [
-            "x64",
-            "arm64"
-          ]
-        }
-      ],
-      "darkModeSupport": true,
-      "hardenedRuntime": true,
-      "gatekeeperAssess": false,
-      "type": "distribution",
-      "entitlements": "assets/entitlements.mac.plist",
-      "entitlementsInherit": "assets/entitlements.mac.plist"
-    },
-    "afterSign": "scripts/post-sign.js",
-    "linux": {
-      "category": "Network",
-      "icon": "assets/icon.png",
-      "target": [
-        {
-          "target": "AppImage",
-          "arch": [
-            "x64"
-          ]
-        },
-        {
-          "target": "deb",
-          "arch": [
-            "x64"
-          ]
-        },
-        {
-          "target": "rpm",
-          "arch": [
-            "x64"
-          ]
-        },
-        {
-          "target": "tar.gz",
-          "arch": [
-            "x64"
-          ]
-        }
-      ]
-    },
-    "win": {
-      "icon": "assets/icon.ico",
-      "target": [
-        {
-          "target": "nsis",
-          "arch": [
-            "x64",
-            "ia32"
-          ]
-        },
-        {
-          "target": "portable",
-          "arch": [
-            "x64",
-            "ia32"
-          ]
-        }
-      ]
-    },
-    "nsis": {
-      "oneClick": false,
-      "allowToChangeInstallationDirectory": true,
-      "createDesktopShortcut": true,
-      "createStartMenuShortcut": true,
-      "shortcutName": "Browzer"
-    }
-  },
-  "dependencies": {
-    "@electron/remote": "^2.0.10",
-    "@modelcontextprotocol/sdk": "^1.17.3",
-    "@types/nodemailer": "^6.4.17",
-    "axios": "^1.6.0",
-    "nodemailer": "^7.0.5",
-    "playwright-core": "^1.54.1",
-    "ws": "^8.18.3"
+  "keywords": [],
+  "author": {
+    "name": "Abhinandan",
+    "email": "abhinandanverma551@gmail.com"
   },
   "license": "MIT",
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "@tailwindcss/oxide",
+      "better-sqlite3",
+      "electron",
+      "electron-winstaller",
+      "esbuild",
+      "unrs-resolver"
+    ]
+  },
   "devDependencies": {
-    "@electron/notarize": "^3.0.2",
-    "@types/node": "^20.0.0",
-    "copy-webpack-plugin": "^13.0.0",
-    "css-loader": "^6.8.1",
-    "electron": "^28.0.0",
-    "electron-builder": "^26.0.12",
-    "electron-icon-builder": "^2.0.1",
-    "glob": "^11.0.3",
-    "html-webpack-plugin": "^5.5.0",
-    "style-loader": "^3.3.3",
-    "ts-loader": "^9.5.0",
-    "typescript": "^5.3.0",
-    "webpack": "^5.89.0",
-    "webpack-cli": "^5.1.4"
+    "@electron-forge/cli": "^7.9.0",
+    "@electron-forge/maker-deb": "^7.9.0",
+    "@electron-forge/maker-rpm": "^7.9.0",
+    "@electron-forge/maker-squirrel": "^7.9.0",
+    "@electron-forge/maker-zip": "^7.9.0",
+    "@electron-forge/plugin-auto-unpack-natives": "^7.9.0",
+    "@electron-forge/plugin-fuses": "^7.9.0",
+    "@electron-forge/plugin-vite": "^7.9.0",
+    "@electron/fuses": "^1.8.0",
+    "@tailwindcss/postcss": "^4.1.14",
+    "@tailwindcss/typography": "^0.5.19",
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/electron-squirrel-startup": "^1.0.2",
+    "@types/react": "^19.2.2",
+    "@types/react-dom": "^19.2.1",
+    "@types/react-router-dom": "^5.3.3",
+    "@typescript-eslint/eslint-plugin": "^5.62.0",
+    "@typescript-eslint/parser": "^5.62.0",
+    "autoprefixer": "^10.4.21",
+    "dotenv": "^17.2.3",
+    "electron": "38.2.1",
+    "eslint": "^8.57.1",
+    "eslint-import-resolver-typescript": "^4.4.4",
+    "eslint-plugin-import": "^2.32.0",
+    "postcss": "^8.5.6",
+    "tailwindcss": "^4.1.14",
+    "typescript": "~4.5.5",
+    "vite": "^5.4.20"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.66.0",
+    "@radix-ui/react-accordion": "^1.2.12",
+    "@radix-ui/react-alert-dialog": "^1.1.15",
+    "@radix-ui/react-avatar": "^1.1.10",
+    "@radix-ui/react-checkbox": "^1.3.3",
+    "@radix-ui/react-dialog": "^1.1.15",
+    "@radix-ui/react-dropdown-menu": "^2.1.16",
+    "@radix-ui/react-label": "^2.1.7",
+    "@radix-ui/react-progress": "^1.1.7",
+    "@radix-ui/react-radio-group": "^1.3.8",
+    "@radix-ui/react-scroll-area": "^1.2.10",
+    "@radix-ui/react-select": "^2.2.6",
+    "@radix-ui/react-separator": "^1.1.7",
+    "@radix-ui/react-slider": "^1.2.1",
+    "@radix-ui/react-slot": "^1.2.3",
+    "@radix-ui/react-switch": "^1.2.6",
+    "@radix-ui/react-tabs": "^1.1.13",
+    "@radix-ui/react-toggle": "^1.1.10",
+    "@radix-ui/react-toggle-group": "^1.1.11",
+    "axios": "^1.13.1",
+    "better-sqlite3": "^12.4.1",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "date-fns": "^4.1.0",
+    "electron-squirrel-startup": "^1.0.1",
+    "electron-store": "^11.0.2",
+    "eventsource": "^4.0.0",
+    "input-otp": "^1.4.2",
+    "lucide-react": "^0.545.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "react-icons": "^5.5.0",
+    "react-resizable-panels": "^3.0.6",
+    "react-router-dom": "^7.9.4",
+    "sonner": "^2.0.7",
+    "tailwind-merge": "^3.3.1",
+    "tw-animate-css": "^1.4.0",
+    "zustand": "^5.0.8"
   }
 }
