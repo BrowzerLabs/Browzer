@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline'; media-src *;">
+  <title>Screen Recorder</title>
+</head>
+<body>
+<script>
+  console.log('🎬 Recorder page loaded');
+  console.log('navigator:', navigator.userAgent);
+  console.log('navigator.mediaDevices:', navigator.mediaDevices);
+  console.log('navigator.mediaDevices.getUserMedia:', typeof navigator.mediaDevices?.getUserMedia);
+  
+  window.startRecording = async (sourceId) => {
+    try {
+      console.log('🎥 Starting recording with sourceId:', sourceId);
+      
+      if (!navigator.mediaDevices) {
+        throw new Error('navigator.mediaDevices is not available');
+      }
+      
+      if (!navigator.mediaDevices.getUserMedia) {
+        throw new Error('navigator.mediaDevices.getUserMedia is not available');
+      }
+      
+      const constraints = {
+        audio: false,
+        video: {
+          mandatory: {
+            chromeMediaSource: 'desktop',
+            chromeMediaSourceId: sourceId,
+            minWidth: 1280,
+            maxWidth: 1920,
+            minHeight: 720,
+            maxHeight: 1080
+          }
+        }
+      };
+      
+      console.log('📹 Requesting media stream with constraints:', JSON.stringify(constraints));
+      
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+      
+      console.log('✅ Media stream obtained:', stream.id);
+      console.log('   Video tracks:', stream.getVideoTracks().length);
+      
+      const options = { 
+        mimeType: 'video/webm;codecs=vp9', 
+        videoBitsPerSecond: 2500000 
+      };
+      
+      if (!MediaRecorder.isTypeSupported(options.mimeType)) {
+        console.log('⚠️ VP9 not supported, falling back to VP8');
+        options.mimeType = 'video/webm;codecs=vp8';
+      }
+      
+      if (!MediaRecorder.isTypeSupported(options.mimeType)) {
+        console.log('⚠️ VP8 not supported, using default codec');
+        options.mimeType = 'video/webm';
+      }
+      
+      console.log('🎬 Creating MediaRecorder with:', options.mimeType);
+      
+      window.recorder = new MediaRecorder(stream, options);
+      window.chunks = [];
+      
+      window.recorder.ondataavailable = (e) => {
+        if (e.data && e.data.size > 0) {
+          window.chunks.push(e.data);
+          console.log('📦 Chunk received:', e.data.size, 'bytes, total chunks:', window.chunks.length);
+        } else {
+          console.warn('⚠️ Empty chunk received');
+        }
+      };
+      
+      window.recorder.onstart = () => {
+        console.log('▶️ MediaRecorder started');
+        window.chunks = []; // Ensure chunks array is fresh
+      };
+      
+      window.recorder.onerror = (e) => {
+        console.error('❌ MediaRecorder error:', e);
+        console.error('   Error details:', e.error);
+      };
+      
+      window.recorder.onstop = () => {
+        console.log('⏹️ MediaRecorder stopped, chunks collected:', window.chunks.length);
+      };
+      
+      window.recorder.start(1000);
+      console.log('✅ Recording started successfully');
+      return true;
+      
+    } catch (error) {
+      console.error('❌ Recording error:', error.message);
+      console.error('   Stack:', error.stack);
+      return false;
+    }
+  };
+  
+  window.stopRecording = () => {
+    return new Promise((resolve) => {
+      if (!window.recorder) {
+        console.log('⚠️ No recorder to stop');
+        resolve(null);
+        return;
+      }
+      
+      console.log('⏹️ Stopping recorder...');
+      
+      // Set up timeout in case onstop never fires
+      const timeout = setTimeout(() => {
+        console.error('❌ Timeout waiting for recorder to stop!');
+        
+        // Try to process what we have
+        if (window.chunks.length > 0) {
+          processChunks();
+        } else {
+          resolve(null);
+        }
+      }, 5000); // 5 second timeout
+      
+      const processChunks = async () => {
+        clearTimeout(timeout);
+        
+        console.log('📦 Processing', window.chunks.length, 'chunks');
+        
+        if (window.chunks.length === 0) {
+          console.warn('⚠️ No chunks recorded!');
+          resolve(null);
+          return;
+        }
+        
+        try {
+          const blob = new Blob(window.chunks, { type: 'video/webm' });
+          console.log('📊 Blob size:', blob.size, 'bytes (', (blob.size / 1024 / 1024).toFixed(2), 'MB)');
+          
+          const buffer = await blob.arrayBuffer();
+          const result = Array.from(new Uint8Array(buffer));
+          console.log('✅ Returning buffer of size:', result.length, 'bytes');
+          
+          // Clean up
+          if (window.recorder && window.recorder.stream) {
+            window.recorder.stream.getTracks().forEach(t => {
+              t.stop();
+              console.log('🛑 Stopped track:', t.kind);
+            });
+          }
+          
+          resolve(result);
+        } catch (error) {
+          console.error('❌ Error processing chunks:', error);
+          resolve(null);
+        }
+      };
+      
+      window.recorder.onstop = processChunks;
+      
+      window.recorder.requestData();
+      
+      setTimeout(() => {
+        window.recorder.stop();
+      }, 100);
+    });
+  };
+  
+  console.log('✅ Recording functions ready');
+</script>
+</body>
+</html>

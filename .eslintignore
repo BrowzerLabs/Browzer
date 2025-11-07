@@ -1,0 +1,15 @@
+# Build output
+dist/
+.vite/
+out/
+
+# Vite config files (they use bundler moduleResolution)
+vite.*.config.ts
+forge.config.ts
+
+# Dependencies
+node_modules/
+
+# Environment files
+.env
+.env.*
