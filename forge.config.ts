@@ -7,7 +7,6 @@ import { MakerDMG } from '@electron-forge/maker-dmg';
 import { VitePlugin } from '@electron-forge/plugin-vite';
 import { FusesPlugin } from '@electron-forge/plugin-fuses';
 import { FuseV1Options, FuseVersion } from '@electron/fuses';
-import path from 'path';
 
 
 const config: ForgeConfig = {
@@ -18,7 +17,7 @@ const config: ForgeConfig = {
     appBundleId: 'com.browzer.app',
     appCategoryType: 'public.app-category.productivity',
     osxSign: {
-      identity: process.env.APPLE_IDENTITY,
+      identity: process.env.APPLE_IDENTITY!,
       identityValidation: true,
     },
     osxNotarize: {
@@ -31,11 +30,8 @@ const config: ForgeConfig = {
   rebuildConfig: {},
   makers: [
     new MakerSquirrel({}),
-    new MakerZIP({}, ['darwin']),
-    new MakerRpm({}),
-    new MakerDeb({}),
     new MakerDMG({
-      // background: './assets/dmg-background.png',
+      background: './assets/dmg-background.png',
       icon: './assets/icon.icns',
       format: 'ULFO',
       contents: (opts) => {
@@ -49,6 +45,42 @@ const config: ForgeConfig = {
         "background-color": "#fff",
       }
     }),
+    new MakerZIP({}, ['darwin']),
+    
+    new MakerDeb({
+      options: {
+        name: 'browzer',
+        productName: 'Browzer',
+        genericName: 'Web Browser',
+        description: 'An Intelligent Agentic Browser',
+        categories: ['Network', 'Office'],
+        icon: './assets/icon.png',
+        homepage: 'https://github.com/BrowzerLabs/Browzer',
+        maintainer: 'Browzer <rahul@trybrowzer.com>',
+        section: 'web'
+      }
+    }),
+    
+    new MakerRpm({
+      options: {
+        name: 'browzer',
+        productName: 'Browzer',
+        icon: './assets/icon.png',
+        categories: ['Network', 'Office']
+      }
+    })
+  ],
+  publishers: [
+    {
+       name: '@electron-forge/publisher-github',
+       config: {
+         repository: {
+           owner: 'BrowzerLabs',
+           name: 'Browzer'
+         },
+         prerelease: true
+       }
+    }
   ],
   plugins: [
     new VitePlugin({

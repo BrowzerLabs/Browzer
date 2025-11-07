@@ -7,12 +7,14 @@
   "scripts": {
     "start": "electron-forge start",
     "package": "electron-forge package",
-    "make": "electron-forge make",
+    "make": "NODE_ENV=production electron-forge make",
+    "publish": "electron-forge publish",
     "make:mac": "NODE_ENV=production electron-forge make --platform darwin",
     "make:dmg": "NODE_ENV=production electron-forge make --platform darwin --arch x64",
     "make:arm64": "NODE_ENV=production electron-forge make --platform darwin --arch arm64",
     "make:universal": "NODE_ENV=production electron-forge make --platform darwin --arch universal",
-    "publish": "electron-forge publish",
+    "make:win": "electron-forge make --platform=win32",
+    "make:linux": "electron-forge make --platform=linux",
     "lint": "eslint --ext .ts,.tsx ."
   },
   "keywords": [],
@@ -103,6 +105,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.66.0",
     "@electron-forge/maker-dmg": "^7.10.2",
+    "@electron-forge/publisher-github": "^7.10.2",
     "@radix-ui/react-accordion": "^1.2.12",
     "@radix-ui/react-alert-dialog": "^1.1.15",
     "@radix-ui/react-avatar": "^1.1.10",
