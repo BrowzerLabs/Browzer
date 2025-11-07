@@ -10,6 +10,7 @@ import { TypeHandler } from './handlers/TypeHandler';
 import { FormHandler } from './handlers/FormHandler';
 import { NavigationHandler } from './handlers/NavigationHandler';
 import { InteractionHandler } from './handlers/InteractionHandler';
+import { FileUploadHandler } from './handlers/FileUploadHandler';
 
 /**
  * BrowserAutomationExecutor - Main orchestrator for browser automation
@@ -36,6 +37,7 @@ export class BrowserAutomationExecutor {
   private formHandler: FormHandler;
   private navigationHandler: NavigationHandler;
   private interactionHandler: InteractionHandler;
+  private fileUploadHandler: FileUploadHandler;
 
   constructor(view: WebContentsView, tabId: string) {
     this.view = view;
@@ -53,6 +55,7 @@ export class BrowserAutomationExecutor {
     this.formHandler = new FormHandler(context);
     this.navigationHandler = new NavigationHandler(context);
     this.interactionHandler = new InteractionHandler(context);
+    this.fileUploadHandler = new FileUploadHandler(context);
   }
 
   /**
@@ -98,6 +101,10 @@ export class BrowserAutomationExecutor {
         return this.interactionHandler.executeKeyPress(params);
       case 'scroll':
         return this.interactionHandler.executeScroll(params);
+      
+      // File upload operations
+      case 'file_upload':
+        return this.fileUploadHandler.execute(params);
       
       // Context extraction
       case 'extract_context':

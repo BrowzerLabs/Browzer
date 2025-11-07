@@ -163,6 +163,16 @@ export interface SubmitParams {
   submitButtonSelector?: string; // Optional: click submit button instead
 }
 
+/**
+ * Parameters for file upload tool
+ */
+export interface FileUploadParams {
+  selector: string; // Primary CSS selector for file input
+  backupSelectors?: string[]; // Fallback selectors
+  filePaths: string | string[]; // Absolute path(s) to file(s) to upload
+  waitForElement?: number; // Wait time in ms before attempting upload (default 1000)
+}
+
 // ============================================================================
 // Execution Result Types
 // ============================================================================
@@ -233,9 +243,13 @@ export interface AutomationError {
     | 'ELEMENT_COVERED'
     | 'TIMEOUT'
     | 'INVALID_SELECTOR'
+    | 'INVALID_ELEMENT'
     | 'NAVIGATION_FAILED'
     | 'CDP_ERROR'
     | 'EXECUTION_ERROR'
+    | 'FILE_NOT_FOUND'
+    | 'UPLOAD_FAILED'
+    | 'MULTIPLE_FILES_NOT_SUPPORTED'
     | 'UNKNOWN_ERROR';
   message: string;
   details?: {
@@ -248,6 +262,12 @@ export interface AutomationError {
       boundingBox?: { x: number; y: number; width: number; height: number };
     };
     suggestions?: string[]; // Suggestions for the model to retry
+    // File upload specific
+    invalidPaths?: string[]; // Invalid file paths
+    actualType?: string; // Actual element type found
+    fileCount?: number; // Number of files attempted
+    acceptsMultiple?: boolean; // Whether input accepts multiple files
+    [key: string]: any; // Allow additional properties for extensibility
   };
 }
 
@@ -264,6 +284,8 @@ export interface ToolExecutionResult {
   effects?: ExecutionEffects; // What happened after the action
   value?: any; // Return value (e.g., extracted text, attribute value)
   context?: any; // Return value (e.g., extracted text, attribute value)
+  data?: any; // Additional data (e.g., snapshot image data)
+  metadata?: any; // Additional metadata (e.g., file upload info)
   
   // Error data
   error?: AutomationError;

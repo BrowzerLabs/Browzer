@@ -65,7 +65,7 @@ export class ClaudeClient {
         this.onThinking('Generating automation plan...');
       }
 
-      return await this.client.messages.create({
+      const response = await this.client.messages.create({
         model: this.model,
         max_tokens: this.maxTokens,
         system: systemBlocks,
@@ -78,6 +78,11 @@ export class ClaudeClient {
         ]
       });
 
+      response.content.forEach(content => {
+       console.log(content);
+      })
+
+      return response;
     } catch (error) {
       console.error('❌ [ClaudeClient] Failed to create automation plan:', error);
       throw error;
@@ -132,7 +137,7 @@ export class ClaudeClient {
         }
       })
 
-      return await this.client.messages.create({
+      const response = await this.client.messages.create({
         model: this.model,
         max_tokens: this.maxTokens,
         system: systemBlocks,
@@ -140,6 +145,11 @@ export class ClaudeClient {
         messages: messages
       });
 
+      response.content.forEach(content => {
+        console.log(content);
+      })
+
+      return response;
     } catch (error) {
       console.error('❌ [ClaudeClient] Failed to continue conversation:', error);
       throw error;

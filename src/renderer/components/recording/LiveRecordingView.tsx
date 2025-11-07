@@ -1,4 +1,4 @@
-import { Play } from 'lucide-react';
+import { MousePointerClick } from 'lucide-react';
 import { Badge } from '@/renderer/ui/badge';
 import { ItemGroup } from '@/renderer/ui/item';
 import { RecordedAction } from '@/shared/types';
@@ -70,7 +70,7 @@ export function LiveRecordingView({
         ) : actions.length === 0 ? (
           /* Empty State */
           <section className='text-center py-12'>
-             <Play className="w-12 h-12 mx-auto text-gray-600 mb-3" />
+             <MousePointerClick className="w-12 h-12 mx-auto text-gray-600 mb-3" />
               <h3 className="text-sm font-semibold text-gray-300 mb-2">No Actions Recorded</h3>
               <p className="text-xs text-gray-500">
                 {isRecording ? 'Perform actions to see them here' : 'Start recording to capture actions'}

@@ -429,6 +429,96 @@ Letters: a, b, c (lowercase) or with Shift modifier for uppercase`
     }
   },
   {
+    name: 'file_upload',
+    description: `Upload files to a file input element. Handles single and multiple file uploads with proper validation.
+
+✅ VALID FILE INPUT SELECTORS:
+- Type: input[type="file"]
+- Data attrs: [data-testid="file-upload"], [data-component="file-input"]
+- ID: #file-upload, #attachment-input
+- ARIA: input[aria-label="Upload file"]
+- Class: input.file-upload (use with type for specificity)
+
+🎯 FILE PATH REQUIREMENTS:
+- **CRITICAL**: Use ABSOLUTE file paths from the recording
+- Paths must be complete system paths (e.g., /Users/username/Documents/file.pdf)
+- For multiple files, provide array of absolute paths
+- Files must exist at the specified locations
+
+📁 RECORDING DATA USAGE:
+- The recorded file-upload action contains "metadata.absolutePaths"
+- **ALWAYS use these exact paths from the recording**
+- Example from recording:
+  {
+    "type": "file-upload",
+    "metadata": {
+      "absolutePaths": ["/Users/abhinandan/Documents/image-mask.png"]
+    }
+  }
+- Use: filePaths: "/Users/abhinandan/Documents/image-mask.png"
+
+⚠️ COMMON MISTAKES TO AVOID:
+- Don't use fake, relative or assumed paths (eg, C:\\fakepath\\file.pdf, ./file.pdf, ../documents/file.pdf)
+
+🔄 SINGLE VS MULTIPLE FILES:
+- Single file: filePaths: "/path/to/file.pdf"
+- Multiple files: filePaths: ["/path/to/file1.pdf", "/path/to/file2.pdf"]
+- Check if input has "multiple" attribute for multi-file support
+
+📝 BEST PRACTICES:
+- Extract absolute paths from recording metadata & verify they exist
+- Provide backup selectors for file input
+- Check upload progress/validation after upload`,
+    input_schema: {
+      type: 'object',
+      properties: {
+        selector: {
+          type: 'string',
+          description: `Primary CSS selector for file input. Must be input[type="file"]. Examples:
+- input[type="file"] (generic)
+- [data-testid="file-upload"] (data attribute - best)
+- #file-input (ID if available)
+- input[aria-label="Upload file"] (ARIA label)
+
+IMPORTANT: File inputs are often hidden (display:none) - this is normal and handled automatically.`
+        },
+        backupSelectors: {
+          type: 'array',
+          description: `REQUIRED: Backup selectors for file input. Use different strategies. Examples:
+["input[type='file']", "[data-component='file-input']", "#file-upload"]
+["[data-testid='upload']", "input.file-input", "[aria-label='Upload']"]`,
+          items: { type: 'string' }
+        },
+        filePaths: {
+          description: `ABSOLUTE file path(s) to upload. **CRITICAL**: Use exact paths from recording metadata.
+
+For single file (string):
+- "/Users/username/Documents/report.pdf"
+- "/home/user/images/photo.jpg"
+
+For multiple files (array):
+- ["/Users/username/file1.pdf", "/Users/username/file2.pdf"]
+
+**ALWAYS extract from recording's metadata.absolutePaths field.**`,
+          oneOf: [
+            { type: 'string', description: 'Single file: absolute path' },
+            { 
+              type: 'array', 
+              items: { type: 'string' },
+              description: 'Multiple files: array of absolute paths'
+            }
+          ]
+        },
+        waitForElement: {
+          type: 'number',
+          description: 'Wait time before uploading (milliseconds). Use 1500-2000 for dynamically loaded inputs. Default: 1000',
+          default: 1000
+        }
+      },
+      required: ['selector', 'backupSelectors', 'filePaths']
+    }
+  },
+  {
     name: 'extract_context',
     description: `Extract browser and DOM context for analysis and decision-making.
 

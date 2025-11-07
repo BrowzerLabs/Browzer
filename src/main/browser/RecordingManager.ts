@@ -27,6 +27,9 @@ export class RecordingManager {
   private lastActiveTabId: string | null = null;
   private activeVideoRecorder: VideoRecorder | null = null;
 
+  private fileDialogCleanup: (() => void) | null = null;
+  private consoleMessageListener: ((event: any, level: number, message: string) => void) | null = null;
+
   constructor(
     private recordingStore: RecordingStore,
     private browserUIView?: WebContentsView
@@ -97,6 +100,8 @@ export class RecordingManager {
         activeTab.view.webContents.id,
         this.recordingState.recordingId
       );
+
+      this.fileDialogCleanup = this.setupFileDialogInterception(activeTab);
       
       // Start video recording on active tab
       this.activeVideoRecorder = activeTab.videoRecorder;
@@ -133,8 +138,15 @@ export class RecordingManager {
       return [];
     }
 
+    if (this.fileDialogCleanup) {
+      console.log('🧹 Cleaning up file dialog interception...');
+      this.fileDialogCleanup();
+      this.fileDialogCleanup = null;
+    }
+
     // Stop centralized action recording
     const actions = await this.centralRecorder.stopRecording();
+    this.recordingState.isRecording = false;
     
     // Stop video recording from active video recorder
     let videoPath: string | null = null;
@@ -335,7 +347,14 @@ export class RecordingManager {
       );
       
       this.lastActiveTabId = newTab.id;
+      // Re-setup file dialog interception on new tab
+      if (this.fileDialogCleanup) {
+        this.fileDialogCleanup(); // Cleanup old tab listener
+      }
+      this.fileDialogCleanup = this.setupFileDialogInterception(newTab);
       
+      console.log('🔄 File dialog interception re-setup for new tab');
+        
       console.log('✅ Recording switched to new tab successfully');
       
     } catch (error) {
@@ -383,6 +402,126 @@ export class RecordingManager {
   private countTabSwitchActions(actions: RecordedAction[]): number {
     return actions.filter(action => action.type === 'tab-switch').length;
   }
+
+  /**
+ * Setup file dialog interception for accurate file upload recording
+ * Uses CDP File.setInterceptionEnabled to intercept file chooser
+ */
+private setupFileDialogInterception(activeTab: Tab): () => void {
+  const { dialog } = require('electron');
+  
+  let currentSelector: string | null = null;
+  let currentTimestamp: number | null = null;
+  let isHandlingFileChooser = false;
+  
+  // Setup console message listener to track file input clicks
+  this.consoleMessageListener = async (event: any, level: number, message: string) => {
+    if (!this.recordingState.isRecording) return;
+    
+    // Detect file input click
+    if (message.includes('[BROWZER_FILE_INPUT_CLICK]')) {
+      try {
+        const jsonStart = message.indexOf('{');
+        const jsonStr = message.substring(jsonStart);
+        const data = JSON.parse(jsonStr);
+        
+        console.log('📂 File input clicked during recording:', data.selector);
+        
+        // Store selector for correlation
+        currentSelector = data.selector;
+        currentTimestamp = data.timestamp;
+        
+        // Prevent multiple dialogs
+        if (isHandlingFileChooser) {
+          console.log('⏳ Already handling file chooser, skipping...');
+          return;
+        }
+        
+        isHandlingFileChooser = true;
+        
+        // Small delay to let browser's native dialog attempt to open
+        // We'll intercept it before it shows
+        setTimeout(async () => {
+          try {
+            // Show our custom dialog
+            const dialogResult = await dialog.showOpenDialog({
+              properties: ['openFile', 'multiSelections'],
+              title: 'Select files to upload',
+            });
+            
+            if (!dialogResult.canceled && dialogResult.filePaths.length > 0) {
+              console.log('✅ Files selected:', dialogResult.filePaths);
+              
+              // Record the file upload action with real paths
+              this.centralRecorder.handleFileDialogResult(
+                currentSelector || 'input[type="file"]',
+                dialogResult.filePaths,
+                currentTimestamp || Date.now()
+              );
+              
+              // Use CDP to set files on the input element
+              try {
+                const dbg = activeTab.view.webContents.debugger;
+                if (!dbg.isAttached()) {
+                  await dbg.attach('1.3');
+                }
+                
+                const fileNames = dialogResult.filePaths.map((p: string) => p.split(/[/\\]/).pop()).join(', ');
+                
+                // Execute script to trigger change event
+                await dbg.sendCommand('Runtime.evaluate', {
+                  expression: `
+                    (function() {
+                      const input = document.querySelector('${currentSelector?.replace(/'/g, "\\'")}');
+                      if (input && input.tagName === 'INPUT' && input.type === 'file') {
+                        // Trigger change event to notify the page
+                        input.dispatchEvent(new Event('change', { bubbles: true }));
+                        input.dispatchEvent(new Event('input', { bubbles: true }));
+                        
+                        return { success: true, fileCount: ${dialogResult.filePaths.length}, files: '${fileNames}' };
+                      }
+                      return { success: false, error: 'Input not found' };
+                    })();
+                  `,
+                  returnByValue: true
+                });
+                
+                console.log('📄 Files injected into page');
+              } catch (cdpError) {
+                console.error('CDP file injection failed:', cdpError);
+              }
+            } else {
+              console.log('❌ File selection cancelled');
+            }
+          } finally {
+            isHandlingFileChooser = false;
+            currentSelector = null;
+            currentTimestamp = null;
+          }
+        }, 50);
+        
+      } catch (error) {
+        console.error('Error handling file input click:', error);
+        isHandlingFileChooser = false;
+      }
+    }
+  };
+  
+  activeTab.view.webContents.on('console-message', this.consoleMessageListener);
+  
+  console.log('✅ File dialog interception setup complete');
+  
+  // Return cleanup function
+  return () => {
+    // Remove console message listener
+    if (this.consoleMessageListener) {
+      activeTab.view.webContents.removeListener('console-message', this.consoleMessageListener);
+      this.consoleMessageListener = null;
+    }
+    
+    console.log('🧹 File dialog interception cleaned up');
+  };
+}
 
   /**
    * Clean up

@@ -70,8 +70,6 @@ export class ElementFinder extends BaseHandler {
     if (secondBest && Math.abs(bestMatch.score - secondBest.score) < 10) {
       console.warn(`[ElementFinder] ⚠️ Multiple similar matches found! Scores are close. Using best match but this may be ambiguous.`);
     }
-    console.log("scoredCandidates: ", scoredCandidates);
-
     return {
       success: true,
       usedSelector: bestMatch.selector,
