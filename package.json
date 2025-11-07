@@ -32,6 +32,7 @@
         "dmg",
         "zip"
       ],
+      "icon": "assets/icon.icns",
       "category": "public.app-category.productivity",
       "hardenedRuntime": true,
       "gatekeeperAssess": false,
