@@ -8,6 +8,10 @@
     "start": "electron-forge start",
     "package": "electron-forge package",
     "make": "electron-forge make",
+    "make:mac": "NODE_ENV=production electron-forge make --platform darwin",
+    "make:dmg": "NODE_ENV=production electron-forge make --platform darwin --arch x64",
+    "make:arm64": "NODE_ENV=production electron-forge make --platform darwin --arch arm64",
+    "make:universal": "NODE_ENV=production electron-forge make --platform darwin --arch universal",
     "publish": "electron-forge publish",
     "lint": "eslint --ext .ts,.tsx ."
   },
@@ -17,6 +21,42 @@
     "email": "abhinandanverma551@gmail.com"
   },
   "license": "MIT",
+  "build": {
+    "appId": "com.browzer.app",
+    "productName": "Browzer",
+    "directories": {
+      "buildResources": "assets"
+    },
+    "mac": {
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "category": "public.app-category.productivity",
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "entitlements": "entitlements.mac.plist",
+      "entitlementsInherit": "entitlements.mac.plist",
+      "notarize": {
+        "teamId": "${APPLE_TEAM_ID}"
+      }
+    },
+    "dmg": {
+      "contents": [
+        {
+          "x": 130,
+          "y": 220,
+          "type": "file"
+        },
+        {
+          "x": 410,
+          "y": 220,
+          "type": "link",
+          "path": "/Applications"
+        }
+      ]
+    }
+  },
   "pnpm": {
     "onlyBuiltDependencies": [
       "@tailwindcss/oxide",
@@ -59,6 +99,7 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.66.0",
+    "@electron-forge/maker-dmg": "^7.10.2",
     "@radix-ui/react-accordion": "^1.2.12",
     "@radix-ui/react-alert-dialog": "^1.1.15",
     "@radix-ui/react-avatar": "^1.1.10",
@@ -82,8 +123,10 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "date-fns": "^4.1.0",
+    "electron-log": "^5.1.7",
     "electron-squirrel-startup": "^1.0.1",
     "electron-store": "^11.0.2",
+    "electron-updater": "^6.6.2",
     "eventsource": "^4.0.0",
     "input-otp": "^1.4.2",
     "lucide-react": "^0.545.0",

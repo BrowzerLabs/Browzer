@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <!-- Hardened Runtime Entitlements -->
+  <key>com.apple.security.cs.allow-jit</key>
+  <true/>
+  <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+  <true/>
+  <key>com.apple.security.cs.disable-executable-page-protection</key>
+  <true/>
+  
+  <!-- Network Entitlements -->
+  <key>com.apple.security.network.client</key>
+  <true/>
+  <key>com.apple.security.network.server</key>
+  <true/>
+  
+  <!-- File Access Entitlements -->
+  <key>com.apple.security.files.user-selected.read-write</key>
+  <true/>
+  <key>com.apple.security.files.downloads.read-write</key>
+  <true/>
+  
+  <!-- Camera and Microphone (for video recording) -->
+  <key>com.apple.security.device.camera</key>
+  <true/>
+  <key>com.apple.security.device.microphone</key>
+  <true/>
+  
+  <!-- Screen Recording -->
+  <key>com.apple.security.device.screen-capture</key>
+  <true/>
+  
+  <!-- Pasteboard Access -->
+  <key>com.apple.security.pasteboard.read-write</key>
+  <true/>
+  
+  <!-- WebAuthn/Passkey Support -->
+  <key>com.apple.security.smartcard</key>
+  <true/>
+  
+  <!-- Temporary Files -->
+  <key>com.apple.security.temporary-exception.files.absolute-path.read-write</key>
+  <array>
+    <string>/private/tmp</string>
+    <string>/private/var/tmp</string>
+  </array>
+</dict>
+</plist>
