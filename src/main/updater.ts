@@ -2,36 +2,26 @@ import { app, dialog, BrowserWindow } from 'electron';
 import { autoUpdater } from 'electron-updater';
 import log from 'electron-log';
 
-/**
- * Setup auto-updater for Browzer
- * Handles checking for updates, downloading, and installing new versions
- */
 export function setupAutoUpdater(mainWindow: BrowserWindow | null) {
-  // Configure logging
   autoUpdater.logger = log;
   autoUpdater.autoInstallOnAppQuit = true;
 
-  // Log environment info
   log.info(`App version: ${app.getVersion()}`);
   log.info(`Platform: ${process.platform} ${process.arch}`);
 
-  // Configure update server (GitHub releases)
   autoUpdater.setFeedURL({
     provider: 'github',
-    owner: 'BrowzerLabs',      // Replace with your GitHub username
-    repo: 'browzer',            // Replace with your repository name
-    releaseType: 'release',     // Use 'prerelease' to include beta versions
+    owner: 'BrowzerLabs',
+    repo: 'Browzer',
+    releaseType: 'release',
   });
 
-  // Check for updates on app startup
   autoUpdater.checkForUpdatesAndNotify();
 
-  // Periodically check for updates (every 60 minutes)
   setInterval(() => {
     autoUpdater.checkForUpdatesAndNotify();
   }, 60 * 60 * 1000);
 
-  // Handle update available
   autoUpdater.on('update-available', (info) => {
     log.info('Update available:', info.version);
     
@@ -44,12 +34,10 @@ export function setupAutoUpdater(mainWindow: BrowserWindow | null) {
     }
   });
 
-  // Handle update not available
   autoUpdater.on('update-not-available', (info) => {
     log.info('Update not available, running latest version:', info.version);
   });
 
-  // Handle update download progress
   autoUpdater.on('download-progress', (progressObj) => {
     const { bytesPerSecond, percent, transferred, total } = progressObj;
     
@@ -67,7 +55,6 @@ export function setupAutoUpdater(mainWindow: BrowserWindow | null) {
     }
   });
 
-  // Handle update downloaded
   autoUpdater.on('update-downloaded', (info) => {
     log.info('Update downloaded:', info.version);
 
@@ -92,13 +79,10 @@ export function setupAutoUpdater(mainWindow: BrowserWindow | null) {
           }
         });
     } else {
-      // If no main window, install immediately
       log.info('No main window, installing update immediately');
       autoUpdater.quitAndInstall();
     }
   });
-
-  // Handle errors
   autoUpdater.on('error', (error) => {
     log.error('Update error:', error);
 
@@ -109,7 +93,6 @@ export function setupAutoUpdater(mainWindow: BrowserWindow | null) {
     }
   });
 
-  // Handle checking for update
   autoUpdater.on('checking-for-update', () => {
     log.info('Checking for updates...');
     
@@ -119,10 +102,6 @@ export function setupAutoUpdater(mainWindow: BrowserWindow | null) {
   });
 }
 
-/**
- * Manually trigger update check
- * Can be called from renderer process via IPC
- */
 export async function checkForUpdates() {
   try {
     log.info('Manual update check triggered');
@@ -134,19 +113,11 @@ export async function checkForUpdates() {
   }
 }
 
-/**
- * Install update and restart
- * Can be called from renderer process via IPC
- */
 export function installUpdate() {
   log.info('Installing update and restarting...');
   autoUpdater.quitAndInstall();
 }
 
-/**
- * Download update manually
- * Useful if you want to show custom UI for download progress
- */
 export async function downloadUpdate() {
   try {
     log.info('Manually downloading update...');

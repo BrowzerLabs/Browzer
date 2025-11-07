@@ -26,17 +26,7 @@ const config: ForgeConfig = {
       appleIdPassword: process.env.APPLE_APP_SPECIFIC_PASSWORD!,
       teamId: process.env.APPLE_TEAM_ID!
     },
-    darwinDarkModeSupport: true,
-    ignore: [
-      /\.git/,
-      /node_modules\/(?!.*\.node$)/,
-      /\.env/,
-      /\.env\.local/,
-      /src/,
-      /\.ts$/,
-      /\.tsx$/,
-      /\.map$/
-    ]
+    darwinDarkModeSupport: true
   },
   rebuildConfig: {},
   makers: [
