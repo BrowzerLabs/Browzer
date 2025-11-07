@@ -1,0 +1,14 @@
+{
+  "debug.javascript.usePreview": true,
+  "debug.node.autoAttach": "off",
+  "typescript.tsdk": "node_modules/typescript/lib",
+  "files.exclude": {
+    "**/.vite": true,
+    "**/out": true
+  },
+  "search.exclude": {
+    "**/.vite": true,
+    "**/out": true,
+    "**/node_modules": true
+  }
+}
