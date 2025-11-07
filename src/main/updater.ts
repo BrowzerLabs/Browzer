@@ -1,8 +1,8 @@
-import { app, dialog, BrowserWindow } from 'electron';
+import { app, dialog, WebContents, BaseWindow } from 'electron';
 import { autoUpdater } from 'electron-updater';
 import log from 'electron-log';
 
-export function setupAutoUpdater(mainWindow: BrowserWindow | null) {
+export function setupAutoUpdater(webContents: WebContents | null, window?: BaseWindow | null) {
   autoUpdater.logger = log;
   autoUpdater.autoInstallOnAppQuit = true;
 
@@ -25,8 +25,8 @@ export function setupAutoUpdater(mainWindow: BrowserWindow | null) {
   autoUpdater.on('update-available', (info) => {
     log.info('Update available:', info.version);
     
-    if (mainWindow) {
-      mainWindow.webContents.send('update:available', {
+    if (webContents && !webContents.isDestroyed()) {
+      webContents.send('update:available', {
         version: info.version,
         releaseDate: info.releaseDate,
         releaseNotes: info.releaseNotes,
@@ -45,8 +45,8 @@ export function setupAutoUpdater(mainWindow: BrowserWindow | null) {
       `Download progress: ${percent.toFixed(2)}% (${transferred}/${total} bytes, ${bytesPerSecond} bytes/sec)`
     );
 
-    if (mainWindow) {
-      mainWindow.webContents.send('update:download-progress', {
+    if (webContents && !webContents.isDestroyed()) {
+      webContents.send('update:download-progress', {
         percent: Math.round(percent),
         transferred,
         total,
@@ -58,9 +58,9 @@ export function setupAutoUpdater(mainWindow: BrowserWindow | null) {
   autoUpdater.on('update-downloaded', (info) => {
     log.info('Update downloaded:', info.version);
 
-    if (mainWindow) {
+    if (webContents && !webContents.isDestroyed()) {
       dialog
-        .showMessageBox(mainWindow, {
+        .showMessageBox(window || undefined, {
           type: 'info',
           title: 'Update Available',
           message: `Browzer v${info.version} is ready to install`,
@@ -75,19 +75,22 @@ export function setupAutoUpdater(mainWindow: BrowserWindow | null) {
             autoUpdater.quitAndInstall();
           } else {
             log.info('User deferred update installation');
-            mainWindow?.webContents.send('update:deferred');
+            if (webContents && !webContents.isDestroyed()) {
+              webContents.send('update:deferred');
+            }
           }
         });
     } else {
-      log.info('No main window, installing update immediately');
+      log.info('No webContents, installing update immediately');
       autoUpdater.quitAndInstall();
     }
   });
+
   autoUpdater.on('error', (error) => {
     log.error('Update error:', error);
 
-    if (mainWindow) {
-      mainWindow.webContents.send('update:error', {
+    if (webContents && !webContents.isDestroyed()) {
+      webContents.send('update:error', {
         message: error.message,
       });
     }
@@ -96,8 +99,8 @@ export function setupAutoUpdater(mainWindow: BrowserWindow | null) {
   autoUpdater.on('checking-for-update', () => {
     log.info('Checking for updates...');
     
-    if (mainWindow) {
-      mainWindow.webContents.send('update:checking');
+    if (webContents && !webContents.isDestroyed()) {
+      webContents.send('update:checking');
     }
   });
 }
