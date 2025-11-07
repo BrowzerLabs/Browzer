@@ -3,13 +3,40 @@ import { MakerSquirrel } from '@electron-forge/maker-squirrel';
 import { MakerZIP } from '@electron-forge/maker-zip';
 import { MakerDeb } from '@electron-forge/maker-deb';
 import { MakerRpm } from '@electron-forge/maker-rpm';
+import { MakerDMG } from '@electron-forge/maker-dmg';
 import { VitePlugin } from '@electron-forge/plugin-vite';
 import { FusesPlugin } from '@electron-forge/plugin-fuses';
 import { FuseV1Options, FuseVersion } from '@electron/fuses';
+import path from 'path';
+
 
 const config: ForgeConfig = {
   packagerConfig: {
+    name: 'Browzer',
     asar: true,
+    icon: './assets/icon',
+    appBundleId: 'com.browzer.app',
+    appCategoryType: 'public.app-category.productivity',
+    osxSign: {
+      identity: process.env.APPLE_IDENTITY,
+      identityValidation: true,
+    },
+    osxNotarize: {
+      appleId: process.env.APPLE_ID!,
+      appleIdPassword: process.env.APPLE_APP_SPECIFIC_PASSWORD!,
+      teamId: process.env.APPLE_TEAM_ID!
+    },
+    darwinDarkModeSupport: true,
+    ignore: [
+      /\.git/,
+      /node_modules\/(?!.*\.node$)/,
+      /\.env/,
+      /\.env\.local/,
+      /src/,
+      /\.ts$/,
+      /\.tsx$/,
+      /\.map$/
+    ]
   },
   rebuildConfig: {},
   makers: [
@@ -17,14 +44,26 @@ const config: ForgeConfig = {
     new MakerZIP({}, ['darwin']),
     new MakerRpm({}),
     new MakerDeb({}),
+    new MakerDMG({
+      // background: './assets/dmg-background.png',
+      icon: './assets/icon.icns',
+      format: 'ULFO',
+      contents: (opts) => {
+        return [
+          { x: 130, y: 220, type: 'file', path: opts.appPath },
+          { x: 410, y: 220, type: 'link', path: '/Applications' }
+        ];
+      },
+      additionalDMGOptions: {
+        window: { size: { width: 540, height: 380 } },
+        "background-color": "#fff",
+      }
+    }),
   ],
   plugins: [
     new VitePlugin({
-      // `build` can specify multiple entry builds, which can be Main process, Preload scripts, Worker process, etc.
-      // If you are familiar with Vite configuration, it will look really familiar.
       build: [
         {
-          // `entry` is just an alias for `build.lib.entry` in the corresponding file of `config`.
           entry: 'src/main.ts',
           config: 'vite.main.config.ts',
           target: 'main',
@@ -42,8 +81,6 @@ const config: ForgeConfig = {
         },
       ],
     }),
-    // Fuses are used to enable/disable various Electron functionality
-    // at package time, before code signing the application
     new FusesPlugin({
       version: FuseVersion.V1,
       [FuseV1Options.RunAsNode]: false,
