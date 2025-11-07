@@ -286,9 +286,9 @@ export function SubscriptionPage() {
         {availableUpgrades.length > 0 && (
           <div>
             <h2 className="text-2xl font-semibold mb-4 ml-2">
-              {subscription.tier === SubscriptionTier.FREE
+              {subscription.tier !== SubscriptionTier.BUSINESS
                 ? 'Upgrade Your Plan'
-                : 'Available Upgrades'}
+                : 'Available Plans'}
             </h2>
             <div className="grid md:grid-cols-2 gap-6">
               {availableUpgrades.map((plan) => (
@@ -326,7 +326,9 @@ export function SubscriptionPage() {
                     onClick={() => handleUpgrade(plan.tier)}
                     disabled={upgrading}
                   >
-                    Upgrade to {plan.name}
+                    {
+                      plan.price_monthly > currentPlan.price_monthly ? 'Upgrade' : 'Downgrade'
+                    } to {plan.name}
                   </Button>
                 </Card>
               ))}
