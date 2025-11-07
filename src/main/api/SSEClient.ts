@@ -115,7 +115,7 @@ export class SSEClient extends EventEmitter {
     };
 
     this.eventSource.onerror = (error: any) => {
-      console.error('[SSEClient] SSE error:', error);
+      console.error('[SSEClient] SSE error:', error.message);
       
       // EventSource automatically tries to reconnect, but we want more control
       // readyState: 0 = CONNECTING, 1 = OPEN, 2 = CLOSED
