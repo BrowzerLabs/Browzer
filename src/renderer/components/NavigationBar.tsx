@@ -1,5 +1,5 @@
 import { useState, useEffect, KeyboardEvent } from 'react';
-import { ArrowLeft, ArrowRight, RotateCw, X, Lock, Globe, Circle, Square, Settings, Clock, User, MoreVertical, Video, ChevronRight, ChevronLeft, Loader2, LogOut } from 'lucide-react';
+import { ArrowLeft, ArrowRight, RotateCw, X, Lock, Globe, Circle, Square, Settings, Clock, User, MoreVertical, Video, ChevronRight, ChevronLeft, Loader2, LogOut, DiamondIcon } from 'lucide-react';
 import type { TabInfo } from '@/shared/types';
 import { cn } from '@/renderer/lib/utils';
 import { useSidebarStore } from '@/renderer/store/useSidebarStore';
@@ -180,6 +180,10 @@ export function NavigationBar({
                   </AvatarFallback>
                 </Avatar>
                 {user?.display_name || 'Profile'}
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => onNavigate('browzer://subscription')}>
+                <DiamondIcon className="w-4 h-4 mr-2" />
+                Subscription
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={() => onNavigate('browzer://settings')}>

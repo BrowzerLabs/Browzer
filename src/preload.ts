@@ -10,6 +10,7 @@ import {
   PortalSessionResponse, 
   CreditUsageResponse 
 } from '@/shared/types/subscription';
+import { NotificationPayload } from '@/shared/types/notification';
 
 
 export interface BrowserAPI {
@@ -173,6 +174,16 @@ export interface SubscriptionAPI {
   useCredits: (creditsToUse: number) => Promise<CreditUsageResponse>;
   hasCredits: (creditsNeeded: number) => Promise<boolean>;
   getCreditsRemaining: () => Promise<number>;
+  
+  // Event Listeners
+  onSubscriptionUpdate: (callback: (data: any) => void) => () => void;
+  
+  // Utility
+  openExternal: (url: string) => Promise<void>;
+}
+
+export interface NotificationAPI {
+  onNotification: (callback: (notification: NotificationPayload) => void) => () => void;
 }
 
 const browserAPI: BrowserAPI = {
@@ -209,11 +220,7 @@ const browserAPI: BrowserAPI = {
   onTabsUpdated: (callback) => {
     const subscription = (_event: Electron.IpcRendererEvent, data: { tabs: TabInfo[]; activeTabId: string | null }) => callback(data);
     ipcRenderer.on('browser:tabs-updated', subscription);
-    
-    // Return unsubscribe function
-    return () => {
-      ipcRenderer.removeListener('browser:tabs-updated', subscription);
-    };
+    return () => ipcRenderer.removeListener('browser:tabs-updated', subscription);
   },
 
   onRecordingAction: (callback) => {
@@ -370,7 +377,7 @@ const browserAPI: BrowserAPI = {
     return () => ipcRenderer.removeListener('deeplink:navigate', subscription);
   },
   
-  // Deep Link actions
+  // tab actions
   hideAllTabs: () => ipcRenderer.invoke('deeplink:hide-tabs'),
   showAllTabs: () => ipcRenderer.invoke('deeplink:show-tabs'),
   navigateToTab: (url: string) => ipcRenderer.invoke('deeplink:navigate-tab', url),
@@ -407,8 +414,27 @@ const subscriptionAPI: SubscriptionAPI = {
   useCredits: (creditsToUse: number) => ipcRenderer.invoke('subscription:use-credits', creditsToUse),
   hasCredits: (creditsNeeded: number) => ipcRenderer.invoke('subscription:has-credits', creditsNeeded),
   getCreditsRemaining: () => ipcRenderer.invoke('subscription:get-credits-remaining'),
+  
+  // Event listener for real-time subscription updates
+  onSubscriptionUpdate: (callback) => {
+    const subscription = (_event: Electron.IpcRendererEvent, data: any) => callback(data);
+    ipcRenderer.on('subscription_update', subscription);
+    return () => ipcRenderer.removeListener('subscription_update', subscription);
+  },
+  
+  openExternal: (url: string) => ipcRenderer.invoke('shell:open-external', url),
+};
+
+// Notification API implementation
+const notificationAPI: NotificationAPI = {
+  onNotification: (callback) => {
+    const subscription = (_event: Electron.IpcRendererEvent, notification: NotificationPayload) => callback(notification);
+    ipcRenderer.on('notification', subscription);
+    return () => ipcRenderer.removeListener('notification', subscription);
+  },
 };
 
 contextBridge.exposeInMainWorld('browserAPI', browserAPI);
 contextBridge.exposeInMainWorld('authAPI', authAPI);
 contextBridge.exposeInMainWorld('subscriptionAPI', subscriptionAPI);
+contextBridge.exposeInMainWorld('notificationAPI', notificationAPI);

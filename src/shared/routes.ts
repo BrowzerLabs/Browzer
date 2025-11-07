@@ -21,6 +21,18 @@ export const ROUTES: Record<string, RouteConfig> = {
     path: '/auth/callback',
     title: 'OAuth Callback',
   },
+  'subscription/success': {
+    path: '/subscription/success',
+    title: 'Subscription Success',
+  },
+  'subscription/cancel': {
+    path: '/subscription/cancel',
+    title: 'Checkout Cancelled',
+  },
+  pricing: {
+    path: '/pricing',
+    title: 'Pricing',
+  },
   settings: {
     path: '/settings',
     title: 'Settings',
@@ -40,6 +52,10 @@ export const ROUTES: Record<string, RouteConfig> = {
   profile: {
     path: '/profile',
     title: 'Profile',
+  },
+  subscription: {
+    path: '/subscription',
+    title: 'Subscription',
   },
 };
 

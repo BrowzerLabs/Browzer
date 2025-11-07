@@ -1,26 +1,14 @@
-/**
- * SSE (Server-Sent Events) Client for real-time server-to-client communication
- * 
- * Features:
- * - Automatic reconnection with exponential backoff
- * - Event-based message handling
- * - Connection state management
- * - Heartbeat monitoring
- * - Error handling and recovery
- * - Type-safe event emitters
- */
-
+import { WebContents } from 'electron';
 import { EventEmitter } from 'events';
 import { EventSource } from 'eventsource';
+import { tokenManager } from '@/main/auth/TokenManager';
 
 export interface SSEConfig {
   url: string;
   electronId: string;
-  apiKey: string;
-  getAccessToken: () => string | null;
   reconnectInterval?: number;
-  maxReconnectAttempts?: number;
   heartbeatTimeout?: number;
+  browserUIWebContents: WebContents;
 }
 
 export enum SSEConnectionState {
@@ -35,11 +23,11 @@ export class SSEClient extends EventEmitter {
   private eventSource: EventSource | null = null;
   private url: string;
   private electronId: string;
-  private apiKey: string;
-  private getAccessToken: () => string | null;
+  private browserUIWebContents: WebContents;
+
   private reconnectInterval: number;
-  private maxReconnectAttempts: number;
   private heartbeatTimeout: number;
+  private maxReconnectAttempts: number;
   private reconnectTimer: NodeJS.Timeout | null = null;
   private heartbeatTimer: NodeJS.Timeout | null = null;
   private reconnectAttempts = 0;
@@ -51,11 +39,11 @@ export class SSEClient extends EventEmitter {
     super();
     this.url = config.url;
     this.electronId = config.electronId;
-    this.apiKey = config.apiKey;
-    this.getAccessToken = config.getAccessToken || (() => null);
+    this.browserUIWebContents = config.browserUIWebContents;
+    
     this.reconnectInterval = config.reconnectInterval || 5000;
-    this.maxReconnectAttempts = config.maxReconnectAttempts || 5;
     this.heartbeatTimeout = config.heartbeatTimeout || 60000; // 60 seconds
+    this.maxReconnectAttempts = 20 
   }
 
   /**
@@ -71,17 +59,13 @@ export class SSEClient extends EventEmitter {
     this.shouldReconnect = true;
 
     try {
-      // Build SSE URL with authentication
       const sseUrl = `${this.url}?electron_id=${encodeURIComponent(this.electronId)}`;
 
-      // Create EventSource with custom fetch for headers (eventsource v4.x pattern)
       const headers: Record<string, string> = {
-        'X-API-Key': this.apiKey,
         'X-Electron-ID': this.electronId,
       };
       
-      // Add access token if available (fetched dynamically)
-      const accessToken = this.getAccessToken();
+      const accessToken = tokenManager.getAccessToken();
       if (accessToken) {
         headers['Authorization'] = `Bearer ${accessToken}`;
       }
@@ -98,10 +82,7 @@ export class SSEClient extends EventEmitter {
         }
       });
 
-      // Setup event listeners
       this.setupEventListeners();
-
-      console.log('[SSEClient] Connecting to SSE stream...');
 
     } catch (error) {
       console.error('[SSEClient] Connection failed:', error);
@@ -111,19 +92,14 @@ export class SSEClient extends EventEmitter {
     }
   }
 
-  /**
-   * Setup EventSource event listeners
-   */
   private setupEventListeners(): void {
     if (!this.eventSource) return;
 
-    // Connection opened
     this.eventSource.onopen = () => {
-      console.log('[SSEClient] Connected to SSE stream');
       this.setState(SSEConnectionState.CONNECTED);
       this.reconnectAttempts = 0;
       this.lastHeartbeat = Date.now();
-      this.emit('connected');
+      console.log('✅ [SSEClient] Connected successfully');
       this.startHeartbeatMonitor();
     };
 
@@ -131,32 +107,35 @@ export class SSEClient extends EventEmitter {
     this.eventSource.onmessage = (event: any) => {
       try {
         const data = JSON.parse(event.data);
+        console.log("Generic message handler: ", data);
         this.handleMessage(data);
       } catch (error) {
         console.error('[SSEClient] Failed to parse message:', error);
       }
     };
 
-    // Error handler
     this.eventSource.onerror = (error: any) => {
-      console.error('[SSEClient] SSE error:', error);
+      console.error('[SSEClient] SSE error:', error.message);
       
       // EventSource automatically tries to reconnect, but we want more control
       // readyState: 0 = CONNECTING, 1 = OPEN, 2 = CLOSED
       if (this.eventSource?.readyState === 2) {
-        console.log('[SSEClient] Connection closed by server');
+        console.log('[SSEClient] Connection closed, will attempt reconnection');
         this.cleanup();
         this.emit('disconnected');
         
         if (this.shouldReconnect) {
           this.scheduleReconnect();
         }
+      } else if (this.eventSource?.readyState === 0) {
+        // Still connecting, wait a bit
+        console.log('[SSEClient] Connection in progress...');
       } else {
+        // Emit error but don't stop reconnection
         this.emit('error', error);
       }
     };
 
-    // Listen for specific event types
     this.setupCustomEventListeners();
   }
 
@@ -164,79 +143,21 @@ export class SSEClient extends EventEmitter {
    * Setup listeners for custom event types
    */
   private setupCustomEventListeners(): void {
-    if (!this.eventSource) return;
-
     // Connection established event
     this.eventSource.addEventListener('connection_established', (event: MessageEvent) => {
-      try {
         const data = JSON.parse(event.data);
-        console.log('[SSEClient] Connection established:', data.message);
         this.emit('connection_established', data);
-      } catch (error) {
-        console.error('[SSEClient] Failed to parse connection_established event:', error);
-      }
     });
 
     // Heartbeat event
     this.eventSource.addEventListener('heartbeat', (event: MessageEvent) => {
-      try {
-        const data = JSON.parse(event.data);
-        this.lastHeartbeat = Date.now();
-        this.emit('heartbeat', data);
-      } catch (error) {
-        console.error('[SSEClient] Failed to parse heartbeat event:', error);
-      }
-    });
-
-    // Automation progress event
-    this.eventSource.addEventListener('automation_progress', (event: MessageEvent) => {
-      try {
-        const data = JSON.parse(event.data);
-        this.emit('automation_progress', data);
-      } catch (error) {
-        console.error('[SSEClient] Failed to parse automation_progress event:', error);
-      }
+      this.lastHeartbeat = Date.now();
     });
 
     // Notification event
     this.eventSource.addEventListener('notification', (event: MessageEvent) => {
-      try {
-        const data = JSON.parse(event.data);
-        this.emit('notification', data);
-      } catch (error) {
-        console.error('[SSEClient] Failed to parse notification event:', error);
-      }
-    });
-
-    // Command event
-    this.eventSource.addEventListener('command', (event: MessageEvent) => {
-      try {
-        const data = JSON.parse(event.data);
-        this.emit('command', data);
-      } catch (error) {
-        console.error('[SSEClient] Failed to parse command event:', error);
-      }
-    });
-
-    // Sync event
-    this.eventSource.addEventListener('sync', (event: MessageEvent) => {
-      try {
-        const data = JSON.parse(event.data);
-        this.emit('sync', data);
-      } catch (error) {
-        console.error('[SSEClient] Failed to parse sync event:', error);
-      }
-    });
-
-    // Error event
-    this.eventSource.addEventListener('error', (event: MessageEvent) => {
-      try {
-        const data = JSON.parse(event.data);
-        console.error('[SSEClient] Server error:', data);
-        this.emit('server_error', data);
-      } catch (error) {
-        console.error('[SSEClient] Failed to parse error event:', error);
-      }
+      const data = JSON.parse(event.data);
+      this.browserUIWebContents.send('notification', data);
     });
   }
 
@@ -246,20 +167,19 @@ export class SSEClient extends EventEmitter {
   private handleMessage(message: any): void {
     const { type, ...data } = message;
 
-    // Emit type-specific event
     if (type) {
       this.emit(type, data);
     }
 
-    // Emit generic message event
     this.emit('message', message);
+    this.browserUIWebContents.send('sse:message', message);
   }
 
   /**
    * Disconnect from SSE endpoint
    */
   disconnect(): void {
-    console.log('[SSEClient] Disconnecting...');
+    console.log('[SSEClient] Manual disconnect requested');
     this.shouldReconnect = false;
     this.cleanup();
     this.setState(SSEConnectionState.DISCONNECTED);
@@ -281,16 +201,17 @@ export class SSEClient extends EventEmitter {
       this.eventSource.close();
       this.eventSource = null;
     }
+    this.setState(SSEConnectionState.DISCONNECTED);
   }
 
   /**
-   * Schedule reconnection attempt
+   * Schedule reconnection attempt with exponential backoff
+   * Will keep trying until connection succeeds
    */
   private scheduleReconnect(): void {
     if (!this.shouldReconnect) {
       return;
     }
-
     if (this.reconnectAttempts >= this.maxReconnectAttempts) {
       console.error('[SSEClient] Max reconnection attempts reached');
       this.setState(SSEConnectionState.ERROR);
@@ -305,17 +226,20 @@ export class SSEClient extends EventEmitter {
     this.reconnectAttempts++;
     this.setState(SSEConnectionState.RECONNECTING);
 
-    // Exponential backoff
+    // Exponential backoff with max delay cap
     const delay = Math.min(
-      this.reconnectInterval * Math.pow(2, this.reconnectAttempts - 1),
-      30000 // Max 30 seconds
+      this.reconnectInterval * Math.pow(2, Math.min(this.reconnectAttempts - 1, 6)),
+      60000
     );
 
-    console.log(`[SSEClient] Reconnecting in ${delay}ms (attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts})...`);
+    console.log(`[SSEClient] Scheduling reconnect in ${delay}ms (attempt ${this.reconnectAttempts})`);
 
     this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = null;
-      this.connect();
+      this.connect().catch(err => {
+        console.error('[SSEClient] Reconnection attempt failed:', err);
+        // Will be handled by onerror and schedule another attempt
+      });
     }, delay);
   }
 
@@ -332,7 +256,7 @@ export class SSEClient extends EventEmitter {
         this.emit('heartbeat_timeout');
         this.scheduleReconnect();
       }
-    }, 10000); // Check every 10 seconds
+    }, 18000); // Check every 18 seconds
   }
 
   /**
@@ -381,5 +305,13 @@ export class SSEClient extends EventEmitter {
    */
   resetReconnectAttempts(): void {
     this.reconnectAttempts = 0;
+  }
+
+  async reconnectWithAuth(): Promise<void> {
+    console.log('[SSEClient] Reconnecting with updated authentication...');
+    this.cleanup();
+    this.shouldReconnect = true;
+    this.reconnectAttempts = 0;
+    await this.connect();
   }
 }

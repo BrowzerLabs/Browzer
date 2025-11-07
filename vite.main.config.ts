@@ -13,7 +13,7 @@ export default defineConfig({
   },
   build: {
     sourcemap: true,
-    minify: false,    
+    minify: false,
     rollupOptions: {
       external: ['better-sqlite3'],
       output: {

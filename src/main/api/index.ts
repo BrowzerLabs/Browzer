@@ -3,6 +3,8 @@
  */
 
 export { ApiClient, ApiConfig, ApiResponse } from './ApiClient';
-export { WebSocketClient, WebSocketConfig } from './WebSocketClient';
-export { ConnectionManager, ConnectionManagerConfig, ConnectionStatus } from './ConnectionManager';
+export { ConnectionService, ConnectionStatus } from './ConnectionService';
 export { api, initializeApi } from './api';
+
+// for future usecases, if needed
+export { WebSocketClient, WebSocketConfig } from './WebSocketClient';

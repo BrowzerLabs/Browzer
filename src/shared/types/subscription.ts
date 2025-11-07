@@ -4,7 +4,7 @@
  */
 
 export enum SubscriptionTier {
-  FREEMIUM = 'freemium',
+  FREE = 'free',
   PRO = 'pro',
   BUSINESS = 'business',
 }

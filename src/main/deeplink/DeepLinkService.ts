@@ -2,26 +2,18 @@ import { app, BaseWindow, WebContents } from 'electron';
 import { getRouteFromURL } from '@/shared/routes';
 
 export class DeepLinkService {
-  private static instance: DeepLinkService | null = null;
   private baseWindow: BaseWindow | null = null;
   private webContents: WebContents | null = null;
   private pendingDeepLink: string | null = null;
 
-  private constructor() {
-    this.setupDeepLinkHandlers();
-  }
-
-  public static getInstance(): DeepLinkService {
-    if (!DeepLinkService.instance) {
-      DeepLinkService.instance = new DeepLinkService();
-    }
-    return DeepLinkService.instance;
-  }
-
-  public setWindow(window: BaseWindow, webContents: WebContents): void {
-    this.baseWindow = window;
+  constructor(
+    baseWindow: BaseWindow,
+    webContents: WebContents
+  ) {
+    this.baseWindow = baseWindow;
     this.webContents = webContents;
-    
+    this.setupDeepLinkHandlers();
+
     if (this.pendingDeepLink) {
       this.handleDeepLink(this.pendingDeepLink);
       this.pendingDeepLink = null;

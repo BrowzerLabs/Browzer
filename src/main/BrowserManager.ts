@@ -284,10 +284,8 @@ export class BrowserManager {
   public navigateToBrowzerURL(url: string): void {
     const activeTab = this.tabManager.getActiveTab();
     if (activeTab) {
-      // Navigate existing tab
       this.navigate(activeTab.id, url);
     } else {
-      // Create new tab with this URL
       this.createTab(url);
     }
   }

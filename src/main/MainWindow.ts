@@ -3,55 +3,40 @@ import { WindowManager } from '@/main/window/WindowManager';
 import { LayoutManager } from '@/main/window/LayoutManager';
 import { IPCHandlers } from '@/main/ipc/IPCHandlers';
 import { DeepLinkService } from '@/main/deeplink/DeepLinkService';
-import { ConnectionManager, ConnectionManagerConfig } from './api';
+import { ConnectionService } from './api';
 import { AuthService } from '@/main/auth/AuthService';
 
-export class BrowserWindow {
+export class MainWindow {
   private windowManager: WindowManager;
   private layoutManager: LayoutManager;
   private browserManager: BrowserManager;
-  private connectionManager: ConnectionManager;
+  private connectionService: ConnectionService;
   private authService: AuthService;
   private ipcHandlers: IPCHandlers;
   private deepLinkService: DeepLinkService;
 
   constructor() {
-    // 1. Initialize window and views
     this.windowManager = new WindowManager();
     
     const baseWindow = this.windowManager.getWindow();
-    const browserUIView = this.windowManager.getAgentUIView();
+    const browserUIView = this.windowManager.getBrowserUIView();
     
     this.layoutManager = new LayoutManager(baseWindow);
 
-    // 2. Initialize browser manager (tabs + recording)
     this.browserManager = new BrowserManager(baseWindow, browserUIView);
 
-    // 3. Initialize deep link service
-    this.deepLinkService = DeepLinkService.getInstance();
-     // 4. Set deep link service window
-    this.deepLinkService.setWindow(baseWindow, browserUIView.webContents);
+    this.deepLinkService = new DeepLinkService(baseWindow, browserUIView.webContents);
 
-    // 5. Initialize AuthService
-    this.authService = new AuthService(this.browserManager);
+    this.connectionService = new ConnectionService(browserUIView.webContents);
 
-    // 6. Initialize connection manager callbacks
-    const connectionConfig: ConnectionManagerConfig = {
-      apiBaseURL: process.env.BACKEND_API_URL || 'http://localhost:8080',
-      apiKey: process.env.BACKEND_API_KEY || '',
-      getAccessToken: () => this.authService.getAccessToken(),
-      clearSession: () => this.authService.clearSession(),
-    };
-    
-    this.connectionManager = new ConnectionManager(connectionConfig);
-    this.connectionManager.initialize();
-
-    // 7. Initialize AuthService after API client is ready
-    this.authService.initialize().catch(err => {
+    this.authService = new AuthService(this.browserManager, this.connectionService);
+    this.authService.restoreSession().catch(err => {
       console.error('Failed to initialize AuthService:', err);
     });
-
-    // 8. Setup IPC communication
+    
+    // Set refresh callback for automatic token refresh
+    this.connectionService.setRefreshCallback(() => this.authService.refreshSession());
+    
     this.ipcHandlers = new IPCHandlers(
       this.browserManager,
       this.layoutManager,
@@ -59,10 +44,10 @@ export class BrowserWindow {
       this.authService
     );
 
-    // 9. Initial layout
+    // Initial layout
     this.updateLayout();
 
-    // 10. Listen for window resize
+    // Listen for window resize
     baseWindow.on('resize', () => {
       this.updateLayout();
     });
@@ -72,7 +57,7 @@ export class BrowserWindow {
    * Update layout when sidebar state or window size changes
    */
   private updateLayout(): void {
-    const browserUIView = this.windowManager.getAgentUIView();
+    const browserUIView = this.windowManager.getBrowserUIView();
     const baseWindow = this.windowManager.getWindow();
     
     if (!baseWindow) return;
@@ -85,7 +70,7 @@ export class BrowserWindow {
 
     // Update agent UI bounds
     if (browserUIView) {
-      const browserUIBounds = this.layoutManager.calculateAgentUIBounds();
+      const browserUIBounds = this.layoutManager.calculateBrowserUIBounds();
       browserUIView.setBounds(browserUIBounds);
     }
 
@@ -97,8 +82,8 @@ export class BrowserWindow {
     return this.windowManager.getWindow();
   }
 
-  public getAgentUIView() {
-    return this.windowManager.getAgentUIView();
+  public getBrowserUIView() {
+    return this.windowManager.getBrowserUIView();
   }
 
   public destroy(): void {

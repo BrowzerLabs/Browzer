@@ -45,6 +45,7 @@ export class IPCHandlers {
     this.setupAutomationHandlers();
     this.setupAuthHandlers();
     this.setupSubscriptionHandlers();
+    this.setupShellHandlers();
     this.setupDeepLinkHandlers();
   }
 
@@ -240,7 +241,7 @@ export class IPCHandlers {
   }
 
   private updateLayout(): void {
-    const browserUIView = this.windowManager.getAgentUIView();
+    const browserUIView = this.windowManager.getBrowserUIView();
     const baseWindow = this.windowManager.getWindow();
     
     if (!baseWindow) return;
@@ -252,7 +253,7 @@ export class IPCHandlers {
       : 0;
 
     if (browserUIView) {
-      const browserUIBounds = this.layoutManager.calculateAgentUIBounds();
+      const browserUIBounds = this.layoutManager.calculateBrowserUIBounds();
       browserUIView.setBounds(browserUIBounds);
     }
     
@@ -425,6 +426,12 @@ export class IPCHandlers {
 
     ipcMain.handle('subscription:get-credits-remaining', async () => {
       return this.subscriptionService.getCreditsRemaining();
+    });
+  }
+
+  private setupShellHandlers(): void {
+    ipcMain.handle('shell:open-external', async (_, url: string) => {
+      await shell.openExternal(url);
     });
   }
 

@@ -1,5 +1,4 @@
-import { BrowserWindow, session } from 'electron';
-import Store from 'electron-store';
+import { BrowserWindow, app } from 'electron';
 import {
   User,
   AuthSession,
@@ -11,26 +10,27 @@ import {
 } from '@/shared/types';
 import { BrowserManager } from '@/main/BrowserManager';
 import { api } from '@/main/api';
+import { tokenManager } from './TokenManager';
+import { ConnectionService } from '@/main/api';
 
 export class AuthService {
-  private sessionStore: Store;
-  private refreshTimer: NodeJS.Timeout | null = null;
+  private currentUser: User | null = null;
   private authWindow: BrowserWindow | null = null;
   private readonly browserManager: BrowserManager;
+  private readonly connectionService: ConnectionService;
 
   constructor(
     browserManager: BrowserManager,
+    connectionService: ConnectionService,
   ) {
     this.browserManager = browserManager;
-    this.sessionStore = new Store({
-      name: 'auth-session',
-      encryptionKey: 'browzer-auth-encryption-key', // In production, use env variable
+    this.connectionService = connectionService;
+    
+    app.on('token-refresh-needed' as any, () => {
+      this.handleTokenRefresh();
     });
   }
 
-  /**
-   * Sign up with email and password
-   */
   async signUp(credentials: SignUpCredentials): Promise<AuthResponse> {
     try {
       const response = await api.post<AuthResponse>(
@@ -64,9 +64,6 @@ export class AuthService {
     }
   }
 
-  /**
-   * Sign in with email and password
-   */
   async signIn(credentials: SignInCredentials): Promise<AuthResponse> {
     try {
       const response = await api.post<AuthResponse>(
@@ -91,8 +88,7 @@ export class AuthService {
 
       // If sign in successful, persist session
       if (authResponse.success && authResponse.session) {
-        this.persistSession(authResponse.session);
-        this.scheduleTokenRefresh(authResponse.session);
+        await this.persistSession(authResponse.session);
       }
 
       return authResponse;
@@ -107,13 +103,8 @@ export class AuthService {
     }
   }
 
-  /**
-   * Sign in with Google OAuth
-   * Opens OAuth window and handles callback
-   */
   async signInWithGoogle(): Promise<AuthResponse> {
     try {
-      // Step 1: Get OAuth URL from backend
       const urlResponse = await api.post<{ success: boolean; url?: string; error?: string }>(
         '/auth/oauth/url',
         {
@@ -138,7 +129,6 @@ export class AuthService {
       urlObj.searchParams.set('prompt', 'select_account');
       oauthUrl = urlObj.toString();
 
-      // Step 3: Open OAuth window 
       return new Promise((resolve) => {
         this.authWindow = new BrowserWindow({
           width: 500,
@@ -199,10 +189,6 @@ export class AuthService {
     }
   }
 
-  /**
-   * Handle OAuth callback URL
-   * Extracts code and exchanges it for session
-   */
   private async handleOAuthCallback(
     url: string,
     resolve: (value: AuthResponse) => void
@@ -213,7 +199,6 @@ export class AuthService {
       const code = urlObj.searchParams.get('code');
       const error = urlObj.searchParams.get('error');
 
-      // Handle OAuth errors
       if (error) {
         this.authWindow?.close();
         this.authWindow = null;
@@ -240,7 +225,6 @@ export class AuthService {
         return;
       }
 
-      // Exchange code for session
       const response = await api.post<AuthResponse>('/auth/oauth/callback', { code });
 
       if (!response.success || !response.data) {
@@ -258,10 +242,8 @@ export class AuthService {
 
       const authResponse = response.data;
 
-      // Persist session if successful
       if (authResponse.success && authResponse.session) {
-        this.persistSession(authResponse.session);
-        this.scheduleTokenRefresh(authResponse.session);
+        await this.persistSession(authResponse.session);
       }
 
       this.authWindow?.close();
@@ -280,20 +262,16 @@ export class AuthService {
     }
   }
 
-  /**
-   * Sign out
-   */
   async signOut(): Promise<{ success: boolean; error?: string }> {
     try {
-      const session = this.getStoredSession();
+      const accessToken = tokenManager.getAccessToken();
       
-      if (session) {
+      if (accessToken) {
         // Call backend signout endpoint
         await api.post<SimpleResponse>('/auth/signout');
       }
 
       this.clearSession();
-      this.cancelTokenRefresh();
       this.browserManager.destroy();
 
       return { success: true };
@@ -305,14 +283,11 @@ export class AuthService {
     }
   }
 
-  /**
-   * Get current session
-   */
   async getCurrentSession(): Promise<AuthSession | null> {
     try {
-      const storedSession = this.getStoredSession();
+      const accessToken = tokenManager.getAccessToken();
       
-      if (!storedSession) {
+      if (!accessToken) {
         return null;
       }
 
@@ -324,21 +299,36 @@ export class AuthService {
         return null;
       }
 
-      return storedSession;
+      // Reconstruct session from tokenManager and current user
+      const refreshToken = tokenManager.getRefreshToken();
+      const expiresAt = tokenManager.getExpiresAt();
+      
+      if (!refreshToken || !expiresAt) {
+        return null;
+      }
+
+      return {
+        user,
+        access_token: accessToken,
+        refresh_token: refreshToken,
+        expires_at: expiresAt,
+      };
     } catch (error) {
       console.error('Error getting current session:', error);
       return null;
     }
   }
 
-  /**
-   * Get current user
-   */
   async getCurrentUser(): Promise<User | null> {
     try {
-      const session = this.getStoredSession();
+      // Return cached user if available
+      if (this.currentUser) {
+        return this.currentUser;
+      }
+
+      const accessToken = tokenManager.getAccessToken();
       
-      if (!session) {
+      if (!accessToken) {
         return null;
       }
 
@@ -348,6 +338,7 @@ export class AuthService {
         return null;
       }
 
+      this.currentUser = response.data.user;
       return response.data.user;
     } catch (error) {
       console.error('Error getting current user:', error);
@@ -355,65 +346,57 @@ export class AuthService {
     }
   }
 
-  /**
-   * Refresh session
-   */
-  async refreshSession(): Promise<AuthResponse> {
+  async refreshSession(): Promise<boolean> {
     try {
-      const storedSession = this.getStoredSession();
+      const refreshToken = tokenManager.getRefreshToken();
       
-      if (!storedSession || !storedSession.refresh_token) {
-        return {
-          success: false,
-          error: {
-            code: 'NO_SESSION',
-            message: 'No session to refresh',
-          },
-        };
+      if (!refreshToken) {
+        console.error('[AuthService] No refresh token available');
+        return false;
       }
+
+      console.log('[AuthService] Refreshing session...');
 
       const response = await api.post<AuthResponse>(
         '/auth/refresh',
         {
-          refresh_token: storedSession.refresh_token,
+          refresh_token: refreshToken,
         }
       );
 
       if (!response.success || !response.data) {
+        console.error('[AuthService] Refresh failed:', response.error);
         this.clearSession();
-        return {
-          success: false,
-          error: {
-            code: 'REFRESH_FAILED',
-            message: response.error || 'Failed to refresh session',
-          },
-        };
+        return false;
       }
 
       const authResponse = response.data;
 
       // Persist new session
       if (authResponse.success && authResponse.session) {
-        this.persistSession(authResponse.session);
-        this.scheduleTokenRefresh(authResponse.session);
+        await this.persistSession(authResponse.session);
+        console.log('[AuthService] Session refreshed successfully');
+        return true;
       }
 
-      return authResponse;
+      return false;
     } catch (error: any) {
+      console.error('[AuthService] Refresh exception:', error);
       this.clearSession();
-      return {
-        success: false,
-        error: {
-          code: 'REFRESH_EXCEPTION',
-          message: error.message || 'An unexpected error occurred during session refresh',
-        },
-      };
+      return false;
     }
   }
 
-  /**
-   * Update user profile
-   */
+  private async handleTokenRefresh(): Promise<void> {
+    console.log('[AuthService] Automatic token refresh triggered');
+    const success = await this.refreshSession();
+    
+    if (!success) {
+      console.error('[AuthService] Automatic token refresh failed');
+      // Optionally notify user that they need to sign in again
+    }
+  }
+
   async updateProfile(updates: UpdateProfileRequest): Promise<AuthResponse> {
     try {
       const response = await api.put<AuthResponse>(
@@ -443,10 +426,6 @@ export class AuthService {
     }
   }
 
-  /**
-   * Verify magic link token hash
-   * Used for email confirmation and password reset
-   */
   async verifyToken(tokenHash: string, type: string): Promise<AuthResponse> {
     try {
       const response = await api.post<AuthResponse>(
@@ -471,8 +450,7 @@ export class AuthService {
 
       // If verification successful, persist session
       if (authResponse.success && authResponse.session) {
-        this.persistSession(authResponse.session);
-        this.scheduleTokenRefresh(authResponse.session);
+        await this.persistSession(authResponse.session);
       }
 
       return authResponse;
@@ -487,9 +465,6 @@ export class AuthService {
     }
   }
 
-  /**
-   * Resend email confirmation magic link
-   */
   async resendConfirmation(email: string): Promise<{ success: boolean; error?: string }> {
     try {
       const response = await api.post<SimpleResponse>(
@@ -516,9 +491,6 @@ export class AuthService {
     }
   }
 
-  /**
-   * Send password reset magic link to email
-   */
   async sendPasswordReset(email: string): Promise<{ success: boolean; error?: string }> {
     try {
       const response = await api.post<SimpleResponse>(
@@ -545,10 +517,6 @@ export class AuthService {
     }
   }
 
-  /**
-   * Update password after magic link verification
-   * The access token comes from the magic link verification
-   */
   async updatePassword(
     newPassword: string,
     accessToken: string
@@ -593,44 +561,35 @@ export class AuthService {
     }
   }
 
-  /**
-   * Persist session to secure storage
-   */
-  private persistSession(session: AuthSession): void {
-    this.sessionStore.set('session', session);
+  private async persistSession(session: AuthSession): Promise<void> {
+    tokenManager.saveTokens(
+      session.access_token,
+      session.refresh_token,
+      session.expires_at
+    );
+    
+    this.currentUser = session.user;
+    
+    await this.connectionService.reconnectSSEWithAuth().catch(err => {
+      console.error('[AuthService] Failed to reconnect SSE:', err);
+    });
   }
 
-  /**
-   * Get stored session
-   */
-  private getStoredSession(): AuthSession | null {
+
+  public async restoreSession(): Promise<void> {
     try {
-      const session = this.sessionStore.get('session') as AuthSession | undefined;
-      return session ?? null;
-    } catch (error) {
-      console.error('Error getting stored session:', error);
-      return null;
-    }
-  }
-
-  public async initialize(): Promise<void> {
-    await this.restoreSession();
-  }
-
-  /**
-   * Restore session from storage
-   */
-  private async restoreSession(): Promise<void> {
-    try {
-      const storedSession = this.getStoredSession();
       
-      if (storedSession && storedSession.access_token) {
+      await tokenManager.restoreTokens();
+      const accessToken = tokenManager.getAccessToken();
+      
+      if (accessToken) {
         const user = await this.getCurrentUser();
         
-        if (user) {
-          this.scheduleTokenRefresh(storedSession);
-        } else {
+        if (!user) {
+          console.log('[AuthService] Session invalid, clearing');
           this.clearSession();
+        } else {
+          console.log('[AuthService] Session restored for user:', user.email);
         }
       }
     } catch (error) {
@@ -639,54 +598,13 @@ export class AuthService {
     }
   }
 
-  /**
-   * Clear session from storage
-   */
   public clearSession(): void {
-    this.sessionStore.delete('session');
-    this.cancelTokenRefresh();
+    tokenManager.clearTokens();
+    this.currentUser = null;
   }
 
-  /**
-   * Schedule automatic token refresh
-   */
-  private scheduleTokenRefresh(session: AuthSession): void {
-    this.cancelTokenRefresh();
-
-    if (session.expires_at) {
-      const expiresIn = session.expires_at * 1000 - Date.now() - 5 * 60 * 1000;
-      
-      if (expiresIn > 0) {
-        this.refreshTimer = setTimeout(() => {
-          this.refreshSession();
-        }, expiresIn);
-      }
-    }
-  }
-
-  /**
-   * Cancel scheduled token refresh
-   */
-  private cancelTokenRefresh(): void {
-    if (this.refreshTimer) {
-      clearTimeout(this.refreshTimer);
-      this.refreshTimer = null;
-    }
-  }
-
-  /**
-   * Get current access token
-   */
-  getAccessToken(): string | null {
-    const session = this.getStoredSession();
-    return session?.access_token ?? null;
-  }
-
-  /**
-   * Cleanup on app quit
-   */
   destroy(): void {
-    this.cancelTokenRefresh();
+    tokenManager.destroy();
     if (this.authWindow) {
       this.authWindow.close();
       this.authWindow = null;
