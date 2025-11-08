@@ -21,11 +21,6 @@ const config: ForgeConfig = {
       identity: process.env.APPLE_IDENTITY!,
       identityValidation: true,
       optionsForFile: (filePath) => {
-        if (filePath.includes('Helper')) {
-          return {
-            entitlements: path.join(__dirname, 'entitlements.helper.plist')
-          };
-        }
         return {
           entitlements: path.join(__dirname, 'entitlements.mac.plist')
         };
