@@ -37,28 +37,22 @@ export class WindowManager {
     });
 
     this.baseWindow.contentView.addChildView(this.browserUIView);
-    this.setupBrowserUI();
     this.setupWindowEvents();
-
-    // Show window after loading
-    setTimeout(() => {
-      this.baseWindow.show();
-    }, 100);
     
     // this.browserUIView.webContents.openDevTools({ mode: 'detach' });
   }
 
-  private setupBrowserUI(): void {
+  public setupBrowserUI(): void {
     if (!this.browserUIView) return;
 
-   // Load the browser UI (React app)
-  if (MAIN_WINDOW_VITE_DEV_SERVER_URL) {
-    this.browserUIView.webContents.loadURL(MAIN_WINDOW_VITE_DEV_SERVER_URL);
-  } else {
-    this.browserUIView.webContents.loadFile(
+    // Load the browser UI (React app)
+    if (MAIN_WINDOW_VITE_DEV_SERVER_URL) {
+      this.browserUIView.webContents.loadURL(MAIN_WINDOW_VITE_DEV_SERVER_URL);
+    } else {
+      this.browserUIView.webContents.loadFile(
       path.join(__dirname, `../renderer/${MAIN_WINDOW_VITE_NAME}/index.html`),
-    );
-  }
+      );
+    }
   }
 
   private setupWindowEvents(): void {
@@ -85,6 +79,12 @@ export class WindowManager {
 
   public getBrowserUIView(): WebContentsView | null {
     return this.browserUIView;
+  }
+
+  public show(): void {
+    if (this.baseWindow) {
+      this.baseWindow.show();
+    }
   }
 
   public destroy(): void {
