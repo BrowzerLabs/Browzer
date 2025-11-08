@@ -57,7 +57,7 @@ export class NavigationManager {
     }
     
     // In production, use file protocol with hash route
-    return `file://${path.join(__dirname, `../../renderer/${MAIN_WINDOW_VITE_NAME}/index.html`)}#/${pageName}`;
+    return `file://${path.join(__dirname, `../renderer/${MAIN_WINDOW_VITE_NAME}/index.html`)}#/${pageName}`;
   }
 
   /**

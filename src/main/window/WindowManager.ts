@@ -44,23 +44,21 @@ export class WindowManager {
     setTimeout(() => {
       this.baseWindow.show();
     }, 100);
-
-    // if (process.env.NODE_ENV === 'development') {
-    //  this.browserUIView.webContents.openDevTools({ mode: 'detach' });
-    // }
+    
+    // this.browserUIView.webContents.openDevTools({ mode: 'detach' });
   }
 
   private setupBrowserUI(): void {
     if (!this.browserUIView) return;
 
-    // Load the browser UI (React app)
-    if (MAIN_WINDOW_VITE_DEV_SERVER_URL) {
-      this.browserUIView.webContents.loadURL(MAIN_WINDOW_VITE_DEV_SERVER_URL);
-    } else {
-      this.browserUIView.webContents.loadFile(
-        path.join(__dirname, `../../renderer/${MAIN_WINDOW_VITE_NAME}/index.html`)
-      );
-    }
+   // Load the browser UI (React app)
+  if (MAIN_WINDOW_VITE_DEV_SERVER_URL) {
+    this.browserUIView.webContents.loadURL(MAIN_WINDOW_VITE_DEV_SERVER_URL);
+  } else {
+    this.browserUIView.webContents.loadFile(
+      path.join(__dirname, `../renderer/${MAIN_WINDOW_VITE_NAME}/index.html`),
+    );
+  }
   }
 
   private setupWindowEvents(): void {
