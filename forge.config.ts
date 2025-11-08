@@ -15,11 +15,7 @@ const config: ForgeConfig = {
   packagerConfig: {
     name: 'Browzer',
     asar: {
-      // Unpack all native modules (.node files) and DLLs
       unpack: '**/*.{node,dll}',
-      
-      // Unpack the entire better-sqlite3 module directory to ensure all dependencies are available
-      // This is more thorough than just unpacking .node files
       unpackDir: path.join('**', 'node_modules', 'better-sqlite3', '**', '*'),
     },
     ignore: [
