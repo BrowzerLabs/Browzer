@@ -5,6 +5,7 @@ import { MakerDeb } from '@electron-forge/maker-deb';
 import { MakerRpm } from '@electron-forge/maker-rpm';
 import { MakerDMG } from '@electron-forge/maker-dmg';
 import { VitePlugin } from '@electron-forge/plugin-vite';
+import { AutoUnpackNativesPlugin } from '@electron-forge/plugin-auto-unpack-natives';
 import { FusesPlugin } from '@electron-forge/plugin-fuses';
 import { FuseV1Options, FuseVersion } from '@electron/fuses';
 import path from 'path';
@@ -13,11 +14,18 @@ import path from 'path';
 const config: ForgeConfig = {
   packagerConfig: {
     name: 'Browzer',
-    asar: true,
+    asar: {
+      // Unpack all native modules (.node files) and DLLs
+      unpack: '**/*.{node,dll}',
+      
+      // Unpack the entire better-sqlite3 module directory to ensure all dependencies are available
+      // This is more thorough than just unpacking .node files
+      unpackDir: path.join('**', 'node_modules', 'better-sqlite3', '**', '*'),
+    },
     icon: './assets/icon',
     appBundleId: 'com.browzer.app',
     appCategoryType: 'public.app-category.productivity',
-   osxSign: {
+    osxSign: {
       identity: process.env.APPLE_IDENTITY!,
       identityValidation: true,
       optionsForFile: (filePath) => {
@@ -89,6 +97,7 @@ const config: ForgeConfig = {
     }
   ],
   plugins: [
+    new AutoUnpackNativesPlugin({}),
     new VitePlugin({
       build: [
         {
