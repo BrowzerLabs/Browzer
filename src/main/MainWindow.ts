@@ -44,13 +44,17 @@ export class MainWindow {
       this.authService
     );
 
-    // Initial layout
+    this.windowManager.setupBrowserUI();
+
     this.updateLayout();
 
-    // Listen for window resize
     baseWindow.on('resize', () => {
       this.updateLayout();
     });
+
+    setTimeout(() => {
+      this.windowManager.show();
+    }, 100);
   }
 
   /**

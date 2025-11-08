@@ -23,7 +23,7 @@ const config: ForgeConfig = {
       unpackDir: path.join('**', 'node_modules', 'better-sqlite3', '**', '*'),
     },
     ignore: [
-      /node_modules\/(?!(better-sqlite3)\/)/,
+      /node_modules\/(?!(better-sqlite3|bindings|file-uri-to-path)\/)/,
     ],
     icon: './assets/icon',
     appBundleId: 'com.browzer.app',
