@@ -7,6 +7,7 @@ import { MakerDMG } from '@electron-forge/maker-dmg';
 import { VitePlugin } from '@electron-forge/plugin-vite';
 import { FusesPlugin } from '@electron-forge/plugin-fuses';
 import { FuseV1Options, FuseVersion } from '@electron/fuses';
+import path from 'path';
 
 
 const config: ForgeConfig = {
@@ -16,9 +17,19 @@ const config: ForgeConfig = {
     icon: './assets/icon',
     appBundleId: 'com.browzer.app',
     appCategoryType: 'public.app-category.productivity',
-    osxSign: {
+   osxSign: {
       identity: process.env.APPLE_IDENTITY!,
       identityValidation: true,
+      optionsForFile: (filePath) => {
+        if (filePath.includes('Helper')) {
+          return {
+            entitlements: path.join(__dirname, 'entitlements.helper.plist')
+          };
+        }
+        return {
+          entitlements: path.join(__dirname, 'entitlements.mac.plist')
+        };
+      }
     },
     osxNotarize: {
       appleId: process.env.APPLE_ID!,
