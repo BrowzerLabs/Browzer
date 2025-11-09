@@ -5,6 +5,7 @@ import { IPCHandlers } from '@/main/ipc/IPCHandlers';
 import { DeepLinkService } from '@/main/deeplink/DeepLinkService';
 import { ConnectionService } from './api';
 import { AuthService } from '@/main/auth/AuthService';
+import { AppMenu } from '@/main/menu/AppMenu';
 
 export class MainWindow {
   private windowManager: WindowManager;
@@ -14,6 +15,7 @@ export class MainWindow {
   private authService: AuthService;
   private ipcHandlers: IPCHandlers;
   private deepLinkService: DeepLinkService;
+  private appMenu: AppMenu;
 
   constructor() {
     this.windowManager = new WindowManager();
@@ -43,6 +45,10 @@ export class MainWindow {
       this.windowManager,
       this.authService
     );
+
+    // Setup application menu
+    this.appMenu = new AppMenu(browserUIView.webContents);
+    this.appMenu.setupMenu();
 
     this.windowManager.setupBrowserUI();
 
