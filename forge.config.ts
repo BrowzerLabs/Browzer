@@ -44,7 +44,6 @@ const config: ForgeConfig = {
   makers: [
     new MakerSquirrel({}),
     new MakerDMG({
-      background: './assets/dmg-background.png',
       icon: './assets/icon.icns',
       format: 'ULFO',
       contents: (opts) => {
