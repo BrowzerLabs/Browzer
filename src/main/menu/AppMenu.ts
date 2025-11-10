@@ -1,13 +1,19 @@
-import { app, Menu, shell, dialog, WebContents } from 'electron';
-import { checkForUpdates } from '../updater';
+import { app, Menu, dialog, WebContents } from 'electron';
+import { checkForUpdates } from '@/main/updater';
 import log from 'electron-log';
+import { BrowserManager } from '@/main/BrowserManager';
 
 export class AppMenu {
+  private browserManager: BrowserManager;
   private webContents: WebContents | null;
 
   private isMac = process.platform === 'darwin';
 
-  constructor(webContents: WebContents | null) {
+  constructor(
+    browserManager: BrowserManager,
+    webContents: WebContents | null
+  ) {
+    this.browserManager = browserManager;
     this.webContents = webContents;
   }
 
@@ -118,14 +124,14 @@ export class AppMenu {
         submenu: [
           {
             label: 'Learn More',
-            click: async () => {
-              await shell.openExternal('https://trybrowzer.com');
+            click: () => {
+              this.browserManager.createTab('https://trybrowzer.com');
             },
           },
           {
             label: 'Documentation',
-            click: async () => {
-              await shell.openExternal('https://docs.trybrowzer.com');
+            click: () => {
+              this.browserManager.createTab('https://docs.trybrowzer.com');
             },
           },
           { type: 'separator' as const },
