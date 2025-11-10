@@ -2,45 +2,84 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-  <!-- Hardened Runtime Entitlements -->
+  <!-- ============================================ -->
+  <!-- HARDENED RUNTIME - Required for Notarization -->
+  <!-- ============================================ -->
+  
+  <!-- Allow JIT: Required for JavaScript engine (V8/Chromium) -->
   <key>com.apple.security.cs.allow-jit</key>
   <true/>
+  
+  <!-- Allow Unsigned Executable Memory: Required for native modules (better-sqlite3, etc.) -->
   <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
   <true/>
+  
+  <!-- Disable Executable Page Protection: Required for dynamic code generation -->
   <key>com.apple.security.cs.disable-executable-page-protection</key>
   <true/>
   
-  <!-- Network Entitlements -->
+  
+  <!-- ============================================ -->
+  <!-- NETWORK ACCESS -->
+  <!-- ============================================ -->
+  
+  <!-- Allow outgoing network connections (API calls, downloads) -->
   <key>com.apple.security.network.client</key>
   <true/>
+  
+  <!-- Allow incoming network connections (local server, if needed) -->
   <key>com.apple.security.network.server</key>
   <true/>
   
-  <!-- File Access Entitlements -->
+  
+  <!-- ============================================ -->
+  <!-- FILE SYSTEM ACCESS -->
+  <!-- ============================================ -->
+  
+  <!-- Allow reading/writing files chosen by user via file dialogs -->
   <key>com.apple.security.files.user-selected.read-write</key>
   <true/>
+  
+  <!-- Allow reading/writing to Downloads folder -->
   <key>com.apple.security.files.downloads.read-write</key>
   <true/>
   
-  <!-- Camera and Microphone (for video recording) -->
+  
+  <!-- ============================================ -->
+  <!-- DEVICE ACCESS - Browser Features -->
+  <!-- ============================================ -->
+  
+  <!-- Camera access (for video calls, screen sharing) -->
   <key>com.apple.security.device.camera</key>
   <true/>
+  
+  <!-- Microphone access (for audio recording, video recording) -->
   <key>com.apple.security.device.microphone</key>
   <true/>
   
-  <!-- Screen Recording -->
+  <!-- Screen recording/capture (for screen sharing) -->
   <key>com.apple.security.device.screen-capture</key>
   <true/>
   
-  <!-- Pasteboard Access -->
+  
+  <!-- ============================================ -->
+  <!-- SYSTEM INTEGRATION -->
+  <!-- ============================================ -->
+  
+  <!-- Clipboard access (copy/paste functionality) -->
   <key>com.apple.security.pasteboard.read-write</key>
   <true/>
   
-  <!-- WebAuthn/Passkey Support -->
+  <!-- Smart card/biometric authentication (WebAuthn, Passkeys) -->
   <key>com.apple.security.smartcard</key>
   <true/>
   
-  <!-- Temporary Files -->
+  
+  <!-- ============================================ -->
+  <!-- TEMPORARY FILES - Exception Paths -->
+  <!-- ============================================ -->
+  
+  <!-- Allow access to system temp directories (for downloads, caching) -->
   <key>com.apple.security.temporary-exception.files.absolute-path.read-write</key>
   <array>
     <string>/private/tmp</string>
