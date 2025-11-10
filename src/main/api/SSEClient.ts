@@ -41,8 +41,8 @@ export class SSEClient extends EventEmitter {
     this.electronId = config.electronId;
     this.browserUIWebContents = config.browserUIWebContents;
     
-    this.reconnectInterval = config.reconnectInterval || 5000;
-    this.heartbeatTimeout = config.heartbeatTimeout || 60000; // 60 seconds
+    this.reconnectInterval = config.reconnectInterval || 3000;
+    this.heartbeatTimeout = config.heartbeatTimeout || 29000;
     this.maxReconnectAttempts = 20 
   }
 

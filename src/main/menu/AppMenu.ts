@@ -119,13 +119,13 @@ export class AppMenu {
           {
             label: 'Learn More',
             click: async () => {
-              await shell.openExternal('https://browzer.app');
+              await shell.openExternal('https://trybrowzer.com');
             },
           },
           {
             label: 'Documentation',
             click: async () => {
-              await shell.openExternal('https://docs.browzer.app');
+              await shell.openExternal('https://docs.trybrowzer.com');
             },
           },
           { type: 'separator' as const },
