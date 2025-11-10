@@ -9,7 +9,7 @@ export const subscriptionProcessingState = {
   },
   
   notify(data: any) {
-    this.listeners.forEach(listener => listener(data));
+    this.listeners.forEach((listener: (arg0: any) => any) => listener(data));
   }
 };
 

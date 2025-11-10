@@ -14,10 +14,12 @@ export default defineConfig({
   build: {
     sourcemap: true,
     minify: false,
+    commonjsOptions: {
+      ignore: ['better-sqlite3'],
+    },
     rollupOptions: {
       external: ['better-sqlite3'],
       output: {
-        // Preserve module structure for better debugging
         manualChunks: undefined,
       },
     },
