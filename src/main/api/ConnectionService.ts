@@ -23,7 +23,7 @@ export class ConnectionService extends EventEmitter {
     browserUIWebContents: WebContents
   ) {
     super();
-    this.apiBaseURL = process.env.BACKEND_API_URL ?? 'http://localhost:8000/api/v1';    
+    this.apiBaseURL = process.env.BACKEND_API_URL ?? 'http://localhost:8000/api/v1'; 
     this.browserUIWebContents = browserUIWebContents;
 
     const apiConfig: ApiConfig = {
@@ -77,8 +77,8 @@ export class ConnectionService extends EventEmitter {
     const sseConfig: SSEConfig = {
       url,
       electronId: this.apiClient.getElectronId(),
-      reconnectInterval: 5000,
-      heartbeatTimeout: 60000, // 60 seconds
+      reconnectInterval: 3000,
+      heartbeatTimeout: 29000,
       browserUIWebContents: this.browserUIWebContents,
     };
 
