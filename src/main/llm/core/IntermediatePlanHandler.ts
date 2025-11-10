@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { ClaudeClient } from '../clients/ClaudeClient';
+import { AutomationClient } from '../clients/AutomationClient';
 import { ToolRegistry } from '../utils/ToolRegistry';
 import { SystemPromptBuilder } from '../builders/SystemPromptBuilder';
 import { MessageBuilder } from '../builders/MessageBuilder';
@@ -14,7 +14,7 @@ import { PlanExecutionResult } from './types';
  * Responsibilities:
  * - Detect intermediate vs final plans
  * - Build continuation prompts
- * - Request next plan from Claude
+ * - Request next plan from AutomationClient
  * - Handle phase transitions
  * 
  * This module centralizes intermediate plan logic for:
@@ -24,16 +24,16 @@ import { PlanExecutionResult } from './types';
  * - State management across phases
  */
 export class IntermediatePlanHandler {
-  private claudeClient: ClaudeClient;
+  private automationClient: AutomationClient;
   private toolRegistry: ToolRegistry;
   private stateManager: AutomationStateManager;
 
   constructor(
-    claudeClient: ClaudeClient,
+    automationClient: AutomationClient,
     toolRegistry: ToolRegistry,
     stateManager: AutomationStateManager
   ) {
-    this.claudeClient = claudeClient;
+    this.automationClient = automationClient;
     this.toolRegistry = toolRegistry;
     this.stateManager = stateManager;
   }
@@ -82,7 +82,7 @@ export class IntermediatePlanHandler {
     const systemPrompt = SystemPromptBuilder.buildAutomationSystemPrompt();
     const tools = this.toolRegistry.getToolDefinitions();
 
-    const response = await this.claudeClient.continueConversation({
+    const response = await this.automationClient.continueConversation({
       systemPrompt,
       messages: this.stateManager.getOptimizedMessages(),
       tools,
@@ -125,7 +125,7 @@ export class IntermediatePlanHandler {
 
     const tools = this.toolRegistry.getToolDefinitions();
 
-    const response = await this.claudeClient.continueConversation({
+    const response = await this.automationClient.continueConversation({
       systemPrompt,
       messages: this.stateManager.getOptimizedMessages(),
       tools,
@@ -176,7 +176,7 @@ export class IntermediatePlanHandler {
     const systemPrompt = SystemPromptBuilder.buildErrorRecoverySystemPrompt();
     const tools = this.toolRegistry.getToolDefinitions();
 
-    const response = await this.claudeClient.continueConversation({
+    const response = await this.automationClient.continueConversation({
       systemPrompt,
       messages: this.stateManager.getOptimizedMessages(),
       tools,

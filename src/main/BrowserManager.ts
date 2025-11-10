@@ -5,6 +5,7 @@ import { HistoryService } from '@/main/history/HistoryService';
 import { PasswordManager } from '@/main/password/PasswordManager';
 import { BrowserAutomationExecutor } from './automation';
 import { SessionManager } from '@/main/llm/session/SessionManager';
+import { ApiClient } from '@/main/api/ApiClient';
 import {
   TabManager,
   RecordingManager,
@@ -38,7 +39,8 @@ export class BrowserManager {
 
   constructor(
     private baseWindow: BaseWindow,
-    browserUIView?: WebContentsView
+    browserUIView?: WebContentsView,
+    apiClient?: ApiClient
   ) {
     // Initialize services
     this.recordingStore = new RecordingStore();
@@ -74,7 +76,8 @@ export class BrowserManager {
     this.automationManager = new AutomationManager(
       this.recordingStore,
       this.sessionManager,
-      browserUIView
+      browserUIView,
+      apiClient
     );
   }
 
