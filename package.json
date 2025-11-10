@@ -19,47 +19,10 @@
   },
   "keywords": [],
   "author": {
-    "name": "Abhinandan",
-    "email": "abhinandanverma551@gmail.com"
+    "name": "Browzer Inc.",
+    "email": "contact@trybrowzer.com"
   },
   "license": "MIT",
-  "build": {
-    "appId": "com.browzer.app",
-    "productName": "Browzer",
-    "directories": {
-      "buildResources": "assets"
-    },
-    "mac": {
-      "target": [
-        "dmg",
-        "zip"
-      ],
-      "icon": "assets/icon.icns",
-      "category": "public.app-category.productivity",
-      "hardenedRuntime": true,
-      "gatekeeperAssess": false,
-      "entitlements": "entitlements.mac.plist",
-      "entitlementsInherit": "entitlements.mac.plist",
-      "notarize": {
-        "teamId": "${APPLE_TEAM_ID}"
-      }
-    },
-    "dmg": {
-      "contents": [
-        {
-          "x": 130,
-          "y": 220,
-          "type": "file"
-        },
-        {
-          "x": 410,
-          "y": 220,
-          "type": "link",
-          "path": "/Applications"
-        }
-      ]
-    }
-  },
   "pnpm": {
     "onlyBuiltDependencies": [
       "@tailwindcss/oxide",

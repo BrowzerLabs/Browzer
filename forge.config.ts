@@ -22,7 +22,7 @@ const config: ForgeConfig = {
       /node_modules\/(?!(better-sqlite3|bindings|file-uri-to-path)\/)/,
     ],
     icon: './assets/icon',
-    appBundleId: 'com.browzer.app',
+    appBundleId: 'com.trybrowzer.app',
     appCategoryType: 'public.app-category.productivity',
     osxSign: {
       identity: process.env.APPLE_IDENTITY!,
