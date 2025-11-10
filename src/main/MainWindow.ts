@@ -25,11 +25,15 @@ export class MainWindow {
     
     this.layoutManager = new LayoutManager(baseWindow);
 
-    this.browserManager = new BrowserManager(baseWindow, browserUIView);
+    this.connectionService = new ConnectionService(browserUIView.webContents);
+
+    this.browserManager = new BrowserManager(
+      baseWindow, 
+      browserUIView,
+      this.connectionService.getApiClient()
+    );
 
     this.deepLinkService = new DeepLinkService(baseWindow, browserUIView.webContents);
-
-    this.connectionService = new ConnectionService(browserUIView.webContents);
 
     this.authService = new AuthService(this.browserManager, this.connectionService);
     this.authService.restoreSession().catch(err => {

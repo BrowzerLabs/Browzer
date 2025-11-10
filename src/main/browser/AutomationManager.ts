@@ -3,6 +3,7 @@ import { AutomationService } from '@/main/llm';
 import { RecordingStore } from '@/main/recording';
 import { Tab } from './types';
 import { SessionManager } from '@/main/llm/session/SessionManager';
+import { ApiClient } from '@/main/api/ApiClient';
 
 /**
  * AutomationManager - Manages LLM automation sessions
@@ -19,7 +20,8 @@ export class AutomationManager {
   constructor(
     private recordingStore: RecordingStore,
     private sessionManager: SessionManager,
-    private browserUIView?: WebContentsView
+    private browserUIView?: WebContentsView,
+    private apiClient?: ApiClient
   ) {}
 
   /**
@@ -38,12 +40,16 @@ export class AutomationManager {
       throw new Error('No active tab or automation executor');
     }
 
+    if (!this.apiClient) {
+      throw new Error('ApiClient not available. Cannot execute automation.');
+    }
+
     // Create AutomationService with shared SessionManager
     const llmService = new AutomationService(
       activeTab.automationExecutor,
       this.recordingStore,
       this.sessionManager,
-      process.env.ANTHROPIC_API_KEY,
+      this.apiClient,
     );
 
     // Start automation execution (non-blocking)

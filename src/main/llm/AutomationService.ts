@@ -2,7 +2,8 @@
 import { EventEmitter } from 'events';
 import { BrowserAutomationExecutor } from '@/main/automation/BrowserAutomationExecutor';
 import { RecordingStore } from '@/main/recording';
-import { ClaudeClient } from './clients/ClaudeClient';
+import { AutomationClient } from './clients/AutomationClient';
+import { ApiClient } from '@/main/api/ApiClient';
 import { ToolRegistry } from './utils/ToolRegistry';
 import { UsageTracker } from './utils/UsageTracker';
 import { AutomationStateManager } from './core/AutomationStateManager';
@@ -43,7 +44,7 @@ export class AutomationService extends EventEmitter {
   private recordingStore: RecordingStore;
   
   // Core services
-  private claudeClient: ClaudeClient;
+  private automationClient: AutomationClient;
   private toolRegistry: ToolRegistry;
   
   // State and execution managers (initialized per session)
@@ -58,14 +59,14 @@ export class AutomationService extends EventEmitter {
     executor: BrowserAutomationExecutor,
     recordingStore: RecordingStore,
     sessionManager: SessionManager,
-    apiKey?: string,
+    apiClient: ApiClient,
   ) {
     super(); // Initialize EventEmitter
     this.executor = executor;
     this.recordingStore = recordingStore;
     
-    // Pass thinking callback to ClaudeClient
-    this.claudeClient = new ClaudeClient(apiKey, (message: string) => {
+    // Pass thinking callback to AutomationClient
+    this.automationClient = new AutomationClient(apiClient, (message: string) => {
       this.emitProgress('claude_thinking', { message });
     });
     
@@ -115,19 +116,22 @@ export class AutomationService extends EventEmitter {
     );
     this.planExecutor = new PlanExecutor(this.executor, this.stateManager, this); // Pass event emitter
     this.errorRecoveryHandler = new ErrorRecoveryHandler(
-      this.claudeClient,
+      this.automationClient,
       this.toolRegistry,
       this.stateManager
     );
     this.intermediatePlanHandler = new IntermediatePlanHandler(
-      this.claudeClient,
+      this.automationClient,
       this.toolRegistry,
       this.stateManager
     );
     this.usageTracker = new UsageTracker();
 
     try {
-      // Step 1: Generate initial plan (thinking event emitted by ClaudeClient)
+      // Step 1: Start automation session
+      await this.automationClient.startAutomation();
+      
+      // Step 2: Generate initial plan (thinking event emitted by AutomationClient)
       const initialPlan = await this.generateInitialPlan();
       this.usageTracker.addUsage(initialPlan.usage);
       this.stateManager.setCurrentPlan(initialPlan.plan);
@@ -174,6 +178,9 @@ export class AutomationService extends EventEmitter {
       // Return final result
       const finalResult = this.stateManager.getFinalResult();
       
+      // End automation session
+      await this.automationClient.endAutomation();
+      
       // Emit completion event
       this.emitProgress('automation_complete', {
         success: finalResult.success,
@@ -194,6 +201,13 @@ export class AutomationService extends EventEmitter {
 
     } catch (error: any) {
       console.error('❌ [IterativeAutomation] Fatal error:', error);
+      
+      // End automation session even on error
+      try {
+        await this.automationClient.endAutomation();
+      } catch (endError) {
+        console.error('❌ [IterativeAutomation] Failed to end automation session:', endError);
+      }
       
       // Emit error event
       this.emitProgress('automation_error', {
@@ -239,7 +253,7 @@ export class AutomationService extends EventEmitter {
     });
 
     // Generate plan
-    const response = await this.claudeClient.createAutomationPlan({
+    const response = await this.automationClient.createAutomationPlan({
       systemPrompt,
       userPrompt,
       tools,
