@@ -15,7 +15,7 @@ import { MessageBuilder } from './builders/MessageBuilder';
 import { AutomationPlanParser, ParsedAutomationPlan } from './parsers/AutomationPlanParser';
 import { IterativeAutomationResult, PlanExecutionResult, UsageStats } from './core/types';
 import Anthropic from '@anthropic-ai/sdk';
-import { AutomationProgressEvent, AutomationEventType } from '@/shared/types';
+import { AutomationProgressEvent, AutomationEventType, SystemPromptType } from '@/shared/types';
 
 /**
  * AutomationService - Smart ReAct-based browser automation orchestrator
@@ -240,7 +240,6 @@ export class AutomationService extends EventEmitter {
   }> {
     if (!this.stateManager) throw new Error('State manager not initialized');
 
-    const systemPrompt = SystemPromptBuilder.buildAutomationSystemPrompt();
     const userPrompt = this.stateManager.getUserGoal();
     const tools = this.toolRegistry.getToolDefinitions();
 
@@ -252,7 +251,7 @@ export class AutomationService extends EventEmitter {
 
     // Generate plan
     const response = await this.automationClient.createAutomationPlan({
-      systemPrompt,
+      systemPromptType: SystemPromptType.AUTOMATION_PLAN_GENERATION,
       userPrompt,
       tools,
       cachedContext: this.stateManager.getCachedContext()

@@ -7,7 +7,7 @@ import { AutomationPlanParser } from '../parsers/AutomationPlanParser';
 import { AutomationStateManager } from './AutomationStateManager';
 import { UsageTracker } from '../utils/UsageTracker';
 import { PlanExecutionResult } from './types';
-import { ToolExecutionResult } from '@/shared/types';
+import { ToolExecutionResult, SystemPromptType } from '@/shared/types';
 
 /**
  * ErrorRecoveryHandler - Handles error recovery during automation
@@ -87,11 +87,10 @@ export class ErrorRecoveryHandler {
     );
 
     // Get recovery plan from Claude
-    const systemPrompt = SystemPromptBuilder.buildErrorRecoverySystemPrompt();
     const tools = this.toolRegistry.getToolDefinitions();
 
     const response = await this.automationClient.continueConversation({
-      systemPrompt,
+      systemPromptType: SystemPromptType.AUTOMATION_ERROR_RECOVERY,
       messages: this.stateManager.getOptimizedMessages(),
       tools,
       cachedContext: this.stateManager.getCachedContext()
