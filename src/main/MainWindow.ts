@@ -102,4 +102,3 @@ export class MainWindow {
     this.windowManager.destroy();
   }
 }
-

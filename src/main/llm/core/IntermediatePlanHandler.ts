@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { ClaudeClient } from '../clients/ClaudeClient';
+import { AutomationClient } from '../clients/AutomationClient';
 import { ToolRegistry } from '../utils/ToolRegistry';
 import { SystemPromptBuilder } from '../builders/SystemPromptBuilder';
 import { MessageBuilder } from '../builders/MessageBuilder';
@@ -7,6 +7,7 @@ import { AutomationPlanParser } from '../parsers/AutomationPlanParser';
 import { AutomationStateManager } from './AutomationStateManager';
 import { UsageTracker } from '../utils/UsageTracker';
 import { PlanExecutionResult } from './types';
+import { SystemPromptType } from '@/shared/types';
 
 /**
  * IntermediatePlanHandler - Handles intermediate plan continuation
@@ -14,7 +15,7 @@ import { PlanExecutionResult } from './types';
  * Responsibilities:
  * - Detect intermediate vs final plans
  * - Build continuation prompts
- * - Request next plan from Claude
+ * - Request next plan from AutomationClient
  * - Handle phase transitions
  * 
  * This module centralizes intermediate plan logic for:
@@ -24,16 +25,16 @@ import { PlanExecutionResult } from './types';
  * - State management across phases
  */
 export class IntermediatePlanHandler {
-  private claudeClient: ClaudeClient;
+  private automationClient: AutomationClient;
   private toolRegistry: ToolRegistry;
   private stateManager: AutomationStateManager;
 
   constructor(
-    claudeClient: ClaudeClient,
+    automationClient: AutomationClient,
     toolRegistry: ToolRegistry,
     stateManager: AutomationStateManager
   ) {
-    this.claudeClient = claudeClient;
+    this.automationClient = automationClient;
     this.toolRegistry = toolRegistry;
     this.stateManager = stateManager;
   }
@@ -79,11 +80,10 @@ export class IntermediatePlanHandler {
     });
 
     // Continue conversation with automation system prompt
-    const systemPrompt = SystemPromptBuilder.buildAutomationSystemPrompt();
     const tools = this.toolRegistry.getToolDefinitions();
 
-    const response = await this.claudeClient.continueConversation({
-      systemPrompt,
+    const response = await this.automationClient.continueConversation({
+      systemPromptType: SystemPromptType.AUTOMATION_PLAN_GENERATION,
       messages: this.stateManager.getOptimizedMessages(),
       tools,
       cachedContext: this.stateManager.getCachedContext()
@@ -118,15 +118,15 @@ export class IntermediatePlanHandler {
   public async handleContextExtraction(): Promise<PlanExecutionResult> {
     console.log('🔄 [IntermediatePlan] Continuing after context extraction...');
 
-    // Continue conversation with same system prompt
-    const systemPrompt = this.stateManager.getRecoveryAttempts() > 0
-      ? SystemPromptBuilder.buildErrorRecoverySystemPrompt()
-      : SystemPromptBuilder.buildAutomationSystemPrompt();
+    // Continue conversation with same system prompt type
+    const systemPromptType = this.stateManager.getRecoveryAttempts() > 0
+      ? SystemPromptType.AUTOMATION_ERROR_RECOVERY
+      : SystemPromptType.AUTOMATION_PLAN_GENERATION;
 
     const tools = this.toolRegistry.getToolDefinitions();
 
-    const response = await this.claudeClient.continueConversation({
-      systemPrompt,
+    const response = await this.automationClient.continueConversation({
+      systemPromptType,
       messages: this.stateManager.getOptimizedMessages(),
       tools,
       cachedContext: this.stateManager.getCachedContext()
@@ -173,11 +173,10 @@ export class IntermediatePlanHandler {
 
 
     // Continue conversation to get new plan
-    const systemPrompt = SystemPromptBuilder.buildErrorRecoverySystemPrompt();
     const tools = this.toolRegistry.getToolDefinitions();
 
-    const response = await this.claudeClient.continueConversation({
-      systemPrompt,
+    const response = await this.automationClient.continueConversation({
+      systemPromptType: SystemPromptType.AUTOMATION_ERROR_RECOVERY,
       messages: this.stateManager.getOptimizedMessages(),
       tools,
       cachedContext: this.stateManager.getCachedContext()
