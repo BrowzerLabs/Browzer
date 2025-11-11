@@ -1,15 +1,11 @@
-/* eslint-disable @typescript-eslint/ban-ts-comment */
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import Anthropic from '@anthropic-ai/sdk';
-import { ApiClient } from '../../api/ApiClient';
+import { api } from '@/main/api';
 
 export class AutomationClient {
-  private apiClient: ApiClient;
   private sessionId: string | null = null;
   private onThinking?: (message: string) => void;
 
-  constructor(apiClient: ApiClient, onThinking?: (message: string) => void) {
-    this.apiClient = apiClient;
+  constructor(onThinking?: (message: string) => void) {
     this.onThinking = onThinking;
   }
 
@@ -19,7 +15,7 @@ export class AutomationClient {
         this.onThinking('Starting automation session...');
       }
 
-      const response = await this.apiClient.post<{ session_id?: string }>('/automation/start');
+      const response = await api.post<{ session_id?: string }>('/automation/start');
       
       if (!response.success || !response.data) {
         throw new Error(response.error);
@@ -50,7 +46,7 @@ export class AutomationClient {
         this.onThinking('Generating automation plan...');
       }
 
-      const response = await this.apiClient.post<{ message: any }>(
+      const response = await api.post<{ message: any }>(
         '/automation/plan',
         {
           system_prompt: systemPrompt,
@@ -106,7 +102,7 @@ export class AutomationClient {
         }
       })
 
-      const response = await this.apiClient.post<{ message: any }>(
+      const response = await api.post<{ message: any }>(
         '/automation/continue',
         {
           system_prompt: systemPrompt,
@@ -145,7 +141,7 @@ export class AutomationClient {
         this.onThinking('Ending automation session...');
       }
 
-      const response = await this.apiClient.post<string>(
+      const response = await api.post<string>(
         '/automation/end',
         undefined,
         {
