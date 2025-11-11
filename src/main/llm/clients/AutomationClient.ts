@@ -1,5 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { api } from '@/main/api';
+import { SystemPromptType } from '@/shared/types';
 
 export class AutomationClient {
   private sessionId: string | null = null;
@@ -30,12 +31,12 @@ export class AutomationClient {
   }
 
   public async createAutomationPlan(params: {
-    systemPrompt: string;
+    systemPromptType: SystemPromptType;
     userPrompt: string;
     tools: Anthropic.Tool[];
     cachedContext?: string;
   }): Promise<Anthropic.Message> {
-    const { systemPrompt, userPrompt, tools, cachedContext } = params;
+    const { systemPromptType, userPrompt, tools, cachedContext } = params;
     
     if (!this.sessionId) {
       throw new Error('No active automation session. Call startAutomation() first.');
@@ -49,7 +50,7 @@ export class AutomationClient {
       const response = await api.post<{ message: any }>(
         '/automation/plan',
         {
-          system_prompt: systemPrompt,
+          system_prompt: systemPromptType,
           user_prompt: userPrompt,
           tools: tools,
           cached_context: cachedContext
@@ -75,12 +76,12 @@ export class AutomationClient {
   }
 
   public async continueConversation(params: {
-    systemPrompt: string;
+    systemPromptType: SystemPromptType;
     messages: Anthropic.MessageParam[];
     tools: Anthropic.Tool[];
     cachedContext?: string;
   }): Promise<Anthropic.Message> {
-    const { systemPrompt, messages, tools, cachedContext } = params;
+    const { systemPromptType, messages, tools, cachedContext } = params;
 
     if (!this.sessionId) {
       throw new Error('No active automation session. Call startAutomation() first.');
@@ -105,7 +106,7 @@ export class AutomationClient {
       const response = await api.post<{ message: any }>(
         '/automation/continue',
         {
-          system_prompt: systemPrompt,
+          system_prompt: systemPromptType,
           messages: messages,
           tools: tools,
           cached_context: cachedContext
