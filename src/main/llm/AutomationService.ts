@@ -3,7 +3,6 @@ import { EventEmitter } from 'events';
 import { BrowserAutomationExecutor } from '@/main/automation/BrowserAutomationExecutor';
 import { RecordingStore } from '@/main/recording';
 import { AutomationClient } from './clients/AutomationClient';
-import { ApiClient } from '@/main/api/ApiClient';
 import { ToolRegistry } from './utils/ToolRegistry';
 import { UsageTracker } from './utils/UsageTracker';
 import { AutomationStateManager } from './core/AutomationStateManager';
@@ -59,14 +58,13 @@ export class AutomationService extends EventEmitter {
     executor: BrowserAutomationExecutor,
     recordingStore: RecordingStore,
     sessionManager: SessionManager,
-    apiClient: ApiClient,
   ) {
     super(); // Initialize EventEmitter
     this.executor = executor;
     this.recordingStore = recordingStore;
     
     // Pass thinking callback to AutomationClient
-    this.automationClient = new AutomationClient(apiClient, (message: string) => {
+    this.automationClient = new AutomationClient((message: string) => {
       this.emitProgress('claude_thinking', { message });
     });
     
