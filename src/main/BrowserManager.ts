@@ -38,7 +38,7 @@ export class BrowserManager {
 
   constructor(
     private baseWindow: BaseWindow,
-    browserUIView?: WebContentsView,
+    browserUIView?: WebContentsView
   ) {
     // Initialize services
     this.recordingStore = new RecordingStore();
