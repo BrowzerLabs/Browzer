@@ -11,7 +11,7 @@ import { InternalRouter, useIsInternalPage } from './InternalRouter';
 import { useDeepLink } from '@/renderer/hooks/useDeepLink';
 import NotFound from '@/renderer/pages/not-found';
 import { NotificationProvider } from '@/renderer/providers/NotificationProvider';
-import { OnboardingPage } from '@/renderer/pages/onboarding';
+import { OnboardingFlow } from '@/renderer/pages/onboarding';
 import { useOnboardingStore } from '@/renderer/stores/onboardingStore';
 
 function MainApp() {
@@ -24,14 +24,23 @@ function AppRoutes() {
   useDeepLink();
   const { hasCompletedOnboarding } = useOnboardingStore();
 
+  // Redirect to onboarding if not completed
+  if (!hasCompletedOnboarding) {
+    return (
+      <Routes>
+        <Route path="/onboarding" element={<OnboardingFlow />} />
+        <Route path="*" element={<Navigate to="/onboarding" replace />} />
+      </Routes>
+    );
+  }
+
   return (
     <Routes>
-      <Route path="/onboarding" element={<OnboardingPage />} />
       
       <Route 
         path="/auth/signin" 
         element={
-          hasCompletedOnboarding ? <SignInPage /> : <Navigate to="/onboarding" replace />
+          <SignInPage />
         } 
       />
       <Route path="/auth/signup" element={<SignUpPage />} />
