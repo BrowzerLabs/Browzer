@@ -15,23 +15,28 @@ interface OnboardingSlide {
 const slides: OnboardingSlide[] = [
   {
     title: 'Welcome to Browzer',
-    description: 'Your intelligent browser that learns from your actions and automates repetitive tasks.',
+    description: 'Teach Browzer how you work, instead of letting AI assume \"your\" processes',
     animationPath: '/assets/onboarding/ai_logo.lottie',
     
   },
   {
-    title: 'Record Your Actions',
-    description: 'Browzer captures your actions, not just screen',
+    title: 'Record Your Processes',
+    description: 'Teach Browzer how you work, instead of letting AI assume "your" processes',
     animationPath: '/assets/onboarding/automation.lottie',
   },
   {
-    title: 'Browzer Automation',
-    description: 'Our AI understands your workflows and automates your tasks in your way',
+    title: 'Automate Your Tasks',
+    description: 'Browzer understands your workflows (truly), to automate them the way you do it!',
     animationPath: '/assets/onboarding/a.lottie',
   },
   {
-    title: 'Almost there',
-    description: 'Always there with you in your right sidebar.',
+    title: 'Privacy First',
+    description: 'All while ensuring that your data stays locally!',
+    animationPath: '/assets/onboarding/lock.lottie',
+  },
+  {
+    title: 'Always Present',
+    description: 'Invoke with a click of the button to chat with your Browzer Assistant',
     animationPath: '/assets/onboarding/ai_circle.lottie'
   },
 ];
