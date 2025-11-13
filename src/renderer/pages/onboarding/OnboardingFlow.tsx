@@ -15,9 +15,8 @@ interface OnboardingSlide {
 const slides: OnboardingSlide[] = [
   {
     title: 'Welcome to Browzer',
-    description: 'Teach Browzer how you work, instead of letting AI assume \"your\" processes',
+    description: 'Your intelligent browzer that learns from your actions and automates repetitive tasks.',
     animationPath: '/assets/onboarding/ai_logo.lottie',
-    
   },
   {
     title: 'Record Your Processes',
