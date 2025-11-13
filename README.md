@@ -544,6 +544,8 @@ copies or substantial portions of the Software.
 - **Tailwind CSS** - For utility-first styling
 - **Lucide** - For the icon library
 - **Open Source Community** - For inspiration and support
+- **Lottie** - For the animations
+- **Pixabay** - For the onboarding background music
 
 ---
 
