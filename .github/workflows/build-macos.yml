@@ -298,7 +298,11 @@ jobs:
       - name: Success notification
         run: |
           echo "✅ macOS build and release completed successfully!"
-          echo "Version: ${GITHUB_REF#refs/tags/}"
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "Version: ${{ github.event.inputs.version }}"
+          else
+            echo "Version: ${GITHUB_REF#refs/tags/}"
+          fi
 
   notify-failure:
     needs: [build-macos, create-release]
