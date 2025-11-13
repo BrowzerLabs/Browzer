@@ -164,8 +164,12 @@ jobs:
           echo "Release files:"
           ls -lh release-files/
           
-          # Get version
-          VERSION=${GITHUB_REF#refs/tags/}
+          # Get version from tag or manual input
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+          else
+            VERSION=${GITHUB_REF#refs/tags/}
+          fi
           echo "version=$VERSION" >> $GITHUB_OUTPUT
       
       - name: Create latest-mac.yml for auto-updater
@@ -269,6 +273,7 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ steps.prepare.outputs.version }}
           files: release-files/*
           body_path: release_notes.md
           draft: false
@@ -293,7 +298,11 @@ jobs:
       - name: Success notification
         run: |
           echo "✅ macOS build and release completed successfully!"
-          echo "Version: ${GITHUB_REF#refs/tags/}"
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "Version: ${{ github.event.inputs.version }}"
+          else
+            echo "Version: ${GITHUB_REF#refs/tags/}"
+          fi
 
   notify-failure:
     needs: [build-macos, create-release]
