@@ -152,10 +152,7 @@ export function SignUpPage() {
           disabled={loading || !email || !password || !!passwordError}
         >
           {loading ? (
-            <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              Creating account...
-            </>
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
           ) : (
             'Create Account'
           )}
