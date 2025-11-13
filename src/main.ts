@@ -1,6 +1,7 @@
 import { app, protocol, net } from 'electron';
 import started from 'electron-squirrel-startup';
 import { MainWindow } from './main/MainWindow';
+import { setupAutoUpdater } from './main/updater';
 import path from 'path';
 
 if (started) {
@@ -44,6 +45,13 @@ protocol.registerSchemesAsPrivileged([
   }
 ]);
 
+let mainWindow: MainWindow | null = null;
+
+const createWindow = () => {
+  mainWindow = new MainWindow();
+};
+
+
 app.whenReady().then(() => {
   protocol.handle('video-file', (request) => {
     const url = request.url.replace('video-file://', '');
@@ -55,13 +63,14 @@ app.whenReady().then(() => {
   });
   
   createWindow();
+  if (mainWindow) {
+    const baseWindow = mainWindow.getWindow();
+    const browserUIView = mainWindow.getBrowserUIView();
+    if (browserUIView) {
+      setupAutoUpdater(browserUIView.webContents, baseWindow);
+    }
+  }
 });
-
-let mainWindow: MainWindow | null = null;
-
-const createWindow = () => {
-  mainWindow = new MainWindow();
-};
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {

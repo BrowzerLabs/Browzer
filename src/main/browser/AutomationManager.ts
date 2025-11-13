@@ -19,7 +19,7 @@ export class AutomationManager {
   constructor(
     private recordingStore: RecordingStore,
     private sessionManager: SessionManager,
-    private browserUIView?: WebContentsView
+    private browserUIView?: WebContentsView,
   ) {}
 
   /**
@@ -43,7 +43,6 @@ export class AutomationManager {
       activeTab.automationExecutor,
       this.recordingStore,
       this.sessionManager,
-      process.env.ANTHROPIC_API_KEY,
     );
 
     // Start automation execution (non-blocking)

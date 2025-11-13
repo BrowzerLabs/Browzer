@@ -6,17 +6,21 @@
   "main": ".vite/build/main.js",
   "scripts": {
     "start": "electron-forge start",
-    "start:debug": "ELECTRON_ENABLE_LOGGING=1 electron-forge start -- --inspect=9229 --remote-debugging-port=9222",
-    "start:debug-brk": "ELECTRON_ENABLE_LOGGING=1 electron-forge start -- --inspect-brk=9229 --remote-debugging-port=9222",
     "package": "electron-forge package",
-    "make": "electron-forge make",
+    "make": "NODE_ENV=production electron-forge make",
     "publish": "electron-forge publish",
+    "make:mac": "NODE_ENV=production electron-forge make --platform darwin",
+    "make:dmg": "NODE_ENV=production electron-forge make --platform darwin --arch x64",
+    "make:arm64": "NODE_ENV=production electron-forge make --platform darwin --arch arm64",
+    "make:universal": "NODE_ENV=production electron-forge make --platform darwin --arch universal",
+    "make:win": "electron-forge make --platform=win32",
+    "make:linux": "electron-forge make --platform=linux",
     "lint": "eslint --ext .ts,.tsx ."
   },
   "keywords": [],
   "author": {
-    "name": "Abhinandan",
-    "email": "abhinandanverma551@gmail.com"
+    "name": "Browzer Labs, Inc.",
+    "email": "contact@trybrowzer.com"
   },
   "license": "MIT",
   "pnpm": {
@@ -26,6 +30,8 @@
       "electron",
       "electron-winstaller",
       "esbuild",
+      "fs-xattr",
+      "macos-alias",
       "unrs-resolver"
     ]
   },
@@ -61,6 +67,9 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.66.0",
+    "@electron-forge/maker-dmg": "^7.10.2",
+    "@electron-forge/publisher-github": "^7.10.2",
+    "@lottiefiles/dotlottie-react": "^0.17.7",
     "@radix-ui/react-accordion": "^1.2.12",
     "@radix-ui/react-alert-dialog": "^1.1.15",
     "@radix-ui/react-avatar": "^1.1.10",
@@ -84,9 +93,12 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "date-fns": "^4.1.0",
+    "electron-log": "^5.1.7",
     "electron-squirrel-startup": "^1.0.1",
     "electron-store": "^11.0.2",
+    "electron-updater": "^6.6.2",
     "eventsource": "^4.0.0",
+    "framer-motion": "^12.23.24",
     "input-otp": "^1.4.2",
     "lucide-react": "^0.545.0",
     "react": "^19.2.0",

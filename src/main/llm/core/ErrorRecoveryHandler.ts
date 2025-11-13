@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { ClaudeClient } from '../clients/ClaudeClient';
+import { AutomationClient } from '../clients/AutomationClient';
 import { ToolRegistry } from '../utils/ToolRegistry';
 import { SystemPromptBuilder } from '../builders/SystemPromptBuilder';
 import { MessageBuilder } from '../builders/MessageBuilder';
@@ -7,14 +7,14 @@ import { AutomationPlanParser } from '../parsers/AutomationPlanParser';
 import { AutomationStateManager } from './AutomationStateManager';
 import { UsageTracker } from '../utils/UsageTracker';
 import { PlanExecutionResult } from './types';
-import { ToolExecutionResult } from '@/shared/types';
+import { ToolExecutionResult, SystemPromptType } from '@/shared/types';
 
 /**
  * ErrorRecoveryHandler - Handles error recovery during automation
  * 
  * Responsibilities:
  * - Build error recovery prompts
- * - Request recovery plan from Claude
+ * - Request recovery plan from Claude (via AutomationClient)
  * - Parse and validate recovery plan
  * - Update state for recovery mode
  * 
@@ -25,16 +25,16 @@ import { ToolExecutionResult } from '@/shared/types';
  * - State management during recovery
  */
 export class ErrorRecoveryHandler {
-  private claudeClient: ClaudeClient;
+  private automationClient: AutomationClient;
   private toolRegistry: ToolRegistry;
   private stateManager: AutomationStateManager;
 
   constructor(
-    claudeClient: ClaudeClient,
+    automationClient: AutomationClient,
     toolRegistry: ToolRegistry,
     stateManager: AutomationStateManager
   ) {
-    this.claudeClient = claudeClient;
+    this.automationClient = automationClient;
     this.toolRegistry = toolRegistry;
     this.stateManager = stateManager;
   }
@@ -87,11 +87,10 @@ export class ErrorRecoveryHandler {
     );
 
     // Get recovery plan from Claude
-    const systemPrompt = SystemPromptBuilder.buildErrorRecoverySystemPrompt();
     const tools = this.toolRegistry.getToolDefinitions();
 
-    const response = await this.claudeClient.continueConversation({
-      systemPrompt,
+    const response = await this.automationClient.continueConversation({
+      systemPromptType: SystemPromptType.AUTOMATION_ERROR_RECOVERY,
       messages: this.stateManager.getOptimizedMessages(),
       tools,
       cachedContext: this.stateManager.getCachedContext()

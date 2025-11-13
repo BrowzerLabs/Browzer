@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { ProtectedRoute } from '@/renderer/components/auth/ProtectedRoute';
 import { SignInPage, SignUpPage, ForgotPasswordPage } from '@/renderer/pages/auth';
 import { ConfirmSignupPage } from '@/renderer/pages/auth/ConfirmSignupPage';
@@ -11,6 +11,8 @@ import { InternalRouter, useIsInternalPage } from './InternalRouter';
 import { useDeepLink } from '@/renderer/hooks/useDeepLink';
 import NotFound from '@/renderer/pages/not-found';
 import { NotificationProvider } from '@/renderer/providers/NotificationProvider';
+import { OnboardingFlow } from '@/renderer/pages/onboarding';
+import { useOnboardingStore } from '@/renderer/stores/onboardingStore';
 
 function MainApp() {
   const isInternalPage = useIsInternalPage();
@@ -19,24 +21,36 @@ function MainApp() {
 }
 
 function AppRoutes() {
-  // Initialize global deep link handler (must be inside Router context)
   useDeepLink();
+  const { hasCompletedOnboarding } = useOnboardingStore();
+
+  // Redirect to onboarding if not completed
+  if (!hasCompletedOnboarding) {
+    return (
+      <Routes>
+        <Route path="/onboarding" element={<OnboardingFlow />} />
+        <Route path="*" element={<Navigate to="/onboarding" replace />} />
+      </Routes>
+    );
+  }
 
   return (
     <Routes>
-      {/* Public Auth Routes */}
-      <Route path="/auth/signin" element={<SignInPage />} />
+      
+      <Route 
+        path="/auth/signin" 
+        element={
+          <SignInPage />
+        } 
+      />
       <Route path="/auth/signup" element={<SignUpPage />} />
       <Route path="/auth/forgot-password" element={<ForgotPasswordPage />} />
       
-      {/* Public Pricing Page */}
       <Route path="/pricing" element={<PricingPage />} />
       
-      {/* Magic Link Callback Routes */}
       <Route path="/auth/confirm-signup" element={<ConfirmSignupPage />} />
       <Route path="/auth/reset-password" element={<ResetPasswordCallbackPage />} />
       
-      {/* Subscription Callback Routes (Protected) */}
       <Route 
         path="/subscription/success" 
         element={
@@ -54,7 +68,6 @@ function AppRoutes() {
         } 
       />
       
-      {/* Protected Main App Route */}
       <Route 
         path="/*" 
         element={
@@ -64,7 +77,6 @@ function AppRoutes() {
         } 
       />
       
-      {/* Fallback - redirect to signin */}
       <Route path="*" element={<NotFound />} />
     </Routes>
   );

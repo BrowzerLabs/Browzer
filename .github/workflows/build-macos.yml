@@ -1,0 +1,309 @@
+name: Build and Release macOS
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to build (e.g., v1.0.0)'
+        required: false
+        default: ''
+
+env:
+  NODE_VERSION: '22'
+  PNPM_VERSION: '10.19.0'
+
+jobs:
+  build-macos:
+    runs-on: macos-latest
+    
+    strategy:
+      matrix:
+        arch: [x64, arm64]
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+      
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+      
+      - name: Get pnpm store directory
+        shell: bash
+        run: echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
+      
+      - name: Setup pnpm cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: ${{ runner.os }}-pnpm-
+      
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      
+      - name: Setup Apple certificates
+        env:
+          APPLE_CERT_DATA: ${{ secrets.APPLE_CERT_DATA }}
+          APPLE_CERT_PASSWORD: ${{ secrets.APPLE_CERT_PASSWORD }}
+        run: |
+          # Create temporary keychain
+          KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
+          KEYCHAIN_PASSWORD=$(openssl rand -base64 32)
+          
+          echo "Creating keychain..."
+          security create-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
+          security set-keychain-settings -lut 21600 $KEYCHAIN_PATH
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
+          
+          # Import certificate
+          echo "Importing certificate..."
+          CERT_PATH=$RUNNER_TEMP/certificate.p12
+          echo -n "$APPLE_CERT_DATA" | base64 --decode -o $CERT_PATH
+          security import $CERT_PATH -P "$APPLE_CERT_PASSWORD" -A -t cert -f pkcs12 -k $KEYCHAIN_PATH
+          security list-keychain -d user -s $KEYCHAIN_PATH
+          
+          # Enable codesigning
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
+          
+          # Verify certificate is available
+          echo "Verifying certificate..."
+          security find-identity -v -p codesigning $KEYCHAIN_PATH
+      
+      - name: Build for macOS (${{ matrix.arch }})
+        env:
+          NODE_ENV: production
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_ID_PASSWORD: ${{ secrets.APPLE_ID_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_IDENTITY: ${{ secrets.APPLE_IDENTITY }}
+          DEBUG: electron-osx-sign*,electron-notarize*
+          ELECTRON_FORGE_ARCH: ${{ matrix.arch }}
+        run: |
+          echo "Building for ${{ matrix.arch }}..."
+          pnpm run make -- --arch=${{ matrix.arch }} --platform=darwin
+      
+      - name: List build output
+        run: |
+          echo "Build output:"
+          find out -type f -name "*.dmg" -o -name "*.zip"
+      
+      - name: Generate checksums
+        run: |
+          echo "Generating checksums..."
+          find out/make -type f \( -name "*.dmg" -o -name "*.zip" \) | while read file; do
+            echo "Processing: $file"
+            shasum -a 256 "$file" | tee "$file.sha256"
+            shasum -a 512 "$file" | tee "$file.sha512"
+          done
+      
+      - name: Verify code signing
+        run: |
+          echo "Verifying code signatures..."
+          find out -name "*.app" -type d | while read app; do
+            echo "Checking: $app"
+            codesign -dv --verbose=4 "$app" 2>&1 || echo "Warning: Could not verify $app"
+            spctl -a -vvv "$app" 2>&1 || echo "Warning: Gatekeeper check failed for $app"
+          done
+      
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: browzer-macos-${{ matrix.arch }}
+          path: |
+            out/make/**/*.dmg
+            out/make/**/*.zip
+            out/make/**/*.sha256
+            out/make/**/*.sha512
+          retention-days: 30
+          if-no-files-found: error
+      
+      - name: Cleanup certificates
+        if: always()
+        run: |
+          security delete-keychain $RUNNER_TEMP/app-signing.keychain-db || true
+          rm -f $RUNNER_TEMP/certificate.p12 || true
+
+  create-release:
+    needs: build-macos
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    
+    permissions:
+      contents: write
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+      
+      - name: Display structure of downloaded files
+        run: ls -R artifacts
+      
+      - name: Prepare release files
+        id: prepare
+        run: |
+          mkdir -p release-files
+          
+          # Copy all DMG and ZIP files
+          find artifacts -type f \( -name "*.dmg" -o -name "*.zip" -o -name "*.sha256" -o -name "*.sha512" \) -exec cp {} release-files/ \;
+          
+          echo "Release files:"
+          ls -lh release-files/
+          
+          # Get version
+          VERSION=${GITHUB_REF#refs/tags/}
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+      
+      - name: Create latest-mac.yml for auto-updater
+        run: |
+          VERSION="${{ steps.prepare.outputs.version }}"
+          VERSION_NUMBER="${VERSION#v}"
+          
+          # Find the universal or x64 DMG (prefer universal)
+          DMG_UNIVERSAL=$(find release-files -name "*universal*.dmg" -o -name "*Universal*.dmg" | head -1)
+          DMG_X64=$(find release-files -name "*x64*.dmg" -o -name "*intel*.dmg" | head -1)
+          DMG_ARM64=$(find release-files -name "*arm64*.dmg" | head -1)
+          
+          # Use universal if available, otherwise x64
+          if [ -n "$DMG_UNIVERSAL" ]; then
+            DMG_FILE="$DMG_UNIVERSAL"
+          elif [ -n "$DMG_X64" ]; then
+            DMG_FILE="$DMG_X64"
+          else
+            DMG_FILE="$DMG_ARM64"
+          fi
+          
+          if [ -z "$DMG_FILE" ]; then
+            echo "Error: No DMG file found!"
+            exit 1
+          fi
+          
+          echo "Using DMG: $DMG_FILE"
+          
+          # Get file info
+          FILENAME=$(basename "$DMG_FILE")
+          SIZE=$(stat -c%s "$DMG_FILE" 2>/dev/null || stat -f%z "$DMG_FILE")
+          SHA512=$(shasum -a 512 "$DMG_FILE" | awk '{print $1}')
+          RELEASE_DATE=$(date -u +'%Y-%m-%dT%H:%M:%S.000Z')
+          
+          # Create latest-mac.yml in electron-updater format
+          cat > release-files/latest-mac.yml <<EOF
+          version: ${VERSION_NUMBER}
+          files:
+            - url: ${FILENAME}
+              sha512: ${SHA512}
+              size: ${SIZE}
+          path: ${FILENAME}
+          sha512: ${SHA512}
+          releaseDate: '${RELEASE_DATE}'
+          EOF
+          
+          echo "Generated latest-mac.yml:"
+          cat release-files/latest-mac.yml
+      
+      - name: Get repository info
+        id: repo_info
+        run: |
+          echo "owner=${{ github.repository_owner }}" >> $GITHUB_OUTPUT
+          echo "repo=${{ github.event.repository.name }}" >> $GITHUB_OUTPUT
+      
+      - name: Generate release notes
+        id: release_notes
+        run: |
+          VERSION="${{ steps.prepare.outputs.version }}"
+          
+          cat > release_notes.md <<EOF
+          # Browzer ${VERSION}
+          
+          ## 📦 Downloads
+          
+          ### macOS
+          
+          Choose the appropriate version for your Mac:
+          
+          - **Intel Macs**: Download \`Browzer-${VERSION}-x64.dmg\`
+          - **Apple Silicon (M1/M2/M3)**: Download \`Browzer-${VERSION}-arm64.dmg\`
+          - **Universal**: Download \`Browzer-${VERSION}-universal.dmg\` (works on both)
+          
+          ### ✅ Installation
+          
+          1. Download the appropriate DMG file
+          2. Double-click to mount the DMG
+          3. Drag Browzer to your Applications folder
+          4. Launch from Applications (you may need to allow it in System Settings > Privacy & Security)
+          
+          ### 🔐 Verification
+          
+          Verify the integrity of your download:
+          
+          \`\`\`bash
+          shasum -a 256 -c Browzer-${VERSION}-x64.dmg.sha256
+          \`\`\`
+          
+          ### 🔄 Auto-Updates
+          
+          Once installed, Browzer will automatically check for and install future updates.
+          
+          ### 📝 What's New
+          
+          <!-- Add your release notes here -->
+          
+          EOF
+          
+          cat release_notes.md
+      
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release-files/*
+          body_path: release_notes.md
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Output release info
+        run: |
+          echo "✅ Release created successfully!"
+          echo "Version: ${{ steps.prepare.outputs.version }}"
+          echo "Files released:"
+          ls -lh release-files/
+
+  notify-success:
+    needs: [build-macos, create-release]
+    runs-on: ubuntu-latest
+    if: success()
+    
+    steps:
+      - name: Success notification
+        run: |
+          echo "✅ macOS build and release completed successfully!"
+          echo "Version: ${GITHUB_REF#refs/tags/}"
+
+  notify-failure:
+    needs: [build-macos, create-release]
+    runs-on: ubuntu-latest
+    if: failure()
+    
+    steps:
+      - name: Failure notification
+        run: |
+          echo "❌ macOS build or release failed!"
+          echo "Check the logs above for details."
+          exit 1

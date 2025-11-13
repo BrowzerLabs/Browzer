@@ -1,5 +1,3 @@
-"use client"
-
 import { useTheme } from "./theme-provider"
 import { Toaster as Sonner, ToasterProps } from "sonner"
 
