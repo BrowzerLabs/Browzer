@@ -48,7 +48,7 @@ export function useAuth() {
         store.setAuthData(session.user, session);
       } else {
         console.log('[Auth] No session found');
-        toast.info('No session found, Please sign in');
+        toast.info('Welcome back 👋🏻, Please sign in to continue');
         store.clearAuth();
       }
       

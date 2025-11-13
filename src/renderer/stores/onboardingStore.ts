@@ -1,26 +1,26 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
-/**
- * Onboarding Store - Tracks first-time user onboarding completion
- * 
- * Uses localStorage to persist state across app restarts
- */
-
-interface OnboardingStore {
+interface OnboardingState {
   hasCompletedOnboarding: boolean;
+  setHasCompletedOnboarding: (completed: boolean) => void;
   completeOnboarding: () => void;
-  resetOnboarding: () => void; // For testing/debugging
+  resetOnboarding: () => void;
 }
 
-export const useOnboardingStore = create<OnboardingStore>()(
+export const useOnboardingStore = create<OnboardingState>()(
   persist(
     (set) => ({
       hasCompletedOnboarding: false,
-      
-      completeOnboarding: () => set({ hasCompletedOnboarding: true }),
-      
-      resetOnboarding: () => set({ hasCompletedOnboarding: false }),
+
+      setHasCompletedOnboarding: (completed) => 
+        set({ hasCompletedOnboarding: completed }),
+
+      completeOnboarding: () => 
+        set({ hasCompletedOnboarding: true }),
+
+      resetOnboarding: () => 
+        set({ hasCompletedOnboarding: false }),
     }),
     {
       name: 'browzer-onboarding-storage',
