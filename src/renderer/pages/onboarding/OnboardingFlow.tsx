@@ -2,19 +2,14 @@ import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { DotLottieReact } from '@lottiefiles/dotlottie-react';
 import { Button } from '@/renderer/ui/button';
-import { Card } from '@/renderer/ui/card';
-import { ChevronRight, ChevronLeft, Sparkles } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { ChevronRight, ChevronLeft } from 'lucide-react';
 import { useOnboardingStore } from '@/renderer/stores/onboardingStore';
-import { cn } from '@/renderer/lib/utils';
+import { useNavigate } from 'react-router-dom';
 
 interface OnboardingSlide {
   title: string;
   description: string;
   animationPath: string;
-  accentColor: string;
-  gradientFrom: string;
-  gradientTo: string;
 }
 
 const slides: OnboardingSlide[] = [
@@ -22,43 +17,50 @@ const slides: OnboardingSlide[] = [
     title: 'Welcome to Browzer',
     description: 'Your intelligent browser that learns from your actions and automates repetitive tasks.',
     animationPath: '/assets/onboarding/ai_logo.lottie',
-    accentColor: '#3b82f6',
-    gradientFrom: '#3b82f6',
-    gradientTo: '#06b6d4',
+    
   },
   {
     title: 'Record Your Actions',
     description: 'Browzer captures your actions, not just screen',
     animationPath: '/assets/onboarding/automation.lottie',
-    accentColor: '#a855f7',
-    gradientFrom: '#a855f7',
-    gradientTo: '#ec4899',
   },
   {
     title: 'Browzer Automation',
     description: 'Our AI understands your workflows and automates your tasks in your way',
     animationPath: '/assets/onboarding/a.lottie',
-    accentColor: '#10b981',
-    gradientFrom: '#10b981',
-    gradientTo: '#06b6d4',
   },
   {
-    title: 'Always there',
+    title: 'Almost there',
     description: 'Always there with you in your right sidebar.',
-    animationPath: '/assets/onboarding/ai_circle.lottie',
-    accentColor: '#10b981',
-    gradientFrom: '#10b981',
-    gradientTo: '#06b6d4',
+    animationPath: '/assets/onboarding/ai_circle.lottie'
   },
 ];
 
 export function OnboardingFlow() {
   const [currentSlide, setCurrentSlide] = useState(0);
+  const [direction, setDirection] = useState(0);
   const navigate = useNavigate();
   const { completeOnboarding } = useOnboardingStore();
-
   const isLastSlide = currentSlide === slides.length - 1;
   const isFirstSlide = currentSlide === 0;
+
+  useEffect(() => {
+    const audio = new Audio('/assets/onboarding/cosmic.mp3');
+    audio.loop = true;
+    audio.volume = 0.3;
+    const playPromise = audio.play();
+    
+    if (playPromise !== undefined) {
+      playPromise.catch(error => {
+        console.log('Audio autoplay prevented:', error);
+      });
+    }
+
+    return () => {
+      audio.pause();
+      audio.currentTime = 0;
+    };
+  }, []);
 
   // Keyboard navigation
   useEffect(() => {
@@ -80,12 +82,14 @@ export function OnboardingFlow() {
     if (isLastSlide) {
       handleComplete();
     } else {
+      setDirection(1);
       setCurrentSlide((prev) => prev + 1);
     }
   };
 
   const handlePrevious = () => {
     if (!isFirstSlide) {
+      setDirection(-1);
       setCurrentSlide((prev) => prev - 1);
     }
   };
@@ -97,23 +101,75 @@ export function OnboardingFlow() {
 
   const slide = slides[currentSlide];
 
-  return (
-    <div className="min-h-screen relative flex items-center justify-center">
-        <div className="flex flex-col items-center">
-                <section className='h-[350px]'>
-                   <DotLottieReact
-                    src={slide.animationPath}
-                    loop
-                    autoplay
-                  />
-                </section>
-                  
-                  <h1 className='mt-10 mb-2 text-5xl text-slate-200 font-bold'>
-                    {slide.title}
-                  </h1>
-                  <p className='text-slate-400 text-sm'>{slide.description}</p>
+  const slideVariants = {
+    enter: (direction: number) => ({
+      x: direction > 0 ? 100 : -100,
+      opacity: 0,
+    }),
+    center: {
+      zIndex: 1,
+      x: 0,
+      opacity: 1,
+    },
+    exit: (direction: number) => ({
+      zIndex: 0,
+      x: direction < 0 ? 100 : -100,
+      opacity: 0,
+    }),
+  };
 
-            </div>
+  return (
+    <div className="min-h-screen relative flex items-center justify-center overflow-hidden">
+      <div className="flex flex-col items-center w-full max-w-4xl px-4">
+        {/* Progress Indicators */}
+        <div className="flex gap-2 mb-8">
+          {slides.map((_, index) => (
+            <motion.div
+              key={index}
+              className={`h-1.5 rounded-full transition-all duration-300 ${
+                index === currentSlide
+                  ? 'w-8 bg-primary'
+                  : index < currentSlide
+                  ? 'w-6 bg-primary/50'
+                  : 'w-6 bg-slate-700'
+              }`}
+              initial={{ scale: 0.8 }}
+              animate={{ scale: index === currentSlide ? 1 : 0.8 }}
+            />
+          ))}
+        </div>
+
+        <AnimatePresence initial={false} custom={direction} mode="wait">
+          <motion.div
+            key={currentSlide}
+            custom={direction}
+            variants={slideVariants}
+            initial="enter"
+            animate="center"
+            exit="exit"
+            transition={{
+              x: { type: 'spring', stiffness: 120, damping: 20 },
+              opacity: { duration: 0.3 },
+            }}
+            className="flex flex-col items-center w-full"
+          >
+            <section className='h-[350px]'>
+              <DotLottieReact
+                src={slide.animationPath}
+                loop
+                autoplay
+              />
+            </section>
+              
+            <h1 className='mt-10 mb-2 text-5xl text-slate-200 font-bold text-center'>
+              {slide.title}
+            </h1>
+            <p className='text-slate-400 text-sm text-center max-w-2xl'>
+              {slide.description}
+            </p>
+          </motion.div>
+        </AnimatePresence>
+      </div>
 
           
             <div className="flex items-center justify-between fixed bottom-7 w-3xl">
@@ -131,9 +187,6 @@ export function OnboardingFlow() {
             <Button
               onClick={handleNext}
               size='lg'
-              className={cn(
-                isLastSlide && 'bg-cyan-500'
-              )}
             >
               {isLastSlide ? (
                 'Get Started'
