@@ -4,7 +4,7 @@ import { ScrollArea } from '@/renderer/ui/scroll-area';
 import { GeneralSettings } from '@/renderer/components/settings/GeneralSettings';
 import { PrivacySettings } from '@/renderer/components/settings/PrivacySettings';
 import { AppearanceSettings } from '@/renderer/components/settings/AppearanceSettings';
-import { AutomationSettings } from '@/renderer/components/settings/AutomationSettings';
+//import { AutomationSettings } from '@/renderer/components/settings/AutomationSettings';
 import { PasswordSettings } from '@/renderer/components/settings/PasswordSettings';
 import { AppSettings } from '@/shared/types';
 import { Settings as SettingsIcon, Shield, Palette, Sparkles, Loader2Icon, Key } from 'lucide-react';
@@ -124,13 +124,13 @@ export function Settings() {
                   <Palette className='h-4 w-4' />
                   <span>Appearance</span>
                 </TabsTrigger>
-                <TabsTrigger
+                {/* <TabsTrigger
                   value='automation'
                   className='justify-start gap-3 rounded-md px-4 py-2.5 data-[state=active]:bg-accent data-[state=active]:shadow-none'
                 >
                   <Sparkles className='h-4 w-4' />
                   <span>Automation</span>
-                </TabsTrigger>
+                </TabsTrigger> */}
               </TabsList>
             </ScrollArea>
 
@@ -166,13 +166,13 @@ export function Settings() {
                   />
                 </TabsContent>
 
-                <TabsContent value='automation'>
+                {/* <TabsContent value='automation'>
                   <AutomationSettings
                     settings={settings.automation}
                     onUpdate={(key, value) => handleUpdateSetting('automation', key, value)}
                     onReset={() => handleResetCategory('automation')}
                   />
-                </TabsContent>
+                </TabsContent> */}
               </div>
             </ScrollArea>
           </div>
