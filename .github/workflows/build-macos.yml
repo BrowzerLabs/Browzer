@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Version to build (e.g., v1.0.0 or leave empty for auto-increment)'
+        description: 'Version to build (e.g., v1.0.0)'
         required: false
         default: ''
 
@@ -16,61 +16,7 @@ env:
   PNPM_VERSION: '10.19.0'
 
 jobs:
-  determine-version:
-    runs-on: ubuntu-latest
-    outputs:
-      version: ${{ steps.version.outputs.version }}
-      should_release: ${{ steps.version.outputs.should_release }}
-    
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      
-      - name: Determine version
-        id: version
-        run: |
-          # Check if triggered by tag
-          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
-            VERSION="${GITHUB_REF#refs/tags/}"
-            echo "version=$VERSION" >> $GITHUB_OUTPUT
-            echo "should_release=true" >> $GITHUB_OUTPUT
-            echo "Using tag version: $VERSION"
-            exit 0
-          fi
-          
-          # Check if manual version provided
-          if [[ -n "${{ github.event.inputs.version }}" ]]; then
-            VERSION="${{ github.event.inputs.version }}"
-            # Add 'v' prefix if not present
-            if [[ ! "$VERSION" =~ ^v ]]; then
-              VERSION="v$VERSION"
-            fi
-            echo "version=$VERSION" >> $GITHUB_OUTPUT
-            echo "should_release=true" >> $GITHUB_OUTPUT
-            echo "Using manual version: $VERSION"
-            exit 0
-          fi
-          
-          # Auto-increment version
-          LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
-          echo "Latest tag: $LATEST_TAG"
-          
-          # Extract version numbers
-          VERSION_NUM=${LATEST_TAG#v}
-          IFS='.' read -r MAJOR MINOR PATCH <<< "$VERSION_NUM"
-          
-          # Increment patch version
-          PATCH=$((PATCH + 1))
-          NEW_VERSION="v${MAJOR}.${MINOR}.${PATCH}"
-          
-          echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
-          echo "should_release=true" >> $GITHUB_OUTPUT
-          echo "Auto-incremented version: $NEW_VERSION"
-
   build-macos:
-    needs: determine-version
     runs-on: macos-latest
     
     strategy:
@@ -188,9 +134,9 @@ jobs:
           rm -f $RUNNER_TEMP/certificate.p12 || true
 
   create-release:
-    needs: [determine-version, build-macos]
+    needs: build-macos
     runs-on: ubuntu-latest
-    if: needs.determine-version.outputs.should_release == 'true'
+    if: startsWith(github.ref, 'refs/tags/') || (github.event_name == 'workflow_dispatch' && github.event.inputs.version != '')
     
     permissions:
       contents: write
@@ -218,10 +164,9 @@ jobs:
           echo "Release files:"
           ls -lh release-files/
           
-          # Get version from previous job
-          VERSION="${{ needs.determine-version.outputs.version }}"
+          # Get version
+          VERSION=${GITHUB_REF#refs/tags/}
           echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "Using version: $VERSION"
       
       - name: Create latest-mac.yml for auto-updater
         run: |
@@ -324,8 +269,6 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ needs.determine-version.outputs.version }}
-          name: Browzer ${{ needs.determine-version.outputs.version }}
           files: release-files/*
           body_path: release_notes.md
           draft: false
@@ -342,7 +285,7 @@ jobs:
           ls -lh release-files/
 
   notify-success:
-    needs: [determine-version, build-macos, create-release]
+    needs: [build-macos, create-release]
     runs-on: ubuntu-latest
     if: success()
     
@@ -350,10 +293,10 @@ jobs:
       - name: Success notification
         run: |
           echo "✅ macOS build and release completed successfully!"
-          echo "Version: ${{ needs.determine-version.outputs.version }}"
+          echo "Version: ${GITHUB_REF#refs/tags/}"
 
   notify-failure:
-    needs: [determine-version, build-macos, create-release]
+    needs: [build-macos, create-release]
     runs-on: ubuntu-latest
     if: failure()
     
