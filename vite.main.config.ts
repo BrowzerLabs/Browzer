@@ -11,6 +11,9 @@ export default defineConfig({
       '@': path.resolve(__dirname, './src'),
     },
   },
+  define: {
+    'process.env.BACKEND_API_URL': JSON.stringify(process.env.BACKEND_API_URL || 'http://localhost:8000/api/v1'),
+  },
   build: {
     sourcemap: true,
     minify: false,
