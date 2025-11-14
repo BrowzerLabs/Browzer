@@ -6,6 +6,14 @@ import { ChevronRight, ChevronLeft } from 'lucide-react';
 import { useOnboardingStore } from '@/renderer/stores/onboardingStore';
 import { useNavigate } from 'react-router-dom';
 
+// Import assets from the same directory
+import aiLogoAnimation from './ai_logo.lottie';
+import automationAnimation from './automation.lottie';
+import aAnimation from './a.lottie';
+import lockAnimation from './lock.lottie';
+import aiCircleAnimation from './ai_circle.lottie';
+import cosmicAudio from './cosmic.mp3';
+
 interface OnboardingSlide {
   title: string;
   description: string;
@@ -16,27 +24,27 @@ const slides: OnboardingSlide[] = [
   {
     title: 'Welcome to Browzer',
     description: 'Your intelligent browser that learns and automates your repetitive workflows.',
-    animationPath: '/assets/onboarding/ai_logo.lottie',
+    animationPath: aiLogoAnimation,
   },
   {
     title: 'Record Your Processes',
     description: 'Teach Browzer how you work, instead of letting AI assume "your" processes',
-    animationPath: '/assets/onboarding/automation.lottie',
+    animationPath: automationAnimation,
   },
   {
     title: 'Automate Your Tasks',
     description: 'Browzer understands your workflows (truly), to automate them the way you do it!',
-    animationPath: '/assets/onboarding/a.lottie',
+    animationPath: aAnimation,
   },
   {
     title: 'Privacy First',
     description: 'All while ensuring that your data stays locally!',
-    animationPath: '/assets/onboarding/lock.lottie',
+    animationPath: lockAnimation,
   },
   {
     title: 'Always Present',
     description: 'Invoke with a click of the button to chat with your Browzer Assistant',
-    animationPath: '/assets/onboarding/ai_circle.lottie'
+    animationPath: aiCircleAnimation
   },
 ];
 
@@ -49,7 +57,7 @@ export function OnboardingFlow() {
   const isFirstSlide = currentSlide === 0;
 
   useEffect(() => {
-    const audio = new Audio('/assets/onboarding/cosmic.mp3');
+    const audio = new Audio(cosmicAudio);
     audio.loop = true;
     audio.volume = 0.2;
     const playPromise = audio.play();

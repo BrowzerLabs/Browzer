@@ -13,4 +13,15 @@ declare global {
   const MAIN_WINDOW_VITE_NAME: string;
 }
 
+// Asset type declarations for Vite
+declare module '*.lottie' {
+  const src: string;
+  export default src;
+}
+
+declare module '*.mp3' {
+  const src: string;
+  export default src;
+}
+
 export {};
