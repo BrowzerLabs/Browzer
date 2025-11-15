@@ -1,17 +1,8 @@
-/**
- * TokenManager - Centralized secure token storage and management
- * 
- * Uses Electron's safeStorage API for OS-level encryption:
- * - macOS: Keychain
- * - Windows: DPAPI
- * - Linux: libsecret
- * 
- * Provides singleton access to tokens without callback dependencies
- * Stores only tokens securely, not the full session with user data
- */
-
-import { safeStorage, app } from 'electron';
+import { app } from 'electron';
 import Store from 'electron-store';
+import { createCipheriv, createDecipheriv, randomBytes, pbkdf2Sync, scryptSync } from 'crypto';
+import { machineIdSync } from 'node-machine-id';
+import { EventEmitter } from 'events';
 
 interface TokenData {
   access_token: string;
@@ -19,19 +10,114 @@ interface TokenData {
   expires_at: number;
 }
 
-export class TokenManager {
+export class TokenManager extends EventEmitter {
   private static instance: TokenManager | null = null;
   private store: Store;
   private cachedTokens: TokenData | null = null;
   private refreshTimer: NodeJS.Timeout | null = null;
   private isRefreshing: boolean = false;
   private refreshPromise: Promise<boolean> | null = null;
+  private encryptionKey: Buffer;
+
+  private readonly ALGORITHM = 'aes-256-gcm';
+  private readonly KEY_LENGTH = 32;
+  private readonly IV_LENGTH = 16;
+  private readonly AUTH_TAG_LENGTH = 16;
+  
+  private readonly APP_CONTEXT = 'browzer-token-storage-v1';
 
   private constructor() {
-    // Use electron-store only for non-sensitive metadata
+    super();
     this.store = new Store({
-      name: 'auth-metadata',
+      name: 'browzer',
+      encryptionKey: 'browzer-store-key-' + app.getVersion(),
     });
+    
+    this.encryptionKey = this.deriveEncryptionKey();
+  }
+
+  private deriveEncryptionKey(): Buffer {
+    try {
+      let installationSalt = this.store.get('installation_salt') as string | undefined;
+      
+      if (!installationSalt) {
+        // Generate a cryptographically random salt on first run
+        installationSalt = randomBytes(32).toString('base64');
+        this.store.set('installation_salt', installationSalt);
+        console.log('[TokenManager] Generated new installation salt');
+      }
+
+      // Combine multiple entropy sources
+      const machineId = machineIdSync();
+      const appVersion = app.getVersion();
+      const appPath = app.getAppPath();
+      
+      // Create composite key material
+      const keyMaterial = `${machineId}|${this.APP_CONTEXT}|${appVersion}|${appPath}`;
+      
+      // Use scrypt
+      const derivedKey = scryptSync(
+        keyMaterial,
+        installationSalt,
+        this.KEY_LENGTH,
+        {
+          N: 16384, // CPU/memory cost (higher = more secure but slower)
+          r: 8,     // Block size
+          p: 1,     // Parallelization
+        }
+      );
+      
+      return derivedKey;
+    } catch (error) {
+      console.error('[TokenManager] Failed to derive encryption key:', error);
+      // Fallback: generate random key (will lose tokens but prevents crashes)
+      console.warn('[TokenManager] Using fallback random key - tokens may be lost');
+      return randomBytes(this.KEY_LENGTH);
+    }
+  }
+
+  private encrypt(plaintext: string): string {
+    try {
+      const iv = randomBytes(this.IV_LENGTH);
+      const cipher = createCipheriv(this.ALGORITHM, this.encryptionKey, iv);
+      
+      let encrypted = cipher.update(plaintext, 'utf8', 'base64');
+      encrypted += cipher.final('base64');
+      
+      const authTag = cipher.getAuthTag();
+      
+      const combined = Buffer.concat([
+        iv,
+        Buffer.from(encrypted, 'base64'),
+        authTag
+      ]);
+      
+      return combined.toString('base64');
+    } catch (error) {
+      console.error('[TokenManager] Encryption failed:', error);
+      throw error;
+    }
+  }
+
+  private decrypt(ciphertext: string): string {
+    try {
+      const combined = Buffer.from(ciphertext, 'base64');
+      
+      const iv = combined.subarray(0, this.IV_LENGTH);
+      const authTag = combined.subarray(combined.length - this.AUTH_TAG_LENGTH);
+      const encrypted = combined.subarray(this.IV_LENGTH, combined.length - this.AUTH_TAG_LENGTH);
+      
+      const decipher = createDecipheriv(this.ALGORITHM, this.encryptionKey, iv);
+      decipher.setAuthTag(authTag);
+      
+      let decrypted = decipher.update(encrypted.toString('base64'), 'base64', 'utf8');
+      decrypted += decipher.final('utf8');
+      
+      return decrypted;
+    } catch (error) {
+      console.error('[TokenManager] Decryption failed:', error);
+      throw error;
+    }
   }
 
   public static getInstance(): TokenManager {
@@ -41,20 +127,7 @@ export class TokenManager {
     return TokenManager.instance;
   }
 
-  /**
-   * Save tokens securely using safeStorage
-   */
   public saveTokens(accessToken: string, refreshToken: string, expiresAt: number): void {
-    if (!safeStorage.isEncryptionAvailable()) {
-      console.error('[TokenManager] Encryption not available, falling back to unencrypted storage');
-      // Fallback: store in plain text (not recommended for production)
-      const tokenData: TokenData = { access_token: accessToken, refresh_token: refreshToken, expires_at: expiresAt };
-      this.store.set('tokens_fallback', tokenData);
-      this.cachedTokens = tokenData;
-      this.scheduleTokenRefresh(expiresAt);
-      return;
-    }
-
     try {
       const tokenData: TokenData = {
         access_token: accessToken,
@@ -62,13 +135,12 @@ export class TokenManager {
         expires_at: expiresAt,
       };
 
-      // Encrypt and store tokens
-      const encrypted = safeStorage.encryptString(JSON.stringify(tokenData));
-      this.store.set('encrypted_tokens', encrypted.toString('base64'));
+      const encrypted = this.encrypt(JSON.stringify(tokenData));
+      this.store.set('encrypted_tokens', encrypted);
 
-      // Store non-sensitive metadata
       this.store.set('token_metadata', {
         expires_at: expiresAt,
+        last_updated: Date.now(),
       });
 
       this.cachedTokens = tokenData;
@@ -87,30 +159,26 @@ export class TokenManager {
     }
 
     try {
-      const encryptedBase64 = this.store.get('encrypted_tokens') as string | undefined;
+      const encrypted = this.store.get('encrypted_tokens') as string | undefined;
       
-      if (!encryptedBase64) {
-        const fallbackTokens = this.store.get('tokens_fallback') as TokenData | undefined;
-        if (fallbackTokens) {
-          this.cachedTokens = fallbackTokens;
-          return fallbackTokens;
-        }
+      if (!encrypted) {
         return null;
       }
 
-      if (!safeStorage.isEncryptionAvailable()) {
-        console.error('[TokenManager] Cannot decrypt: encryption not available');
-        return null;
-      }
-
-      const encrypted = Buffer.from(encryptedBase64, 'base64');
-      const decrypted = safeStorage.decryptString(encrypted);
+      const decrypted = this.decrypt(encrypted);
       const tokenData: TokenData = JSON.parse(decrypted);
+
+      // Validate token structure
+      if (!tokenData.access_token || !tokenData.refresh_token || !tokenData.expires_at) {
+        console.error('[TokenManager] Invalid token data structure');
+        return null;
+      }
 
       this.cachedTokens = tokenData;
       return tokenData;
     } catch (error) {
       console.error('[TokenManager] Failed to get tokens:', error);
+      this.clearTokens();
       return null;
     }
   }
@@ -146,9 +214,18 @@ export class TokenManager {
     this.cachedTokens = null;
     this.store.delete('encrypted_tokens');
     this.store.delete('token_metadata');
-    this.store.delete('tokens_fallback');
     this.cancelTokenRefresh();
     console.log('[TokenManager] Tokens cleared');
+  }
+
+  /**
+   * Clears tokens and resets the installation
+   * Use this for complete reset (e.g., logout + remove device trust)
+   */
+  public resetInstallation(): void {
+    this.clearTokens();
+    this.store.delete('installation_salt');
+    console.log('[TokenManager] Installation reset');
   }
 
   async restoreTokens(): Promise<void> {
@@ -169,7 +246,6 @@ export class TokenManager {
     }
   }
 
-
   private scheduleTokenRefresh(expiresAt: number): void {
     this.cancelTokenRefresh();
 
@@ -180,10 +256,11 @@ export class TokenManager {
         console.log(`[TokenManager] Token refresh scheduled in ${Math.floor(expiresIn / 1000 / 60)} minutes`);
         this.refreshTimer = setTimeout(() => {
           console.log('[TokenManager] Token refresh triggered');
-          app.emit('token-refresh-needed');
+          this.emit('token-refresh-needed');
         }, expiresIn);
       } else {
         console.log('[TokenManager] Token already expired or expiring soon');
+        this.emit('token-refresh-needed');
       }
     }
   }
@@ -218,6 +295,7 @@ export class TokenManager {
 
   public destroy(): void {
     this.cancelTokenRefresh();
+    this.cachedTokens = null;
   }
 }
 
