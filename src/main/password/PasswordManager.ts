@@ -1,6 +1,8 @@
-import { safeStorage } from 'electron';
 import Store from 'electron-store';
 import { randomUUID } from 'crypto';
+import { createCipheriv, createDecipheriv, randomBytes, scryptSync } from 'crypto';
+import { machineIdSync } from 'node-machine-id';
+import { app } from 'electron';
 
 /**
  * Saved credential interface
@@ -9,7 +11,7 @@ export interface SavedCredential {
   id: string;
   origin: string;
   username: string;
-  encryptedPassword: Buffer;
+  encryptedPassword: string; // Changed from Buffer to string (base64)
   lastUsed: number;
   timesUsed: number;
   createdAt: number;
@@ -35,11 +37,19 @@ interface PasswordStore {
 }
 
 /**
- * PasswordManager - Secure password storage using Electron's safeStorage
- * Follows the same pattern as SettingsStore using electron-store
+ * PasswordManager - Secure password storage using AES-256-GCM encryption
+ * No keychain dialog required - uses machine-specific key derivation
+ * Follows the same pattern as TokenManager
  */
 export class PasswordManager {
   private store: Store<PasswordStore>;
+  private encryptionKey: Buffer;
+  
+  private readonly ALGORITHM = 'aes-256-gcm';
+  private readonly KEY_LENGTH = 32;
+  private readonly IV_LENGTH = 16;
+  private readonly AUTH_TAG_LENGTH = 16;
+  private readonly APP_CONTEXT = 'browzer-password-storage-v1';
 
   constructor() {
     this.store = new Store<PasswordStore>({
@@ -47,33 +57,105 @@ export class PasswordManager {
       defaults: {
         credentials: [],
         blacklistedSites: []
-      },
-      // Store in encrypted format
-      serialize: (value) => {
-        // Convert Buffer objects to serializable format
-        const serializable = {
-          ...value,
-          credentials: value.credentials.map(cred => ({
-            ...cred,
-            encryptedPassword: Array.from(cred.encryptedPassword)
-          }))
-        };
-        return JSON.stringify(serializable);
-      },
-      deserialize: (value) => {
-        const parsed = JSON.parse(value);
-        // Convert arrays back to Buffer objects
-        return {
-          ...parsed,
-          credentials: parsed.credentials.map((cred: any) => ({
-            ...cred,
-            encryptedPassword: Buffer.from(cred.encryptedPassword)
-          }))
-        };
       }
     });
 
+    this.encryptionKey = this.deriveEncryptionKey();
     console.log('[PasswordManager] Initialized with store at:', this.store.path);
+  }
+
+  /**
+   * Derive encryption key from machine ID and installation salt
+   * Same approach as TokenManager - no keychain dialog needed
+   */
+  private deriveEncryptionKey(): Buffer {
+    try {
+      let installationSalt = this.store.get('installation_salt') as string | undefined;
+      
+      if (!installationSalt) {
+        // Generate a cryptographically random salt on first run
+        installationSalt = randomBytes(32).toString('base64');
+        this.store.set('installation_salt', installationSalt);
+        console.log('[PasswordManager] Generated new installation salt');
+      }
+
+      // Combine multiple entropy sources
+      const machineId = machineIdSync();
+      const appVersion = app.getVersion();
+      const appPath = app.getAppPath();
+      
+      // Create composite key material
+      const keyMaterial = `${machineId}|${this.APP_CONTEXT}|${appVersion}|${appPath}`;
+      
+      // Use scrypt for key derivation
+      const derivedKey = scryptSync(
+        keyMaterial,
+        installationSalt,
+        this.KEY_LENGTH,
+        {
+          N: 16384, // CPU/memory cost (higher = more secure but slower)
+          r: 8,     // Block size
+          p: 1,     // Parallelization
+        }
+      );
+      
+      return derivedKey;
+    } catch (error) {
+      console.error('[PasswordManager] Failed to derive encryption key:', error);
+      // Fallback: generate random key (will lose passwords but prevents crashes)
+      console.warn('[PasswordManager] Using fallback random key - passwords may be lost');
+      return randomBytes(this.KEY_LENGTH);
+    }
+  }
+
+  /**
+   * Encrypt password using AES-256-GCM
+   */
+  private encrypt(plaintext: string): string {
+    try {
+      const iv = randomBytes(this.IV_LENGTH);
+      const cipher = createCipheriv(this.ALGORITHM, this.encryptionKey, iv);
+      
+      let encrypted = cipher.update(plaintext, 'utf8', 'base64');
+      encrypted += cipher.final('base64');
+      
+      const authTag = cipher.getAuthTag();
+      
+      const combined = Buffer.concat([
+        iv,
+        Buffer.from(encrypted, 'base64'),
+        authTag
+      ]);
+      
+      return combined.toString('base64');
+    } catch (error) {
+      console.error('[PasswordManager] Encryption failed:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Decrypt password using AES-256-GCM
+   */
+  private decrypt(ciphertext: string): string {
+    try {
+      const combined = Buffer.from(ciphertext, 'base64');
+      
+      const iv = combined.subarray(0, this.IV_LENGTH);
+      const authTag = combined.subarray(combined.length - this.AUTH_TAG_LENGTH);
+      const encrypted = combined.subarray(this.IV_LENGTH, combined.length - this.AUTH_TAG_LENGTH);
+      
+      const decipher = createDecipheriv(this.ALGORITHM, this.encryptionKey, iv);
+      decipher.setAuthTag(authTag);
+      
+      let decrypted = decipher.update(encrypted.toString('base64'), 'base64', 'utf8');
+      decrypted += decipher.final('utf8');
+      
+      return decrypted;
+    } catch (error) {
+      console.error('[PasswordManager] Decryption failed:', error);
+      throw error;
+    }
   }
 
   /**
@@ -90,7 +172,7 @@ export class PasswordManager {
 
       if (existingIndex !== -1) {
         // Update existing credential
-        const encrypted = safeStorage.encryptString(password);
+        const encrypted = this.encrypt(password);
         credentials[existingIndex] = {
           ...credentials[existingIndex],
           encryptedPassword: encrypted,
@@ -99,7 +181,7 @@ export class PasswordManager {
         };
       } else {
         // Create new credential
-        const encrypted = safeStorage.encryptString(password);
+        const encrypted = this.encrypt(password);
         const credential: SavedCredential = {
           id: randomUUID(),
           origin,
@@ -152,7 +234,7 @@ export class PasswordManager {
         return null;
       }
 
-      const decrypted = safeStorage.decryptString(credential.encryptedPassword);
+      const decrypted = this.decrypt(credential.encryptedPassword);
       
       // Update usage stats
       const updatedCredentials = credentials.map(c => 
@@ -238,7 +320,7 @@ export class PasswordManager {
         return false;
       }
 
-      const encrypted = safeStorage.encryptString(password);
+      const encrypted = this.encrypt(password);
       credentials[index] = {
         ...credentials[index],
         username,
