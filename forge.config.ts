@@ -15,7 +15,7 @@ const config: ForgeConfig = {
   packagerConfig: {
     name: 'Browzer',
     asar: {
-      unpack: '**/*.{node,dll}',
+      unpack: '**/*.{node,dll,lottie,mp3}',
       unpackDir: path.join('**', 'node_modules', 'better-sqlite3', '**', '*'),
     },
     ignore: [
