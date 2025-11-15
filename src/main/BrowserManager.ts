@@ -85,6 +85,10 @@ export class BrowserManager {
     }
   }
 
+  public getTabManager(): TabManager {
+    return this.tabManager;
+  }
+
   // ============================================================================
   // Tab Management (delegated to TabManager)
   // ============================================================================

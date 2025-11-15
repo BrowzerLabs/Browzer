@@ -10,16 +10,6 @@ import { NavigationManager } from './NavigationManager';
 import { DebuggerManager } from './DebuggerManager';
 import { PasswordAutomation } from '@/main/password';
 
-/**
- * TabManager - Manages tab lifecycle and state
- * 
- * Responsibilities:
- * - Create and destroy tabs
- * - Switch between tabs
- * - Manage tab views and bounds
- * - Setup tab event listeners
- * - Handle navigation (back, forward, reload, stop)
- */
 export class TabManager {
   private tabs: Map<string, Tab> = new Map();
   private activeTabId: string | null = null;
@@ -37,9 +27,6 @@ export class TabManager {
     private eventHandlers: TabEventHandlers
   ) {}
 
-  /**
-   * Create a new tab with a WebContentsView
-   */
   public createTab(url?: string): TabInfo {
     const tabId = `tab-${++this.tabCounter}`;
     
@@ -257,6 +244,40 @@ export class TabManager {
    */
   public getActiveTabId(): string | null {
     return this.activeTabId;
+  }
+
+  /**
+   * Select the next tab in the tab list
+   */
+  public selectNextTab(): void {
+    const tabs = Array.from(this.tabs.values());
+    if (tabs.length === 0) return;
+
+    const currentIndex = tabs.findIndex(tab => tab.id === this.activeTabId);
+    const nextIndex = (currentIndex + 1) % tabs.length;
+    this.switchToTab(tabs[nextIndex].id);
+  }
+
+  /**
+   * Select the previous tab in the tab list
+   */
+  public selectPreviousTab(): void {
+    const tabs = Array.from(this.tabs.values());
+    if (tabs.length === 0) return;
+
+    const currentIndex = tabs.findIndex(tab => tab.id === this.activeTabId);
+    const prevIndex = currentIndex <= 0 ? tabs.length - 1 : currentIndex - 1;
+    this.switchToTab(tabs[prevIndex].id);
+  }
+
+  /**
+   * Select a tab by its index
+   */
+  public selectTabByIndex(index: number): void {
+    const tabs = Array.from(this.tabs.values());
+    if (index >= 0 && index < tabs.length) {
+      this.switchToTab(tabs[index].id);
+    }
   }
 
   /**
