@@ -51,6 +51,25 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
       
+      - name: Update version in package.json
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+          else
+            VERSION=${GITHUB_REF#refs/tags/}
+          fi
+          
+          # Remove 'v' prefix if present
+          VERSION_NUMBER="${VERSION#v}"
+          
+          echo "Updating package.json to version: $VERSION_NUMBER"
+          
+          # Update package.json version
+          sed -i '' "s/\"version\": \"[^\"]*\"/\"version\": \"$VERSION_NUMBER\"/" package.json
+          
+          # Verify the update
+          grep "\"version\":" package.json
+      
       - name: Setup Apple certificates
         env:
           APPLE_CERT_DATA: ${{ secrets.APPLE_CERT_DATA }}
