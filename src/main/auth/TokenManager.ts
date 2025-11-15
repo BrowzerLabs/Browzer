@@ -29,7 +29,7 @@ export class TokenManager extends EventEmitter {
   private constructor() {
     super();
     this.store = new Store({
-      name: 'auth-tokens',
+      name: 'browzer',
       encryptionKey: 'browzer-store-key-' + app.getVersion(),
     });
     
