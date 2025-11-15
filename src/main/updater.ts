@@ -1,14 +1,28 @@
 import { app, dialog, WebContents, BaseWindow } from 'electron';
-import { autoUpdater } from 'electron-updater';
+import { autoUpdater, UpdateInfo } from 'electron-updater';
 import log from 'electron-log';
+import Store from 'electron-store';
+
+// Store to persist update state
+const updateStore = new Store({
+  name: 'update-state',
+  defaults: {
+    pendingUpdateVersion: null,
+    lastUpdateCheckTime: null,
+  }
+});
+
+let pendingUpdateInfo: UpdateInfo | null = null;
 
 export function setupAutoUpdater(webContents: WebContents | null, window?: BaseWindow | null) {
   autoUpdater.logger = log;
   autoUpdater.autoInstallOnAppQuit = true;
 
-  log.info(`App version: ${app.getVersion()}`);
+  const currentVersion = app.getVersion();
+  log.info(`App version: ${currentVersion}`);
   log.info(`Platform: ${process.platform} ${process.arch}`);
 
+  autoUpdater.allowDowngrade = false;
   autoUpdater.setFeedURL({
     provider: 'github',
     owner: 'BrowzerLabs',
@@ -16,14 +30,29 @@ export function setupAutoUpdater(webContents: WebContents | null, window?: BaseW
     releaseType: 'release',
   });
 
-  autoUpdater.checkForUpdatesAndNotify();
+  const pendingVersion = updateStore.get('pendingUpdateVersion') as string | null;
+  if (pendingVersion && pendingVersion !== currentVersion) {
+    log.info(`Pending update found from previous session: v${pendingVersion}`);
+    autoUpdater.checkForUpdatesAndNotify();
+  } else if (pendingVersion === currentVersion) {
+    updateStore.delete('pendingUpdateVersion');
+    log.info('Update successfully installed and applied');
+  }
 
   setInterval(() => {
     autoUpdater.checkForUpdatesAndNotify();
   }, 60 * 60 * 1000);
 
   autoUpdater.on('update-available', (info) => {
-    log.info('Update available:', info.version);
+    const currentVersion = app.getVersion();
+    log.info(`Update available: v${info.version} (current: v${currentVersion})`);
+    
+    if (info.version === currentVersion) {
+      log.warn(`Update version ${info.version} is same as current version. Skipping.`);
+      return;
+    }
+    
+    pendingUpdateInfo = info;
     
     if (webContents && !webContents.isDestroyed()) {
       webContents.send('update:available', {
@@ -57,12 +86,16 @@ export function setupAutoUpdater(webContents: WebContents | null, window?: BaseW
 
   autoUpdater.on('update-downloaded', (info) => {
     log.info('Update downloaded:', info.version);
+    
+    updateStore.set('pendingUpdateVersion', info.version);
 
     if (webContents && !webContents.isDestroyed()) {
+      const parentWindow = window && !window.isDestroyed() ? window : undefined;
+      
       dialog
-        .showMessageBox(window || undefined, {
+        .showMessageBox(parentWindow, {
           type: 'info',
-          title: 'Update Available',
+          title: 'Update Ready to Install',
           message: `Browzer v${info.version} is ready to install`,
           detail: 'The app will restart to complete the installation.',
           buttons: ['Install Now', 'Later'],
@@ -72,16 +105,18 @@ export function setupAutoUpdater(webContents: WebContents | null, window?: BaseW
         .then((result) => {
           if (result.response === 0) {
             log.info('User chose to install update immediately');
+            updateStore.delete('pendingUpdateVersion');
             autoUpdater.quitAndInstall();
           } else {
-            log.info('User deferred update installation');
+            log.info('User deferred update installation. Update will be installed on next app quit.');
             if (webContents && !webContents.isDestroyed()) {
               webContents.send('update:deferred');
             }
           }
-        });
+        })
     } else {
       log.info('No webContents, installing update immediately');
+      updateStore.delete('pendingUpdateVersion');
       autoUpdater.quitAndInstall();
     }
   });
