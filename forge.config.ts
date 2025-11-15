@@ -29,7 +29,9 @@ const config: ForgeConfig = {
       identityValidation: true,
       optionsForFile: (filePath) => {
         return {
-          entitlements: path.join(__dirname, 'entitlements.mac.plist')
+          entitlements: path.join(__dirname, 'entitlements.mac.plist'),
+          'entitlements-inherit': path.join(__dirname, 'entitlements.mac.plist'),
+          hardenedRuntime: true
         };
       }
     },
