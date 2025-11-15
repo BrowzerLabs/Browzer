@@ -600,6 +600,7 @@ export class AuthService {
 
   public clearSession(): void {
     tokenManager.clearTokens();
+    tokenManager.resetInstallation();
     this.currentUser = null;
   }
 

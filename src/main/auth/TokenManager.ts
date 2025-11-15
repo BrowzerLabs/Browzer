@@ -1,7 +1,8 @@
 import { app } from 'electron';
 import Store from 'electron-store';
-import { createCipheriv, createDecipheriv, randomBytes, pbkdf2Sync } from 'crypto';
+import { createCipheriv, createDecipheriv, randomBytes, pbkdf2Sync, scryptSync } from 'crypto';
 import { machineIdSync } from 'node-machine-id';
+import { EventEmitter } from 'events';
 
 interface TokenData {
   access_token: string;
@@ -9,7 +10,7 @@ interface TokenData {
   expires_at: number;
 }
 
-export class TokenManager {
+export class TokenManager extends EventEmitter {
   private static instance: TokenManager | null = null;
   private store: Store;
   private cachedTokens: TokenData | null = null;
@@ -18,15 +19,18 @@ export class TokenManager {
   private refreshPromise: Promise<boolean> | null = null;
   private encryptionKey: Buffer;
 
-  private readonly APP_SALT = 'browzer-secure-token-storage-v1';
   private readonly ALGORITHM = 'aes-256-gcm';
   private readonly KEY_LENGTH = 32;
   private readonly IV_LENGTH = 16;
   private readonly AUTH_TAG_LENGTH = 16;
+  
+  private readonly APP_CONTEXT = 'browzer-token-storage-v1';
 
   private constructor() {
+    super();
     this.store = new Store({
       name: 'auth-tokens',
+      encryptionKey: 'browzer-store-key-' + app.getVersion(),
     });
     
     this.encryptionKey = this.deriveEncryptionKey();
@@ -34,10 +38,40 @@ export class TokenManager {
 
   private deriveEncryptionKey(): Buffer {
     try {
+      let installationSalt = this.store.get('installation_salt') as string | undefined;
+      
+      if (!installationSalt) {
+        // Generate a cryptographically random salt on first run
+        installationSalt = randomBytes(32).toString('base64');
+        this.store.set('installation_salt', installationSalt);
+        console.log('[TokenManager] Generated new installation salt');
+      }
+
+      // Combine multiple entropy sources
       const machineId = machineIdSync();
-      return pbkdf2Sync(machineId, this.APP_SALT, 100000, this.KEY_LENGTH, 'sha256');
+      const appVersion = app.getVersion();
+      const appPath = app.getAppPath();
+      
+      // Create composite key material
+      const keyMaterial = `${machineId}|${this.APP_CONTEXT}|${appVersion}|${appPath}`;
+      
+      // Use scrypt
+      const derivedKey = scryptSync(
+        keyMaterial,
+        installationSalt,
+        this.KEY_LENGTH,
+        {
+          N: 16384, // CPU/memory cost (higher = more secure but slower)
+          r: 8,     // Block size
+          p: 1,     // Parallelization
+        }
+      );
+      
+      return derivedKey;
     } catch (error) {
       console.error('[TokenManager] Failed to derive encryption key:', error);
+      // Fallback: generate random key (will lose tokens but prevents crashes)
+      console.warn('[TokenManager] Using fallback random key - tokens may be lost');
       return randomBytes(this.KEY_LENGTH);
     }
   }
@@ -106,6 +140,7 @@ export class TokenManager {
 
       this.store.set('token_metadata', {
         expires_at: expiresAt,
+        last_updated: Date.now(),
       });
 
       this.cachedTokens = tokenData;
@@ -133,10 +168,17 @@ export class TokenManager {
       const decrypted = this.decrypt(encrypted);
       const tokenData: TokenData = JSON.parse(decrypted);
 
+      // Validate token structure
+      if (!tokenData.access_token || !tokenData.refresh_token || !tokenData.expires_at) {
+        console.error('[TokenManager] Invalid token data structure');
+        return null;
+      }
+
       this.cachedTokens = tokenData;
       return tokenData;
     } catch (error) {
       console.error('[TokenManager] Failed to get tokens:', error);
+      this.clearTokens();
       return null;
     }
   }
@@ -176,6 +218,16 @@ export class TokenManager {
     console.log('[TokenManager] Tokens cleared');
   }
 
+  /**
+   * Clears tokens and resets the installation
+   * Use this for complete reset (e.g., logout + remove device trust)
+   */
+  public resetInstallation(): void {
+    this.clearTokens();
+    this.store.delete('installation_salt');
+    console.log('[TokenManager] Installation reset');
+  }
+
   async restoreTokens(): Promise<void> {
     try {
       const tokens = this.getStoredTokens();
@@ -194,7 +246,6 @@ export class TokenManager {
     }
   }
 
-
   private scheduleTokenRefresh(expiresAt: number): void {
     this.cancelTokenRefresh();
 
@@ -205,10 +256,11 @@ export class TokenManager {
         console.log(`[TokenManager] Token refresh scheduled in ${Math.floor(expiresIn / 1000 / 60)} minutes`);
         this.refreshTimer = setTimeout(() => {
           console.log('[TokenManager] Token refresh triggered');
-          app.emit('token-refresh-needed');
+          this.emit('token-refresh-needed');
         }, expiresIn);
       } else {
         console.log('[TokenManager] Token already expired or expiring soon');
+        this.emit('token-refresh-needed');
       }
     }
   }
@@ -243,6 +295,7 @@ export class TokenManager {
 
   public destroy(): void {
     this.cancelTokenRefresh();
+    this.cachedTokens = null;
   }
 }
 
