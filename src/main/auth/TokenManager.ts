@@ -139,7 +139,18 @@ export class TokenManager {
     const now = Math.floor(Date.now() / 1000);
     const expiresIn = tokens.expires_at - now;
     
+    // Token is expired if it expires in less than 5 minutes OR already expired
     return expiresIn < 300;
+  }
+
+  public isTokenAlreadyExpired(): boolean {
+    const tokens = this.getStoredTokens();
+    if (!tokens || !tokens.expires_at) {
+      return true;
+    }
+
+    const now = Math.floor(Date.now() / 1000);
+    return tokens.expires_at <= now;
   }
 
   public clearTokens(): void {
@@ -159,8 +170,10 @@ export class TokenManager {
           this.scheduleTokenRefresh(tokens.expires_at);
           console.log('[TokenManager] Tokens restored');
         } else {
-          console.log('[TokenManager] Stored tokens expired');
-          this.clearTokens();
+          console.log('[TokenManager] Stored tokens expired, but refresh token available - will attempt refresh');
+          // Don't clear yet - let the caller attempt refresh
+          // Emit event to trigger refresh attempt
+          this.emit('token-refresh-needed');
         }
       }
     } catch (error) {
