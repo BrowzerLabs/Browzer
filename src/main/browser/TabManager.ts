@@ -92,9 +92,6 @@ export class TabManager {
     return tabInfo;
   }
 
-  /**
-   * Close a tab
-   */
   public closeTab(tabId: string): boolean {
     const tab = this.tabs.get(tabId);
     if (!tab) return false;
@@ -129,9 +126,6 @@ export class TabManager {
     return true;
   }
 
-  /**
-   * Switch to a specific tab
-   */
   public switchToTab(tabId: string): boolean {
     const tab = this.tabs.get(tabId);
     if (!tab) return false;
@@ -157,9 +151,6 @@ export class TabManager {
     return true;
   }
 
-  /**
-   * Navigate a tab to a URL
-   */
   public navigate(tabId: string, url: string): boolean {
     const tab = this.tabs.get(tabId);
     if (!tab) return false;
@@ -169,9 +160,6 @@ export class TabManager {
     return true;
   }
 
-  /**
-   * Navigation controls
-   */
   public goBack(tabId: string): boolean {
     const tab = this.tabs.get(tabId);
     if (!tab || !tab.view.webContents.navigationHistory.canGoBack()) return false;
@@ -210,45 +198,27 @@ export class TabManager {
     return tab ? tab.view.webContents.navigationHistory.canGoForward() : false;
   }
 
-  /**
-   * Get all tabs info
-   */
   public getAllTabs(): { tabs: TabInfo[]; activeTabId: string | null } {
     const tabs = Array.from(this.tabs.values()).map(tab => tab.info);
     return { tabs, activeTabId: this.activeTabId };
   }
 
-  /**
-   * Get active tab
-   */
   public getActiveTab(): Tab | null {
     return this.activeTabId ? this.tabs.get(this.activeTabId) || null : null;
   }
 
-  /**
-   * Get tab by ID
-   */
   public getTab(tabId: string): Tab | undefined {
     return this.tabs.get(tabId);
   }
 
-  /**
-   * Get all tabs (internal)
-   */
   public getTabs(): Map<string, Tab> {
     return this.tabs;
   }
 
-  /**
-   * Get active tab ID
-   */
   public getActiveTabId(): string | null {
     return this.activeTabId;
   }
 
-  /**
-   * Select the next tab in the tab list
-   */
   public selectNextTab(): void {
     const tabs = Array.from(this.tabs.values());
     if (tabs.length === 0) return;
@@ -258,9 +228,6 @@ export class TabManager {
     this.switchToTab(tabs[nextIndex].id);
   }
 
-  /**
-   * Select the previous tab in the tab list
-   */
   public selectPreviousTab(): void {
     const tabs = Array.from(this.tabs.values());
     if (tabs.length === 0) return;
@@ -270,9 +237,6 @@ export class TabManager {
     this.switchToTab(tabs[prevIndex].id);
   }
 
-  /**
-   * Select a tab by its index
-   */
   public selectTabByIndex(index: number): void {
     const tabs = Array.from(this.tabs.values());
     if (index >= 0 && index < tabs.length) {
@@ -291,9 +255,6 @@ export class TabManager {
     });
   }
 
-  /**
-   * Clean up all tabs
-   */
   public destroy(): void {
     this.tabs.forEach(tab => {
       this.debuggerManager.cleanupDebugger(tab.view, tab.id);
@@ -316,9 +277,6 @@ export class TabManager {
     });
   }
 
-  /**
-   * Setup event listeners for a tab's WebContents
-   */
   private setupTabEvents(tab: Tab): void {
     const { view, info } = tab;
     const webContents = view.webContents;
@@ -354,7 +312,6 @@ export class TabManager {
         ).catch(err => console.error('Failed to add history entry:', err));
       }
       
-      // Start CDP-based password automation
       if (tab.passwordAutomation && !this.navigationManager.isInternalPage(info.url)) {
         try {
           await tab.passwordAutomation.start();
@@ -392,7 +349,6 @@ export class TabManager {
       this.eventHandlers.onTabsChanged();
     });
 
-    // Favicon
     webContents.on('page-favicon-updated', (_, favicons) => {
       if (!info.url.includes('browzer://settings') && favicons.length > 0) {
         info.favicon = favicons[0];

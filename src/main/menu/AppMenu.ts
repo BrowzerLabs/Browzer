@@ -8,15 +8,24 @@ export class AppMenu {
 
   private isMac = process.platform === 'darwin';
 
+  private keys = {
+    newTab: this.isMac ? 'Cmd+T' : 'Ctrl+T',
+    newWindow: this.isMac ? 'Cmd+N' : 'Ctrl+N',
+    closeTab: this.isMac ? 'Cmd+W' : 'Ctrl+W',
+    back: this.isMac ? 'Cmd+[' : 'Alt+Left',
+    forward: this.isMac ? 'Cmd+]' : 'Alt+Right',
+    reload: this.isMac ? 'Cmd+R' : 'Ctrl+R',
+    forceReload: this.isMac ? 'Cmd+Shift+R' : 'Ctrl+Shift+R',
+    nextTab: this.isMac ? 'Cmd+Option+Right' : 'Ctrl+Tab',
+    prevTab: this.isMac ? 'Cmd+Option+Left' : 'Ctrl+Shift+Tab',
+  };
+
   constructor(
     tabManager: TabManager,
   ) {
     this.tabManager = tabManager;
   }
 
-  /**
-   * Build and set the application menu
-   */
   public setupMenu(): void {
     const template: Electron.MenuItemConstructorOptions[] = [
       // App menu (macOS only)
@@ -44,20 +53,19 @@ export class AppMenu {
           ]
         : []),
 
-      // File menu
       {
         label: 'File',
         submenu: [
           {
             label: 'New Tab',
-            accelerator: this.isMac ? 'Cmd+T' : 'Ctrl+T',
+            accelerator: this.keys.newTab,
             click: () => {
               this.tabManager.createTab();
             },
           },
           {
             label: 'New Window',
-            accelerator: this.isMac ? 'Cmd+N' : 'Ctrl+N',
+            accelerator: this.keys.newWindow,
             click: () => {
               // For now, create a new tab. In future, this could open a new window
               this.tabManager.createTab();
@@ -66,7 +74,7 @@ export class AppMenu {
           { type: 'separator' as const },
           {
             label: 'Close Tab',
-            accelerator: this.isMac ? 'Cmd+W' : 'Ctrl+W',
+            accelerator: this.keys.closeTab,
             click: () => {
               const { activeTabId } = this.tabManager.getAllTabs();
               if (activeTabId) {
@@ -79,7 +87,6 @@ export class AppMenu {
         ],
       },
 
-      // Edit menu
       {
         label: 'Edit',
         submenu: [
@@ -111,13 +118,12 @@ export class AppMenu {
         ],
       },
 
-      // View menu
       {
         label: 'View',
         submenu: [
           {
             label: 'Back',
-            accelerator: this.isMac ? 'Cmd+[' : 'Alt+Left',
+            accelerator: this.keys.back,
             click: () => {
               const activeTabId = this.tabManager.getActiveTabId();
               if (activeTabId) {
@@ -127,7 +133,7 @@ export class AppMenu {
           },
           {
             label: 'Forward',
-            accelerator: this.isMac ? 'Cmd+]' : 'Alt+Right',
+            accelerator: this.keys.forward,
             click: () => {
               const activeTabId = this.tabManager.getActiveTabId();
               if (activeTabId) {
@@ -138,7 +144,7 @@ export class AppMenu {
           { type: 'separator' as const },
           {
             label: 'Reload',
-            accelerator: this.isMac ? 'Cmd+R' : 'Ctrl+R',
+            accelerator: this.keys.reload,
             click: () => {
               const activeTabId = this.tabManager.getActiveTabId();
               if (activeTabId) {
@@ -148,7 +154,7 @@ export class AppMenu {
           },
           {
             label: 'Force Reload',
-            accelerator: this.isMac ? 'Cmd+Shift+R' : 'Ctrl+Shift+R',
+            accelerator: this.keys.forceReload,
             click: () => {
               const activeTabId = this.tabManager.getActiveTabId();
               if (activeTabId) {
@@ -165,7 +171,6 @@ export class AppMenu {
         ],
       },
 
-      // Window menu
       {
         label: 'Window',
         submenu: [
@@ -174,14 +179,14 @@ export class AppMenu {
           { type: 'separator' as const },
           {
             label: 'Select Next Tab',
-            accelerator: this.isMac ? 'Cmd+Option+Right' : 'Ctrl+Tab',
+            accelerator: this.keys.nextTab,
             click: () => {
               this.tabManager.selectNextTab();
             },
           },
           {
             label: 'Select Previous Tab',
-            accelerator: this.isMac ? 'Cmd+Option+Left' : 'Ctrl+Shift+Tab',
+            accelerator: this.keys.prevTab,
             click: () => {
               this.tabManager.selectPreviousTab();
             },
@@ -248,9 +253,6 @@ export class AppMenu {
     Menu.setApplicationMenu(menu);
   }
 
-  /**
-   * Handle "Check for Updates" menu click
-   */
   private async handleCheckForUpdates(): Promise<void> {
     try {
 
