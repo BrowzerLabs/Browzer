@@ -1,25 +1,31 @@
 import { app, Menu, dialog, WebContents } from 'electron';
 import { checkForUpdates } from '@/main/updater';
 import log from 'electron-log';
-import { BrowserManager } from '@/main/BrowserManager';
+import { TabManager } from '@/main/browser/TabManager';
 
 export class AppMenu {
-  private browserManager: BrowserManager;
-  private webContents: WebContents | null;
+  private tabManager: TabManager;
 
   private isMac = process.platform === 'darwin';
 
+  private keys = {
+    newTab: this.isMac ? 'Cmd+T' : 'Ctrl+T',
+    newWindow: this.isMac ? 'Cmd+N' : 'Ctrl+N',
+    closeTab: this.isMac ? 'Cmd+W' : 'Ctrl+W',
+    back: this.isMac ? 'Cmd+[' : 'Alt+Left',
+    forward: this.isMac ? 'Cmd+]' : 'Alt+Right',
+    reload: this.isMac ? 'Cmd+R' : 'Ctrl+R',
+    forceReload: this.isMac ? 'Cmd+Shift+R' : 'Ctrl+Shift+R',
+    nextTab: this.isMac ? 'Cmd+Option+Right' : 'Ctrl+Tab',
+    prevTab: this.isMac ? 'Cmd+Option+Left' : 'Ctrl+Shift+Tab',
+  };
+
   constructor(
-    browserManager: BrowserManager,
-    webContents: WebContents | null
+    tabManager: TabManager,
   ) {
-    this.browserManager = browserManager;
-    this.webContents = webContents;
+    this.tabManager = tabManager;
   }
 
-  /**
-   * Build and set the application menu
-   */
   public setupMenu(): void {
     const template: Electron.MenuItemConstructorOptions[] = [
       // App menu (macOS only)
@@ -47,13 +53,40 @@ export class AppMenu {
           ]
         : []),
 
-      // File menu
       {
         label: 'File',
-        submenu: [this.isMac ? { role: 'close' as const } : { role: 'quit' as const }],
+        submenu: [
+          {
+            label: 'New Tab',
+            accelerator: this.keys.newTab,
+            click: () => {
+              this.tabManager.createTab();
+            },
+          },
+          {
+            label: 'New Window',
+            accelerator: this.keys.newWindow,
+            click: () => {
+              // For now, create a new tab. In future, this could open a new window
+              this.tabManager.createTab();
+            },
+          },
+          { type: 'separator' as const },
+          {
+            label: 'Close Tab',
+            accelerator: this.keys.closeTab,
+            click: () => {
+              const { activeTabId } = this.tabManager.getAllTabs();
+              if (activeTabId) {
+                this.tabManager.closeTab(activeTabId);
+              }
+            },
+          },
+          { type: 'separator' as const },
+          this.isMac ? { role: 'close' as const } : { role: 'quit' as const },
+        ],
       },
 
-      // Edit menu
       {
         label: 'Edit',
         submenu: [
@@ -85,12 +118,50 @@ export class AppMenu {
         ],
       },
 
-      // View menu
       {
         label: 'View',
         submenu: [
-          { role: 'reload' as const },
-          { role: 'forceReload' as const },
+          {
+            label: 'Back',
+            accelerator: this.keys.back,
+            click: () => {
+              const activeTabId = this.tabManager.getActiveTabId();
+              if (activeTabId) {
+                this.tabManager.goBack(activeTabId);
+              }
+            },
+          },
+          {
+            label: 'Forward',
+            accelerator: this.keys.forward,
+            click: () => {
+              const activeTabId = this.tabManager.getActiveTabId();
+              if (activeTabId) {
+                this.tabManager.goForward(activeTabId);
+              }
+            },
+          },
+          { type: 'separator' as const },
+          {
+            label: 'Reload',
+            accelerator: this.keys.reload,
+            click: () => {
+              const activeTabId = this.tabManager.getActiveTabId();
+              if (activeTabId) {
+                this.tabManager.reload(activeTabId);
+              }
+            },
+          },
+          {
+            label: 'Force Reload',
+            accelerator: this.keys.forceReload,
+            click: () => {
+              const activeTabId = this.tabManager.getActiveTabId();
+              if (activeTabId) {
+                this.tabManager.reload(activeTabId);
+              }
+            },
+          },
           { type: 'separator' as const },
           { role: 'resetZoom' as const },
           { role: 'zoomIn' as const },
@@ -100,12 +171,35 @@ export class AppMenu {
         ],
       },
 
-      // Window menu
       {
         label: 'Window',
         submenu: [
           { role: 'minimize' as const },
           { role: 'zoom' as const },
+          { type: 'separator' as const },
+          {
+            label: 'Select Next Tab',
+            accelerator: this.keys.nextTab,
+            click: () => {
+              this.tabManager.selectNextTab();
+            },
+          },
+          {
+            label: 'Select Previous Tab',
+            accelerator: this.keys.prevTab,
+            click: () => {
+              this.tabManager.selectPreviousTab();
+            },
+          },
+          { type: 'separator' as const },
+          // Tab shortcuts 1-9
+          ...Array.from({ length: 9 }, (_, i) => ({
+            label: `Select Tab ${i + 1}`,
+            accelerator: this.isMac ? `Cmd+${i + 1}` : `Ctrl+${i + 1}`,
+            click: () => {
+              this.tabManager.selectTabByIndex(i);
+            },
+          })),
           ...(this.isMac
             ? [
                 { type: 'separator' as const },
@@ -113,7 +207,10 @@ export class AppMenu {
                 { type: 'separator' as const },
                 { role: 'window' as const },
               ]
-            : [{ role: 'close' as const }]),
+            : [
+                { type: 'separator' as const },
+                { role: 'close' as const },
+              ]),
         ],
       },
 
@@ -124,13 +221,13 @@ export class AppMenu {
           {
             label: 'Learn More',
             click: () => {
-              this.browserManager.createTab('https://trybrowzer.com');
+              this.tabManager.createTab('https://trybrowzer.com');
             },
           },
           {
             label: 'Documentation',
             click: () => {
-              this.browserManager.createTab('https://docs.trybrowzer.com');
+              this.tabManager.createTab('https://docs.trybrowzer.com');
             },
           },
           { type: 'separator' as const },
@@ -156,20 +253,10 @@ export class AppMenu {
     Menu.setApplicationMenu(menu);
   }
 
-  /**
-   * Handle "Check for Updates" menu click
-   */
   private async handleCheckForUpdates(): Promise<void> {
     try {
-      log.info('User manually checking for updates...');
-
-      // Show checking dialog
-      if (this.webContents && !this.webContents.isDestroyed()) {
-        this.webContents.send('update:checking');
-      }
 
       const result = await checkForUpdates();
-
       if (result && result.updateInfo) {
         const currentVersion = app.getVersion();
         const latestVersion = result.updateInfo.version;
@@ -207,12 +294,5 @@ export class AppMenu {
         buttons: ['OK'],
       });
     }
-  }
-
-  /**
-   * Update the webContents reference
-   */
-  public updateWebContents(webContents: WebContents | null): void {
-    this.webContents = webContents;
   }
 }

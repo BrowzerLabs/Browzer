@@ -26,7 +26,8 @@ export class AuthService {
     this.browserManager = browserManager;
     this.connectionService = connectionService;
     
-    app.on('token-refresh-needed' as any, () => {
+    // Listen to token refresh events from TokenManager
+    tokenManager.on('token-refresh-needed', () => {
       this.handleTokenRefresh();
     });
   }
@@ -578,11 +579,26 @@ export class AuthService {
 
   public async restoreSession(): Promise<void> {
     try {
-      
       await tokenManager.restoreTokens();
-      const accessToken = tokenManager.getAccessToken();
       
-      if (accessToken) {
+      const refreshToken = tokenManager.getRefreshToken();
+      const isTokenAlreadyExpired = tokenManager.isTokenAlreadyExpired();
+      
+      // If token is already expired but refresh token exists, attempt refresh
+      if (isTokenAlreadyExpired && refreshToken) {
+        console.log('[AuthService] Token already expired on startup, attempting refresh...');
+        const refreshSuccess = await this.refreshSession();
+        
+        if (!refreshSuccess) {
+          console.log('[AuthService] Refresh failed, clearing session');
+          this.clearSession();
+          return;
+        }
+      }
+      
+      // Now validate the session
+      const currentAccessToken = tokenManager.getAccessToken();
+      if (currentAccessToken) {
         const user = await this.getCurrentUser();
         
         if (!user) {
@@ -600,6 +616,7 @@ export class AuthService {
 
   public clearSession(): void {
     tokenManager.clearTokens();
+    tokenManager.resetInstallation();
     this.currentUser = null;
   }
 
