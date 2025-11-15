@@ -27,7 +27,7 @@ export function ClaudeThinkingEvent({ event, isLatest }: EventItemProps) {
         
         <div className="flex-1 min-w-0">
           <p className="text-sm font-medium text-purple-900 dark:text-purple-100 mb-1">
-            Claude is thinking...
+            Browzer is thinking...
           </p>
           <p className="text-sm text-purple-700 dark:text-purple-300">
             {event.data.message || 'Analyzing your request and planning the automation...'}

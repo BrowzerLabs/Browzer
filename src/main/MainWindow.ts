@@ -47,7 +47,7 @@ export class MainWindow {
     );
 
     // Setup application menu
-    this.appMenu = new AppMenu(this.browserManager, browserUIView.webContents);
+    this.appMenu = new AppMenu(this.browserManager.getTabManager());
     this.appMenu.setupMenu();
 
     this.windowManager.setupBrowserUI();
