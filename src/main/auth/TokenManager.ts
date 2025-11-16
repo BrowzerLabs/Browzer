@@ -30,7 +30,7 @@ export class TokenManager extends EventEmitter {
     super();
     this.store = new Store({
       name: 'browzer',
-      encryptionKey: 'browzer-store-key-' + app.getVersion(),
+      // encryptionKey: 'browzer-store-key-' + app.getVersion(), // it uses safeStorage at its core, so it will propmpt for keychain access
     });
     
     this.encryptionKey = this.deriveEncryptionKey();
