@@ -35,12 +35,9 @@ export class UpdaterManager {
     log.info(`[Updater] App version: ${currentVersion}`);
     log.info(`[Updater] Platform: ${process.platform} ${process.arch}`);
 
-    autoUpdater.setFeedURL({
-      provider: 'github',
-      owner: 'BrowzerLabs',
-      repo: 'Browzer',
-      releaseType: 'release',
-    });
+    // Note: Update configuration is read from app-update.yml file
+    // which is included in the app bundle via forge.config.ts extraResource
+    log.info('[Updater] Using app-update.yml for update configuration');
 
     this.registerEventHandlers();
   }
