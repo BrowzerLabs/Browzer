@@ -30,7 +30,7 @@ export class TokenManager extends EventEmitter {
     super();
     this.store = new Store({
       name: 'browzer',
-      // encryptionKey: 'browzer-store-key-' + app.getVersion(), // it uses safeStorage at its core, so it will propmpt for keychain access
+      encryptionKey: 'browzer-store-encryption-key'
     });
     
     this.encryptionKey = this.deriveEncryptionKey();
@@ -49,11 +49,11 @@ export class TokenManager extends EventEmitter {
 
       // Combine multiple entropy sources
       const machineId = machineIdSync();
-      const appVersion = app.getVersion();
       const appPath = app.getAppPath();
       
       // Create composite key material
-      const keyMaterial = `${machineId}|${this.APP_CONTEXT}|${appVersion}|${appPath}`;
+      // NOTE: Do NOT include app version here - it causes encryption to break during updates
+      const keyMaterial = `${machineId}|${this.APP_CONTEXT}|${appPath}`;
       
       // Use scrypt
       const derivedKey = scryptSync(

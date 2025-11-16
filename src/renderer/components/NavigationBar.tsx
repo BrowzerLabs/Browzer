@@ -1,10 +1,11 @@
 import { useState, useEffect, KeyboardEvent } from 'react';
-import { ArrowLeft, ArrowRight, RotateCw, X, Lock, Globe, Circle, Square, Settings, Clock, User, MoreVertical, Video, ChevronRight, ChevronLeft, Loader2, LogOut, DiamondIcon } from 'lucide-react';
+import { ArrowLeft, ArrowRight, RotateCw, X, Lock, Globe, Circle, Square, Settings, Clock, User, MoreVertical, Video, ChevronRight, ChevronLeft, Loader2, LogOut, DiamondIcon, Download } from 'lucide-react';
 import type { TabInfo } from '@/shared/types';
 import { cn } from '@/renderer/lib/utils';
 import { useSidebarStore } from '@/renderer/store/useSidebarStore';
 import { useRecording } from '@/renderer/hooks/useRecording';
 import { useAuth } from '@/renderer/hooks/useAuth';
+import { useUpdateProgress } from '@/renderer/hooks/useUpdateProgress';
 import { Input } from '@/renderer/ui/input';
 import ThemeToggle from '@/renderer/ui/theme-toggle';
 import { Button } from '@/renderer/ui/button';
@@ -39,6 +40,7 @@ export function NavigationBar({
   const { isVisible: isSidebarVisible, toggleSidebar } = useSidebarStore();
   const { isRecording, isLoading, toggleRecording } = useRecording();
   const { user, signOut, loading } = useAuth();
+  const { isDownloading, progress, version } = useUpdateProgress();
 
   // Update URL input when active tab changes
   useEffect(() => {
@@ -121,6 +123,43 @@ export function NavigationBar({
           className="rounded-full focus-visible:ring-1 focus-visible:ring-gray-300 focus-visible:border-gray-300"
         />
       </div>
+
+      {/* Update Progress Indicator */}
+      {isDownloading && (
+        <div className="relative">
+          <Button 
+            variant="outline" 
+            size="icon"
+            disabled
+            title={`Downloading update v${version} - ${Math.round(progress)}%`}
+            className="relative overflow-hidden"
+          >
+            <Download className="w-4 h-4 text-blue-500 z-10" />
+            {/* Circular progress indicator */}
+            <svg className="absolute inset-0 w-full h-full -rotate-90" viewBox="0 0 36 36">
+              <circle
+                cx="18"
+                cy="18"
+                r="16"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                className="text-gray-200 dark:text-gray-700"
+              />
+              <circle
+                cx="18"
+                cy="18"
+                r="16"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeDasharray={`${progress} 100`}
+                className="text-blue-500 transition-all duration-300"
+              />
+            </svg>
+          </Button>
+        </div>
+      )}
 
       {/* Record Button */}
       <Button 

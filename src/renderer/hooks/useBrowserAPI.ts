@@ -1,9 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
-import type { TabInfo } from '../../preload';
+import type { TabInfo } from '@/shared/types';
 
-/**
- * React hook to interact with the browser API
- */
 export function useBrowserAPI() {
   const [tabs, setTabs] = useState<TabInfo[]>([]);
   const [activeTabId, setActiveTabId] = useState<string | null>(null);
