@@ -24,6 +24,9 @@ const config: ForgeConfig = {
     icon: './assets/icon',
     appBundleId: 'com.trybrowzer.app',
     appCategoryType: 'public.app-category.productivity',
+    extraResource: [
+      './app-update.yml'
+    ],
     osxSign: {
       identity: process.env.APPLE_IDENTITY!,
       identityValidation: true,
