@@ -30,19 +30,9 @@ export function setupAutoUpdater(webContents: WebContents | null, window?: BaseW
     releaseType: 'release',
   });
 
-  const pendingVersion = updateStore.get('pendingUpdateVersion') as string | null;
-  if (pendingVersion && pendingVersion !== currentVersion) {
-    log.info(`Pending update found from previous session: v${pendingVersion}`);
-    autoUpdater.checkForUpdatesAndNotify();
-  } else if (pendingVersion === currentVersion) {
-    updateStore.delete('pendingUpdateVersion');
-    log.info('Update successfully installed and applied');
-  }
-
-  setInterval(() => {
-    autoUpdater.checkForUpdatesAndNotify();
-  }, 60 * 60 * 1000);
-
+  // Register ALL event handlers BEFORE checking for updates
+  // This ensures we don't miss any events that fire quickly
+  
   autoUpdater.on('update-available', (info) => {
     const currentVersion = app.getVersion();
     log.info(`Update available: v${info.version} (current: v${currentVersion})`);
@@ -138,12 +128,58 @@ export function setupAutoUpdater(webContents: WebContents | null, window?: BaseW
       webContents.send('update:checking');
     }
   });
+
+  // NOW check for updates (after all handlers are registered)
+  // Handle pending updates from previous session
+  const pendingVersion = updateStore.get('pendingUpdateVersion') as string | null;
+  if (pendingVersion && pendingVersion !== currentVersion) {
+    log.info(`Pending update found from previous session: v${pendingVersion}`);
+    // Check immediately for pending update
+    autoUpdater.checkForUpdatesAndNotify().catch((error) => {
+      log.error('Error checking for pending update:', error);
+    });
+  } else if (pendingVersion === currentVersion) {
+    updateStore.delete('pendingUpdateVersion');
+    log.info('Update successfully installed and applied');
+    // Still check for newer updates after a delay
+    setTimeout(() => {
+      log.info('Starting initial update check...');
+      autoUpdater.checkForUpdatesAndNotify().catch((error) => {
+        log.error('Error during initial update check:', error);
+      });
+    }, 5000);
+  } else {
+    // No pending update, check for updates on startup (after a short delay to ensure app is ready)
+    setTimeout(() => {
+      log.info('Starting initial update check...');
+      autoUpdater.checkForUpdatesAndNotify().catch((error) => {
+        log.error('Error during initial update check:', error);
+      });
+    }, 5000); // 5 second delay to ensure app is fully initialized
+  }
+
+  // Set up hourly automatic checks
+  setInterval(() => {
+    log.info('Hourly update check triggered');
+    autoUpdater.checkForUpdatesAndNotify().catch((error) => {
+      log.error('Error during hourly update check:', error);
+    });
+  }, 60 * 60 * 1000);
 }
 
 export async function checkForUpdates() {
   try {
     log.info('Manual update check triggered');
-    const result = await autoUpdater.checkForUpdates();
+    log.info('Current app version:', app.getVersion());
+    
+    // Use checkForUpdatesAndNotify to automatically download if available
+    const result = await autoUpdater.checkForUpdatesAndNotify();
+    
+    log.info('Update check completed');
+    if (result && result.updateInfo) {
+      log.info(`Latest version available: ${result.updateInfo.version}`);
+    }
+    
     return result;
   } catch (error) {
     log.error('Error checking for updates:', error);
