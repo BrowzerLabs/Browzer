@@ -23,11 +23,14 @@ export function setupAutoUpdater(webContents: WebContents | null, window?: BaseW
   log.info(`Platform: ${process.platform} ${process.arch}`);
 
   autoUpdater.allowDowngrade = false;
+  // IMPORTANT: This must match your forge.config.ts publisher settings
+  // If forge.config.ts has prerelease: true, use 'prerelease' here
+  // If forge.config.ts has prerelease: false, use 'release' here
   autoUpdater.setFeedURL({
     provider: 'github',
     owner: 'BrowzerLabs',
     repo: 'Browzer',
-    releaseType: 'release',
+    releaseType: 'release', // Matches forge.config.ts prerelease: false
   });
 
   // Register ALL event handlers BEFORE checking for updates
@@ -43,6 +46,17 @@ export function setupAutoUpdater(webContents: WebContents | null, window?: BaseW
     }
     
     pendingUpdateInfo = info;
+    
+    // Explicitly trigger download (checkForUpdatesAndNotify should do this, but ensure it happens)
+    log.info(`Starting download of v${info.version}...`);
+    autoUpdater.downloadUpdate().catch((error) => {
+      log.error('Error downloading update:', error);
+      if (webContents && !webContents.isDestroyed()) {
+        webContents.send('update:error', {
+          message: `Failed to download update: ${error instanceof Error ? error.message : String(error)}`,
+        });
+      }
+    });
     
     if (webContents && !webContents.isDestroyed()) {
       webContents.send('update:available', {
