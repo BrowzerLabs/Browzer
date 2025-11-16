@@ -90,7 +90,7 @@ const config: ForgeConfig = {
            owner: 'BrowzerLabs',
            name: 'Browzer'
          },
-         prerelease: true
+         prerelease: false
        }
     }
   ],
