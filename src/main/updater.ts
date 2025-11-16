@@ -14,6 +14,13 @@ export class UpdaterManager {
 
   public initialize(webContents: WebContents): void {
     this.webContents = webContents;
+
+    autoUpdater.setFeedURL({
+      provider: 'github',
+      owner: 'BrowzerLabs',
+      repo: 'Browzer',
+      releaseType: 'release',
+    });
     
     setTimeout(() => {
       this.checkForUpdates(false);
@@ -34,10 +41,6 @@ export class UpdaterManager {
     const currentVersion = app.getVersion();
     log.info(`[Updater] App version: ${currentVersion}`);
     log.info(`[Updater] Platform: ${process.platform} ${process.arch}`);
-
-    // Note: Update configuration is read from app-update.yml file
-    // which is included in the app bundle via forge.config.ts extraResource
-    log.info('[Updater] Using app-update.yml for update configuration');
 
     this.registerEventHandlers();
   }
