@@ -9,7 +9,6 @@ import { AuthService } from '@/main/auth';
 import { SubscriptionService } from '@/main/subscription/SubscriptionService';
 import { RecordedAction, HistoryQuery, AppSettings, SignUpCredentials, SignInCredentials, UpdateProfileRequest } from '@/shared/types';
 import { CheckoutSessionRequest, PortalSessionRequest } from '@/shared/types/subscription';
-import { updaterManager } from '@/main/updater';
 
 /**
  * IPCHandlers - Centralized IPC communication setup
@@ -48,7 +47,6 @@ export class IPCHandlers {
     this.setupSubscriptionHandlers();
     this.setupShellHandlers();
     this.setupDeepLinkHandlers();
-    this.setupUpdaterHandlers();
   }
 
   private setupTabHandlers(): void {
@@ -449,42 +447,6 @@ export class IPCHandlers {
     ipcMain.handle('deeplink:navigate-tab', async (_, url: string) => {
       this.browserManager.navigateToBrowzerURL(url);
       return true;
-    });
-  }
-
-  private setupUpdaterHandlers(): void {
-    ipcMain.handle('updater:check-for-updates', async () => {
-      await updaterManager.checkForUpdates(true);
-      return { success: true };
-    });
-
-    ipcMain.handle('updater:download-update', async () => {
-      try {
-        await updaterManager.downloadUpdate();
-        return { success: true };
-      } catch (error) {
-        return {
-          success: false,
-          error: error instanceof Error ? error.message : 'Failed to download update',
-        };
-      }
-    });
-
-    ipcMain.handle('updater:install-update', async () => {
-      updaterManager.installUpdate();
-      return { success: true };
-    });
-
-    ipcMain.handle('updater:get-version', async () => {
-      return updaterManager.getCurrentVersion();
-    });
-    ipcMain.handle('updater:get-status', async () => {
-      return {
-        isDownloading: updaterManager.isUpdateDownloading(),
-        isUpdateReady: updaterManager.isUpdateReady(),
-        downloadedUpdateInfo: updaterManager.getDownloadedUpdateInfo(),
-        currentVersion: updaterManager.getCurrentVersion(),
-      };
     });
   }
 

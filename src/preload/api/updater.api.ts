@@ -7,14 +7,7 @@ import type { UpdateInfo, UpdateProgress } from '@/shared/types';
  * Handles application auto-update functionality
  */
 export const createUpdaterAPI = (): UpdaterAPI => ({
-  // Actions
-  checkForUpdates: () => invoke('updater:check-for-updates'),
-  downloadUpdate: () => invoke('updater:download-update'),
-  installUpdate: () => invoke('updater:install-update'),
-  getVersion: () => invoke('updater:get-version'),
-  getStatus: () => invoke('updater:get-status'),
   
-  // Event listeners
   onUpdateChecking: (callback) => 
     createSimpleListener('update:checking', callback),
   onUpdateAvailable: (callback) => 

@@ -6,6 +6,7 @@ import { DeepLinkService } from '@/main/deeplink/DeepLinkService';
 import { ConnectionService } from './api';
 import { AuthService } from '@/main/auth/AuthService';
 import { AppMenu } from '@/main/menu/AppMenu';
+import { UpdaterManager } from './updater';
 
 export class MainWindow {
   private windowManager: WindowManager;
@@ -16,6 +17,7 @@ export class MainWindow {
   private ipcHandlers: IPCHandlers;
   private deepLinkService: DeepLinkService;
   private appMenu: AppMenu;
+  private updaterManager: UpdaterManager;
 
   constructor() {
     this.windowManager = new WindowManager();
@@ -26,6 +28,8 @@ export class MainWindow {
     this.layoutManager = new LayoutManager(baseWindow);
 
     this.browserManager = new BrowserManager(baseWindow, browserUIView);
+
+    this.updaterManager = new UpdaterManager(browserUIView.webContents);
 
     this.deepLinkService = new DeepLinkService(baseWindow, browserUIView.webContents);
 
@@ -47,7 +51,7 @@ export class MainWindow {
     );
 
     // Setup application menu
-    this.appMenu = new AppMenu(this.browserManager.getTabManager());
+    this.appMenu = new AppMenu(this.browserManager.getTabManager(), this.updaterManager);
     this.appMenu.setupMenu();
 
     this.windowManager.setupBrowserUI();

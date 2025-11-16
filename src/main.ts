@@ -1,7 +1,6 @@
 import { app, protocol, net } from 'electron';
 import started from 'electron-squirrel-startup';
 import { MainWindow } from './main/MainWindow';
-import { updaterManager } from './main/updater';
 import path from 'path';
 
 if (started) {
@@ -63,14 +62,6 @@ app.whenReady().then(() => {
   });
   
   createWindow();
-  
-  // Initialize updater after window is created
-  if (mainWindow) {
-    const browserUIView = mainWindow.getBrowserUIView();
-    if (browserUIView) {
-      updaterManager.initialize(browserUIView.webContents);
-    }
-  }
 });
 
 app.on('window-all-closed', () => {

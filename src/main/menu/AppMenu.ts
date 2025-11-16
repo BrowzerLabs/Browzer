@@ -1,10 +1,11 @@
-import { app, Menu, dialog, WebContents } from 'electron';
-import { updaterManager } from '@/main/updater';
+import { app, Menu, dialog } from 'electron';
 import log from 'electron-log';
 import { TabManager } from '@/main/browser/TabManager';
+import { UpdaterManager } from '@/main/updater';
 
 export class AppMenu {
   private tabManager: TabManager;
+  private updaterManager: UpdaterManager;
 
   private isMac = process.platform === 'darwin';
 
@@ -22,8 +23,10 @@ export class AppMenu {
 
   constructor(
     tabManager: TabManager,
+    updaterManager: UpdaterManager
   ) {
     this.tabManager = tabManager;
+    this.updaterManager = updaterManager;
   }
 
   public setupMenu(): void {
@@ -255,19 +258,7 @@ export class AppMenu {
 
   private async handleCheckForUpdates(): Promise<void> {
     try {
-      log.info('[AppMenu] Manual update check triggered');
-      
-      // Trigger update check - the updater will handle notifications via IPC
-      await updaterManager.checkForUpdates(true);
-      
-      // Show a simple confirmation that check was initiated
-      dialog.showMessageBox({
-        type: 'info',
-        title: 'Checking for Updates',
-        message: 'Checking for updates...',
-        detail: 'We\'re checking for the latest version. You\'ll be notified if an update is available.',
-        buttons: ['OK'],
-      });
+      await this.updaterManager.checkForUpdates(true);
     } catch (error) {
       log.error('[AppMenu] Error checking for updates:', error);
       

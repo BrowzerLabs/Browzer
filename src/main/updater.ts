@@ -1,4 +1,4 @@
-import { app, WebContents } from 'electron';
+import { app, WebContents, dialog } from 'electron';
 import { autoUpdater, UpdateInfo, ProgressInfo } from 'electron-updater';
 import log from 'electron-log';
 
@@ -8,12 +8,11 @@ export class UpdaterManager {
   private isDownloading = false;
   private downloadedUpdateInfo: UpdateInfo | null = null;
 
-  constructor() {
-    this.setupAutoUpdater();
-  }
-
-  public initialize(webContents: WebContents): void {
+  constructor(
+    webContents: WebContents
+  ) {
     this.webContents = webContents;
+    this.setupAutoUpdater();
 
     autoUpdater.setFeedURL({
       provider: 'github',
@@ -34,7 +33,7 @@ export class UpdaterManager {
 
   private setupAutoUpdater(): void {
     autoUpdater.logger = log;
-    autoUpdater.autoDownload = true; // Automatically download when update is available
+    autoUpdater.autoDownload = true;
     autoUpdater.autoInstallOnAppQuit = true;
     autoUpdater.allowDowngrade = false;
 
@@ -66,13 +65,27 @@ export class UpdaterManager {
         releaseNotes: info.releaseNotes,
         currentVersion,
       });
+
+      dialog.showMessageBox({
+        type: 'info',
+        title: 'Update Available',
+        message: `A new version ${info.version} is available!`,
+        detail: `Current version: ${currentVersion}\n\nThe update will be downloaded in the background. You'll be notified when it's ready to install.`,
+        buttons: ['OK'],
+        defaultId: 0,
+      }).catch(err => log.error('[Updater] Error showing dialog:', err));
     });
 
     autoUpdater.on('update-not-available', (info: UpdateInfo) => {
       log.info(`[Updater] No updates available. Current version: ${info.version}`);
-      this.sendToRenderer('update:not-available', {
-        version: info.version,
-      });
+      dialog.showMessageBox({
+        type: 'info',
+        title: 'Update Not Available',
+        message: `No updates available.`,
+        detail: `Current version: ${info.version}\n\n`,
+        buttons: ['OK'],
+        defaultId: 0,
+      }).catch(err => log.error('[Updater] Error showing dialog:', err));
     });
 
     autoUpdater.on('download-progress', (progress: ProgressInfo) => {
@@ -100,11 +113,30 @@ export class UpdaterManager {
       this.isDownloading = false;
       this.downloadedUpdateInfo = info;
 
+      // Send to renderer to hide progress indicator
       this.sendToRenderer('update:downloaded', {
         version: info.version,
         releaseDate: info.releaseDate,
         releaseNotes: info.releaseNotes,
       });
+
+      // Show install dialog
+      dialog.showMessageBox({
+        type: 'info',
+        title: 'Update Ready',
+        message: `Version ${info.version} has been downloaded`,
+        detail: 'The update is ready to install. Would you like to restart now or install it later?\n\nNote: The update will be automatically installed when you quit the app.',
+        buttons: ['Quit and Install', 'Install Later'],
+        defaultId: 0,
+        cancelId: 1,
+      }).then(result => {
+        if (result.response === 0) {
+          log.info('[Updater] User chose to install update now');
+          this.installUpdate();
+        } else {
+          log.info('[Updater] User chose to install update later');
+        }
+      }).catch(err => log.error('[Updater] Error showing dialog:', err));
     });
 
     autoUpdater.on('error', (error: Error) => {
@@ -116,6 +148,15 @@ export class UpdaterManager {
         stack: error.stack,
         name: error.name,
       });
+
+      // Show error dialog only for critical errors
+      dialog.showMessageBox({
+          type: 'error',
+          title: 'Update Error',
+          message: 'Failed to check for updates',
+          detail: error.message,
+          buttons: ['OK'],
+        }).catch(err => log.error('[Updater] Error showing dialog:', err));
     });
   }
 
@@ -135,9 +176,13 @@ export class UpdaterManager {
       log.error('[Updater] Error checking for updates:', error);
       
       if (isManual) {
-        this.sendToRenderer('update:error', {
-          message: error instanceof Error ? error.message : 'Failed to check for updates',
-        });
+        dialog.showMessageBox({
+          type: 'error',
+          title: 'Update Error',
+          message: 'Failed to check for updates',
+          detail: error.message,
+          buttons: ['OK'],
+        }).catch(err => log.error('[Updater] Error showing dialog:', err));
       }
     }
   }
@@ -162,9 +207,13 @@ export class UpdaterManager {
       log.error('[Updater] Error downloading update:', error);
       this.isDownloading = false;
       
-      this.sendToRenderer('update:error', {
-        message: error instanceof Error ? error.message : 'Failed to download update',
-      });
+      dialog.showMessageBox({
+        type: 'error',
+        title: 'Update Error',
+        message: 'Failed to download update',
+        detail: error.message,
+        buttons: ['OK'],
+      }).catch(err => log.error('[Updater] Error showing dialog:', err));
       
       throw error;
     }
@@ -176,9 +225,14 @@ export class UpdaterManager {
   public installUpdate(): void {
     if (!this.downloadedUpdateInfo) {
       log.error('[Updater] No update downloaded to install');
-      this.sendToRenderer('update:error', {
-        message: 'No update available to install',
-      });
+      dialog.showMessageBox({
+        type: 'error',
+        title: 'Update Error',
+        message: `No updates available.`,
+        detail: `Current version: ${this.getCurrentVersion()}`,
+        buttons: ['OK'],
+        defaultId: 0,
+      }).catch(err => log.error('[Updater] Error showing dialog:', err));
       return;
     }
 
@@ -249,6 +303,3 @@ export class UpdaterManager {
     this.webContents = null;
   }
 }
-
-// Export singleton instance
-export const updaterManager = new UpdaterManager();
