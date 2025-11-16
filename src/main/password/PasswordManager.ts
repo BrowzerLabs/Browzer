@@ -81,11 +81,11 @@ export class PasswordManager {
 
       // Combine multiple entropy sources
       const machineId = machineIdSync();
-      const appVersion = app.getVersion();
       const appPath = app.getAppPath();
       
       // Create composite key material
-      const keyMaterial = `${machineId}|${this.APP_CONTEXT}|${appVersion}|${appPath}`;
+      // NOTE: Do NOT include app version here - it causes encryption to break during updates
+      const keyMaterial = `${machineId}|${this.APP_CONTEXT}|${appPath}`;
       
       // Use scrypt for key derivation
       const derivedKey = scryptSync(

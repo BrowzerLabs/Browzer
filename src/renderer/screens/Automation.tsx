@@ -1,27 +1,13 @@
 import { useEffect, useState } from 'react';
-import { Bot, Loader2Icon, RefreshCcw, Play, Trash2, Clock, CheckCircle2, XCircle, Pause } from 'lucide-react';
+import { Bot, Loader2Icon, RefreshCcw } from 'lucide-react';
 import { Button } from '@/renderer/ui/button';
 import { toast } from 'sonner';
-import ThemeToggle from '@/renderer/ui/theme-toggle';
 import { SessionListItem } from '@/renderer/stores/automationStore';
 import { AutomationSessionCard } from '@/renderer/components/automation/AutomationSessionCard';
 import { AutomationStats } from '@/renderer/components/automation/AutomationStats';
 import { AutomationFilters } from '@/renderer/components/automation/AutomationFilters';
 import { AutomationDialog } from '@/renderer/components/automation/AutomationDialog';
 
-/**
- * Automation Sessions Screen
- * 
- * Dedicated internal page for managing automation sessions at browzer://automation
- * 
- * Features:
- * - View all automation sessions
- * - Filter by status (running, completed, error, paused)
- * - Search by goal or recording
- * - View session details and events
- * - Resume/delete sessions
- * - Real-time status updates
- */
 export function Automation() {
   const [sessions, setSessions] = useState<SessionListItem[]>([]);
   const [filteredSessions, setFilteredSessions] = useState<SessionListItem[]>([]);
@@ -34,7 +20,6 @@ export function Automation() {
   useEffect(() => {
     loadSessions();
     
-    // Subscribe to automation events for real-time updates
     const unsubscribe = window.browserAPI.onAutomationProgress(() => {
       loadSessions();
     });
@@ -52,7 +37,6 @@ export function Automation() {
     try {
       setLoading(true);
       const data = await window.browserAPI.getAutomationSessions();
-      // Sort by updated time (most recent first)
       const sorted = data.sort((a: SessionListItem, b: SessionListItem) => b.updatedAt - a.createdAt);
       setSessions(sorted);
       setFilteredSessions(sorted);
@@ -67,7 +51,6 @@ export function Automation() {
   const filterSessions = () => {
     let filtered = [...sessions];
 
-    // Apply search filter
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase();
       filtered = filtered.filter(
@@ -78,7 +61,6 @@ export function Automation() {
       );
     }
 
-    // Apply status filter
     if (filterStatus !== 'all') {
       filtered = filtered.filter((session) => session.status === filterStatus);
     }
@@ -173,7 +155,6 @@ export function Automation() {
               <RefreshCcw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
               Refresh
             </Button>
-            <ThemeToggle />
           </section>
         </div>
 

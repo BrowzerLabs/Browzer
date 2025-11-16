@@ -24,7 +24,6 @@ function AppRoutes() {
   useDeepLink();
   const { hasCompletedOnboarding } = useOnboardingStore();
 
-  // Redirect to onboarding if not completed
   if (!hasCompletedOnboarding) {
     return (
       <Routes>

@@ -1,7 +1,7 @@
 {
   "name": "browzer",
   "productName": "Browzer",
-  "version": "1.0.0",
+  "version": "0.0.1",
   "description": "My Electron application description",
   "main": ".vite/build/main.js",
   "scripts": {
@@ -23,6 +23,12 @@
     "email": "contact@trybrowzer.com"
   },
   "license": "MIT",
+  "publish": {
+    "provider": "github",
+    "owner": "BrowzerLabs",
+    "repo": "Browzer",
+    "releaseType": "release"
+  },
   "pnpm": {
     "onlyBuiltDependencies": [
       "@tailwindcss/oxide",
