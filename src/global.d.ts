@@ -1,4 +1,4 @@
-import type { BrowserAPI, AuthAPI, SubscriptionAPI, NotificationAPI, UpdaterAPI } from './preload';
+import type { BrowserAPI, AuthAPI, SubscriptionAPI, NotificationAPI, UpdaterAPI } from './preload/preload';
 
 declare global {
   interface Window {
