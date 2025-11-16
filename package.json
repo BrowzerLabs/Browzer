@@ -23,6 +23,12 @@
     "email": "contact@trybrowzer.com"
   },
   "license": "MIT",
+  "publish": {
+    "provider": "github",
+    "owner": "BrowzerLabs",
+    "repo": "Browzer",
+    "releaseType": "release"
+  },
   "pnpm": {
     "onlyBuiltDependencies": [
       "@tailwindcss/oxide",
