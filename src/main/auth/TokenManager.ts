@@ -30,9 +30,7 @@ export class TokenManager extends EventEmitter {
     super();
     this.store = new Store({
       name: 'browzer',
-      // Use a fixed encryption key that doesn't change between versions
-      // This prevents corruption during updates
-      encryptionKey: 'browzer-store-encryption-key',
+      encryptionKey: 'browzer-store-encryption-key'
     });
     
     this.encryptionKey = this.deriveEncryptionKey();
