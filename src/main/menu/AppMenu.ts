@@ -1,5 +1,5 @@
 import { app, Menu, dialog, WebContents } from 'electron';
-import { checkForUpdates } from '@/main/updater';
+import { updaterManager } from '@/main/updater';
 import log from 'electron-log';
 import { TabManager } from '@/main/browser/TabManager';
 
@@ -255,36 +255,21 @@ export class AppMenu {
 
   private async handleCheckForUpdates(): Promise<void> {
     try {
-
-      const result = await checkForUpdates();
-      if (result && result.updateInfo) {
-        const currentVersion = app.getVersion();
-        const latestVersion = result.updateInfo.version;
-
-        if (currentVersion === latestVersion) {
-          // Already up to date
-          log.info('Already running the latest version');
-          dialog.showMessageBox({
-            type: 'info',
-            title: 'No Updates Available',
-            message: 'You are up to date!',
-            detail: `Browzer v${currentVersion} is currently the latest version.`,
-            buttons: ['OK'],
-          });
-        } else {
-          // Update available - will download automatically
-          log.info(`Update available: v${latestVersion}`);
-          dialog.showMessageBox({
-            type: 'info',
-            title: 'Update Available',
-            message: `Update to v${latestVersion} Available`,
-            detail: `A new version of Browzer (v${latestVersion}) is available and will be downloaded automatically in the background. You'll be notified when it's ready to install.`,
-            buttons: ['OK'],
-          });
-        }
-      }
+      log.info('[AppMenu] Manual update check triggered');
+      
+      // Trigger update check - the updater will handle notifications via IPC
+      await updaterManager.checkForUpdates(true);
+      
+      // Show a simple confirmation that check was initiated
+      dialog.showMessageBox({
+        type: 'info',
+        title: 'Checking for Updates',
+        message: 'Checking for updates...',
+        detail: 'We\'re checking for the latest version. You\'ll be notified if an update is available.',
+        buttons: ['OK'],
+      });
     } catch (error) {
-      log.error('Error checking for updates:', error);
+      log.error('[AppMenu] Error checking for updates:', error);
       
       dialog.showMessageBox({
         type: 'error',

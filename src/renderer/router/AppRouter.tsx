@@ -13,6 +13,10 @@ import NotFound from '@/renderer/pages/not-found';
 import { NotificationProvider } from '@/renderer/providers/NotificationProvider';
 import { OnboardingFlow } from '@/renderer/pages/onboarding';
 import { useOnboardingStore } from '@/renderer/stores/onboardingStore';
+import { UpdatePage } from '@/renderer/pages/UpdatePage';
+import { useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { toast } from 'sonner';
 
 function MainApp() {
   const isInternalPage = useIsInternalPage();
@@ -21,7 +25,19 @@ function MainApp() {
 }
 
 function AppRoutes() {
+  const navigate = useNavigate();
   useDeepLink();
+  useEffect(() => {
+     // Listen for update available event
+    const unsubscribe = window.updaterAPI.onUpdateAvailable(() => {
+      toast.info('Update available. Please restart the app to apply the update.');
+      window.browserAPI.hideAllTabs();
+      navigate('/update');
+    });
+    return () => {
+      unsubscribe();
+    };
+  }, [navigate]);
   const { hasCompletedOnboarding } = useOnboardingStore();
 
   // Redirect to onboarding if not completed
@@ -36,6 +52,8 @@ function AppRoutes() {
 
   return (
     <Routes>
+      {/* Update route - accessible without authentication */}
+      <Route path="/update" element={<UpdatePage />} />
       
       <Route 
         path="/auth/signin" 

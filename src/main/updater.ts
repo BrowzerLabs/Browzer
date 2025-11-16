@@ -1,218 +1,253 @@
-import { app, dialog, WebContents, BaseWindow } from 'electron';
-import { autoUpdater, UpdateInfo } from 'electron-updater';
+import { app, WebContents } from 'electron';
+import { autoUpdater, UpdateInfo, ProgressInfo } from 'electron-updater';
 import log from 'electron-log';
-import Store from 'electron-store';
 
-// Store to persist update state
-const updateStore = new Store({
-  name: 'update-state',
-  defaults: {
-    pendingUpdateVersion: null,
-    lastUpdateCheckTime: null,
+export class UpdaterManager {
+  private webContents: WebContents | null = null;
+  private updateCheckInterval: NodeJS.Timeout | null = null;
+  private isDownloading = false;
+  private downloadedUpdateInfo: UpdateInfo | null = null;
+
+  constructor() {
+    this.setupAutoUpdater();
   }
-});
 
-let pendingUpdateInfo: UpdateInfo | null = null;
+  public initialize(webContents: WebContents): void {
+    this.webContents = webContents;
+    
+    setTimeout(() => {
+      this.checkForUpdates(false);
+    }, 5000);
 
-export function setupAutoUpdater(webContents: WebContents | null, window?: BaseWindow | null) {
-  autoUpdater.logger = log;
-  autoUpdater.autoInstallOnAppQuit = true;
+    this.updateCheckInterval = setInterval(() => {
+      log.info('[Updater] Hourly update check triggered');
+      this.checkForUpdates(false);
+    }, 60 * 60 * 1000); // Every hour
+  }
 
-  const currentVersion = app.getVersion();
-  log.info(`App version: ${currentVersion}`);
-  log.info(`Platform: ${process.platform} ${process.arch}`);
+  private setupAutoUpdater(): void {
+    autoUpdater.logger = log;
+    autoUpdater.autoInstallOnAppQuit = true;
+    autoUpdater.allowDowngrade = false;
 
-  autoUpdater.allowDowngrade = false;
-  // IMPORTANT: This must match your forge.config.ts publisher settings
-  // If forge.config.ts has prerelease: true, use 'prerelease' here
-  // If forge.config.ts has prerelease: false, use 'release' here
-  autoUpdater.setFeedURL({
-    provider: 'github',
-    owner: 'BrowzerLabs',
-    repo: 'Browzer',
-    releaseType: 'release', // Matches forge.config.ts prerelease: false
-  });
-
-  // Register ALL event handlers BEFORE checking for updates
-  // This ensures we don't miss any events that fire quickly
-  
-  autoUpdater.on('update-available', (info) => {
     const currentVersion = app.getVersion();
-    log.info(`Update available: v${info.version} (current: v${currentVersion})`);
-    
-    if (info.version === currentVersion) {
-      log.warn(`Update version ${info.version} is same as current version. Skipping.`);
-      return;
-    }
-    
-    pendingUpdateInfo = info;
-    
-    // Explicitly trigger download (checkForUpdatesAndNotify should do this, but ensure it happens)
-    log.info(`Starting download of v${info.version}...`);
-    autoUpdater.downloadUpdate().catch((error) => {
-      log.error('Error downloading update:', error);
-      if (webContents && !webContents.isDestroyed()) {
-        webContents.send('update:error', {
-          message: `Failed to download update: ${error instanceof Error ? error.message : String(error)}`,
-        });
-      }
+    log.info(`[Updater] App version: ${currentVersion}`);
+    log.info(`[Updater] Platform: ${process.platform} ${process.arch}`);
+
+    autoUpdater.setFeedURL({
+      provider: 'github',
+      owner: 'BrowzerLabs',
+      repo: 'Browzer',
+      releaseType: 'release',
     });
-    
-    if (webContents && !webContents.isDestroyed()) {
-      webContents.send('update:available', {
+
+    this.registerEventHandlers();
+  }
+
+  private registerEventHandlers(): void {
+    autoUpdater.on('checking-for-update', () => {
+      log.info('[Updater] Checking for updates...');
+      this.sendToRenderer('update:checking');
+    });
+
+    autoUpdater.on('update-available', (info: UpdateInfo) => {
+      const currentVersion = app.getVersion();
+      log.info(`[Updater] Update available: v${info.version} (current: v${currentVersion})`);
+      
+      if (info.version === currentVersion) {
+        log.warn('[Updater] Update version same as current, skipping');
+        return;
+      }
+
+      this.sendToRenderer('update:available', {
+        version: info.version,
+        releaseDate: info.releaseDate,
+        releaseNotes: info.releaseNotes,
+        currentVersion,
+      });
+    });
+
+    autoUpdater.on('update-not-available', (info: UpdateInfo) => {
+      log.info(`[Updater] No updates available. Current version: ${info.version}`);
+      this.sendToRenderer('update:not-available', {
+        version: info.version,
+      });
+    });
+
+    autoUpdater.on('download-progress', (progress: ProgressInfo) => {
+      const { bytesPerSecond, percent, transferred, total } = progress;
+      
+      log.info(
+        `[Updater] Download progress: ${percent.toFixed(2)}% ` +
+        `(${this.formatBytes(transferred)}/${this.formatBytes(total)}) ` +
+        `@ ${this.formatBytes(bytesPerSecond)}/s`
+      );
+
+      this.sendToRenderer('update:download-progress', {
+        percent: Math.round(percent * 100) / 100,
+        transferred,
+        total,
+        bytesPerSecond,
+        transferredFormatted: this.formatBytes(transferred),
+        totalFormatted: this.formatBytes(total),
+        speedFormatted: `${this.formatBytes(bytesPerSecond)}/s`,
+      });
+    });
+
+    autoUpdater.on('update-downloaded', (info: UpdateInfo) => {
+      log.info(`[Updater] Update downloaded successfully: v${info.version}`);
+      this.isDownloading = false;
+      this.downloadedUpdateInfo = info;
+
+      this.sendToRenderer('update:downloaded', {
         version: info.version,
         releaseDate: info.releaseDate,
         releaseNotes: info.releaseNotes,
       });
-    }
-  });
+    });
 
-  autoUpdater.on('update-not-available', (info) => {
-    log.info('Update not available, running latest version:', info.version);
-  });
+    autoUpdater.on('error', (error: Error) => {
+      log.error('[Updater] Error:', error);
+      this.isDownloading = false;
 
-  autoUpdater.on('download-progress', (progressObj) => {
-    const { bytesPerSecond, percent, transferred, total } = progressObj;
-    
-    log.info(
-      `Download progress: ${percent.toFixed(2)}% (${transferred}/${total} bytes, ${bytesPerSecond} bytes/sec)`
-    );
-
-    if (webContents && !webContents.isDestroyed()) {
-      webContents.send('update:download-progress', {
-        percent: Math.round(percent),
-        transferred,
-        total,
-        bytesPerSecond,
-      });
-    }
-  });
-
-  autoUpdater.on('update-downloaded', (info) => {
-    log.info('Update downloaded:', info.version);
-    
-    updateStore.set('pendingUpdateVersion', info.version);
-
-    if (webContents && !webContents.isDestroyed()) {
-      const parentWindow = window && !window.isDestroyed() ? window : undefined;
-      
-      dialog
-        .showMessageBox(parentWindow, {
-          type: 'info',
-          title: 'Update Ready to Install',
-          message: `Browzer v${info.version} is ready to install`,
-          detail: 'The app will restart to complete the installation.',
-          buttons: ['Install Now', 'Later'],
-          defaultId: 0,
-          cancelId: 1,
-        })
-        .then((result) => {
-          if (result.response === 0) {
-            log.info('User chose to install update immediately');
-            updateStore.delete('pendingUpdateVersion');
-            autoUpdater.quitAndInstall();
-          } else {
-            log.info('User deferred update installation. Update will be installed on next app quit.');
-            if (webContents && !webContents.isDestroyed()) {
-              webContents.send('update:deferred');
-            }
-          }
-        })
-    } else {
-      log.info('No webContents, installing update immediately');
-      updateStore.delete('pendingUpdateVersion');
-      autoUpdater.quitAndInstall();
-    }
-  });
-
-  autoUpdater.on('error', (error) => {
-    log.error('Update error:', error);
-
-    if (webContents && !webContents.isDestroyed()) {
-      webContents.send('update:error', {
+      this.sendToRenderer('update:error', {
         message: error.message,
+        stack: error.stack,
+        name: error.name,
       });
-    }
-  });
-
-  autoUpdater.on('checking-for-update', () => {
-    log.info('Checking for updates...');
-    
-    if (webContents && !webContents.isDestroyed()) {
-      webContents.send('update:checking');
-    }
-  });
-
-  // NOW check for updates (after all handlers are registered)
-  // Handle pending updates from previous session
-  const pendingVersion = updateStore.get('pendingUpdateVersion') as string | null;
-  if (pendingVersion && pendingVersion !== currentVersion) {
-    log.info(`Pending update found from previous session: v${pendingVersion}`);
-    // Check immediately for pending update
-    autoUpdater.checkForUpdatesAndNotify().catch((error) => {
-      log.error('Error checking for pending update:', error);
     });
-  } else if (pendingVersion === currentVersion) {
-    updateStore.delete('pendingUpdateVersion');
-    log.info('Update successfully installed and applied');
-    // Still check for newer updates after a delay
-    setTimeout(() => {
-      log.info('Starting initial update check...');
-      autoUpdater.checkForUpdatesAndNotify().catch((error) => {
-        log.error('Error during initial update check:', error);
-      });
-    }, 5000);
-  } else {
-    // No pending update, check for updates on startup (after a short delay to ensure app is ready)
-    setTimeout(() => {
-      log.info('Starting initial update check...');
-      autoUpdater.checkForUpdatesAndNotify().catch((error) => {
-        log.error('Error during initial update check:', error);
-      });
-    }, 5000); // 5 second delay to ensure app is fully initialized
   }
 
-  // Set up hourly automatic checks
-  setInterval(() => {
-    log.info('Hourly update check triggered');
-    autoUpdater.checkForUpdatesAndNotify().catch((error) => {
-      log.error('Error during hourly update check:', error);
-    });
-  }, 60 * 60 * 1000);
-}
-
-export async function checkForUpdates() {
-  try {
-    log.info('Manual update check triggered');
-    log.info('Current app version:', app.getVersion());
-    
-    // Use checkForUpdatesAndNotify to automatically download if available
-    const result = await autoUpdater.checkForUpdatesAndNotify();
-    
-    log.info('Update check completed');
-    if (result && result.updateInfo) {
-      log.info(`Latest version available: ${result.updateInfo.version}`);
+  /**
+   * Check for updates (can be triggered manually or automatically)
+   */
+  public async checkForUpdates(isManual = false): Promise<void> {
+    try {
+      log.info(`[Updater] ${isManual ? 'Manual' : 'Automatic'} update check initiated`);
+      
+      const result = await autoUpdater.checkForUpdates();
+      
+      if (result && result.updateInfo) {
+        log.info(`[Updater] Check complete. Latest version: ${result.updateInfo.version}`);
+      }
+    } catch (error) {
+      log.error('[Updater] Error checking for updates:', error);
+      
+      if (isManual) {
+        this.sendToRenderer('update:error', {
+          message: error instanceof Error ? error.message : 'Failed to check for updates',
+        });
+      }
     }
+  }
+
+  /**
+   * Start downloading the available update
+   */
+  public async downloadUpdate(): Promise<void> {
+    if (this.isDownloading) {
+      log.warn('[Updater] Download already in progress');
+      return;
+    }
+
+    try {
+      log.info('[Updater] Starting update download...');
+      this.isDownloading = true;
+      
+      this.sendToRenderer('update:download-started');
+      
+      await autoUpdater.downloadUpdate();
+    } catch (error) {
+      log.error('[Updater] Error downloading update:', error);
+      this.isDownloading = false;
+      
+      this.sendToRenderer('update:error', {
+        message: error instanceof Error ? error.message : 'Failed to download update',
+      });
+      
+      throw error;
+    }
+  }
+
+  /**
+   * Install the downloaded update and restart the app
+   */
+  public installUpdate(): void {
+    if (!this.downloadedUpdateInfo) {
+      log.error('[Updater] No update downloaded to install');
+      this.sendToRenderer('update:error', {
+        message: 'No update available to install',
+      });
+      return;
+    }
+
+    log.info(`[Updater] Installing update v${this.downloadedUpdateInfo.version} and restarting...`);
     
-    return result;
-  } catch (error) {
-    log.error('Error checking for updates:', error);
-    throw error;
+    // This will quit the app and install the update
+    autoUpdater.quitAndInstall(false, true);
+  }
+
+  /**
+   * Get current app version
+   */
+  public getCurrentVersion(): string {
+    return app.getVersion();
+  }
+
+  /**
+   * Check if an update is currently downloading
+   */
+  public isUpdateDownloading(): boolean {
+    return this.isDownloading;
+  }
+
+  /**
+   * Check if an update has been downloaded and is ready to install
+   */
+  public isUpdateReady(): boolean {
+    return this.downloadedUpdateInfo !== null;
+  }
+
+  /**
+   * Get downloaded update info
+   */
+  public getDownloadedUpdateInfo(): UpdateInfo | null {
+    return this.downloadedUpdateInfo;
+  }
+
+  /**
+   * Send message to renderer process
+   */
+  private sendToRenderer(channel: string, data?: any): void {
+    if (this.webContents && !this.webContents.isDestroyed()) {
+      this.webContents.send(channel, data);
+    }
+  }
+
+  /**
+   * Format bytes to human-readable format
+   */
+  private formatBytes(bytes: number): string {
+    if (bytes === 0) return '0 B';
+    
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    
+    return `${parseFloat((bytes / Math.pow(k, i)).toFixed(2))} ${sizes[i]}`;
+  }
+
+  /**
+   * Cleanup resources
+   */
+  public cleanup(): void {
+    if (this.updateCheckInterval) {
+      clearInterval(this.updateCheckInterval);
+      this.updateCheckInterval = null;
+    }
+    this.webContents = null;
   }
 }
 
-export function installUpdate() {
-  log.info('Installing update and restarting...');
-  autoUpdater.quitAndInstall();
-}
-
-export async function downloadUpdate() {
-  try {
-    log.info('Manually downloading update...');
-    await autoUpdater.downloadUpdate();
-    log.info('Update downloaded successfully');
-  } catch (error) {
-    log.error('Error downloading update:', error);
-    throw error;
-  }
-}
+// Export singleton instance
+export const updaterManager = new UpdaterManager();

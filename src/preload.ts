@@ -1,6 +1,21 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { contextBridge, ipcRenderer, desktopCapturer } from 'electron';
-import { HistoryEntry, HistoryQuery, HistoryStats, TabInfo, AppSettings, SignUpCredentials, SignInCredentials, AuthResponse, AuthSession, User, UpdateProfileRequest } from '@/shared/types';
+import { 
+  HistoryEntry, 
+  HistoryQuery, 
+  HistoryStats, 
+  TabInfo, 
+  AppSettings, 
+  SignUpCredentials, 
+  SignInCredentials, 
+  AuthResponse, 
+  AuthSession, 
+  User, 
+  UpdateProfileRequest, 
+  UpdateStatus, 
+  UpdateInfo, 
+  UpdateProgress 
+} from '@/shared/types';
 import { 
   PlansResponse, 
   SubscriptionResponse, 
@@ -184,6 +199,24 @@ export interface SubscriptionAPI {
 
 export interface NotificationAPI {
   onNotification: (callback: (notification: NotificationPayload) => void) => () => void;
+}
+
+export interface UpdaterAPI {
+  // Actions
+  checkForUpdates: () => Promise<{ success: boolean }>;
+  downloadUpdate: () => Promise<{ success: boolean; error?: string }>;
+  installUpdate: () => Promise<{ success: boolean }>;
+  getVersion: () => Promise<string>;
+  getStatus: () => Promise<UpdateStatus>;
+  
+  // Event listeners
+  onUpdateChecking: (callback: () => void) => () => void;
+  onUpdateAvailable: (callback: (info: UpdateInfo & { currentVersion: string }) => void) => () => void;
+  onUpdateNotAvailable: (callback: (info: { version: string }) => void) => () => void;
+  onDownloadStarted: (callback: () => void) => () => void;
+  onDownloadProgress: (callback: (progress: UpdateProgress) => void) => () => void;
+  onUpdateDownloaded: (callback: (info: UpdateInfo) => void) => () => void;
+  onUpdateError: (callback: (error: { message: string; stack?: string; name?: string }) => void) => () => void;
 }
 
 const browserAPI: BrowserAPI = {
@@ -434,7 +467,55 @@ const notificationAPI: NotificationAPI = {
   },
 };
 
+// Updater API implementation
+const updaterAPI: UpdaterAPI = {
+  // Actions
+  checkForUpdates: () => ipcRenderer.invoke('updater:check-for-updates'),
+  downloadUpdate: () => ipcRenderer.invoke('updater:download-update'),
+  installUpdate: () => ipcRenderer.invoke('updater:install-update'),
+  getVersion: () => ipcRenderer.invoke('updater:get-version'),
+  getStatus: () => ipcRenderer.invoke('updater:get-status'),
+  
+  // Event listeners
+  onUpdateChecking: (callback) => {
+    const subscription = () => callback();
+    ipcRenderer.on('update:checking', subscription);
+    return () => ipcRenderer.removeListener('update:checking', subscription);
+  },
+  onUpdateAvailable: (callback) => {
+    const subscription = (_event: Electron.IpcRendererEvent, info: any) => callback(info);
+    ipcRenderer.on('update:available', subscription);
+    return () => ipcRenderer.removeListener('update:available', subscription);
+  },
+  onUpdateNotAvailable: (callback) => {
+    const subscription = (_event: Electron.IpcRendererEvent, info: any) => callback(info);
+    ipcRenderer.on('update:not-available', subscription);
+    return () => ipcRenderer.removeListener('update:not-available', subscription);
+  },
+  onDownloadStarted: (callback) => {
+    const subscription = () => callback();
+    ipcRenderer.on('update:download-started', subscription);
+    return () => ipcRenderer.removeListener('update:download-started', subscription);
+  },
+  onDownloadProgress: (callback) => {
+    const subscription = (_event: Electron.IpcRendererEvent, progress: UpdateProgress) => callback(progress);
+    ipcRenderer.on('update:download-progress', subscription);
+    return () => ipcRenderer.removeListener('update:download-progress', subscription);
+  },
+  onUpdateDownloaded: (callback) => {
+    const subscription = (_event: Electron.IpcRendererEvent, info: UpdateInfo) => callback(info);
+    ipcRenderer.on('update:downloaded', subscription);
+    return () => ipcRenderer.removeListener('update:downloaded', subscription);
+  },
+  onUpdateError: (callback) => {
+    const subscription = (_event: Electron.IpcRendererEvent, error: any) => callback(error);
+    ipcRenderer.on('update:error', subscription);
+    return () => ipcRenderer.removeListener('update:error', subscription);
+  },
+};
+
 contextBridge.exposeInMainWorld('browserAPI', browserAPI);
 contextBridge.exposeInMainWorld('authAPI', authAPI);
 contextBridge.exposeInMainWorld('subscriptionAPI', subscriptionAPI);
 contextBridge.exposeInMainWorld('notificationAPI', notificationAPI);
+contextBridge.exposeInMainWorld('updaterAPI', updaterAPI);

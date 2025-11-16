@@ -10,3 +10,4 @@ export * from './auth';
 export * from './subscription';
 export * from './notification';
 export * from './prompts';
+export * from './update';
