@@ -197,31 +197,31 @@ jobs:
           VERSION="${{ steps.prepare.outputs.version }}"
           VERSION_NUMBER="${VERSION#v}"
           
-          # Find the universal or x64 DMG (prefer universal)
-          DMG_UNIVERSAL=$(find release-files -name "*universal*.dmg" -o -name "*Universal*.dmg" | head -1)
-          DMG_X64=$(find release-files -name "*x64*.dmg" -o -name "*intel*.dmg" | head -1)
-          DMG_ARM64=$(find release-files -name "*arm64*.dmg" | head -1)
+          # Find ZIP files for auto-updates (electron-updater requires ZIP, not DMG)
+          ZIP_X64=$(find release-files -name "*x64*.zip" -o -name "*intel*.zip" | head -1)
+          ZIP_ARM64=$(find release-files -name "*arm64*.zip" | head -1)
+          ZIP_UNIVERSAL=$(find release-files -name "*universal*.zip" -o -name "*Universal*.zip" | head -1)
           
-          # Use universal if available, otherwise x64
-          if [ -n "$DMG_UNIVERSAL" ]; then
-            DMG_FILE="$DMG_UNIVERSAL"
-          elif [ -n "$DMG_X64" ]; then
-            DMG_FILE="$DMG_X64"
+          # Prefer universal, fallback to architecture-specific
+          if [ -n "$ZIP_UNIVERSAL" ]; then
+            ZIP_FILE="$ZIP_UNIVERSAL"
+          elif [ -n "$ZIP_ARM64" ]; then
+            ZIP_FILE="$ZIP_ARM64"
+          elif [ -n "$ZIP_X64" ]; then
+            ZIP_FILE="$ZIP_X64"
           else
-            DMG_FILE="$DMG_ARM64"
-          fi
-          
-          if [ -z "$DMG_FILE" ]; then
-            echo "Error: No DMG file found!"
+            echo "Error: No ZIP file found for auto-updates!"
+            echo "Available files:"
+            ls -la release-files/
             exit 1
           fi
           
-          echo "Using DMG: $DMG_FILE"
+          echo "Using ZIP for auto-updates: $ZIP_FILE"
           
           # Get file info
-          FILENAME=$(basename "$DMG_FILE")
-          SIZE=$(stat -c%s "$DMG_FILE" 2>/dev/null || stat -f%z "$DMG_FILE")
-          SHA512=$(shasum -a 512 "$DMG_FILE" | awk '{print $1}')
+          FILENAME=$(basename "$ZIP_FILE")
+          SIZE=$(stat -c%s "$ZIP_FILE" 2>/dev/null || stat -f%z "$ZIP_FILE")
+          SHA512=$(shasum -a 512 "$ZIP_FILE" | awk '{print $1}')
           RELEASE_DATE=$(date -u +'%Y-%m-%dT%H:%M:%S.000Z')
           
           # Create latest-mac.yml in electron-updater format
