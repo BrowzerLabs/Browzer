@@ -27,6 +27,7 @@ export class UpdaterManager {
 
   private setupAutoUpdater(): void {
     autoUpdater.logger = log;
+    autoUpdater.autoDownload = true; // Automatically download when update is available
     autoUpdater.autoInstallOnAppQuit = true;
     autoUpdater.allowDowngrade = false;
 

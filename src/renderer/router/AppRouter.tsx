@@ -34,8 +34,18 @@ function AppRoutes() {
       window.browserAPI.hideAllTabs();
       navigate('/update');
     });
+
+    const unsubscribe2 = window.updaterAPI.onUpdateNotAvailable(() => {
+      toast.warning('Update not available.');
+    });
+
+    const unsubscribe4 = window.updaterAPI.onUpdateDownloaded(() => {
+      toast.success('Update downloaded. Please restart the app to apply the update.');
+    });
     return () => {
       unsubscribe();
+      unsubscribe2();
+      unsubscribe4();
     };
   }, [navigate]);
   const { hasCompletedOnboarding } = useOnboardingStore();
