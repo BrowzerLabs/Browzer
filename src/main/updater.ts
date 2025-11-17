@@ -7,6 +7,7 @@ export class UpdaterManager {
   private updateCheckInterval: NodeJS.Timeout | null = null;
   private isDownloading = false;
   private downloadedUpdateInfo: UpdateInfo | null = null;
+  private shouldShowNoUpdateDialog = false;
 
   constructor(
     webContents: WebContents
@@ -51,6 +52,8 @@ export class UpdaterManager {
     });
 
     autoUpdater.on('update-available', (info: UpdateInfo) => {
+      this.shouldShowNoUpdateDialog = false;
+
       const currentVersion = app.getVersion();
       log.info(`[Updater] Update available: v${info.version} (current: v${currentVersion})`);
       
@@ -77,7 +80,15 @@ export class UpdaterManager {
     });
 
     autoUpdater.on('update-not-available', (info: UpdateInfo) => {
+      const wasManualCheck = this.shouldShowNoUpdateDialog;
+      this.shouldShowNoUpdateDialog = false;
+
       log.info(`[Updater] No updates available. Current version: ${info.version}`);
+
+      if (!wasManualCheck) {
+        return;
+      }
+
       dialog.showMessageBox({
         type: 'info',
         title: 'Update Not Available',
@@ -140,6 +151,7 @@ export class UpdaterManager {
     });
 
     autoUpdater.on('error', (error: Error) => {
+      this.shouldShowNoUpdateDialog = false;
       log.error('[Updater] Error:', error);
       this.isDownloading = false;
 
@@ -166,6 +178,8 @@ export class UpdaterManager {
   public async checkForUpdates(isManual = false): Promise<void> {
     try {
       log.info(`[Updater] ${isManual ? 'Manual' : 'Automatic'} update check initiated`);
+
+      this.shouldShowNoUpdateDialog = isManual;
       
       const result = await autoUpdater.checkForUpdates();
       
@@ -175,6 +189,10 @@ export class UpdaterManager {
     } catch (error) {
       log.error('[Updater] Error checking for updates:', error);
       
+      if (isManual) {
+        this.shouldShowNoUpdateDialog = false;
+      }
+
       if (isManual) {
         dialog.showMessageBox({
           type: 'error',
