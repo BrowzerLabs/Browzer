@@ -1,28 +1,14 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { BaseHandler } from '../core/BaseHandler';
 import { ElementFinder } from '../core/ElementFinder';
-import { EffectTracker } from '../core/EffectTracker';
 import type { HandlerContext } from '../core/types';
 import type { KeyPressParams, ScrollParams, ToolExecutionResult } from '@/shared/types';
 
-/**
- * InteractionHandler - Handles keyboard and scroll interactions
- * 
- * Provides operations for:
- * - Key press with modifiers (Ctrl, Shift, Alt, Meta)
- * - Scroll (by direction/amount or to element)
- * 
- * This handler ensures interactions work reliably across different
- * page states and element positions.
- */
 export class InteractionHandler extends BaseHandler {
   private elementFinder: ElementFinder;
-  private effectTracker: EffectTracker;
 
   constructor(context: HandlerContext) {
     super(context);
     this.elementFinder = new ElementFinder(context);
-    this.effectTracker = new EffectTracker(context);
   }
 
   /**
@@ -80,15 +66,12 @@ export class InteractionHandler extends BaseHandler {
       console.log(`[InteractionHandler] ✅ Key pressed: ${params.key}`);
 
       await this.sleep(300);
-      const effects = await this.effectTracker.capturePostActionEffects();
-
       const executionTime = Date.now() - startTime;
 
       return {
         success: true,
         toolName: 'keyPress',
         executionTime,
-        effects,
         value: params.key,
         timestamp: Date.now(),
         tabId: this.tabId,
@@ -176,7 +159,6 @@ export class InteractionHandler extends BaseHandler {
       }
 
       await this.sleep(500); // Wait for scroll to complete
-      const effects = await this.effectTracker.capturePostActionEffects();
 
       const executionTime = Date.now() - startTime;
 
@@ -184,7 +166,6 @@ export class InteractionHandler extends BaseHandler {
         success: true,
         toolName: 'scroll',
         executionTime,
-        effects,
         timestamp: Date.now(),
         tabId: this.tabId,
         url: this.getUrl()

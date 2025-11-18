@@ -1,30 +1,15 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { BaseHandler } from '../core/BaseHandler';
 import { ElementFinder } from '../core/ElementFinder';
-import { EffectTracker } from '../core/EffectTracker';
 import type { HandlerContext, InputPrepResult, TypingResult } from '../core/types';
 import type { TypeParams, ToolExecutionResult, FoundElement } from '@/shared/types';
 
-/**
- * TypeHandler - Handles text input/typing automation
- * 
- * Provides robust typing with:
- * - React/Vue framework support (proper event triggering)
- * - Input preparation (scroll, focus, clear)
- * - CDP-based key events for realistic typing
- * - Comprehensive event simulation (beforeinput, input, change)
- * 
- * This handler ensures typing works reliably across different frameworks
- * and properly triggers validation and state updates.
- */
 export class TypeHandler extends BaseHandler {
   private elementFinder: ElementFinder;
-  private effectTracker: EffectTracker;
 
   constructor(context: HandlerContext) {
     super(context);
     this.elementFinder = new ElementFinder(context);
-    this.effectTracker = new EffectTracker(context);
   }
 
   /**
@@ -81,9 +66,6 @@ export class TypeHandler extends BaseHandler {
 
       console.log(`[TypeHandler] ✅ Input prepared`);
 
-      // Capture pre-action state
-      await this.effectTracker.capturePreActionState();
-
       // Perform typing
       const pressEnter = params.pressEnter ?? false;
       const typingResult = await this.performRobustTyping(
@@ -111,8 +93,6 @@ export class TypeHandler extends BaseHandler {
 
       // Wait for effects
       await this.sleep(500);
-      const effects = await this.effectTracker.capturePostActionEffects();
-
       const executionTime = Date.now() - startTime;
 
       return {
@@ -129,7 +109,6 @@ export class TypeHandler extends BaseHandler {
           isVisible: true,
           isEnabled: true
         } as FoundElement,
-        effects,
         value: params.text,
         timestamp: Date.now(),
         tabId: this.tabId,

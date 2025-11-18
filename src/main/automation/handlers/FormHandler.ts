@@ -1,29 +1,14 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { BaseHandler } from '../core/BaseHandler';
 import { ElementFinder } from '../core/ElementFinder';
-import { EffectTracker } from '../core/EffectTracker';
 import type { HandlerContext } from '../core/types';
 import type { SelectParams, CheckboxParams, SubmitParams, ToolExecutionResult, FoundElement, ElementQueryResult } from '@/shared/types';
 
-/**
- * FormHandler - Handles form-related automation operations
- * 
- * Provides operations for:
- * - Select dropdowns (by value, label, or index)
- * - Checkboxes and radio buttons
- * - Form submission
- * 
- * This handler ensures form interactions work reliably and trigger
- * proper validation and change events.
- */
 export class FormHandler extends BaseHandler {
   private elementFinder: ElementFinder;
-  private effectTracker: EffectTracker;
 
   constructor(context: HandlerContext) {
     super(context);
     this.elementFinder = new ElementFinder(context);
-    this.effectTracker = new EffectTracker(context);
   }
 
   /**
@@ -121,8 +106,6 @@ export class FormHandler extends BaseHandler {
       console.log(`[FormHandler] ✅ Selected option: ${result.selectedText}`);
 
       await this.sleep(300);
-      const effects = await this.effectTracker.capturePostActionEffects();
-
       const executionTime = Date.now() - startTime;
 
       return {
@@ -130,7 +113,6 @@ export class FormHandler extends BaseHandler {
         toolName: 'select',
         executionTime,
         element: this.createFoundElement(queryResult),
-        effects,
         value: result.selectedValue,
         timestamp: Date.now(),
         tabId: this.tabId,
@@ -206,8 +188,6 @@ export class FormHandler extends BaseHandler {
       console.log(`[FormHandler] ✅ Checkbox set to: ${result.checked}`);
 
       await this.sleep(300);
-      const effects = await this.effectTracker.capturePostActionEffects();
-
       const executionTime = Date.now() - startTime;
 
       return {
@@ -215,7 +195,6 @@ export class FormHandler extends BaseHandler {
         toolName: 'checkbox',
         executionTime,
         element: this.createFoundElement(queryResult),
-        effects,
         value: result.checked,
         timestamp: Date.now(),
         tabId: this.tabId,
@@ -241,8 +220,6 @@ export class FormHandler extends BaseHandler {
 
     try {
       console.log(`[FormHandler] Submitting form`);
-
-      await this.effectTracker.capturePreActionState();
 
       if (params.submitButtonSelector) {
         // Click submit button instead
@@ -288,7 +265,6 @@ export class FormHandler extends BaseHandler {
         console.log(`[FormHandler] ✅ Form submitted`);
 
         await this.sleep(500);
-        const effects = await this.effectTracker.capturePostActionEffects();
 
         const executionTime = Date.now() - startTime;
 
@@ -296,7 +272,6 @@ export class FormHandler extends BaseHandler {
           success: true,
           toolName: 'submit',
           executionTime,
-          effects,
           timestamp: Date.now(),
           tabId: this.tabId,
           url: this.getUrl()

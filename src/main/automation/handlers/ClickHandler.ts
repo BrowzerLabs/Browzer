@@ -1,30 +1,14 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { BaseHandler } from '../core/BaseHandler';
 import { ElementFinder } from '../core/ElementFinder';
-import { EffectTracker } from '../core/EffectTracker';
-import type { HandlerContext, ClickExecutionResult, ClickabilityResult } from '../core/types';
+import type { HandlerContext, ClickExecutionResult, } from '../core/types';
 import type { ClickParams, ToolExecutionResult, FoundElement } from '@/shared/types';
 
-/**
- * ClickHandler - Handles click automation operations
- * 
- * Provides robust clicking with:
- * - Multi-strategy element finding
- * - Visibility and clickability verification
- * - Multiple click fallback strategies
- * - Effect tracking (navigation, DOM changes, etc.)
- * 
- * This handler ensures clicks work reliably across different web frameworks
- * and UI patterns (React, Vue, Angular, vanilla JS).
- */
 export class ClickHandler extends BaseHandler {
   private elementFinder: ElementFinder;
-  private effectTracker: EffectTracker;
 
   constructor(context: HandlerContext) {
     super(context);
     this.elementFinder = new ElementFinder(context);
-    this.effectTracker = new EffectTracker(context);
   }
 
   /**
@@ -90,7 +74,6 @@ export class ClickHandler extends BaseHandler {
 
       // Step 5: Wait for effects and detect changes
       await this.sleep(800);
-      const effects = await this.effectTracker.capturePostActionEffects();
 
       const executionTime = Date.now() - startTime;
 
@@ -108,7 +91,6 @@ export class ClickHandler extends BaseHandler {
           isVisible: true,
           isEnabled: true
         } as FoundElement,
-        effects,
         timestamp: Date.now(),
         tabId: this.tabId,
         url: this.getUrl()
