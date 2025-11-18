@@ -72,7 +72,7 @@ export class BrowserManager {
   }
 
   public initializeAfterAuth(): void {
-    const { tabs } = this.getAllTabs();
+    const { tabs } = this.tabManager.getAllTabs();
     if (tabs.length === 0) {
       this.tabManager.createTab('https://www.google.com');
     }
@@ -80,54 +80,6 @@ export class BrowserManager {
 
   public getTabManager(): TabManager {
     return this.tabManager;
-  }
-
-  // ============================================================================
-  // Tab Management (delegated to TabManager)
-  // ============================================================================
-
-  public createTab(url?: string): TabInfo {
-    return this.tabManager.createTab(url);
-  }
-
-  public closeTab(tabId: string): boolean {
-    return this.tabManager.closeTab(tabId);
-  }
-
-  public switchToTab(tabId: string): boolean {
-    return this.tabManager.switchToTab(tabId);
-  }
-
-  public navigate(tabId: string, url: string): boolean {
-    return this.tabManager.navigate(tabId, url);
-  }
-
-  public goBack(tabId: string): boolean {
-    return this.tabManager.goBack(tabId);
-  }
-
-  public goForward(tabId: string): boolean {
-    return this.tabManager.goForward(tabId);
-  }
-
-  public reload(tabId: string): boolean {
-    return this.tabManager.reload(tabId);
-  }
-
-  public stop(tabId: string): boolean {
-    return this.tabManager.stop(tabId);
-  }
-
-  public canGoBack(tabId: string): boolean {
-    return this.tabManager.canGoBack(tabId);
-  }
-
-  public canGoForward(tabId: string): boolean {
-    return this.tabManager.canGoForward(tabId);
-  }
-
-  public getAllTabs(): { tabs: TabInfo[]; activeTabId: string | null } {
-    return this.tabManager.getAllTabs();
   }
 
   // ============================================================================
@@ -270,9 +222,9 @@ export class BrowserManager {
   public navigateToBrowzerURL(url: string): void {
     const activeTab = this.tabManager.getActiveTab();
     if (activeTab) {
-      this.navigate(activeTab.id, url);
+      this.tabManager.navigate(activeTab.id, url);
     } else {
-      this.createTab(url);
+      this.tabManager.createTab(url);
     }
   }
 
@@ -307,7 +259,7 @@ export class BrowserManager {
     const allViews = this.baseWindow.contentView.children;
     allViews.forEach(view => {
       if (view instanceof WebContentsView) {
-        view.webContents.send('browser:tabs-updated', this.getAllTabs());
+        view.webContents.send('browser:tabs-updated', this.tabManager.getAllTabs());
       }
     });
   }
