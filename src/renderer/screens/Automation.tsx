@@ -151,9 +151,10 @@ export function Automation() {
                 toast.success('Sessions refreshed');
               }}
               disabled={loading}
+              size='icon-lg'
+              variant='outline'
             >
-              <RefreshCcw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-              Refresh
+              <RefreshCcw />
             </Button>
           </section>
         </div>

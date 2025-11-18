@@ -245,7 +245,6 @@ export class BrowserManager {
     });
 
     this.tabManager.on('tab:switched', (previousTabId, newTab) => {
-      console.log('🔴 Tab switched:', previousTabId, '->', newTab.id);
       if (this.recordingManager.isRecordingActive()) {
         this.recordingManager.handleTabSwitch(previousTabId, newTab);
       }
