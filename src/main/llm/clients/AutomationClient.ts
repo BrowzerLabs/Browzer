@@ -16,7 +16,7 @@ export class AutomationClient {
         this.onThinking('Starting automation session...');
       }
 
-      const response = await api.post<{ session_id?: string }>('/automation/start');
+      const response = await api.post<{ session_id: string }>('/automation/start');
       
       if (!response.success || !response.data) {
         throw new Error(response.error);
@@ -39,7 +39,8 @@ export class AutomationClient {
     const { systemPromptType, userPrompt, tools, cachedContext } = params;
     
     if (!this.sessionId) {
-      throw new Error('No active automation session. Call startAutomation() first.');
+      alert('No active automation session. Please start a new session.');
+      return;
     }
 
     try {
