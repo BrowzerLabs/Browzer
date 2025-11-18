@@ -1,7 +1,7 @@
 import { ReactNode, useEffect, useState, useRef } from 'react';
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '@/renderer/hooks/useAuth';
-import { Loader2 } from 'lucide-react';
+import { Loader2, ShieldCheck } from 'lucide-react';
 
 /**
  * ProtectedRoute - Protects routes requiring authentication
@@ -56,8 +56,9 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
   // Loading state
   if (loading) {
     return (
-      <div className="h-screen flex flex-col items-center justify-center">
-        <Loader2 className="size-7 animate-spin" />
+      <div className="h-screen flex flex-col items-center justify-center gap-2 animate-pulse">
+        <ShieldCheck className="size-7" />
+        <p className='text-xs'>Verifying wheather its really you</p>
       </div>
     );
   }
@@ -70,8 +71,9 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
   // Authenticated but browser not ready
   if (!browserReady) {
     return (
-      <div className="h-screen flex flex-col items-center justify-center">
+      <div className="h-screen flex flex-col items-center justify-center gap-2 text-teal-500">
         <Loader2 className="size-7 animate-spin" />
+        <p className='animate-pulse text-xs'>Setting up your Browzer</p>
       </div>
     );
   }
