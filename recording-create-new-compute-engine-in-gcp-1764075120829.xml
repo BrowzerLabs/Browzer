@@ -1,0 +1,240 @@
+<recorded_session>
+<metadata>
+  <name>Create New Compute Engine in GCP</name>
+  <description>No description provided</description>
+  <duration_seconds>199</duration_seconds>
+  <starting_url>https://www.google.com/</starting_url>
+  <timing_guidance>
+    <important>The timestamps below show REAL USER TIMING. Use these gaps to determine realistic wait times between actions.</important>
+  </timing_guidance>
+</metadata>
+
+<actions>
+  <action id="1" type="navigate" timestamp="1764074535504" time_gap_from_previous_sec="0.0">
+    <page_url>https://console.cloud.google.com/?authuser=1&amp;pli=1</page_url>
+  </action>
+
+  <action id="2" type="click" timestamp="1764074548658" time_gap_from_previous_sec="13.2">
+    <page_url>https://console.cloud.google.com/?authuser=1&amp;pli=1</page_url>
+    <target_element>
+      <tag>DIV</tag>
+      <text>Compute Engine</text>
+      <position x="69" y="496" width="120" height="22" />
+      <attributes>
+        <attr name="_ngcontent-ng-c2823923585"></attr>
+        <attr name="class">content-text</attr>
+      </attributes>
+    </target_element>
+    <click_position x="178" y="517" />
+  </action>
+
+  <action id="3" type="click" timestamp="1764074559673" time_gap_from_previous_sec="11.0">
+    <page_url>https://console.cloud.google.com/?authuser=1&amp;pli=1</page_url>
+    <target_element>
+      <tag>SPAN</tag>
+      <text>Create instance</text>
+      <position x="440" y="112" width="105" height="20" />
+      <attributes>
+        <attr name="class">mdc-button__label</attr>
+        <attr name="sandboxuid">0</attr>
+      </attributes>
+    </target_element>
+    <click_position x="497" y="122" />
+  </action>
+
+  <action id="4" type="click" timestamp="1764074567811" time_gap_from_previous_sec="8.1">
+    <page_url>https://console.cloud.google.com/?authuser=1&amp;pli=1</page_url>
+    <target_element>
+      <tag>path</tag>
+      <position x="631" y="162" width="13" height="13" />
+      <attributes>
+        <attr name="d">M10.5 9l4.906-4.907-1.5-1.5L9 7.503l-4.907-4.91-1.5 1.5L7.503 9l-4.907 4.907 1.5 1.5L9 10.497l4.907 4.907 1.5-1.5L10.497 9z</attr>
+        <attr name="fill-rule">evenodd</attr>
+        <attr name="sandboxuid">0</attr>
+      </attributes>
+    </target_element>
+    <click_position x="636" y="166" />
+  </action>
+
+  <action id="5" type="click" timestamp="1764074586256" time_gap_from_previous_sec="18.4">
+    <page_url>https://console.cloud.google.com/?authuser=1&amp;pli=1</page_url>
+    <target_element>
+      <tag>INPUT</tag>
+      <value>instance-20251125-124231</value>
+      <position x="286" y="172" width="652" height="24" />
+      <attributes>
+        <attr name="id">_0rif_mat-input-5</attr>
+        <attr name="matinput"></attr>
+        <attr name="class">cm-input gmat-mdc-input mat-mdc-input-element mat-mdc-form-field-input-control mdc-text-field__input ng-untouched ng-pristine ng-valid cdk-text-field-autofill-monitored ng-star-inserted</attr>
+        <attr name="jslog">66226;track:input_text</attr>
+        <attr name="required"></attr>
+        <attr name="aria-invalid">false</attr>
+        <attr name="aria-required">true</attr>
+        <attr name="sandboxuid">0</attr>
+      </attributes>
+    </target_element>
+    <click_position x="525" y="183" />
+  </action>
+
+  <action id="6" type="keypress" timestamp="1764074588502" time_gap_from_previous_sec="2.2">
+    <page_url>https://console.cloud.google.com/?authuser=1&amp;pli=1</page_url>
+    <target_element>
+      <tag>INPUT</tag>
+      <value>instance-20251125-124231</value>
+      <position x="286" y="172" width="652" height="24" />
+      <attributes>
+        <attr name="id">_0rif_mat-input-5</attr>
+        <attr name="matinput"></attr>
+        <attr name="class">cm-input gmat-mdc-input mat-mdc-input-element mat-mdc-form-field-input-control mdc-text-field__input ng-untouched ng-pristine ng-valid cdk-text-field-autofill-monitored ng-star-inserted</attr>
+        <attr name="jslog">66226;track:input_text</attr>
+        <attr name="required"></attr>
+        <attr name="aria-invalid">false</attr>
+        <attr name="aria-required">true</attr>
+        <attr name="sandboxuid">0</attr>
+      </attributes>
+    </target_element>
+  </action>
+
+  <action id="7" type="input" timestamp="1764074597989" time_gap_from_previous_sec="9.5">
+    <page_url>https://console.cloud.google.com/?authuser=1&amp;pli=1</page_url>
+    <target_element>
+      <tag>INPUT</tag>
+      <value>test-instance-011</value>
+      <position x="286" y="172" width="652" height="24" />
+      <attributes>
+        <attr name="id">_0rif_mat-input-5</attr>
+        <attr name="matinput"></attr>
+        <attr name="class">cm-input gmat-mdc-input mat-mdc-input-element mat-mdc-form-field-input-control mdc-text-field__input ng-untouched cdk-text-field-autofill-monitored ng-star-inserted ng-dirty ng-valid</attr>
+        <attr name="jslog">66226;track:input_text</attr>
+        <attr name="required"></attr>
+        <attr name="aria-required">true</attr>
+        <attr name="sandboxuid">0</attr>
+        <attr name="aria-invalid">false</attr>
+      </attributes>
+    </target_element>
+  </action>
+
+  <action id="8" type="click" timestamp="1764074597999" time_gap_from_previous_sec="0.0">
+    <page_url>https://console.cloud.google.com/?authuser=1&amp;pli=1</page_url>
+    <target_element>
+      <tag>DIV</tag>
+      <text>us-central1 (Iowa)</text>
+      <position x="286" y="224" width="289" height="36" />
+      <attributes>
+        <attr name="class">mat-mdc-form-field-infix</attr>
+        <attr name="sandboxuid">0</attr>
+      </attributes>
+    </target_element>
+    <click_position x="540" y="225" />
+  </action>
+
+  <action id="9" type="click" timestamp="1764074600688" time_gap_from_previous_sec="2.7">
+    <page_url>https://console.cloud.google.com/?authuser=1&amp;pli=1</page_url>
+    <target_element>
+      <tag>DIV</tag>
+      <text>us-central1 (Iowa)
+Low CO2</text>
+      <position x="318" y="438" width="297" height="20" />
+      <attributes>
+        <attr name="class">cfc-flex-container cfc-flex-space-between-content</attr>
+        <attr name="sandboxuid">0</attr>
+      </attributes>
+    </target_element>
+    <click_position x="514" y="439" />
+  </action>
+
+  <action id="10" type="click" timestamp="1764074639662" time_gap_from_previous_sec="39.0">
+    <page_url>https://console.cloud.google.com/?authuser=1&amp;pli=1</page_url>
+    <target_element>
+      <tag>DIV</tag>
+      <text>e2-medium (2 vCPU, 1 core, 4 GB memory)</text>
+      <position x="217" y="529" width="664" height="20" />
+      <attributes>
+        <attr name="_ngcontent-ng-c1860038682"></attr>
+        <attr name="class">cfc-select-value</attr>
+        <attr name="sandboxuid">0</attr>
+      </attributes>
+    </target_element>
+    <click_position x="673" y="534" />
+  </action>
+
+  <action id="11" type="click" timestamp="1764074649335" time_gap_from_previous_sec="9.7">
+    <page_url>https://console.cloud.google.com/?authuser=1&amp;pli=1</page_url>
+    <target_element>
+      <tag>DIV</tag>
+      <text>e2-micro</text>
+      <position x="576" y="355" width="310" height="20" />
+      <attributes>
+        <attr name="_ngcontent-ng-c113896504"></attr>
+        <attr name="class">cfc-select-option-row</attr>
+        <attr name="sandboxuid">0</attr>
+      </attributes>
+    </target_element>
+    <click_position x="695" y="373" />
+  </action>
+
+  <action id="12" type="click" timestamp="1764074652478" time_gap_from_previous_sec="3.1">
+    <page_url>https://console.cloud.google.com/?authuser=1&amp;pli=1</page_url>
+    <target_element>
+      <tag>SPAN</tag>
+      <text>Advanced configurations</text>
+      <position x="209" y="633" width="188" height="24" />
+      <attributes>
+        <attr name="class">mdc-button__label</attr>
+        <attr name="sandboxuid">0</attr>
+      </attributes>
+    </target_element>
+    <click_position x="365" y="655" />
+  </action>
+
+  <action id="13" type="click" timestamp="1764074660902" time_gap_from_previous_sec="8.4">
+    <page_url>https://console.cloud.google.com/?authuser=1&amp;pli=1</page_url>
+    <target_element>
+      <tag>SPAN</tag>
+      <text>Custom</text>
+      <position x="273" y="188" width="75" height="32" />
+      <attributes>
+        <attr name="class">mat-button-toggle-label-content</attr>
+        <attr name="sandboxuid">0</attr>
+      </attributes>
+    </target_element>
+    <click_position x="301" y="212" />
+  </action>
+
+  <action id="14" type="click" timestamp="1764074674825" time_gap_from_previous_sec="13.9">
+    <page_url>https://console.cloud.google.com/?authuser=1&amp;pli=1</page_url>
+    <target_element>
+      <tag>SPAN</tag>
+      <text>Create</text>
+      <position x="286" y="730" width="45" height="20" />
+      <attributes>
+        <attr name="class">mdc-button__label</attr>
+        <attr name="sandboxuid">0</attr>
+      </attributes>
+    </target_element>
+    <click_position x="309" y="735" />
+  </action>
+
+  <action id="15" type="submit" timestamp="1764074674864" time_gap_from_previous_sec="0.0">
+    <page_url>https://console.cloud.google.com/?authuser=1&amp;pli=1</page_url>
+    <target_element>
+      <tag>FORM</tag>
+      <text>Machine configuration
+e2-custom-2-1024, us-central1
+OS and storage
+Debian GNU/Linux 12 (bookworm)
+Da</text>
+      <position x="-69" y="147" width="1024" height="548" />
+      <attributes>
+        <attr name="id">_0rif_create-instance-with-steps</attr>
+        <attr name="_ngcontent-ng-c2538693380"></attr>
+        <attr name="novalidate"></attr>
+        <attr name="class">cfc-max-width-full cfc-height-full ng-dirty ng-star-inserted ng-valid ng-touched</attr>
+        <attr name="sandboxuid">0</attr>
+        <attr name="jslog">127656;track:generic_click,impression</attr>
+      </attributes>
+    </target_element>
+  </action>
+
+</actions>
+</recorded_session>
