@@ -538,20 +538,6 @@ ${currentUrl ? `- Current URL: ${currentUrl}` : '- URL unknown'}
 Remember: The automation has already completed ${executedSteps.filter(s => s.success).length} steps successfully. Focus on what remains to achieve the goal.`;
   }
 
-  /**
-   * Format a recorded session for inclusion in the prompt
-   * 
-   * Uses XML structure for clarity (Claude best practice) and leverages new
-   * element structure with attributes and parentSelector for better automation.
-   * 
-   * Key improvements:
-   * - XML tags for clear structure
-   * - Complete element attributes for reliable selector generation
-   * - Parent context for hierarchical understanding
-   * - Summarized effects for outcome understanding
-   * - Timestamp and time gap information for realistic wait time guidance
-   * - Concise format optimized for prompt caching
-   */
   public static formatRecordedSession(session: RecordingSession): string {
     const actions = session.actions || [];
     
@@ -602,11 +588,6 @@ Remember: The automation has already completed ${executedSteps.filter(s => s.suc
         formatted += `    <target_element>\n`;
         formatted += `      <tag>${action.target.tagName}</tag>\n`;
         formatted += `      <selector>${this.escapeXml(action.target.selector)}</selector>\n`;
-        
-        // Parent context for hierarchical understanding
-        if (action.target.parentSelector) {
-          formatted += `      <parent_selector>${this.escapeXml(action.target.parentSelector)}</parent_selector>\n`;
-        }
         
         // Element text/value
         if (action.target.text) {

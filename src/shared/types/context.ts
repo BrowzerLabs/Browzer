@@ -18,7 +18,6 @@ export interface InteractiveElement {
     height: number;
   };
   isDisabled: boolean;
-  parentSelector?: string;
   attributes: Record<string, string>;
 }
 

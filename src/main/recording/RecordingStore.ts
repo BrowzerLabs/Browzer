@@ -304,11 +304,7 @@ export class RecordingStore {
 
       const { filePath } = await dialog.showSaveDialog({
         title: 'Export Recording',
-        defaultPath: fileName,
-        filters: [
-          { name: 'JSON Files', extensions: ['json'] },
-          { name: 'All Files', extensions: ['*'] }
-        ]
+        defaultPath: fileName
       });
 
       if (filePath) {

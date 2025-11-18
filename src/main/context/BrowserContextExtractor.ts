@@ -348,7 +348,6 @@ export class BrowserContextExtractor {
               width: Math.round(rect.width),
               height: Math.round(rect.height)
             },
-            parentSelector: el.parentElement ? getSelector(el.parentElement) : undefined,
             isDisabled: el.disabled || el.getAttribute('aria-disabled') === 'true',
             attributes
           };
@@ -515,7 +514,6 @@ export class BrowserContextExtractor {
               width: Math.round(rect.width),
               height: Math.round(rect.height)
             },
-            parentSelector: el.parentElement ? getSelector(el.parentElement) : undefined,
             isDisabled: el.disabled || el.getAttribute('aria-disabled') === 'true',
             attributes
           };
