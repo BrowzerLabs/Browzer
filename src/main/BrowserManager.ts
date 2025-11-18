@@ -11,7 +11,6 @@ import {
   AutomationManager,
   NavigationManager,
   DebuggerManager,
-  TabEventHandlers
 } from './browser';
 
 /**
@@ -50,21 +49,15 @@ export class BrowserManager {
     this.navigationManager = new NavigationManager();
     this.debuggerManager = new DebuggerManager();
     
-    // Setup event handlers for TabManager
-    const tabEventHandlers: TabEventHandlers = {
-      onTabsChanged: () => this.notifyTabsChanged(),
-      onCredentialSelected: (tabId, credentialId, username) => 
-        this.tabManager.handleCredentialSelected(tabId, credentialId, username)
-    };
-
     this.tabManager = new TabManager(
       baseWindow,
       this.passwordManager,
       this.historyService,
       this.navigationManager,
       this.debuggerManager,
-      tabEventHandlers
     );
+    
+    this.setupTabEventListeners();
 
     this.recordingManager = new RecordingManager(
       this.recordingStore,
@@ -102,18 +95,7 @@ export class BrowserManager {
   }
 
   public switchToTab(tabId: string): boolean {
-    const previousTabId = this.tabManager.getActiveTabId();
-    const success = this.tabManager.switchToTab(tabId);
-    
-    // Handle recording tab switch if recording is active
-    if (success && this.recordingManager.isRecordingActive() && previousTabId && previousTabId !== tabId) {
-      const newTab = this.tabManager.getTab(tabId);
-      if (newTab) {
-        this.recordingManager.handleTabSwitch(previousTabId, newTab);
-      }
-    }
-    
-    return success;
+    return this.tabManager.switchToTab(tabId);
   }
 
   public navigate(tabId: string, url: string): boolean {
@@ -155,7 +137,7 @@ export class BrowserManager {
   public async startRecording(): Promise<boolean> {
     const activeTab = this.tabManager.getActiveTab();
     if (!activeTab) {
-      console.error('No active tab to record');
+      alert('No active tab to record')
       return false;
     }
 
@@ -305,9 +287,18 @@ export class BrowserManager {
     this.sessionManager.close();
   }
 
-  // ============================================================================
-  // Private Methods
-  // ============================================================================
+  private setupTabEventListeners(): void {
+    this.tabManager.on('tabs:changed', () => {
+      this.notifyTabsChanged();
+    });
+
+    this.tabManager.on('tab:switched', (previousTabId, newTab) => {
+      console.log('🔴 Tab switched:', previousTabId, '->', newTab.id);
+      if (this.recordingManager.isRecordingActive()) {
+        this.recordingManager.handleTabSwitch(previousTabId, newTab);
+      }
+    });
+  }
 
   /**
    * Notify renderer about tab changes

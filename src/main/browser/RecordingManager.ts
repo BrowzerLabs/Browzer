@@ -4,16 +4,6 @@ import { RecordedAction, RecordingSession, RecordingTabInfo } from '@/shared/typ
 import { stat } from 'fs/promises';
 import { Tab, RecordingState } from './types';
 
-/**
- * RecordingManager - Orchestrates recording sessions across tabs
- * 
- * Responsibilities:
- * - Start/stop recording sessions
- * - Manage centralized action recorder
- * - Handle multi-tab recording
- * - Coordinate video recording
- * - Save recording sessions with metadata
- */
 export class RecordingManager {
   private recordingState: RecordingState = {
     isRecording: false,
@@ -59,7 +49,6 @@ export class RecordingManager {
       // Add initial tab to recording tabs
       this.recordingTabs.set(activeTab.id, {
         tabId: activeTab.id,
-        webContentsId: activeTab.view.webContents.id,
         title: activeTab.info.title,
         url: activeTab.info.url,
         firstActiveAt: Date.now(),
@@ -82,7 +71,7 @@ export class RecordingManager {
       });
       
       this.centralRecorder.setMaxActionsCallback(() => {
-        console.log('🛑 Max actions limit reached, triggering auto-stop');
+        alert('🛑 Max actions limit reached, triggering auto-stop');
         // Notify renderer to show save form immediately
         if (this.browserUIView && !this.browserUIView.webContents.isDestroyed()) {
           this.browserUIView.webContents.send('recording:max-actions-reached');
@@ -94,7 +83,6 @@ export class RecordingManager {
         activeTab.id,
         activeTab.info.url,
         activeTab.info.title,
-        activeTab.view.webContents.id,
         this.recordingState.recordingId
       );
       
@@ -103,7 +91,7 @@ export class RecordingManager {
       const videoStarted = await this.activeVideoRecorder.startRecording(this.recordingState.recordingId);
       
       if (!videoStarted) {
-        console.warn('⚠️ Video recording failed to start, continuing with action recording only');
+        alert('⚠️ Video recording failed to start, continuing with action recording only');
         this.activeVideoRecorder = null;
       }
       
@@ -289,10 +277,8 @@ export class RecordingManager {
         tabId: newTab.id,
         tabUrl: newTab.info.url,
         tabTitle: newTab.info.title,
-        webContentsId: newTab.view.webContents.id,
         metadata: {
-          fromTabId: previousTabId,
-          toTabId: newTab.id,
+          previousTabId: previousTabId,
         }
       };
       
@@ -310,7 +296,6 @@ export class RecordingManager {
       if (!this.recordingTabs.has(newTab.id)) {
         this.recordingTabs.set(newTab.id, {
           tabId: newTab.id,
-          webContentsId: newTab.view.webContents.id,
           title: newTab.info.title,
           url: newTab.info.url,
           firstActiveAt: now,

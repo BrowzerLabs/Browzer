@@ -19,17 +19,13 @@ export interface Tab {
   selectedCredentialUsername?: string;
 }
 
-/**
- * Tab event handlers
- */
-export interface TabEventHandlers {
-  onTabsChanged: () => void;
-  onCredentialSelected: (tabId: string, credentialId: string, username: string) => void;
+export interface TabManagerEvents {
+  'tab:created': (tab: Tab, previousActiveTabId: string | null) => void;
+  'tab:closed': (closedTabId: string, newActiveTabId: string | null, wasActiveTab: boolean) => void;
+  'tab:switched': (previousTabId: string, newTab: Tab) => void;
+  'tabs:changed': () => void;
 }
 
-/**
- * Recording state
- */
 export interface RecordingState {
   isRecording: boolean;
   recordingId: string | null;

@@ -1,16 +1,31 @@
 import { BaseWindow, WebContentsView, Menu } from 'electron';
+import { EventEmitter } from 'events';
 import path from 'node:path';
 import { TabInfo, HistoryTransition } from '@/shared/types';
 import { VideoRecorder } from '@/main/recording';
 import { PasswordManager } from '@/main/password/PasswordManager';
 import { BrowserAutomationExecutor } from '@/main/automation';
 import { HistoryService } from '@/main/history/HistoryService';
-import { Tab, TabEventHandlers } from './types';
+import { Tab, TabManagerEvents } from './types';
 import { NavigationManager } from './NavigationManager';
 import { DebuggerManager } from './DebuggerManager';
 import { PasswordAutomation } from '@/main/password';
 
-export class TabManager {
+export class TabManager extends EventEmitter {
+  public on<K extends keyof TabManagerEvents>(
+    event: K,
+    listener: TabManagerEvents[K]
+  ): this {
+    return super.on(event, listener);
+  }
+
+  public emit<K extends keyof TabManagerEvents>(
+    event: K,
+    ...args: Parameters<TabManagerEvents[K]>
+  ): boolean {
+    return super.emit(event, ...args);
+  }
+
   private tabs: Map<string, Tab> = new Map();
   private activeTabId: string | null = null;
   private tabCounter = 0;
@@ -24,10 +39,12 @@ export class TabManager {
     private historyService: HistoryService,
     private navigationManager: NavigationManager,
     private debuggerManager: DebuggerManager,
-    private eventHandlers: TabEventHandlers
-  ) {}
+  ) {
+    super();
+  }
 
   public createTab(url?: string): TabInfo {
+    const previousActiveTabId = this.activeTabId;
     const tabId = `tab-${++this.tabCounter}`;
     
     const view = new WebContentsView({
@@ -68,7 +85,7 @@ export class TabManager {
         view, 
         this.passwordManager, 
         tabId,
-        this.eventHandlers.onCredentialSelected
+        this.handleCredentialSelected.bind(this)
       ),
       automationExecutor: new BrowserAutomationExecutor(view, tabId),
     };
@@ -88,6 +105,8 @@ export class TabManager {
     view.webContents.loadURL(this.navigationManager.normalizeURL(urlToLoad));
 
     this.switchToTab(tabId);
+    
+    this.emit('tab:created', tab, previousActiveTabId);
 
     return tabInfo;
   }
@@ -95,6 +114,9 @@ export class TabManager {
   public closeTab(tabId: string): boolean {
     const tab = this.tabs.get(tabId);
     if (!tab) return false;
+
+    const wasActiveTab = this.activeTabId === tabId;
+    let newActiveTabId: string | null = null;
 
     // Remove view from window
     this.baseWindow.contentView.removeChildView(tab.view);
@@ -113,16 +135,20 @@ export class TabManager {
     this.tabs.delete(tabId);
 
     // If this was the active tab, switch to another
-    if (this.activeTabId === tabId) {
+    if (wasActiveTab) {
       const remainingTabs = Array.from(this.tabs.keys());
       if (remainingTabs.length > 0) {
         this.switchToTab(remainingTabs[0]);
+        newActiveTabId = remainingTabs[0];
       } else {
         this.activeTabId = null;
       }
     }
 
-    this.eventHandlers.onTabsChanged();
+    this.emit('tabs:changed');
+    
+    this.emit('tab:closed', tabId, newActiveTabId, wasActiveTab);
+    
     return true;
   }
 
@@ -130,6 +156,7 @@ export class TabManager {
     const tab = this.tabs.get(tabId);
     if (!tab) return false;
 
+    const previousTabId = this.activeTabId;
 
     // Hide current active tab
     if (this.activeTabId && this.activeTabId !== tabId) {
@@ -147,7 +174,12 @@ export class TabManager {
     this.baseWindow.contentView.removeChildView(tab.view);
     this.baseWindow.contentView.addChildView(tab.view);
 
-    this.eventHandlers.onTabsChanged();
+    this.emit('tabs:changed');
+    
+    if (previousTabId && previousTabId !== tabId) {
+      this.emit('tab:switched', previousTabId, tab);
+    }
+    
     return true;
   }
 
@@ -289,13 +321,13 @@ export class TabManager {
       } else {
         info.title = title || 'Untitled';
       }
-      this.eventHandlers.onTabsChanged();
+      this.emit('tabs:changed');
     });
 
     // Navigation events
     webContents.on('did-start-loading', () => {
       info.isLoading = true;
-      this.eventHandlers.onTabsChanged();
+      this.emit('tabs:changed');
     });
 
     webContents.on('did-stop-loading', async () => {
@@ -320,7 +352,7 @@ export class TabManager {
         }
       }
       
-      this.eventHandlers.onTabsChanged();
+      this.emit('tabs:changed');
     });
 
     webContents.on('did-navigate', (_, url) => {
@@ -333,7 +365,7 @@ export class TabManager {
       }
       info.canGoBack = webContents.navigationHistory.canGoBack();
       info.canGoForward = webContents.navigationHistory.canGoForward();
-      this.eventHandlers.onTabsChanged();
+      this.emit('tabs:changed');
     });
 
     webContents.on('did-navigate-in-page', (_, url) => {
@@ -346,13 +378,13 @@ export class TabManager {
       }
       info.canGoBack = webContents.navigationHistory.canGoBack();
       info.canGoForward = webContents.navigationHistory.canGoForward();
-      this.eventHandlers.onTabsChanged();
+      this.emit('tabs:changed');
     });
 
     webContents.on('page-favicon-updated', (_, favicons) => {
       if (!info.url.includes('browzer://settings') && favicons.length > 0) {
         info.favicon = favicons[0];
-        this.eventHandlers.onTabsChanged();
+        this.emit('tabs:changed');
       }
     });
 
@@ -406,7 +438,7 @@ export class TabManager {
         console.error(`Failed to load ${validatedURL}: ${errorDescription}`);
       }
       info.isLoading = false;
-      this.eventHandlers.onTabsChanged();
+      this.emit('tabs:changed');
     });
   }
 

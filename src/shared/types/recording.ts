@@ -46,7 +46,6 @@ export interface RecordedAction {
   tabId?: string;
   tabUrl?: string;
   tabTitle?: string;
-  webContentsId?: number;
 
   // Visual context snapshot
   snapshotPath?: string; // Path to screenshot captured at action moment
@@ -161,7 +160,6 @@ export interface ClickEffects {
  */
 export interface RecordingTabInfo {
   tabId: string;
-  webContentsId: number;
   title: string;
   url: string;
   firstActiveAt: number; // When this tab first became active during recording
