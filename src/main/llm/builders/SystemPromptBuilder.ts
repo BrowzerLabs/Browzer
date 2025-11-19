@@ -267,7 +267,7 @@ Remember: You get ONE chance to create the plan. Make it OPTIMIZED, complete, ro
 <your_role>
 You are in an ACTIVE automation session that encountered an error. Your role is to:
 1. Analyze the error and understand what went wrong
-2. Examine the current browser state using the extract_browser_context tool
+2. Examine the current browser state using the extract_context tool
 3. Generate a NEW complete automation plan that continues from the current state
 4. Focus on completing the remaining steps to achieve the user's goal
 
@@ -283,7 +283,7 @@ When you receive an error report, follow this process:
    - What is the specific error message?
 
 2. **Analyze Current State** (IF REQUIRED):
-   - Use the extract_browser_context tool to see the current page
+   - Use the extract_context tool to see the current page
    - Check what elements are available now
    - Verify the current URL and page state
    - Understand what is the browser context and why the automation system failed
@@ -303,7 +303,7 @@ When you receive an error report, follow this process:
 </error_recovery_process>
 
 <critical_instructions>
-**ALWAYS use extract_browser_context first** when analyzing an error:
+**ALWAYS use extract_context first** when analyzing an error:
 - This tool shows you exactly what elements exist on the current page
 - It provides accurate selectors and attributes
 - It helps you understand the current state
@@ -317,7 +317,7 @@ When you receive an error report, follow this process:
 - Make it a fresh, optimized plan based on current reality
 
 **Use precise selectors from context**:
-- The extract_browser_context tool gives you actual element attributes
+- The extract_context tool gives you actual element attributes
 - Use these to build reliable selectors
 - Provide multiple backup selectors
 - Verify elements exist before planning to use them
@@ -358,7 +358,7 @@ Your response should contain:
    - What went wrong and why
    - What the current state is
 
-2. **extract_browser_context tool call**:
+2. **extract_context tool call**:
    - ALWAYS call this first to understand current page
 
 3. **Recovery Strategy** (after seeing context):
@@ -381,7 +381,7 @@ Your response should contain:
 
 </quality_standards>
 
-Remember: You're in an active session. The user's goal hasn't changed, but the path to get there needs adjustment based on current reality. Use extract_browser_context to see that reality, then create the best path forward.`;
+Remember: You're in an active session. The user's goal hasn't changed, but the path to get there needs adjustment based on current reality. Use extract_context to see that reality, then create the best path forward.`;
   }
 
   /**
@@ -524,16 +524,14 @@ Remember: The automation has already completed ${executedSteps.filter(s => s.suc
   <name>${session.name}</name>
   <description>${session.description || 'No description provided'}</description>
   <duration_seconds>${Math.round(session.duration / 1000)}</duration_seconds>
-  <total_actions>${session.actionCount}</total_actions>
   <starting_url>${session.url || session.tabs?.[0]?.url || 'Unknown'}</starting_url>
   <timing_guidance>
     <important>The timestamps below show REAL USER TIMING. Use these gaps to determine realistic wait times between actions.</important>
     <guidance>
-      - Small gaps (0-2 sec): User was already focused, minimal wait needed
-      - Medium gaps (2-8 sec): Page was loading or user was reading/deciding, add 2-3 sec wait
+      - Small gaps (2-8 sec): Page was loading or user was reading/deciding, add 2-5 sec wait
       - Large gaps (8+ sec): Form validation, page transition, or network request, add 3-5 sec wait
-      - After navigation: Always add 2-3 sec minimum for page load
-      - After form submission: Add 3-5 sec for server response
+      - After navigation: Always add 4-6 sec minimum for page load
+      - After form submission: Add 5-7 sec for server response
     </guidance>
   </timing_guidance>
 </metadata>\n\n`;
@@ -549,13 +547,6 @@ Remember: The automation has already completed ${executedSteps.filter(s => s.suc
       
       formatted += `  <action id="${index + 1}" type="${action.type}" timestamp="${currentTimestamp}" time_gap_from_previous_sec="${timeSinceLastActionSec}">\n`;
       
-      // Timing information
-      formatted += `    <timing>
-      <timestamp_ms>${currentTimestamp}</timestamp_ms>
-      <time_since_previous_action_sec>${timeSinceLastActionSec}</time_since_previous_action_sec>
-      <suggested_wait_before_next_action_ms>${this.calculateSuggestedWait(timeSinceLastAction, action.type)}</suggested_wait_before_next_action_ms>
-    </timing>\n`;
-      
       // Current page context
       if (action.tabUrl) {
         formatted += `    <page_url>${this.escapeXml(action.tabUrl)}</page_url>\n`;
@@ -565,7 +556,6 @@ Remember: The automation has already completed ${executedSteps.filter(s => s.suc
       if (action.target) {
         formatted += `    <target_element>\n`;
         formatted += `      <tag>${action.target.tagName}</tag>\n`;
-        formatted += `      <selector>${this.escapeXml(action.target.selector)}</selector>\n`;
         
         // Element text/value
         if (action.target.text) {

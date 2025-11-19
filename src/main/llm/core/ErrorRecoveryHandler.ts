@@ -86,15 +86,11 @@ export class ErrorRecoveryHandler {
       MessageBuilder.buildUserMessageWithToolResultsAndText(toolResults, errorPrompt)
     );
 
-    // Get recovery plan from Claude
-    const tools = this.toolRegistry.getToolDefinitions();
-
-    const response = await this.automationClient.continueConversation({
-      systemPromptType: SystemPromptType.AUTOMATION_ERROR_RECOVERY,
-      messages: this.stateManager.getOptimizedMessages(),
-      tools,
-      cachedContext: this.stateManager.getCachedContext()
-    });
+    const response = await this.automationClient.continueConversation(
+      SystemPromptType.AUTOMATION_ERROR_RECOVERY,
+      this.stateManager.getOptimizedMessages(),
+      this.stateManager.getCachedContext()
+    );
 
     // Add assistant response to conversation
     this.stateManager.addMessage({

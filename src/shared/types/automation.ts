@@ -78,8 +78,6 @@ export interface PlanExecutionData {
  */
 export interface NavigateParams {
   url: string;
-  waitUntil?: 'load' | 'domcontentloaded' | 'networkidle';
-  timeout?: number; // milliseconds, default 30000
 }
 
 /**
@@ -90,8 +88,6 @@ export interface ClickParams {
   backupSelectors?: string[]; // Fallback selectors to try if primary fails
   text?: string; // Expected text content for verification
   boundingBox?: { x: number; y: number; width: number; height: number }; // Expected position for verification
-  waitForElement?: number; // Wait time in ms before attempting click (default 1000)
-  verifyVisible?: boolean; // Ensure element is visible before clicking (default true)
 }
 
 /**
@@ -103,7 +99,6 @@ export interface TypeParams {
   text: string;
   clearFirst?: boolean; // Clear existing value before typing (default true)
   pressEnter?: boolean; // Press Enter after typing (default false)
-  waitForElement?: number;
 }
 
 /**
@@ -115,7 +110,6 @@ export interface SelectParams {
   value?: string; // Select by value attribute
   label?: string; // Select by visible text
   index?: number; // Select by index
-  waitForElement?: number;
 }
 
 /**
@@ -125,7 +119,6 @@ export interface CheckboxParams {
   selector: string;
   backupSelectors?: string[];
   checked: boolean; // true to check, false to uncheck
-  waitForElement?: number;
 }
 
 /**
