@@ -385,28 +385,6 @@ Remember: You're in an active session. The user's goal hasn't changed, but the p
   }
 
   /**
-   * Build user prompt for automation request
-   * 
-   * @param userGoal - What the user wants to automate
-   * @param hasRecordedSession - Whether a recorded session is provided
-   */
-  public static buildUserPrompt(userGoal: string, hasRecordedSession: boolean): string {
-    if (hasRecordedSession) {
-      return `I have provided a recorded session above showing how I manually accomplished a similar task.
-
-**My automation goal:**
-${userGoal}
-
-Please analyze the recorded session and create automation plan(s) that accomplish my goal. Generate ALL tool calls needed for that specific FINAL or INTERMEDIATE plan.`;
-    } else {
-      return `**My automation goal:**
-${userGoal}
-
-Please create automation plan(s) that accomplish this goal. Generate ALL the reqd tool calls needed for that specific FINAL or INTERMEDIATE plan.`;
-    }
-  }
-
-  /**
    * Build continuation prompt after intermediate plan execution
    * 
    * This is used when an intermediate plan completes successfully and
