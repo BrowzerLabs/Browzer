@@ -72,6 +72,13 @@ export interface PlanExecutionData {
 // ============================================================================
 // Tool Parameter Types
 // ============================================================================
+export interface ElementFinderParams {
+  tag: string;
+  text?: string
+  attributes?: Record<string, string>;  
+  boundingBox?: { x: number; y: number; width: number; height: number };
+  elementIndex?: number;           
+}
 
 /**
  * Parameters for navigate tool
@@ -83,18 +90,15 @@ export interface NavigateParams {
 /**
  * Parameters for click tool
  */
-export interface ClickParams {
-  selector: string; // Primary CSS selector
-  backupSelectors?: string[]; // Fallback selectors to try if primary fails
-  text?: string; // Expected text content for verification
-  boundingBox?: { x: number; y: number; width: number; height: number }; // Expected position for verification
+export interface ClickParams extends ElementFinderParams {
+  click_position?: { x: number; y: number };
 }
 
 /**
  * Parameters for type/input tool
  */
 export interface TypeParams {
-  selector: string;
+  selectors: string[];
   backupSelectors?: string[];
   text: string;
   clearFirst?: boolean; // Clear existing value before typing (default true)
@@ -226,6 +230,8 @@ export interface AutomationError {
     | 'ELEMENT_COVERED'
     | 'TIMEOUT'
     | 'INVALID_SELECTOR'
+    | 'INVALID_PARAMS'
+    | 'CLICK_FAILED'
     | 'NAVIGATION_FAILED'
     | 'CDP_ERROR'
     | 'EXECUTION_ERROR'

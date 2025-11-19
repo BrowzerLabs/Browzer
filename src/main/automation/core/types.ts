@@ -68,13 +68,8 @@ export interface ClickabilityResult {
  */
 export interface AdvancedFindResult {
   success: boolean;
-  usedSelector?: string;
-  selectorType?: 'primary' | 'backup' | 'text-match' | 'position-match';
   element?: any;
   error?: string;
-  details?: string;
-  // NEW: Scoring information
-  matchScore?: number;
   totalCandidates?: number;
 }
 

@@ -4,6 +4,7 @@ import path from 'path';
 import { RecordingSession } from '@/shared/types';
 import { unlink, writeFile } from 'fs/promises';
 import { existsSync } from 'fs';
+import { SystemPromptBuilder } from '../llm';
 
 /**
  * RecordingStore - SQLite-based persistent storage for recorded sessions
@@ -299,8 +300,8 @@ export class RecordingStore {
         return { success: false, error: 'Recording not found' };
       }
 
-      const jsonString = JSON.stringify(recording, null, 2);
-      const fileName = `recording-${recording.name.replace(/[^a-z0-9]/gi, '-').toLowerCase()}-${Date.now()}.json`;
+      const xmlString = SystemPromptBuilder.formatRecordedSession(recording)
+      const fileName = `recording-${recording.name.replace(/[^a-z0-9]/gi, '-').toLowerCase()}-${Date.now()}.xml`;
 
       const { filePath } = await dialog.showSaveDialog({
         title: 'Export Recording',
@@ -308,7 +309,7 @@ export class RecordingStore {
       });
 
       if (filePath) {
-        await writeFile(filePath, jsonString, 'utf-8');
+        await writeFile(filePath, xmlString, 'utf-8');
         return { success: true, filePath };
       }
 

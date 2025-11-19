@@ -1,4 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
+import { ElementFinderParams } from '@/shared/types';
 import { BaseHandler } from './BaseHandler';
 import type { HandlerContext, AdvancedFindResult } from './types';
 
@@ -13,13 +14,6 @@ import type { HandlerContext, AdvancedFindResult } from './types';
  * 5. Element index - Use nth-element for disambiguation
  */
 
-export interface ElementFinderParams {
-  tag: string;                     // HTML tag (e.g., 'BUTTON', 'INPUT')
-  text?: string;                   // Visible text content
-  attributes?: Record<string, string>;  // All element attributes
-  boundingBox?: { x: number; y: number; width: number; height: number };
-  elementIndex?: number;           // Index among siblings (0-based)
-}
 
 interface ScoredCandidate {
   element: any;
@@ -67,8 +61,7 @@ export class ElementFinder extends BaseHandler {
     if (candidates.length === 0) {
       return {
         success: false,
-        error: 'No matching elements found',
-        details: `Searched with: tag=${params.tag}, text="${params.text}"`
+        error: `No matching elements found. Searched with: tag=${params.tag}, text="${params.text}"`
       };
     }
 
@@ -80,8 +73,7 @@ export class ElementFinder extends BaseHandler {
     if (scored.length === 0) {
       return {
         success: false,
-        error: 'No candidates passed scoring',
-        details: `Found ${candidates.length} elements but none matched well`
+        error: `No candidates passed scoring. Found ${candidates.length} elements but none matched well`,
       };
     }
 
@@ -90,10 +82,7 @@ export class ElementFinder extends BaseHandler {
 
     return {
       success: true,
-      usedSelector: this.generateSelector(best.element),
-      selectorType: 'primary',
       element: best.element,
-      matchScore: best.score,
       totalCandidates: candidates.length
     };
   }
