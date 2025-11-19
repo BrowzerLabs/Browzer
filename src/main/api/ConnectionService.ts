@@ -23,7 +23,7 @@ export class ConnectionService extends EventEmitter {
     browserUIWebContents: WebContents
   ) {
     super();
-    this.apiBaseURL = process.env.BACKEND_API_URL ?? 'http://localhost:8000/api/v1'; 
+    this.apiBaseURL = process.env.BACKEND_API_URL ?? 'http://localhost:8002/api/v1'; 
     this.browserUIWebContents = browserUIWebContents;
 
     const apiConfig: ApiConfig = {
