@@ -200,9 +200,25 @@ export function SubscriptionPage() {
           <div className="flex items-start justify-between mb-6">
             <div>
               <h2 className="text-xl font-semibold">{currentPlan.name}</h2>
-              <p className="text-gray-600 dark:text-gray-400">
-                ${currentPlan.price_monthly}/month
-              </p>
+              <div className="flex items-center gap-2">
+                {currentPlan.actual_price_monthly != null && currentPlan.actual_price_monthly !== currentPlan.price_monthly ? (
+                  <>
+                    <p className="text-gray-600 dark:text-gray-400 line-through text-sm">
+                      ${currentPlan.price_monthly}/month
+                    </p>
+                    <p className="text-teal-600 dark:text-teal-400 font-semibold">
+                      ${currentPlan.actual_price_monthly}/month
+                    </p>
+                    <Badge className="bg-green-600 text-white text-xs">
+                      {Math.round((1 - currentPlan.actual_price_monthly / currentPlan.price_monthly) * 100)}% OFF
+                    </Badge>
+                  </>
+                ) : (
+                  <p className="text-gray-600 dark:text-gray-400">
+                    ${currentPlan.actual_price_monthly ?? currentPlan.price_monthly}/month
+                  </p>
+                )}
+              </div>
             </div>
             {getStatusBadge(subscription.status)}
           </div>
@@ -295,9 +311,22 @@ export function SubscriptionPage() {
                 <Card key={plan.tier} className="m-2 p-6 hover:bg-slate-100 dark:hover:bg-slate-800 hover:z-20 hover:shadow-lg shadow-slate-200 dark:shadow-slate-800 transition-all">
                    <div>
                       <h3 className="text-xl font-semibold">{plan.name}</h3>
-                      <p className="text-gray-600 dark:text-gray-400">
-                        ${plan.price_monthly}/month
-                      </p>
+                      <div className="flex items-center gap-2">
+                        {plan.actual_price_monthly != null && plan.actual_price_monthly !== plan.price_monthly ? (
+                          <>
+                            <p className="text-gray-600 dark:text-gray-400 line-through text-sm">
+                              ${plan.price_monthly}/month
+                            </p>
+                            <p className="text-teal-600 dark:text-teal-400 font-semibold">
+                              ${plan.actual_price_monthly}/month
+                            </p>
+                          </>
+                        ) : (
+                          <p className="text-gray-600 dark:text-gray-400">
+                            ${plan.actual_price_monthly ?? plan.price_monthly}/month
+                          </p>
+                        )}
+                      </div>
                     </div>
 
                   <div className="mb-4 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
@@ -327,7 +356,7 @@ export function SubscriptionPage() {
                     disabled={upgrading}
                   >
                     {
-                      plan.price_monthly > currentPlan.price_monthly ? 'Upgrade' : 'Downgrade'
+                      (plan.actual_price_monthly ?? plan.price_monthly) > (currentPlan.actual_price_monthly ?? currentPlan.price_monthly) ? 'Upgrade' : 'Downgrade'
                     } to {plan.name}
                   </Button>
                 </Card>
