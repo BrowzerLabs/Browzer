@@ -16,6 +16,7 @@ export class ClickHandler extends BaseHandler {
    * Execute click action
    */
   async execute(params: ClickParams): Promise<ToolExecutionResult> {
+    console.log("click position: ", params.click_position);
     const startTime = Date.now();
     try {
       let clickX: number;
@@ -113,19 +114,6 @@ export class ClickHandler extends BaseHandler {
       return {
         success: true,
         toolName: 'click',
-        executionTime,
-        element: foundElement ? {
-          selector: this.generateSelector(foundElement),
-          selectorType: 'primary',
-          tagName: foundElement.tagName,
-          text: foundElement.text,
-          attributes: foundElement.attributes || {},
-          boundingBox: foundElement.boundingBox,
-          isVisible: foundElement.isVisible,
-          isEnabled: true
-        } as FoundElement : undefined,
-        timestamp: Date.now(),
-        tabId: this.tabId,
         url: this.getUrl()
       };
 

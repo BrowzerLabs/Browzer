@@ -53,10 +53,11 @@ export class ElementFinder extends BaseHandler {
    * Find element using attribute-priority matching
    */
   async advancedFind(params: ElementFinderParams): Promise<AdvancedFindResult> {
-    console.log(`[ElementFinder] 🔍 Searching: tag=${params.tag}, text="${params.text}"`);
-
+    console.log("params: ", JSON.stringify(params));
+    
     // Find all candidates
     const candidates = await this.findCandidates(params);
+    console.log("candidates: ", candidates);
 
     if (candidates.length === 0) {
       return {
@@ -64,8 +65,6 @@ export class ElementFinder extends BaseHandler {
         error: `No matching elements found. Searched with: tag=${params.tag}, text="${params.text}"`
       };
     }
-
-    console.log(`[ElementFinder] 📊 Found ${candidates.length} candidate(s), scoring...`);
 
     // Score and rank
     const scored = this.scoreAndRank(candidates, params);

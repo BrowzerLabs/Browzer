@@ -1,58 +1,23 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { BaseHandler } from '../core/BaseHandler';
 import type { HandlerContext } from '../core/types';
 import type { NavigateParams, WaitForElementParams, ToolExecutionResult } from '@/shared/types';
 
-/**
- * NavigationHandler - Handles navigation and waiting operations
- * 
- * Provides operations for:
- * - Page navigation with various wait strategies
- * - Simple wait/sleep operations
- * - Wait for element to appear/disappear
- * 
- * This handler ensures navigation is reliable and waits are properly timed.
- */
+
 export class NavigationHandler extends BaseHandler {
   constructor(context: HandlerContext) {
     super(context);
   }
 
-  /**
-   * Execute navigate operation
-   */
   async executeNavigate(params: NavigateParams): Promise<ToolExecutionResult> {
     const startTime = Date.now();
     
     try {
-      const waitUntil = params.waitUntil || 'load';
-      const timeout = params.timeout || 30000;
-      
-      // Set up navigation promise BEFORE calling loadURL to avoid race condition
-      const navigationPromise = this.waitForNavigation(waitUntil, timeout);
-      
-      // Start navigation
       await this.view.webContents.loadURL(params.url);
-      
-      // Wait for navigation to complete
-      await navigationPromise;
-
-      const executionTime = Date.now() - startTime;
-      const currentUrl = this.getUrl();
 
       return {
         success: true,
         toolName: 'navigate',
-        executionTime,
-        effects: {
-          navigationOccurred: true,
-          newUrl: currentUrl,
-          navigationTiming: executionTime,
-          summary: `Successfully navigated to ${currentUrl}`
-        },
-        timestamp: Date.now(),
-        tabId: this.tabId,
-        url: currentUrl
+        url: this.getUrl()
       };
 
     } catch (error) {
@@ -67,9 +32,6 @@ export class NavigationHandler extends BaseHandler {
     }
   }
 
-  /**
-   * Execute simple wait operation
-   */
   async executeWait(params: { duration: number }): Promise<ToolExecutionResult> {
     const startTime = Date.now();
 
@@ -84,20 +46,10 @@ export class NavigationHandler extends BaseHandler {
     return {
       success: true,
       toolName: 'wait',
-      executionTime,
-      effects: {
-        navigationOccurred: false,
-        summary: `Waited for ${duration}ms`
-      },
-      timestamp: Date.now(),
-      tabId: this.tabId,
       url: this.getUrl()
     };
   }
 
-  /**
-   * Execute wait for element operation
-   */
   async executeWaitForElement(params: WaitForElementParams): Promise<ToolExecutionResult> {
     const startTime = Date.now();
 
@@ -184,13 +136,6 @@ export class NavigationHandler extends BaseHandler {
       return {
         success: true,
         toolName: 'waitForElement',
-        executionTime,
-        effects: {
-          navigationOccurred: false,
-          summary: `Element reached state: ${state}`
-        },
-        timestamp: Date.now(),
-        tabId: this.tabId,
         url: this.getUrl()
       };
 

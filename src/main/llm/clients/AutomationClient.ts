@@ -20,8 +20,6 @@ export class AutomationClient {
         this.onThinking('Creating automation plan...');
       } 
 
-      console.log("recorded session", formatted_session);
-
       const response = await api.post<{ message: Anthropic.Message; session_id: string }>(
         '/automation/plan',
         {
@@ -33,7 +31,6 @@ export class AutomationClient {
       if (!response.success || !response.data?.message) {
         throw new Error(response.error || 'Failed to create automation plan');
       }
-      console.log(response.data);
 
       this.sessionId = response.data.session_id;
       console.log(`✅ [AutomationClientV2] Session created: ${this.sessionId}`);

@@ -1,7 +1,7 @@
 import { BaseHandler } from '../core/BaseHandler';
 import { ElementFinder } from '../core/ElementFinder';
 import type { HandlerContext } from '../core/types';
-import type { SelectParams, CheckboxParams, SubmitParams, ToolExecutionResult, FoundElement, ElementQueryResult } from '@/shared/types';
+import type { SelectParams, CheckboxParams, SubmitParams, ToolExecutionResult, FoundElement } from '@/shared/types';
 
 export class FormHandler extends BaseHandler {
   private elementFinder: ElementFinder;
@@ -18,35 +18,43 @@ export class FormHandler extends BaseHandler {
     const startTime = Date.now();
 
     try {
-      console.log(`[FormHandler] Selecting from dropdown: ${params.selector}`);
 
-      const waitTime = params.waitForElement ?? 1000;
-      if (waitTime > 0) await this.sleep(waitTime);
+      const findResult = await this.elementFinder.advancedFind(params);
 
-      const selectors = [params.selector, ...(params.backupSelectors || [])];
-      const queryResult = await this.elementFinder.findWithCDP(selectors, true);
-
-      if (!queryResult.found || !queryResult.nodeId || !queryResult.element) {
+      if (!findResult.success || !findResult.element) {
         return this.createErrorResult('select', startTime, {
           code: 'ELEMENT_NOT_FOUND',
-          message: `Could not find select element`,
-          details: { 
-            attemptedSelectors: selectors,
-            suggestions: ['Verify the select element selector', 'Check if the dropdown is dynamically loaded']
+          message: 'Could not find select element',
+          details: {
+            lastError: findResult.error,
+            suggestions: [
+              'Verify the select element attributes',
+              'Check if the dropdown is dynamically loaded',
+              'Ensure page has finished loading'
+            ]
           }
         });
       }
 
-      // Select the option using JavaScript
+      const foundElement = findResult.element;
+      console.log('[FormHandler] ✅ Select found');
+
+      // Select the option
       const selectScript = `
         (function() {
-          const select = document.querySelector(${JSON.stringify(queryResult.selector)});
-          if (!select) return { success: false, error: 'Element not found' };
+          const select = document.elementFromPoint(
+            ${foundElement.boundingBox.x + foundElement.boundingBox.width / 2},
+            ${foundElement.boundingBox.y + foundElement.boundingBox.height / 2}
+          );
+          
+          if (!select || select.tagName !== 'SELECT') {
+            return { success: false, error: 'Element is not a select' };
+          }
           
           let optionSelected = false;
           
+          // Try by value
           ${params.value ? `
-            // Select by value
             for (let i = 0; i < select.options.length; i++) {
               if (select.options[i].value === ${JSON.stringify(params.value)}) {
                 select.selectedIndex = i;
@@ -56,8 +64,8 @@ export class FormHandler extends BaseHandler {
             }
           ` : ''}
           
+          // Try by label
           ${params.label ? `
-            // Select by label
             if (!optionSelected) {
               for (let i = 0; i < select.options.length; i++) {
                 if (select.options[i].text === ${JSON.stringify(params.label)}) {
@@ -69,8 +77,8 @@ export class FormHandler extends BaseHandler {
             }
           ` : ''}
           
+          // Try by index
           ${params.index !== undefined ? `
-            // Select by index
             if (!optionSelected && ${params.index} < select.options.length) {
               select.selectedIndex = ${params.index};
               optionSelected = true;
@@ -80,7 +88,11 @@ export class FormHandler extends BaseHandler {
           if (optionSelected) {
             select.dispatchEvent(new Event('change', { bubbles: true }));
             select.dispatchEvent(new Event('input', { bubbles: true }));
-            return { success: true, selectedValue: select.value, selectedText: select.options[select.selectedIndex].text };
+            return { 
+              success: true, 
+              selectedValue: select.value, 
+              selectedText: select.options[select.selectedIndex].text 
+            };
           }
           
           return { success: false, error: 'No matching option found' };
@@ -96,33 +108,26 @@ export class FormHandler extends BaseHandler {
           details: {
             suggestions: [
               'Verify the value/label/index matches an available option',
-              'Check if the dropdown has loaded all options',
-              'Try using a different selection method (value vs label vs index)'
+              'Check if the dropdown has loaded all options'
             ]
           }
         });
       }
 
-      console.log(`[FormHandler] ✅ Selected option: ${result.selectedText}`);
-
       await this.sleep(300);
-      const executionTime = Date.now() - startTime;
 
       return {
         success: true,
         toolName: 'select',
-        executionTime,
-        element: this.createFoundElement(queryResult),
         value: result.selectedValue,
-        timestamp: Date.now(),
-        tabId: this.tabId,
         url: this.getUrl()
       };
 
     } catch (error) {
+      console.error('[FormHandler] ❌ Select failed:', error);
       return this.createErrorResult('select', startTime, {
         code: 'EXECUTION_ERROR',
-        message: `Select execution failed`,
+        message: `Select failed: ${error instanceof Error ? error.message : String(error)}`,
         details: {
           lastError: error instanceof Error ? error.message : String(error)
         }
@@ -135,32 +140,40 @@ export class FormHandler extends BaseHandler {
    */
   async executeCheckbox(params: CheckboxParams): Promise<ToolExecutionResult> {
     const startTime = Date.now();
+    console.log(`[FormHandler] ☑️  Checkbox: ${params.checked ? 'check' : 'uncheck'}`);
 
     try {
-      console.log(`[FormHandler] Setting checkbox ${params.checked ? 'checked' : 'unchecked'}: ${params.selector}`);
+      const findResult = await this.elementFinder.advancedFind(params);
 
-      const waitTime = params.waitForElement ?? 1000;
-      if (waitTime > 0) await this.sleep(waitTime);
-
-      const selectors = [params.selector, ...(params.backupSelectors || [])];
-      const queryResult = await this.elementFinder.findWithCDP(selectors, true);
-
-      if (!queryResult.found || !queryResult.nodeId || !queryResult.element) {
+      if (!findResult.success || !findResult.element) {
         return this.createErrorResult('checkbox', startTime, {
           code: 'ELEMENT_NOT_FOUND',
-          message: `Could not find checkbox element`,
-          details: { 
-            attemptedSelectors: selectors,
-            suggestions: ['Verify the checkbox selector', 'Check if the checkbox is visible']
+          message: 'Could not find checkbox element',
+          details: {
+            lastError: findResult.error,
+            suggestions: [
+              'Verify the checkbox element attributes',
+              'Check if the checkbox is visible',
+              'Ensure type="checkbox" or type="radio"'
+            ]
           }
         });
       }
 
+      const foundElement = findResult.element;
+      console.log('[FormHandler] ✅ Checkbox found');
+
       // Set checkbox state
       const checkboxScript = `
         (function() {
-          const checkbox = document.querySelector(${JSON.stringify(queryResult.selector)});
-          if (!checkbox) return { success: false, error: 'Element not found' };
+          const checkbox = document.elementFromPoint(
+            ${foundElement.boundingBox.x + foundElement.boundingBox.width / 2},
+            ${foundElement.boundingBox.y + foundElement.boundingBox.height / 2}
+          );
+          
+          if (!checkbox || (checkbox.type !== 'checkbox' && checkbox.type !== 'radio')) {
+            return { success: false, error: 'Element is not a checkbox or radio' };
+          }
           
           if (checkbox.checked !== ${params.checked}) {
             checkbox.checked = ${params.checked};
@@ -185,26 +198,20 @@ export class FormHandler extends BaseHandler {
         });
       }
 
-      console.log(`[FormHandler] ✅ Checkbox set to: ${result.checked}`);
-
       await this.sleep(300);
-      const executionTime = Date.now() - startTime;
 
       return {
         success: true,
         toolName: 'checkbox',
-        executionTime,
-        element: this.createFoundElement(queryResult),
         value: result.checked,
-        timestamp: Date.now(),
-        tabId: this.tabId,
         url: this.getUrl()
       };
 
     } catch (error) {
+      console.error('[FormHandler] ❌ Checkbox failed:', error);
       return this.createErrorResult('checkbox', startTime, {
         code: 'EXECUTION_ERROR',
-        message: `Checkbox execution failed`,
+        message: `Checkbox failed: ${error instanceof Error ? error.message : String(error)}`,
         details: {
           lastError: error instanceof Error ? error.message : String(error)
         }
@@ -217,91 +224,96 @@ export class FormHandler extends BaseHandler {
    */
   async executeSubmit(params: SubmitParams, clickHandler: any): Promise<ToolExecutionResult> {
     const startTime = Date.now();
+    console.log('[FormHandler] 📤 Submit form');
 
     try {
-      console.log(`[FormHandler] Submitting form`);
-
-      if (params.submitButtonSelector) {
-        // Click submit button instead
-        console.log(`[FormHandler] Clicking submit button: ${params.submitButtonSelector}`);
+      if (params.submitButton) {
         return await clickHandler.execute({
-          selector: params.submitButtonSelector,
-          waitForElement: 1000
+          ...params.submitButton,
+          tag: params.submitButton.tag || 'BUTTON'
         });
-      } else {
-        // Submit form directly
-        const submitScript = `
-          (function() {
-            const form = ${params.formSelector ? `document.querySelector(${JSON.stringify(params.formSelector)})` : 'document.querySelector("form")'};
-            if (!form) return { success: false, error: 'Form not found' };
-            
-            // Try to submit the form
-            if (typeof form.requestSubmit === 'function') {
-              form.requestSubmit(); // Modern method that triggers validation
-            } else {
-              form.submit(); // Fallback
-            }
-            
-            return { success: true };
-          })();
-        `;
-
-        const result = await this.view.webContents.executeJavaScript(submitScript);
-
-        if (!result.success) {
-          return this.createErrorResult('submit', startTime, {
-            code: 'ELEMENT_NOT_FOUND',
-            message: result.error || 'Form not found',
-            details: {
-              suggestions: [
-                'Verify a form element exists on the page',
-                'Try specifying a formSelector parameter',
-                'Consider using the submitButtonSelector to click the submit button instead'
-              ]
-            }
-          });
-        }
-
-        console.log(`[FormHandler] ✅ Form submitted`);
-
-        await this.sleep(500);
-
-        const executionTime = Date.now() - startTime;
-
-        return {
-          success: true,
-          toolName: 'submit',
-          executionTime,
-          timestamp: Date.now(),
-          tabId: this.tabId,
-          url: this.getUrl()
-        };
       }
 
+      let formElement: any = null;
+
+      if (params.form) {
+        const findResult = await this.elementFinder.advancedFind({
+          ...params.form,
+          tag: params.form.tag || 'FORM'
+        });
+
+        if (findResult.success && findResult.element) {
+          formElement = findResult.element;
+        }
+      }
+
+      const submitScript = formElement ? `
+        (function() {
+          const form = document.elementFromPoint(
+            ${formElement.boundingBox.x + formElement.boundingBox.width / 2},
+            ${formElement.boundingBox.y + formElement.boundingBox.height / 2}
+          );
+          
+          if (!form || form.tagName !== 'FORM') {
+            return { success: false, error: 'Element is not a form' };
+          }
+          
+          if (typeof form.requestSubmit === 'function') {
+            form.requestSubmit();
+          } else {
+            form.submit();
+          }
+          
+          return { success: true };
+        })();
+      ` : `
+        (function() {
+          const form = document.querySelector('form');
+          if (!form) return { success: false, error: 'No form found' };
+          
+          if (typeof form.requestSubmit === 'function') {
+            form.requestSubmit();
+          } else {
+            form.submit();
+          }
+          
+          return { success: true };
+        })();
+      `;
+
+      const result = await this.view.webContents.executeJavaScript(submitScript);
+
+      if (!result.success) {
+        return this.createErrorResult('submit', startTime, {
+          code: 'ELEMENT_NOT_FOUND',
+          message: result.error || 'Form not found',
+          details: {
+            suggestions: [
+              'Verify a form element exists on the page',
+              'Try specifying form parameters',
+              'Consider using submitButton to click the submit button instead'
+            ]
+          }
+        });
+      }
+
+      await this.sleep(500);
+
+      return {
+        success: true,
+        toolName: 'submit',
+        url: this.getUrl()
+      };
+
     } catch (error) {
+      console.error('[FormHandler] ❌ Submit failed:', error);
       return this.createErrorResult('submit', startTime, {
         code: 'EXECUTION_ERROR',
-        message: `Form submit failed`,
+        message: `Submit failed: ${error instanceof Error ? error.message : String(error)}`,
         details: {
           lastError: error instanceof Error ? error.message : String(error)
         }
       });
     }
-  }
-
-  /**
-   * Helper to create FoundElement from ElementQueryResult
-   */
-  private createFoundElement(queryResult: ElementQueryResult): FoundElement {
-    return {
-      selector: queryResult.selector,
-      selectorType: queryResult.selectorType,
-      tagName: queryResult.element.tagName,
-      text: queryResult.element.text,
-      attributes: queryResult.element.attributes,
-      boundingBox: queryResult.element.boundingBox,
-      isVisible: queryResult.element.isVisible,
-      isEnabled: queryResult.element.isEnabled
-    };
   }
 }

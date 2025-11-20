@@ -1,7 +1,7 @@
 import { BaseHandler } from '../core/BaseHandler';
 import { ElementFinder } from '../core/ElementFinder';
 import type { HandlerContext } from '../core/types';
-import type { KeyPressParams, ScrollParams, ToolExecutionResult } from '@/shared/types';
+import type { KeyPressParams, ScrollParams, ToolExecutionResult, ElementFinderParams } from '@/shared/types';
 
 export class InteractionHandler extends BaseHandler {
   private elementFinder: ElementFinder;
@@ -11,80 +11,75 @@ export class InteractionHandler extends BaseHandler {
     this.elementFinder = new ElementFinder(context);
   }
 
-  /**
-   * Execute key press operation
-   */
   async executeKeyPress(params: KeyPressParams): Promise<ToolExecutionResult> {
     const startTime = Date.now();
 
     try {
-      console.log(`[InteractionHandler] Pressing key: ${params.key}`);
-
       // Focus element if specified
-      if (params.selector) {
-        const queryResult = await this.elementFinder.findWithCDP([params.selector], true);
-        if (queryResult.found && queryResult.nodeId) {
-          await this.debugger.sendCommand('DOM.focus', { nodeId: queryResult.nodeId });
-          await this.sleep(100); // Small delay after focus
+      if (params.focusElement) {
+        const findResult = await this.elementFinder.advancedFind(params.focusElement);
+        
+        if (findResult.success && findResult.element) {
+          await this.focusElement(findResult.element.boundingBox);
+          await this.sleep(100);
         } else {
-          return this.createErrorResult('keyPress', startTime, {
-            code: 'ELEMENT_NOT_FOUND',
-            message: `Could not find element to focus: ${params.selector}`,
-            details: {
-              suggestions: ['Verify the selector is correct', 'Try without focusing a specific element']
-            }
-          });
+          console.warn('[InteractionHandler] ⚠️ Could not find element to focus, pressing key anyway');
         }
       }
 
       // Build modifiers
-      const modifiers = this.buildKeyModifiers(params.modifiers || []);
+      let modifiersBitmask = 0;
+      if (params.modifiers) {
+        for (const mod of params.modifiers) {
+          if (mod === 'Alt') modifiersBitmask |= 1;
+          if (mod === 'Control') modifiersBitmask |= 2;
+          if (mod === 'Meta') modifiersBitmask |= 4;
+          if (mod === 'Shift') modifiersBitmask |= 8;
+        }
+      }
 
-      // Press key down
-      await this.debugger.sendCommand('Input.dispatchKeyEvent', {
+      const cdp = this.view.webContents.debugger;
+      if (!cdp.isAttached()) cdp.attach('1.3');
+
+      // Key down
+      await cdp.sendCommand('Input.dispatchKeyEvent', {
         type: 'keyDown',
         key: params.key,
-        code: params.key,
-        windowsVirtualKeyCode: this.getKeyCode(params.key),
-        nativeVirtualKeyCode: this.getKeyCode(params.key),
-        ...modifiers
+        code: this.getKeyCode(params.key),
+        modifiers: modifiersBitmask
       });
 
-      // Small delay between down and up
       await this.sleep(50);
 
-      // Press key up
-      await this.debugger.sendCommand('Input.dispatchKeyEvent', {
+      // Key up
+      await cdp.sendCommand('Input.dispatchKeyEvent', {
         type: 'keyUp',
         key: params.key,
-        code: params.key,
-        windowsVirtualKeyCode: this.getKeyCode(params.key),
-        nativeVirtualKeyCode: this.getKeyCode(params.key),
-        ...modifiers
+        code: this.getKeyCode(params.key),
+        modifiers: modifiersBitmask
       });
 
       console.log(`[InteractionHandler] ✅ Key pressed: ${params.key}`);
 
       await this.sleep(300);
-      const executionTime = Date.now() - startTime;
 
       return {
         success: true,
         toolName: 'keyPress',
-        executionTime,
-        value: params.key,
-        timestamp: Date.now(),
-        tabId: this.tabId,
         url: this.getUrl()
       };
 
     } catch (error) {
+      console.error('[InteractionHandler] ❌ Key press failed:', error);
       return this.createErrorResult('keyPress', startTime, {
         code: 'EXECUTION_ERROR',
-        message: `Key press failed`,
+        message: `Key press failed: ${error instanceof Error ? error.message : String(error)}`,
         details: {
           lastError: error instanceof Error ? error.message : String(error),
-          suggestions: ['Verify the key name is correct (e.g., "Enter", "Escape", "Tab")']
+          suggestions: [
+            'Verify the key name is correct (e.g., "Enter", "Escape", "Tab")',
+            'Check if modifiers are supported'
+          ]
         }
       });
     }
@@ -95,86 +90,65 @@ export class InteractionHandler extends BaseHandler {
    */
   async executeScroll(params: ScrollParams): Promise<ToolExecutionResult> {
     const startTime = Date.now();
+    console.log(`[InteractionHandler] 📜 Scroll:`, params);
 
     try {
-      console.log(`[InteractionHandler] Scrolling: ${JSON.stringify(params)}`);
-
       if (params.toElement) {
         // Scroll to element
         const scrollScript = `
           (function() {
             const el = document.querySelector(${JSON.stringify(params.toElement)});
             if (!el) return { success: false, error: 'Element not found' };
-            
-            el.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
-            return { success: true, scrolledTo: 'element' };
+            el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            return { success: true };
           })();
         `;
 
         const result = await this.view.webContents.executeJavaScript(scrollScript);
-
+        
         if (!result.success) {
           return this.createErrorResult('scroll', startTime, {
             code: 'ELEMENT_NOT_FOUND',
-            message: `Could not find element to scroll to: ${params.toElement}`,
+            message: result.error || 'Could not find element to scroll to',
             details: {
               suggestions: ['Verify the element selector is correct']
             }
           });
         }
-
-        console.log(`[InteractionHandler] ✅ Scrolled to element`);
       } else {
-        // Scroll by amount
+        // Scroll by direction/amount
+        const direction = params.direction || 'down';
         const amount = params.amount || 500;
+
         let deltaX = 0;
         let deltaY = 0;
 
-        switch (params.direction) {
-          case 'down':
-            deltaY = amount;
-            break;
-          case 'up':
-            deltaY = -amount;
-            break;
-          case 'right':
-            deltaX = amount;
-            break;
-          case 'left':
-            deltaX = -amount;
-            break;
-          default:
-            deltaY = amount; // Default to down
-        }
+        if (direction === 'down') deltaY = amount;
+        else if (direction === 'up') deltaY = -amount;
+        else if (direction === 'right') deltaX = amount;
+        else if (direction === 'left') deltaX = -amount;
 
         await this.view.webContents.executeJavaScript(`
-          window.scrollBy({
-            left: ${deltaX},
-            top: ${deltaY},
-            behavior: 'smooth'
-          });
+          window.scrollBy({ left: ${deltaX}, top: ${deltaY}, behavior: 'smooth' });
         `);
-
-        console.log(`[InteractionHandler] ✅ Scrolled ${params.direction || 'down'} by ${amount}px`);
       }
 
-      await this.sleep(500); // Wait for scroll to complete
+      console.log('[InteractionHandler] ✅ Scrolled');
 
+      await this.sleep(500);
       const executionTime = Date.now() - startTime;
 
       return {
         success: true,
         toolName: 'scroll',
-        executionTime,
-        timestamp: Date.now(),
-        tabId: this.tabId,
         url: this.getUrl()
       };
 
     } catch (error) {
+      console.error('[InteractionHandler] ❌ Scroll failed:', error);
       return this.createErrorResult('scroll', startTime, {
         code: 'EXECUTION_ERROR',
-        message: `Scroll failed`,
+        message: `Scroll failed: ${error instanceof Error ? error.message : String(error)}`,
         details: {
           lastError: error instanceof Error ? error.message : String(error)
         }
@@ -183,46 +157,60 @@ export class InteractionHandler extends BaseHandler {
   }
 
   /**
-   * Build key modifiers for CDP
+   * Focus element by clicking
    */
-  private buildKeyModifiers(modifiers: string[]): any {
-    const result: any = {};
-    if (modifiers.includes('Control')) result.modifiers = (result.modifiers || 0) | 2;
-    if (modifiers.includes('Shift')) result.modifiers = (result.modifiers || 0) | 8;
-    if (modifiers.includes('Alt')) result.modifiers = (result.modifiers || 0) | 1;
-    if (modifiers.includes('Meta')) result.modifiers = (result.modifiers || 0) | 4;
-    return result;
+  private async focusElement(boundingBox: { x: number; y: number; width: number; height: number }): Promise<void> {
+    try {
+      const centerX = Math.round(boundingBox.x + boundingBox.width / 2);
+      const centerY = Math.round(boundingBox.y + boundingBox.height / 2);
+
+      const cdp = this.view.webContents.debugger;
+      if (!cdp.isAttached()) cdp.attach('1.3');
+
+      await cdp.sendCommand('Input.dispatchMouseEvent', {
+        type: 'mousePressed',
+        x: centerX,
+        y: centerY,
+        button: 'left',
+        clickCount: 1
+      });
+
+      await this.sleep(50);
+
+      await cdp.sendCommand('Input.dispatchMouseEvent', {
+        type: 'mouseReleased',
+        x: centerX,
+        y: centerY,
+        button: 'left',
+        clickCount: 1
+      });
+
+    } catch (error) {
+      console.warn('[InteractionHandler] ⚠️ Focus failed:', error);
+    }
   }
 
   /**
-   * Get key code for CDP
+   * Get key code for common keys
    */
-  private getKeyCode(key: string): number {
-    // Common key codes for CDP Input.dispatchKeyEvent
-    const keyCodes: Record<string, number> = {
-      'Enter': 13,
-      'Escape': 27,
-      'Tab': 9,
-      'Backspace': 8,
-      'Delete': 46,
-      'ArrowUp': 38,
-      'ArrowDown': 40,
-      'ArrowLeft': 37,
-      'ArrowRight': 39,
-      'Home': 36,
-      'End': 35,
-      'PageUp': 33,
-      'PageDown': 34,
-      'Space': 32,
-      ' ': 32
+  private getKeyCode(key: string): string {
+    const keyMap: Record<string, string> = {
+      'Enter': 'Enter',
+      'Escape': 'Escape',
+      'Tab': 'Tab',
+      'Backspace': 'Backspace',
+      'Delete': 'Delete',
+      'ArrowUp': 'ArrowUp',
+      'ArrowDown': 'ArrowDown',
+      'ArrowLeft': 'ArrowLeft',
+      'ArrowRight': 'ArrowRight',
+      'Home': 'Home',
+      'End': 'End',
+      'PageUp': 'PageUp',
+      'PageDown': 'PageDown',
+      'Space': 'Space'
     };
 
-    // If it's a single character, use its char code
-    if (key.length === 1) {
-      return key.toUpperCase().charCodeAt(0);
-    }
-
-    // Return mapped key code or 0
-    return keyCodes[key] || 0;
+    return keyMap[key] || key;
   }
 }
