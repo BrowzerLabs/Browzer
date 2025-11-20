@@ -313,9 +313,14 @@ export class BrowserManager {
    * Notify renderer about tab changes
    */
   private notifyTabsChanged(): void {
+    // Don't notify if window is being destroyed
+    if (this.baseWindow.isDestroyed()) {
+      return;
+    }
+
     const allViews = this.baseWindow.contentView.children;
     allViews.forEach(view => {
-      if (view instanceof WebContentsView) {
+      if (view instanceof WebContentsView && !view.webContents.isDestroyed()) {
         view.webContents.send('browser:tabs-updated', this.getAllTabs());
       }
     });

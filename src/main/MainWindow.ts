@@ -62,6 +62,15 @@ export class MainWindow {
       this.updateLayout();
     });
 
+    // Cleanup BEFORE window is destroyed to prevent "Object destroyed" errors
+    baseWindow.on('close', () => {
+      console.log('[MainWindow] Window closing, cleaning up resources...');
+      // Cleanup IPC handlers first to prevent duplicate registration
+      this.ipcHandlers.cleanup();
+      // Cleanup browser manager (tabs, recordings, etc.)
+      this.browserManager.destroy();
+    });
+
     setTimeout(() => {
       this.windowManager.show();
     }, 100);
