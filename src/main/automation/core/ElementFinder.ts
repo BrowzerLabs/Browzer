@@ -3,22 +3,11 @@ import { ElementFinderParams } from '@/shared/types';
 import { BaseHandler } from './BaseHandler';
 import type { HandlerContext, AdvancedFindResult } from './types';
 
-/**
- * SIMPLIFIED ELEMENT FINDER - Attribute-Priority Matching
- * 
- * Strategy (in priority order):
- * 1. Tag name - Filter by HTML tag
- * 2. Stable attributes - Match id, data-*, aria-*, name, type, role, etc.
- * 3. Text content - Match visible text
- * 4. Position - Match bounding box coordinates
- * 5. Element index - Use nth-element for disambiguation
- */
-
-
 interface ScoredCandidate {
   element: any;
   score: number;
   matchedBy: string[];
+  breakdown: Record<string, number>;
 }
 
 export class ElementFinder extends BaseHandler {
@@ -41,8 +30,6 @@ export class ElementFinder extends BaseHandler {
     'value',  // Changes with user input
     'checked',
     'selected',
-    'disabled',
-    'readonly'
   ];
 
   constructor(context: HandlerContext) {
@@ -50,44 +37,66 @@ export class ElementFinder extends BaseHandler {
   }
 
   /**
-   * Find element using attribute-priority matching
+   * Find element using attribute-priority matching with comprehensive scoring
    */
   async advancedFind(params: ElementFinderParams): Promise<AdvancedFindResult> {
-    console.log("params: ", JSON.stringify(params));
+    console.log('[ElementFinder] 🔍 Searching with params:', {
+      tag: params.tag,
+      text: params.text?.substring(0, 50),
+      attributeCount: Object.keys(params.attributes || {}).length,
+      hasPosition: !!params.boundingBox,
+      elementIndex: params.elementIndex
+    });
     
-    // Find all candidates
+    // Step 1: Find all candidates matching basic criteria
     const candidates = await this.findCandidates(params);
-    console.log("candidates: ", candidates);
+    console.log(`candidate(s): `, candidates);
 
     if (candidates.length === 0) {
       return {
         success: false,
-        error: `No matching elements found. Searched with: tag=${params.tag}, text="${params.text}"`
+        error: `No matching elements found. Searched with: tag=${params.tag}, text="${params.text || 'none'}", attributes=${JSON.stringify(params.attributes || {})}`
       };
     }
 
-    // Score and rank
+    // Step 2: Score and rank all candidates
     const scored = this.scoreAndRank(candidates, params);
 
     if (scored.length === 0) {
       return {
         success: false,
-        error: `No candidates passed scoring. Found ${candidates.length} elements but none matched well`,
+        error: `No candidates passed scoring. Found ${candidates.length} elements but none matched criteria`,
       };
     }
 
+    // Step 3: Get best match
     const best = scored[0];
-    console.log(`[ElementFinder] 🏆 Best: score=${best.score}, matched by: ${best.matchedBy.join(', ')}`);
+    const secondBest = scored[1];
+    console.log(`best: `, best);
+    console.log(`secondBest: `, secondBest);
+
+    // Log results
+    if (secondBest) {
+      console.log(`[ElementFinder] 🥈 Second best: score=${secondBest.score.toFixed(1)}, matched by: ${secondBest.matchedBy.join(', ')}`);
+      
+      // Warn if ambiguous
+      if (Math.abs(best.score - secondBest.score) < 10) {
+        console.warn(`[ElementFinder] ⚠️ AMBIGUOUS MATCH! Scores are very close. Using best but this may be wrong.`);
+      }
+    }
 
     return {
       success: true,
       element: best.element,
-      totalCandidates: candidates.length
+      totalCandidates: candidates.length,
     };
   }
 
   /**
-   * Find all candidate elements
+   * Find all candidate elements matching basic criteria
+   * 
+   * This searches the ENTIRE DOM, not just viewport.
+   * Filters by tag, text (if provided), and stable attributes (if provided).
    */
   private async findCandidates(params: ElementFinderParams): Promise<any[]> {
     const script = `
@@ -96,78 +105,85 @@ export class ElementFinder extends BaseHandler {
           const tag = ${JSON.stringify(params.tag)};
           const targetText = ${JSON.stringify(params.text || '')}.toLowerCase().trim();
           const targetAttrs = ${JSON.stringify(params.attributes || {})};
-          const targetBox = ${JSON.stringify(params.boundingBox)};
+          const dynamicAttrs = ${JSON.stringify(ElementFinder.DYNAMIC_ATTRIBUTES)};
           
-          // Get all elements with matching tag
+          // Step 1: Get all elements with matching tag
           let elements = Array.from(document.getElementsByTagName(tag));
           
-          // If no tag match, try broader search
+          // If no tag match, try broader search for interactive elements
           if (elements.length === 0 && targetText) {
-            elements = Array.from(document.querySelectorAll('button, a, input, label, span, div, [role="button"]'));
+            elements = Array.from(document.querySelectorAll('button, a, input, label, span, div, [role="button"], [role="link"]'));
           }
           
-          // Filter by text if provided
+          console.log('[ElementFinder] Initial candidates by tag:', elements.length);
+          
+          // Step 2: Filter by text if provided
           if (targetText) {
             elements = elements.filter(el => {
               const elText = (el.innerText || el.textContent || '').toLowerCase().trim();
               const ariaLabel = (el.getAttribute('aria-label') || '').toLowerCase().trim();
               const placeholder = (el.getAttribute('placeholder') || '').toLowerCase().trim();
               const title = (el.getAttribute('title') || '').toLowerCase().trim();
+              const value = (el.value || '').toLowerCase().trim();
               
               return elText.includes(targetText) || 
                      ariaLabel.includes(targetText) ||
                      placeholder.includes(targetText) ||
-                     title.includes(targetText);
+                     title.includes(targetText) ||
+                     value.includes(targetText);
             });
+            console.log('[ElementFinder] After text filter:', elements.length);
           }
           
-          // Filter by stable attributes if provided
+          // Step 3: Filter by stable attributes if provided
+          // CRITICAL: Only filter if we have at least ONE stable attribute
+          // If all attributes are dynamic (class, style, etc.), skip filtering
           if (Object.keys(targetAttrs).length > 0) {
-            const dynamicAttrs = ${JSON.stringify(ElementFinder.DYNAMIC_ATTRIBUTES)};
+            // First, check if we have ANY stable attributes
+            const hasAnyStableAttr = Object.keys(targetAttrs).some(key => 
+              !dynamicAttrs.includes(key) && targetAttrs[key]
+            );
             
-            elements = elements.filter(el => {
-              let matches = 0;
-              for (const [key, value] of Object.entries(targetAttrs)) {
-                // Skip dynamic attributes
-                if (dynamicAttrs.includes(key)) continue;
-                if (!value) continue;
-                
-                const elValue = el.getAttribute(key);
-                if (elValue === value) matches++;
-              }
-              return matches > 0; // At least one stable attribute matches
-            });
-          }
-          
-          // Filter by position if provided
-          if (targetBox) {
-            const centerX = targetBox.x + targetBox.width / 2;
-            const centerY = targetBox.y + targetBox.height / 2;
-            
-            // Find element at position
-            const elAtPos = document.elementFromPoint(centerX, centerY);
-            if (elAtPos) {
-              // Only keep elements near this position
+            if (hasAnyStableAttr) {
+              // Only filter if we have stable attributes to match
               elements = elements.filter(el => {
-                const rect = el.getBoundingClientRect();
-                const elCenterX = rect.x + rect.width / 2;
-                const elCenterY = rect.y + rect.height / 2;
-                const distance = Math.abs(elCenterX - centerX) + Math.abs(elCenterY - centerY);
-                return distance < 100; // Within 100px
+                let hasStableMatch = false;
+                
+                for (const [key, value] of Object.entries(targetAttrs)) {
+                  // Skip dynamic attributes
+                  if (dynamicAttrs.includes(key)) continue;
+                  if (!value) continue;
+                  
+                  const elValue = el.getAttribute(key);
+                  if (elValue === value) {
+                    hasStableMatch = true;
+                    break; // At least one stable attribute matches
+                  }
+                }
+                
+                return hasStableMatch;
               });
+              console.log('[ElementFinder] After attribute filter:', elements.length);
+            } else {
+              console.log('[ElementFinder] All attributes are dynamic, skipping attribute filter');
             }
           }
           
-          // Map to structured data
+          // Step 4: Map to structured data
+          // NOTE: We deliberately DO NOT filter by position here
+          // Reason: Elements outside viewport are still valid targets
+          // Position is used for SCORING, not filtering
           return elements.map(el => {
             const rect = el.getBoundingClientRect();
             const style = window.getComputedStyle(el);
             
+            // Collect all attributes
             const attributes = {};
             for (const attr of el.attributes) {
               attributes[attr.name] = attr.value;
             }
             
+            // Get element index among siblings
             const elementIndex = el.parentElement 
               ? Array.from(el.parentElement.children).indexOf(el)
               : 0;
@@ -189,12 +205,14 @@ export class ElementFinder extends BaseHandler {
               isInViewport: rect.top >= 0 && rect.left >= 0 &&
                            rect.bottom <= window.innerHeight &&
                            rect.right <= window.innerWidth,
-              elementIndex: elementIndex
+              elementIndex: elementIndex,
+              // Store reference for debugging
+              _debugPath: el.id || el.className || el.tagName
             };
-          }).filter(el => el.isVisible); // Only visible elements
+          });
           
         } catch (e) {
-          console.error('ElementFinder error:', e);
+          console.error('[ElementFinder] Error in findCandidates:', e);
           return [];
         }
       })();
@@ -204,7 +222,16 @@ export class ElementFinder extends BaseHandler {
   }
 
   /**
-   * Score and rank candidates
+   * Score and rank candidates using comprehensive criteria
+   * 
+   * Scoring breakdown (max 200+ points):
+   * - Tag match: 20 points
+   * - Stable attributes: up to 60 points (id=20, data-*=15, aria-*=12, name/type/role=10)
+   * - Text match: up to 30 points (exact=30, contains=20, word overlap=10)
+   * - Position match: up to 40 points (perfect=40, close=30, near=20)
+   * - Visibility: 10 points
+   * - In viewport: 5 points
+   * - Element index match: 50 points (huge bonus for disambiguation)
    */
   private scoreAndRank(candidates: any[], params: ElementFinderParams): ScoredCandidate[] {
     const scored: ScoredCandidate[] = [];
@@ -212,10 +239,12 @@ export class ElementFinder extends BaseHandler {
     for (const candidate of candidates) {
       let score = 0;
       const matchedBy: string[] = [];
+      const breakdown: Record<string, number> = {};
 
-      // 1. Tag match (20 points)
+      // 1. Tag match (20 points) - Should always match since we filter by tag
       if (candidate.tagName?.toUpperCase() === params.tag.toUpperCase()) {
         score += 20;
+        breakdown.tag = 20;
         matchedBy.push('tag');
       }
 
@@ -224,6 +253,7 @@ export class ElementFinder extends BaseHandler {
         const attrScore = this.scoreAttributes(candidate.attributes, params.attributes);
         if (attrScore > 0) {
           score += attrScore;
+          breakdown.attributes = attrScore;
           matchedBy.push('attributes');
         }
       }
@@ -233,15 +263,18 @@ export class ElementFinder extends BaseHandler {
         const textScore = this.scoreText(candidate.text, params.text);
         if (textScore > 0) {
           score += textScore;
+          breakdown.text = textScore;
           matchedBy.push('text');
         }
       }
 
       // 4. Position match (up to 40 points)
+      // Lower weight than attributes/text because positions change with responsive design
       if (params.boundingBox && candidate.boundingBox) {
         const posScore = this.scorePosition(candidate.boundingBox, params.boundingBox);
         if (posScore > 0) {
           score += posScore;
+          breakdown.position = posScore;
           matchedBy.push('position');
         }
       }
@@ -249,33 +282,41 @@ export class ElementFinder extends BaseHandler {
       // 5. Visibility bonus (10 points)
       if (candidate.isVisible) {
         score += 10;
+        breakdown.visibility = 10;
       }
 
       // 6. In viewport bonus (5 points)
       if (candidate.isInViewport) {
         score += 5;
+        breakdown.inViewport = 5;
       }
 
-      scored.push({ element: candidate, score, matchedBy });
+      scored.push({ element: candidate, score, matchedBy, breakdown });
     }
 
-    // Sort by score
+    // Sort by score (highest first)
     scored.sort((a, b) => b.score - a.score);
 
-    // Apply element index disambiguation if multiple high scores
+    // 7. Apply element index disambiguation if multiple high scores
+    // This is the FINAL tiebreaker when everything else is similar
     if (params.elementIndex !== undefined && scored.length > 1) {
       const topScore = scored[0].score;
-      const closeMatches = scored.filter(s => Math.abs(s.score - topScore) < 10);
+      const closeMatches = scored.filter(s => Math.abs(s.score - topScore) < 15);
       
       if (closeMatches.length > 1) {
+        console.log(`[ElementFinder] 🎯 Multiple close matches (${closeMatches.length}), using elementIndex=${params.elementIndex} to disambiguate`);
+        
         for (const candidate of closeMatches) {
           if (candidate.element.elementIndex === params.elementIndex) {
-            candidate.score += 50; // Huge bonus for exact index match
+            candidate.score += 50; // HUGE bonus for exact index match
+            candidate.breakdown.elementIndex = 50;
             candidate.matchedBy.push('elementIndex');
-            console.log(`[ElementFinder] 🎯 Using elementIndex=${params.elementIndex} to disambiguate`);
+            console.log(`[ElementFinder] ✅ Found exact elementIndex match!`);
             break;
           }
         }
+        
+        // Re-sort after applying index bonus
         scored.sort((a, b) => b.score - a.score);
       }
     }
@@ -285,6 +326,13 @@ export class ElementFinder extends BaseHandler {
 
   /**
    * Score attribute matches (ignore dynamic attributes)
+   * 
+   * Prioritizes stable attributes:
+   * - id: 20 points (most stable)
+   * - data-*: 15 points (very stable)
+   * - aria-*: 12 points (stable)
+   * - name/type/role: 10 points (stable)
+   * - others: 5 points
    */
   private scoreAttributes(elementAttrs: Record<string, string>, targetAttrs: Record<string, string>): number {
     let score = 0;
@@ -306,7 +354,7 @@ export class ElementFinder extends BaseHandler {
         else if (['name', 'type', 'role'].includes(key)) score += 10;
         else score += 5;
       }
-      // Partial match
+      // Partial match (lower score)
       else if (elementValue.includes(value) || value.includes(elementValue)) {
         score += 3;
       }
@@ -317,6 +365,11 @@ export class ElementFinder extends BaseHandler {
 
   /**
    * Score text match
+   * 
+   * - Exact match: 30 points
+   * - Contains: 20 points
+   * - Reverse contains: 15 points
+   * - Word overlap: up to 10 points
    */
   private scoreText(elementText: string, targetText: string): number {
     const elText = elementText.toLowerCase().trim();
@@ -337,6 +390,13 @@ export class ElementFinder extends BaseHandler {
 
   /**
    * Score position match
+   * 
+   * Lower weight than attributes/text because:
+   * - Positions change with responsive design
+   * - Positions change with dynamic content
+   * - Positions change with screen size
+   * 
+   * Use for disambiguation, not primary matching.
    */
   private scorePosition(
     elementBox: { x: number; y: number; width: number; height: number },
@@ -346,34 +406,12 @@ export class ElementFinder extends BaseHandler {
     const yDiff = Math.abs(elementBox.y - targetBox.y);
     const totalDiff = xDiff + yDiff;
 
-    if (totalDiff < 5) return 40;   // Perfect
+    if (totalDiff < 5) return 40;   // Perfect (within 5px)
     if (totalDiff < 20) return 30;  // Very close
     if (totalDiff < 50) return 20;  // Close
     if (totalDiff < 100) return 10; // Near
     if (totalDiff < 200) return 5;  // Nearby
 
     return 0;
-  }
-
-  /**
-   * Generate selector for logging
-   */
-  private generateSelector(element: any): string {
-    const attrs = element.attributes || {};
-    
-    if (attrs.id && !attrs.id.match(/^(:r[0-9a-z]+:|mui-|mat-)/)) {
-      return `#${attrs.id}`;
-    }
-    if (attrs['data-testid']) {
-      return `[data-testid="${attrs['data-testid']}"]`;
-    }
-    if (attrs['aria-label']) {
-      return `[aria-label="${attrs['aria-label']}"]`;
-    }
-    if (attrs.name) {
-      return `[name="${attrs.name}"]`;
-    }
-    
-    return element.tagName?.toLowerCase() || 'unknown';
   }
 }
