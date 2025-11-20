@@ -48,15 +48,6 @@ let mainWindow: MainWindow | null = null;
 
 const createWindow = () => {
   mainWindow = new MainWindow();
-  
-  // Listen for window close to reset mainWindow reference
-  const window = mainWindow.getWindow();
-  if (window) {
-    window.on('closed', () => {
-      console.log('[main] Window closed, resetting mainWindow reference');
-      mainWindow = null;
-    });
-  }
 };
 
 
@@ -77,12 +68,9 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
     app.quit();
   }
-  // On macOS, keep app running but clear window reference
-  mainWindow = null;
 });
 
 app.on('activate', () => {
-  // On macOS, recreate window when dock icon is clicked and no windows are open
   if (mainWindow === null) {
     createWindow();
   }
