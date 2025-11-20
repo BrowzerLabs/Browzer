@@ -1,29 +1,24 @@
 import { BaseHandler } from '../core/BaseHandler';
-import { ElementFinder } from '../core/ElementFinder';
 import type { HandlerContext } from '../core/types';
-import type { KeyPressParams, ScrollParams, ToolExecutionResult, ElementFinderParams } from '@/shared/types';
+import type { KeyPressParams, ScrollParams, ToolExecutionResult } from '@/shared/types';
 
 export class InteractionHandler extends BaseHandler {
-  private elementFinder: ElementFinder;
-
   constructor(context: HandlerContext) {
     super(context);
-    this.elementFinder = new ElementFinder(context);
   }
 
   async executeKeyPress(params: KeyPressParams): Promise<ToolExecutionResult> {
     const startTime = Date.now();
 
     try {
-      // Focus element if specified
+      // Focus element if specified (using unified find + focus)
       if (params.focusElement) {
-        const findResult = await this.elementFinder.advancedFind(params.focusElement);
+        const focusResult = await this.findAndFocusElement(params.focusElement);
         
-        if (findResult.success && findResult.element) {
-          await this.focusElement(findResult.element.boundingBox);
-          await this.sleep(100);
-        } else {
+        if (!focusResult.success) {
           console.warn('[InteractionHandler] ⚠️ Could not find element to focus, pressing key anyway');
+        } else {
+          await this.sleep(150);
         }
       }
 
@@ -157,36 +152,126 @@ export class InteractionHandler extends BaseHandler {
   }
 
   /**
-   * Focus element by clicking
+   * UNIFIED: Find element and focus it in one operation
    */
-  private async focusElement(boundingBox: { x: number; y: number; width: number; height: number }): Promise<void> {
+  private async findAndFocusElement(params: any): Promise<{ success: boolean; centerX?: number; centerY?: number }> {
     try {
-      const centerX = Math.round(boundingBox.x + boundingBox.width / 2);
-      const centerY = Math.round(boundingBox.y + boundingBox.height / 2);
+      console.log('[InteractionHandler] 🔍 Finding element to focus');
 
-      const cdp = this.view.webContents.debugger;
-      if (!cdp.isAttached()) cdp.attach('1.3');
+      const script = `
+        (async function() {
+          const targetTag = ${JSON.stringify(params.tag)};
+          const targetAttrs = ${JSON.stringify(params.attributes || {})};
+          const targetBoundingBox = ${JSON.stringify(params.boundingBox || null)};
+          
+          const DYNAMIC_ATTRIBUTES = [
+            'class', 'style', 'aria-expanded', 'aria-selected', 'aria-checked',
+            'aria-pressed', 'aria-hidden', 'aria-current', 'tabindex',
+            'data-state', 'data-active', 'data-selected', 'data-focus', 'data-hover',
+            'value', 'checked', 'selected'
+          ];
+          
+          // Find candidates
+          let candidates = Array.from(document.getElementsByTagName(targetTag));
+          
+          // Filter by stable attributes
+          const stableAttrKeys = Object.keys(targetAttrs).filter(key => 
+            !DYNAMIC_ATTRIBUTES.includes(key) && targetAttrs[key]
+          );
+          
+          if (stableAttrKeys.length > 0) {
+            candidates = candidates.filter(el => {
+              return stableAttrKeys.some(key => el.getAttribute(key) === targetAttrs[key]);
+            });
+          }
+          
+          if (candidates.length === 0) {
+            return { success: false, error: 'No matching elements found' };
+          }
+          
+          // Score candidates
+          const scored = candidates.map(el => {
+            let score = 0;
+            
+            if (el.tagName.toUpperCase() === targetTag.toUpperCase()) score += 20;
+            
+            for (const key of stableAttrKeys) {
+              if (el.getAttribute(key) === targetAttrs[key]) {
+                if (key === 'id') score += 20;
+                else if (key.startsWith('data-')) score += 15;
+                else score += 10;
+              }
+            }
+            
+            if (targetBoundingBox) {
+              const rect = el.getBoundingClientRect();
+              const totalDiff = Math.abs(rect.x - targetBoundingBox.x) + Math.abs(rect.y - targetBoundingBox.y);
+              if (totalDiff < 50) score += 30;
+              else if (totalDiff < 100) score += 15;
+            }
+            
+            const rect = el.getBoundingClientRect();
+            const style = window.getComputedStyle(el);
+            if (rect.width > 0 && rect.height > 0 && style.display !== 'none') score += 10;
+            
+            return { element: el, score };
+          });
+          
+          scored.sort((a, b) => b.score - a.score);
+          const best = scored[0];
+          const element = best.element;
+          
+          // Focus element
+          if (typeof element.focus === 'function') {
+            element.focus();
+          }
+          
+          // Scroll into view
+          element.scrollIntoView({ behavior: 'auto', block: 'center', inline: 'center' });
+          await new Promise(resolve => setTimeout(resolve, 300));
+          
+          const rect = element.getBoundingClientRect();
+          return { 
+            success: true, 
+            centerX: rect.left + rect.width / 2,
+            centerY: rect.top + rect.height / 2
+          };
+        })();
+      `;
 
-      await cdp.sendCommand('Input.dispatchMouseEvent', {
-        type: 'mousePressed',
-        x: centerX,
-        y: centerY,
-        button: 'left',
-        clickCount: 1
-      });
+      const result = await this.view.webContents.executeJavaScript(script);
+      
+      if (result.success && result.centerX && result.centerY) {
+        // Additional CDP click to ensure focus
+        const cdp = this.view.webContents.debugger;
+        if (!cdp.isAttached()) cdp.attach('1.3');
 
-      await this.sleep(50);
+        await cdp.sendCommand('Input.dispatchMouseEvent', {
+          type: 'mousePressed',
+          x: Math.round(result.centerX),
+          y: Math.round(result.centerY),
+          button: 'left',
+          clickCount: 1
+        });
 
-      await cdp.sendCommand('Input.dispatchMouseEvent', {
-        type: 'mouseReleased',
-        x: centerX,
-        y: centerY,
-        button: 'left',
-        clickCount: 1
-      });
+        await this.sleep(50);
+
+        await cdp.sendCommand('Input.dispatchMouseEvent', {
+          type: 'mouseReleased',
+          x: Math.round(result.centerX),
+          y: Math.round(result.centerY),
+          button: 'left',
+          clickCount: 1
+        });
+        
+        console.log('[InteractionHandler] ✅ Element found and focused');
+      }
+      
+      return result;
 
     } catch (error) {
-      console.warn('[InteractionHandler] ⚠️ Focus failed:', error);
+      console.error('[InteractionHandler] ❌ Find and focus failed:', error);
+      return { success: false };
     }
   }
 

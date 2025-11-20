@@ -1,14 +1,20 @@
 import { BaseHandler } from '../core/BaseHandler';
-import { ElementFinder } from '../core/ElementFinder';
 import type { HandlerContext } from '../core/types';
-import type { SelectParams, CheckboxParams, SubmitParams, ToolExecutionResult, FoundElement } from '@/shared/types';
+import type { SelectParams, CheckboxParams, SubmitParams, ToolExecutionResult } from '@/shared/types';
 
+/**
+ * UNIFIED FORM HANDLER - Single Script Approach
+ * 
+ * Handles form interactions with unified approach:
+ * - Select: Find dropdown + Select option in one script
+ * - Checkbox: Find checkbox + Toggle state in one script
+ * - Submit: Find form/button + Submit in one script
+ * 
+ * All operations use single browser script execution for maximum reliability.
+ */
 export class FormHandler extends BaseHandler {
-  private elementFinder: ElementFinder;
-
   constructor(context: HandlerContext) {
     super(context);
-    this.elementFinder = new ElementFinder(context);
   }
 
   /**
@@ -18,97 +24,21 @@ export class FormHandler extends BaseHandler {
     const startTime = Date.now();
 
     try {
+      console.log('[FormHandler] 📋 Executing unified select');
 
-      const findResult = await this.elementFinder.advancedFind(params);
-
-      if (!findResult.success || !findResult.element) {
-        return this.createErrorResult('select', startTime, {
-          code: 'ELEMENT_NOT_FOUND',
-          message: 'Could not find select element',
-          details: {
-            lastError: findResult.error,
-            suggestions: [
-              'Verify the select element attributes',
-              'Check if the dropdown is dynamically loaded',
-              'Ensure page has finished loading'
-            ]
-          }
-        });
-      }
-
-      const foundElement = findResult.element;
-      console.log('[FormHandler] ✅ Select found');
-
-      // Select the option
-      const selectScript = `
-        (function() {
-          const select = document.elementFromPoint(
-            ${foundElement.boundingBox.x + foundElement.boundingBox.width / 2},
-            ${foundElement.boundingBox.y + foundElement.boundingBox.height / 2}
-          );
-          
-          if (!select || select.tagName !== 'SELECT') {
-            return { success: false, error: 'Element is not a select' };
-          }
-          
-          let optionSelected = false;
-          
-          // Try by value
-          ${params.value ? `
-            for (let i = 0; i < select.options.length; i++) {
-              if (select.options[i].value === ${JSON.stringify(params.value)}) {
-                select.selectedIndex = i;
-                optionSelected = true;
-                break;
-              }
-            }
-          ` : ''}
-          
-          // Try by label
-          ${params.label ? `
-            if (!optionSelected) {
-              for (let i = 0; i < select.options.length; i++) {
-                if (select.options[i].text === ${JSON.stringify(params.label)}) {
-                  select.selectedIndex = i;
-                  optionSelected = true;
-                  break;
-                }
-              }
-            }
-          ` : ''}
-          
-          // Try by index
-          ${params.index !== undefined ? `
-            if (!optionSelected && ${params.index} < select.options.length) {
-              select.selectedIndex = ${params.index};
-              optionSelected = true;
-            }
-          ` : ''}
-          
-          if (optionSelected) {
-            select.dispatchEvent(new Event('change', { bubbles: true }));
-            select.dispatchEvent(new Event('input', { bubbles: true }));
-            return { 
-              success: true, 
-              selectedValue: select.value, 
-              selectedText: select.options[select.selectedIndex].text 
-            };
-          }
-          
-          return { success: false, error: 'No matching option found' };
-        })();
-      `;
-
-      const result = await this.view.webContents.executeJavaScript(selectScript);
+      const result = await this.executeFindAndSelect(params);
 
       if (!result.success) {
         return this.createErrorResult('select', startTime, {
-          code: 'EXECUTION_ERROR',
+          code: result.error?.includes('not found') ? 'ELEMENT_NOT_FOUND' : 'EXECUTION_ERROR',
           message: result.error || 'Failed to select option',
           details: {
+            lastError: result.error,
             suggestions: [
+              'Verify the select element attributes',
+              'Check if the dropdown is dynamically loaded',
               'Verify the value/label/index matches an available option',
-              'Check if the dropdown has loaded all options'
+              'Ensure page has finished loading'
             ]
           }
         });
@@ -136,6 +66,173 @@ export class FormHandler extends BaseHandler {
   }
 
   /**
+   * UNIFIED: Find select element and select option in ONE script
+   */
+  private async executeFindAndSelect(params: SelectParams): Promise<{
+    success: boolean;
+    error?: string;
+    selectedValue?: string;
+    selectedText?: string;
+  }> {
+    try {
+      const script = `
+        (async function() {
+          // ============================================================================
+          // CONFIGURATION
+          // ============================================================================
+          const targetTag = ${JSON.stringify(params.tag || 'SELECT')};
+          const targetAttrs = ${JSON.stringify(params.attributes || {})};
+          const targetBoundingBox = ${JSON.stringify(params.boundingBox || null)};
+          const selectValue = ${JSON.stringify(params.value || null)};
+          const selectLabel = ${JSON.stringify(params.label || null)};
+          const selectIndex = ${JSON.stringify(params.index)};
+          
+          const DYNAMIC_ATTRIBUTES = [
+            'class', 'style', 'aria-expanded', 'aria-selected', 'aria-checked',
+            'aria-pressed', 'aria-hidden', 'aria-current', 'tabindex',
+            'data-state', 'data-active', 'data-selected', 'data-focus', 'data-hover',
+            'value', 'checked', 'selected'
+          ];
+          
+          console.log('[UnifiedSelect] 🔍 Finding select element');
+          
+          // ============================================================================
+          // STEP 1: FIND SELECT ELEMENT
+          // ============================================================================
+          let candidates = Array.from(document.getElementsByTagName(targetTag));
+          
+          // Filter by stable attributes
+          const stableAttrKeys = Object.keys(targetAttrs).filter(key => 
+            !DYNAMIC_ATTRIBUTES.includes(key) && targetAttrs[key]
+          );
+          
+          if (stableAttrKeys.length > 0) {
+            candidates = candidates.filter(el => {
+              return stableAttrKeys.some(key => el.getAttribute(key) === targetAttrs[key]);
+            });
+          }
+          
+          if (candidates.length === 0) {
+            return { success: false, error: 'No matching select elements found' };
+          }
+          
+          // Score candidates
+          const scored = candidates.map(el => {
+            let score = 0;
+            
+            if (el.tagName.toUpperCase() === 'SELECT') score += 30;
+            
+            for (const key of stableAttrKeys) {
+              if (el.getAttribute(key) === targetAttrs[key]) {
+                if (key === 'id') score += 20;
+                else if (key === 'name') score += 18;
+                else if (key.startsWith('data-')) score += 15;
+                else score += 10;
+              }
+            }
+            
+            if (targetBoundingBox) {
+              const rect = el.getBoundingClientRect();
+              const totalDiff = Math.abs(rect.x - targetBoundingBox.x) + Math.abs(rect.y - targetBoundingBox.y);
+              if (totalDiff < 50) score += 30;
+              else if (totalDiff < 100) score += 15;
+            }
+            
+            const rect = el.getBoundingClientRect();
+            const style = window.getComputedStyle(el);
+            if (rect.width > 0 && rect.height > 0 && style.display !== 'none') score += 10;
+            
+            return { element: el, score };
+          });
+          
+          scored.sort((a, b) => b.score - a.score);
+          const select = scored[0].element;
+          
+          if (select.tagName !== 'SELECT') {
+            return { success: false, error: 'Element is not a SELECT' };
+          }
+          
+          console.log('[UnifiedSelect] ✅ Select element found');
+          
+          // ============================================================================
+          // STEP 2: SCROLL INTO VIEW
+          // ============================================================================
+          select.scrollIntoView({ behavior: 'auto', block: 'center', inline: 'center' });
+          await new Promise(resolve => setTimeout(resolve, 300));
+          
+          // ============================================================================
+          // STEP 3: SELECT OPTION
+          // ============================================================================
+          let optionSelected = false;
+          
+          // Try by value
+          if (selectValue) {
+            for (let i = 0; i < select.options.length; i++) {
+              if (select.options[i].value === selectValue) {
+                select.selectedIndex = i;
+                optionSelected = true;
+                console.log('[UnifiedSelect] ✅ Selected by value:', selectValue);
+                break;
+              }
+            }
+          }
+          
+          // Try by label (text)
+          if (!optionSelected && selectLabel) {
+            for (let i = 0; i < select.options.length; i++) {
+              if (select.options[i].text === selectLabel || 
+                  select.options[i].text.includes(selectLabel)) {
+                select.selectedIndex = i;
+                optionSelected = true;
+                console.log('[UnifiedSelect] ✅ Selected by label:', selectLabel);
+                break;
+              }
+            }
+          }
+          
+          // Try by index
+          if (!optionSelected && selectIndex !== undefined && selectIndex !== null) {
+            if (selectIndex >= 0 && selectIndex < select.options.length) {
+              select.selectedIndex = selectIndex;
+              optionSelected = true;
+              console.log('[UnifiedSelect] ✅ Selected by index:', selectIndex);
+            }
+          }
+          
+          if (!optionSelected) {
+            return { success: false, error: 'No matching option found' };
+          }
+          
+          // ============================================================================
+          // STEP 4: DISPATCH EVENTS
+          // ============================================================================
+          select.dispatchEvent(new Event('change', { bubbles: true }));
+          select.dispatchEvent(new Event('input', { bubbles: true }));
+          
+          console.log('[UnifiedSelect] ✅ Select completed successfully');
+          
+          return {
+            success: true,
+            selectedValue: select.value,
+            selectedText: select.options[select.selectedIndex].text
+          };
+          
+        })();
+      `;
+
+      const result = await this.view.webContents.executeJavaScript(script);
+      return result;
+
+    } catch (error) {
+      console.error('[FormHandler] ❌ Unified select failed:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : String(error)
+      };
+    }
+  }
+
+  /**
    * Execute checkbox/radio operation
    */
   async executeCheckbox(params: CheckboxParams): Promise<ToolExecutionResult> {
@@ -143,57 +240,19 @@ export class FormHandler extends BaseHandler {
     console.log(`[FormHandler] ☑️  Checkbox: ${params.checked ? 'check' : 'uncheck'}`);
 
     try {
-      const findResult = await this.elementFinder.advancedFind(params);
+      const result = await this.executeFindAndToggleCheckbox(params);
 
-      if (!findResult.success || !findResult.element) {
+      if (!result.success) {
         return this.createErrorResult('checkbox', startTime, {
-          code: 'ELEMENT_NOT_FOUND',
-          message: 'Could not find checkbox element',
+          code: result.error?.includes('not found') ? 'ELEMENT_NOT_FOUND' : 'EXECUTION_ERROR',
+          message: result.error || 'Failed to toggle checkbox',
           details: {
-            lastError: findResult.error,
+            lastError: result.error,
             suggestions: [
               'Verify the checkbox element attributes',
               'Check if the checkbox is visible',
               'Ensure type="checkbox" or type="radio"'
             ]
-          }
-        });
-      }
-
-      const foundElement = findResult.element;
-      console.log('[FormHandler] ✅ Checkbox found');
-
-      // Set checkbox state
-      const checkboxScript = `
-        (function() {
-          const checkbox = document.elementFromPoint(
-            ${foundElement.boundingBox.x + foundElement.boundingBox.width / 2},
-            ${foundElement.boundingBox.y + foundElement.boundingBox.height / 2}
-          );
-          
-          if (!checkbox || (checkbox.type !== 'checkbox' && checkbox.type !== 'radio')) {
-            return { success: false, error: 'Element is not a checkbox or radio' };
-          }
-          
-          if (checkbox.checked !== ${params.checked}) {
-            checkbox.checked = ${params.checked};
-            checkbox.dispatchEvent(new Event('change', { bubbles: true }));
-            checkbox.dispatchEvent(new Event('click', { bubbles: true }));
-            checkbox.dispatchEvent(new Event('input', { bubbles: true }));
-          }
-          
-          return { success: true, checked: checkbox.checked };
-        })();
-      `;
-
-      const result = await this.view.webContents.executeJavaScript(checkboxScript);
-
-      if (!result.success) {
-        return this.createErrorResult('checkbox', startTime, {
-          code: 'EXECUTION_ERROR',
-          message: result.error || 'Failed to set checkbox state',
-          details: {
-            suggestions: ['Verify the element is a checkbox or radio button']
           }
         });
       }
@@ -220,6 +279,139 @@ export class FormHandler extends BaseHandler {
   }
 
   /**
+   * UNIFIED: Find checkbox and toggle state in ONE script
+   */
+  private async executeFindAndToggleCheckbox(params: CheckboxParams): Promise<{
+    success: boolean;
+    error?: string;
+    checked?: boolean;
+  }> {
+    try {
+      const script = `
+        (async function() {
+          // ============================================================================
+          // CONFIGURATION
+          // ============================================================================
+          const targetTag = ${JSON.stringify(params.tag || 'INPUT')};
+          const targetAttrs = ${JSON.stringify(params.attributes || {})};
+          const targetBoundingBox = ${JSON.stringify(params.boundingBox || null)};
+          const targetChecked = ${JSON.stringify(params.checked)};
+          
+          const DYNAMIC_ATTRIBUTES = [
+            'class', 'style', 'aria-expanded', 'aria-selected', 'aria-checked',
+            'aria-pressed', 'aria-hidden', 'aria-current', 'tabindex',
+            'data-state', 'data-active', 'data-selected', 'data-focus', 'data-hover',
+            'value', 'checked', 'selected'
+          ];
+          
+          console.log('[UnifiedCheckbox] 🔍 Finding checkbox element');
+          
+          // ============================================================================
+          // STEP 1: FIND CHECKBOX ELEMENT
+          // ============================================================================
+          let candidates = Array.from(document.querySelectorAll('input[type="checkbox"], input[type="radio"]'));
+          
+          // Filter by tag if specified
+          if (targetTag && targetTag.toUpperCase() !== 'INPUT') {
+            candidates = candidates.filter(el => el.tagName.toUpperCase() === targetTag.toUpperCase());
+          }
+          
+          // Filter by stable attributes
+          const stableAttrKeys = Object.keys(targetAttrs).filter(key => 
+            !DYNAMIC_ATTRIBUTES.includes(key) && targetAttrs[key]
+          );
+          
+          if (stableAttrKeys.length > 0) {
+            candidates = candidates.filter(el => {
+              return stableAttrKeys.some(key => el.getAttribute(key) === targetAttrs[key]);
+            });
+          }
+          
+          if (candidates.length === 0) {
+            return { success: false, error: 'No matching checkbox/radio elements found' };
+          }
+          
+          // Score candidates
+          const scored = candidates.map(el => {
+            let score = 0;
+            
+            if (el.type === 'checkbox' || el.type === 'radio') score += 30;
+            
+            for (const key of stableAttrKeys) {
+              if (el.getAttribute(key) === targetAttrs[key]) {
+                if (key === 'id') score += 20;
+                else if (key === 'name') score += 18;
+                else if (key.startsWith('data-')) score += 15;
+                else score += 10;
+              }
+            }
+            
+            if (targetBoundingBox) {
+              const rect = el.getBoundingClientRect();
+              const totalDiff = Math.abs(rect.x - targetBoundingBox.x) + Math.abs(rect.y - targetBoundingBox.y);
+              if (totalDiff < 50) score += 30;
+              else if (totalDiff < 100) score += 15;
+            }
+            
+            const rect = el.getBoundingClientRect();
+            const style = window.getComputedStyle(el);
+            if (rect.width > 0 && rect.height > 0 && style.display !== 'none') score += 10;
+            
+            return { element: el, score };
+          });
+          
+          scored.sort((a, b) => b.score - a.score);
+          const checkbox = scored[0].element;
+          
+          if (checkbox.type !== 'checkbox' && checkbox.type !== 'radio') {
+            return { success: false, error: 'Element is not a checkbox or radio' };
+          }
+          
+          console.log('[UnifiedCheckbox] ✅ Checkbox element found');
+          
+          // ============================================================================
+          // STEP 2: SCROLL INTO VIEW
+          // ============================================================================
+          checkbox.scrollIntoView({ behavior: 'auto', block: 'center', inline: 'center' });
+          await new Promise(resolve => setTimeout(resolve, 300));
+          
+          // ============================================================================
+          // STEP 3: TOGGLE CHECKBOX STATE
+          // ============================================================================
+          if (checkbox.checked !== targetChecked) {
+            checkbox.checked = targetChecked;
+            
+            // Dispatch events
+            checkbox.dispatchEvent(new Event('change', { bubbles: true }));
+            checkbox.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+            checkbox.dispatchEvent(new Event('input', { bubbles: true }));
+            
+            console.log('[UnifiedCheckbox] ✅ Checkbox toggled to:', targetChecked);
+          } else {
+            console.log('[UnifiedCheckbox] ℹ️ Checkbox already in desired state:', targetChecked);
+          }
+          
+          return {
+            success: true,
+            checked: checkbox.checked
+          };
+          
+        })();
+      `;
+
+      const result = await this.view.webContents.executeJavaScript(script);
+      return result;
+
+    } catch (error) {
+      console.error('[FormHandler] ❌ Unified checkbox failed:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : String(error)
+      };
+    }
+  }
+
+  /**
    * Execute form submit operation
    */
   async executeSubmit(params: SubmitParams, clickHandler: any): Promise<ToolExecutionResult> {
@@ -227,6 +419,7 @@ export class FormHandler extends BaseHandler {
     console.log('[FormHandler] 📤 Submit form');
 
     try {
+      // If submitButton is specified, use ClickHandler (already unified)
       if (params.submitButton) {
         return await clickHandler.execute({
           ...params.submitButton,
@@ -234,60 +427,15 @@ export class FormHandler extends BaseHandler {
         });
       }
 
-      let formElement: any = null;
-
-      if (params.form) {
-        const findResult = await this.elementFinder.advancedFind({
-          ...params.form,
-          tag: params.form.tag || 'FORM'
-        });
-
-        if (findResult.success && findResult.element) {
-          formElement = findResult.element;
-        }
-      }
-
-      const submitScript = formElement ? `
-        (function() {
-          const form = document.elementFromPoint(
-            ${formElement.boundingBox.x + formElement.boundingBox.width / 2},
-            ${formElement.boundingBox.y + formElement.boundingBox.height / 2}
-          );
-          
-          if (!form || form.tagName !== 'FORM') {
-            return { success: false, error: 'Element is not a form' };
-          }
-          
-          if (typeof form.requestSubmit === 'function') {
-            form.requestSubmit();
-          } else {
-            form.submit();
-          }
-          
-          return { success: true };
-        })();
-      ` : `
-        (function() {
-          const form = document.querySelector('form');
-          if (!form) return { success: false, error: 'No form found' };
-          
-          if (typeof form.requestSubmit === 'function') {
-            form.requestSubmit();
-          } else {
-            form.submit();
-          }
-          
-          return { success: true };
-        })();
-      `;
-
-      const result = await this.view.webContents.executeJavaScript(submitScript);
+      // Otherwise, find and submit form
+      const result = await this.executeFindAndSubmitForm(params);
 
       if (!result.success) {
         return this.createErrorResult('submit', startTime, {
           code: 'ELEMENT_NOT_FOUND',
           message: result.error || 'Form not found',
           details: {
+            lastError: result.error,
             suggestions: [
               'Verify a form element exists on the page',
               'Try specifying form parameters',
@@ -314,6 +462,98 @@ export class FormHandler extends BaseHandler {
           lastError: error instanceof Error ? error.message : String(error)
         }
       });
+    }
+  }
+
+  /**
+   * UNIFIED: Find form and submit in ONE script
+   */
+  private async executeFindAndSubmitForm(params: SubmitParams): Promise<{
+    success: boolean;
+    error?: string;
+  }> {
+    try {
+      const script = `
+        (async function() {
+          let form = null;
+          
+          ${params.form ? `
+            // Find form by attributes
+            const targetTag = ${JSON.stringify(params.form.tag || 'FORM')};
+            const targetAttrs = ${JSON.stringify(params.form.attributes || {})};
+            const targetBoundingBox = ${JSON.stringify(params.form.boundingBox || null)};
+            
+            const DYNAMIC_ATTRIBUTES = [
+              'class', 'style', 'aria-expanded', 'aria-selected', 'aria-checked',
+              'aria-pressed', 'aria-hidden', 'aria-current', 'tabindex',
+              'data-state', 'data-active', 'data-selected', 'data-focus', 'data-hover',
+              'value', 'checked', 'selected'
+            ];
+            
+            let candidates = Array.from(document.getElementsByTagName(targetTag));
+            
+            const stableAttrKeys = Object.keys(targetAttrs).filter(key => 
+              !DYNAMIC_ATTRIBUTES.includes(key) && targetAttrs[key]
+            );
+            
+            if (stableAttrKeys.length > 0) {
+              candidates = candidates.filter(el => {
+                return stableAttrKeys.some(key => el.getAttribute(key) === targetAttrs[key]);
+              });
+            }
+            
+            if (candidates.length > 0) {
+              // Score and select best
+              const scored = candidates.map(el => {
+                let score = 0;
+                if (el.tagName === 'FORM') score += 30;
+                for (const key of stableAttrKeys) {
+                  if (el.getAttribute(key) === targetAttrs[key]) {
+                    if (key === 'id') score += 20;
+                    else if (key === 'name') score += 18;
+                    else score += 10;
+                  }
+                }
+                return { element: el, score };
+              });
+              scored.sort((a, b) => b.score - a.score);
+              form = scored[0].element;
+            }
+          ` : `
+            // Find first form on page
+            form = document.querySelector('form');
+          `}
+          
+          if (!form) {
+            return { success: false, error: 'No form found' };
+          }
+          
+          if (form.tagName !== 'FORM') {
+            return { success: false, error: 'Element is not a FORM' };
+          }
+          
+          // Submit form
+          if (typeof form.requestSubmit === 'function') {
+            form.requestSubmit();
+          } else {
+            form.submit();
+          }
+          
+          console.log('[UnifiedSubmit] ✅ Form submitted');
+          return { success: true };
+          
+        })();
+      `;
+
+      const result = await this.view.webContents.executeJavaScript(script);
+      return result;
+
+    } catch (error) {
+      console.error('[FormHandler] ❌ Unified submit failed:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : String(error)
+      };
     }
   }
 }
