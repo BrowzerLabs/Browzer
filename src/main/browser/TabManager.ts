@@ -112,9 +112,6 @@ export class TabManager {
     tab.view.webContents.close();
     this.tabs.delete(tabId);
 
-    // Check if this is the last tab BEFORE switching/closing
-    const isLastTab = this.tabs.size === 0;
-
     // If this was the active tab, switch to another
     if (this.activeTabId === tabId) {
       const remainingTabs = Array.from(this.tabs.keys());
@@ -125,17 +122,7 @@ export class TabManager {
       }
     }
 
-    // Notify about tab changes BEFORE closing window
-    if (!isLastTab) {
-      this.eventHandlers.onTabsChanged();
-    }
-
-    // Close window when last tab is closed (standard browser behavior)
-    if (isLastTab) {
-      console.log('[TabManager] Last tab closed, closing window...');
-      this.baseWindow.close();
-    }
-
+    this.eventHandlers.onTabsChanged();
     return true;
   }
 
@@ -271,14 +258,8 @@ export class TabManager {
   public destroy(): void {
     this.tabs.forEach(tab => {
       this.debuggerManager.cleanupDebugger(tab.view, tab.id);
-      // Only remove child view if window is not destroyed
-      if (!this.baseWindow.isDestroyed()) {
-        this.baseWindow.contentView.removeChildView(tab.view);
-      }
-      // Close webContents if not already destroyed
-      if (!tab.view.webContents.isDestroyed()) {
-        tab.view.webContents.close();
-      }
+      this.baseWindow.contentView.removeChildView(tab.view);
+      tab.view.webContents.close();
     });
     this.tabs.clear();
   }
