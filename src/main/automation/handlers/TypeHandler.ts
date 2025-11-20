@@ -1,99 +1,90 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { BaseHandler } from '../core/BaseHandler';
-import { ElementFinder } from '../core/ElementFinder';
 import type { HandlerContext } from '../core/types';
-import type { ToolExecutionResult, FoundElement, TypeParams, ElementFinderParams } from '@/shared/types';
+import type { ToolExecutionResult, TypeParams } from '@/shared/types';
 
 /**
- * SIMPLIFIED TYPE HANDLER
+ * UNIFIED TYPE HANDLER - Single Script Approach
  * 
- * Strategy:
- * 1. Use ElementFinder to locate the input element
- * 2. Focus the element
- * 3. Clear existing content if needed
- * 4. Type character by character using CDP Input.dispatchKeyEvent (native-like)
- * 5. Press Enter if requested
+ * This handler executes EVERYTHING in a unified approach:
+ * 1. Find all candidate input elements (INPUT, TEXTAREA, contenteditable, ARIA textbox)
+ * 2. Score each candidate based on attributes, text, position
+ * 3. Select best match
+ * 4. Focus + Scroll + Highlight
+ * 5. Clear existing content (if requested)
+ * 6. Type text using CDP (native keyboard events)
+ * 7. Press Enter (if requested)
+ * 
+ * Benefits:
+ * - No DOM serialization issues for finding
+ * - Atomic find operation
+ * - Native-like typing via CDP
+ * - Handles all input types (input, textarea, contenteditable, ARIA textbox)
+ * - Better reliability
  */
-
 export class TypeHandler extends BaseHandler {
-  private elementFinder: ElementFinder;
-
   constructor(context: HandlerContext) {
     super(context);
-    this.elementFinder = new ElementFinder(context);
   }
 
   /**
-   * Execute type action
+   * Execute type action using unified approach
    */
   async execute(params: TypeParams): Promise<ToolExecutionResult> {
     const startTime = Date.now();
+    
     try {
+      console.log('[TypeHandler] ⌨️  Starting unified type execution');
 
-      const findParams: ElementFinderParams = {
-        tag: params.tag,
-        attributes: params.attributes,
-        boundingBox: params.boundingBox,
-        elementIndex: params.elementIndex
-      };
-
-      const findResult = await this.elementFinder.advancedFind(findParams);
-
-      if (!findResult.success || !findResult.element) {
+      // Step 1: Find and prepare input element
+      const findResult = await this.executeFindAndPrepare(params);
+      
+      if (!findResult.success) {
         return this.createErrorResult('type', startTime, {
           code: 'ELEMENT_NOT_FOUND',
-          message: 'Could not find input element',
+          message: findResult.error || 'Could not find input element',
           details: {
             lastError: findResult.error,
             suggestions: [
               'Verify element attributes match the current page',
-              'Check if input is inside iframe or shadow DOM',
-              'Ensure page has finished loading'
+              'Check if input is dynamically loaded',
+              'Ensure input is not inside iframe or shadow DOM',
+              'Try adding more specific attributes (id, name, placeholder)'
             ]
           }
         });
       }
 
-      const foundElement = findResult.element;
-      console.log(`[TypeHandler] ✅ Input found`);
+      const { centerX, centerY } = findResult;
+      console.log(`[TypeHandler] ✅ Input found and prepared at (${centerX}, ${centerY})`);
 
-      // Scroll into view
-      await this.scrollIntoView(foundElement.boundingBox);
-      await this.sleep(200);
+      // Step 2: Focus the element using CDP click
+      await this.focusElement(centerX!, centerY!);
+      await this.sleep(150);
 
-      // Focus the element
-      const focusSuccess = await this.focusElement(foundElement.boundingBox);
-      if (!focusSuccess) {
-        return this.createErrorResult('type', startTime, {
-          code: 'EXECUTION_ERROR',
-          message: 'Failed to focus input element',
-          details: {
-            suggestions: ['Element may not be interactable', 'Try clicking the element first']
-          }
-        });
-      }
-
-      await this.sleep(100);
-
-      // Clear existing content if requested
+      // Step 3: Clear existing content if requested
       if (params.clearFirst !== false) { // Default true
         await this.clearInput();
         await this.sleep(100);
       }
 
-      // Type the text
+      // Step 4: Type the text using CDP
       const typeSuccess = await this.typeText(params.text);
       if (!typeSuccess) {
         return this.createErrorResult('type', startTime, {
           code: 'EXECUTION_ERROR',
           message: 'Failed to type text',
           details: {
-            suggestions: ['Element may have lost focus', 'Input may be disabled or readonly']
+            suggestions: [
+              'Element may have lost focus',
+              'Input may be disabled or readonly',
+              'Try clicking the element first'
+            ]
           }
         });
       }
 
-      // Press Enter if requested
+      // Step 5: Press Enter if requested
       if (params.pressEnter) {
         await this.sleep(100);
         await this.pressKey('Enter');
@@ -118,28 +109,283 @@ export class TypeHandler extends BaseHandler {
         code: 'EXECUTION_ERROR',
         message: `Type execution failed: ${error instanceof Error ? error.message : String(error)}`,
         details: {
-          lastError: error instanceof Error ? error.message : String(error),
-          suggestions: [
-            'Check if input accepts the text format',
-            'Verify element is not disabled or readonly'
-          ]
+          lastError: error instanceof Error ? error.message : String(error)
         }
       });
     }
   }
 
-  private async focusElement(boundingBox: { x: number; y: number; width: number; height: number }): Promise<boolean> {
+  /**
+   * UNIFIED SCRIPT: Find + Score + Prepare input element
+   * 
+   * Returns the center coordinates of the best matching input element
+   */
+  private async executeFindAndPrepare(params: TypeParams): Promise<{
+    success: boolean;
+    error?: string;
+    centerX?: number;
+    centerY?: number;
+  }> {
     try {
-      const centerX = Math.round(boundingBox.x + boundingBox.width / 2);
-      const centerY = Math.round(boundingBox.y + boundingBox.height / 2);
+      console.log('[TypeHandler] 🔍 Executing unified find-and-prepare script');
 
+      const script = `
+        (async function() {
+          // ============================================================================
+          // CONFIGURATION
+          // ============================================================================
+          const targetTag = ${JSON.stringify(params.tag || 'INPUT')};
+          const targetAttrs = ${JSON.stringify(params.attributes || {})};
+          const targetBoundingBox = ${JSON.stringify(params.boundingBox || null)};
+          const targetIndex = ${JSON.stringify(params.elementIndex)};
+          
+          const DYNAMIC_ATTRIBUTES = [
+            'class', 'style', 'aria-expanded', 'aria-selected', 'aria-checked',
+            'aria-pressed', 'aria-hidden', 'aria-current', 'tabindex',
+            'data-state', 'data-active', 'data-selected', 'data-focus', 'data-hover',
+            'value', 'checked', 'selected'
+          ];
+          
+          console.log('[UnifiedType] 🔍 Finding input elements with:', {
+            tag: targetTag,
+            hasAttrs: Object.keys(targetAttrs).length > 0
+          });
+          
+          // ============================================================================
+          // STEP 1: FIND ALL CANDIDATE INPUT ELEMENTS
+          // ============================================================================
+          let candidates = [];
+          
+          // Strategy 1: Find by specific tag
+          if (targetTag) {
+            candidates = Array.from(document.getElementsByTagName(targetTag));
+            console.log('[UnifiedType] Found', candidates.length, 'elements with tag', targetTag);
+          }
+          
+          // Strategy 2: If no specific tag or no results, find ALL input-like elements
+          if (candidates.length === 0) {
+            const inputSelectors = [
+              'input[type="text"]',
+              'input[type="email"]',
+              'input[type="password"]',
+              'input[type="search"]',
+              'input[type="tel"]',
+              'input[type="url"]',
+              'input[type="number"]',
+              'input:not([type])',  // Inputs without type default to text
+              'textarea',
+              '[contenteditable="true"]',
+              '[role="textbox"]',
+              '[role="searchbox"]',
+              '[role="combobox"]'
+            ];
+            
+            candidates = Array.from(document.querySelectorAll(inputSelectors.join(', ')));
+            console.log('[UnifiedType] Broadened search, found', candidates.length, 'input elements');
+          }
+          
+          // Filter out disabled and readonly elements
+          candidates = candidates.filter(el => {
+            const isDisabled = el.disabled || el.getAttribute('aria-disabled') === 'true';
+            const isReadonly = el.readOnly || el.getAttribute('aria-readonly') === 'true';
+            return !isDisabled && !isReadonly;
+          });
+          console.log('[UnifiedType] After filtering disabled/readonly:', candidates.length);
+          
+          // Filter by stable attributes
+          const stableAttrKeys = Object.keys(targetAttrs).filter(key => 
+            !DYNAMIC_ATTRIBUTES.includes(key) && targetAttrs[key]
+          );
+          
+          if (stableAttrKeys.length > 0) {
+            candidates = candidates.filter(el => {
+              return stableAttrKeys.some(key => el.getAttribute(key) === targetAttrs[key]);
+            });
+            console.log('[UnifiedType] After attribute filter:', candidates.length);
+          }
+          
+          if (candidates.length === 0) {
+            return { success: false, error: 'No matching input elements found' };
+          }
+          
+          // ============================================================================
+          // STEP 2: SCORE ALL CANDIDATES
+          // ============================================================================
+          const scored = candidates.map(el => {
+            let score = 0;
+            const matchedBy = [];
+            
+            // Tag match (20 points)
+            if (targetTag && el.tagName.toUpperCase() === targetTag.toUpperCase()) {
+              score += 20;
+              matchedBy.push('tag');
+            }
+            
+            // Input type bonus (15 points for text-like inputs)
+            const inputType = el.type?.toLowerCase();
+            const textTypes = ['text', 'email', 'password', 'search', 'tel', 'url', 'number'];
+            if (textTypes.includes(inputType) || el.tagName === 'TEXTAREA') {
+              score += 15;
+              matchedBy.push('inputType');
+            }
+            
+            // Stable attribute matches (up to 60 points)
+            for (const key of stableAttrKeys) {
+              const elValue = el.getAttribute(key);
+              if (elValue === targetAttrs[key]) {
+                if (key === 'id') score += 20;
+                else if (key === 'name') score += 18;
+                else if (key === 'placeholder') score += 15;
+                else if (key.startsWith('data-')) score += 15;
+                else if (key.startsWith('aria-')) score += 12;
+                else if (key === 'type') score += 10;
+                else score += 5;
+                matchedBy.push('attr:' + key);
+              }
+            }
+            
+            // Position match (up to 40 points)
+            if (targetBoundingBox) {
+              const rect = el.getBoundingClientRect();
+              const xDiff = Math.abs(rect.x - targetBoundingBox.x);
+              const yDiff = Math.abs(rect.y - targetBoundingBox.y);
+              const totalDiff = xDiff + yDiff;
+              
+              if (totalDiff < 5) score += 40;
+              else if (totalDiff < 20) score += 30;
+              else if (totalDiff < 50) score += 20;
+              else if (totalDiff < 100) score += 10;
+              else if (totalDiff < 200) score += 5;
+              
+              if (totalDiff < 50) matchedBy.push('position');
+            }
+            
+            // Visibility bonus (10 points)
+            const rect = el.getBoundingClientRect();
+            const style = window.getComputedStyle(el);
+            const isVisible = rect.width > 0 && rect.height > 0 && 
+                             style.display !== 'none' && 
+                             style.visibility !== 'hidden' &&
+                             style.opacity !== '0';
+            if (isVisible) {
+              score += 10;
+              matchedBy.push('visible');
+            }
+            
+            // Empty value bonus (5 points) - prefer empty inputs for new typing
+            if (!el.value || el.value.trim() === '') {
+              score += 5;
+              matchedBy.push('empty');
+            }
+            
+            // Focus bonus (10 points) - if already focused, likely the right one
+            if (document.activeElement === el) {
+              score += 10;
+              matchedBy.push('focused');
+            }
+            
+            return { element: el, score, matchedBy };
+          });
+          
+          // Sort by score
+          scored.sort((a, b) => b.score - a.score);
+          
+          // Apply element index disambiguation
+          if (targetIndex !== undefined && scored.length > 1) {
+            const topScore = scored[0].score;
+            const closeMatches = scored.filter(s => Math.abs(s.score - topScore) < 15);
+            
+            if (closeMatches.length > 1) {
+              for (const candidate of closeMatches) {
+                const elIndex = candidate.element.parentElement 
+                  ? Array.from(candidate.element.parentElement.children).indexOf(candidate.element)
+                  : 0;
+                if (elIndex === targetIndex) {
+                  candidate.score += 50;
+                  candidate.matchedBy.push('index');
+                  break;
+                }
+              }
+              scored.sort((a, b) => b.score - a.score);
+            }
+          }
+          
+          const best = scored[0];
+          console.log('[UnifiedType] 🏆 Best match: score=' + best.score + ', matched by: ' + best.matchedBy.join(', '));
+          
+          if (scored.length > 1) {
+            console.log('[UnifiedType] 🥈 Second best: score=' + scored[1].score);
+            if (Math.abs(best.score - scored[1].score) < 10) {
+              console.warn('[UnifiedType] ⚠️ AMBIGUOUS MATCH! Scores are very close.');
+            }
+          }
+          
+          // ============================================================================
+          // STEP 3: PREPARE ELEMENT (Focus + Scroll + Highlight)
+          // ============================================================================
+          const element = best.element;
+          
+          // Focus
+          if (typeof element.focus === 'function') {
+            element.focus();
+            console.log('[UnifiedType] ✅ Element focused');
+          }
+          
+          // Scroll into view
+          element.scrollIntoView({ behavior: 'auto', block: 'center', inline: 'center' });
+          console.log('[UnifiedType] 📍 Scrolling element into view...');
+          await new Promise(resolve => setTimeout(resolve, 500));
+          
+          // Highlight
+          const originalOutline = element.style.outline;
+          const originalOutlineOffset = element.style.outlineOffset;
+          element.style.outline = '2px solid #0066ff';  // Blue for input
+          element.style.outlineOffset = '2px';
+          console.log('[UnifiedType] ✅ Element highlighted');
+          await new Promise(resolve => setTimeout(resolve, 200));
+          
+          // Get center coordinates for CDP click
+          const rect = element.getBoundingClientRect();
+          const centerX = rect.left + rect.width / 2;
+          const centerY = rect.top + rect.height / 2;
+          
+          // Restore outline after a moment
+          setTimeout(() => {
+            element.style.outline = originalOutline;
+            element.style.outlineOffset = originalOutlineOffset;
+          }, 1000);
+          
+          console.log('[UnifiedType] ✅ Input prepared successfully');
+          return { success: true, centerX, centerY };
+          
+        })();
+      `;
+
+      const result = await this.view.webContents.executeJavaScript(script);
+      return result;
+
+    } catch (error) {
+      console.error('[TypeHandler] ❌ Unified find-and-prepare failed:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : String(error)
+      };
+    }
+  }
+
+  /**
+   * Focus element using CDP click
+   */
+  private async focusElement(centerX: number, centerY: number): Promise<void> {
+    try {
       const cdp = this.view.webContents.debugger;
       if (!cdp.isAttached()) cdp.attach('1.3');
 
+      // Click to focus
       await cdp.sendCommand('Input.dispatchMouseEvent', {
         type: 'mousePressed',
-        x: centerX,
-        y: centerY,
+        x: Math.round(centerX),
+        y: Math.round(centerY),
         button: 'left',
         clickCount: 1
       });
@@ -148,30 +394,33 @@ export class TypeHandler extends BaseHandler {
 
       await cdp.sendCommand('Input.dispatchMouseEvent', {
         type: 'mouseReleased',
-        x: centerX,
-        y: centerY,
+        x: Math.round(centerX),
+        y: Math.round(centerY),
         button: 'left',
         clickCount: 1
       });
 
-      return true;
+      console.log('[TypeHandler] ✅ Element focused via CDP click');
     } catch (error) {
       console.error('[TypeHandler] ❌ Focus failed:', error);
-      return false;
     }
   }
 
+  /**
+   * Clear input using Ctrl+A (Cmd+A on Mac) + Backspace
+   */
   private async clearInput(): Promise<void> {
     try {
       const cdp = this.view.webContents.debugger;
       const modifier = process.platform === 'darwin' ? 'Meta' : 'Control';
+      const modifierCode = modifier === 'Meta' ? 8 : 2;
       
-      // Select all
+      // Select all (Ctrl/Cmd + A)
       await cdp.sendCommand('Input.dispatchKeyEvent', {
         type: 'keyDown',
         key: 'a',
         code: 'KeyA',
-        modifiers: modifier === 'Meta' ? 8 : 2
+        modifiers: modifierCode
       });
 
       await this.sleep(50);
@@ -180,12 +429,12 @@ export class TypeHandler extends BaseHandler {
         type: 'keyUp',
         key: 'a',
         code: 'KeyA',
-        modifiers: modifier === 'Meta' ? 8 : 2
+        modifiers: modifierCode
       });
 
       await this.sleep(50);
 
-      // Delete
+      // Delete (Backspace)
       await cdp.sendCommand('Input.dispatchKeyEvent', {
         type: 'keyDown',
         key: 'Backspace',
@@ -200,31 +449,40 @@ export class TypeHandler extends BaseHandler {
         code: 'Backspace'
       });
 
+      console.log('[TypeHandler] ✅ Input cleared');
     } catch (error) {
       console.warn('[TypeHandler] ⚠️ Clear failed:', error);
     }
   }
 
+  /**
+   * Type text character by character using CDP
+   */
   private async typeText(text: string): Promise<boolean> {
     try {
       const cdp = this.view.webContents.debugger;
 
+      console.log(`[TypeHandler] ⌨️  Typing: "${text}"`);
+
       for (const char of text) {
+        // Key down
         await cdp.sendCommand('Input.dispatchKeyEvent', {
           type: 'keyDown',
           text: char
         });
 
-        await this.sleep(20);
+        await this.sleep(30); // Slightly slower for more natural typing
 
+        // Key up
         await cdp.sendCommand('Input.dispatchKeyEvent', {
           type: 'keyUp',
           text: char
         });
 
-        await this.sleep(20);
+        await this.sleep(30);
       }
 
+      console.log('[TypeHandler] ✅ Text typed successfully');
       return true;
     } catch (error) {
       console.error('[TypeHandler] ❌ Type text failed:', error);
@@ -232,6 +490,9 @@ export class TypeHandler extends BaseHandler {
     }
   }
 
+  /**
+   * Press a special key (Enter, Tab, etc.)
+   */
   private async pressKey(key: string): Promise<void> {
     try {
       const cdp = this.view.webContents.debugger;
@@ -253,46 +514,5 @@ export class TypeHandler extends BaseHandler {
     } catch (error) {
       console.warn(`[TypeHandler] ⚠️ Press ${key} failed:`, error);
     }
-  }
-
-  private async scrollIntoView(boundingBox: { x: number; y: number; width: number; height: number }): Promise<void> {
-    try {
-      const centerX = boundingBox.x + boundingBox.width / 2;
-      const centerY = boundingBox.y + boundingBox.height / 2;
-
-      const script = `
-        (function() {
-          const element = document.elementFromPoint(${centerX}, ${centerY});
-          if (element) {
-            element.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
-            return true;
-          }
-          return false;
-        })();
-      `;
-
-      await this.view.webContents.executeJavaScript(script);
-    } catch (error) {
-      console.warn('[TypeHandler] ⚠️ Scroll failed:', error);
-    }
-  }
-
-  private generateSelector(element: any): string {
-    const attrs = element.attributes || {};
-    
-    if (attrs.id && !attrs.id.match(/^(:r[0-9a-z]+:|mui-|mat-)/)) {
-      return `#${attrs.id}`;
-    }
-    if (attrs['data-testid']) {
-      return `[data-testid="${attrs['data-testid']}"]`;
-    }
-    if (attrs.name) {
-      return `[name="${attrs.name}"]`;
-    }
-    if (attrs.placeholder) {
-      return `[placeholder="${attrs.placeholder}"]`;
-    }
-    
-    return element.tagName?.toLowerCase() || 'unknown';
   }
 }

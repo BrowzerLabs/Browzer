@@ -43,7 +43,7 @@ export class ElementFinder extends BaseHandler {
     console.log('[ElementFinder] 🔍 Searching with params:', {
       tag: params.tag,
       text: params.text?.substring(0, 50),
-      attributeCount: Object.keys(params.attributes || {}).length,
+      attributes: params.attributes,
       hasPosition: !!params.boundingBox,
       elementIndex: params.elementIndex
     });
@@ -85,6 +85,9 @@ export class ElementFinder extends BaseHandler {
       }
     }
 
+    // NOTE: Cannot access DOM element here - we're in Node.js context!
+    // DOM elements get serialized to {} when returned from executeJavaScript()
+    // The actual clicking must happen in browser context (ClickHandler)
     return {
       success: true,
       element: best.element,
@@ -136,8 +139,6 @@ export class ElementFinder extends BaseHandler {
           }
           
           // Step 3: Filter by stable attributes if provided
-          // CRITICAL: Only filter if we have at least ONE stable attribute
-          // If all attributes are dynamic (class, style, etc.), skip filtering
           if (Object.keys(targetAttrs).length > 0) {
             // First, check if we have ANY stable attributes
             const hasAnyStableAttr = Object.keys(targetAttrs).some(key => 
@@ -169,10 +170,9 @@ export class ElementFinder extends BaseHandler {
             }
           }
           
-          // Step 4: Map to structured data
-          // NOTE: We deliberately DO NOT filter by position here
-          // Reason: Elements outside viewport are still valid targets
-          // Position is used for SCORING, not filtering
+          // CRITICAL: Do NOT include 'element: el' in the return!
+          // DOM elements cannot be serialized and will become empty objects {}
+          // We return element DATA only, then re-find the element in ClickHandler
           return elements.map(el => {
             const rect = el.getBoundingClientRect();
             const style = window.getComputedStyle(el);
