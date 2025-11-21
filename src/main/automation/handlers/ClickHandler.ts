@@ -248,6 +248,45 @@ export class ClickHandler extends BaseHandler {
               matchedBy.push('visible');
             }
             
+            // Modal/Dialog priority bonus (20 points)
+            let current = el;
+            let depth = 0;
+            let isInModal = false;
+            
+            while (current && depth < 10) {
+              const role = current.getAttribute('role');
+              const ariaModal = current.getAttribute('aria-modal');
+              const className = current.className?.toString().toLowerCase() || '';
+              
+              // Check for modal/dialog indicators
+              if (role === 'dialog' || 
+                  role === 'alertdialog' || 
+                  ariaModal === 'true' ||
+                  className.includes('modal') ||
+                  className.includes('dialog') ||
+                  className.includes('overlay') ||
+                  className.includes('popup')) {
+                
+                // Verify it's actually visible and on top
+                const modalStyle = window.getComputedStyle(current);
+                const zIndex = parseInt(modalStyle.zIndex) || 0;
+                
+                if (zIndex > 50) {
+                  console.log('[Click] Found modal with zIndex:', zIndex);
+                  isInModal = true;
+                  break;
+                }
+              }
+              
+              current = current.parentElement;
+              depth++;
+            }
+            
+            if (isInModal) {
+              score += 20;
+              matchedBy.push('in-modal');
+            }
+            
             return { element: el, score, matchedBy };
           });
           
