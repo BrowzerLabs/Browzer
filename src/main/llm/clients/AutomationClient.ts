@@ -1,6 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { api } from '@/main/api';
-import { RecordingSession, SystemPromptType } from '@/shared/types';
+import { SystemPromptType } from '@/shared/types';
+import { AutomationStatus } from '..';
 
 export class AutomationClient {
   private sessionId: string | null = null;
@@ -82,6 +83,39 @@ export class AutomationClient {
 
     } catch (error) {
       console.error('❌ [AutomationClient] Failed to continue conversation:', error);
+      throw error;
+    }
+  }
+
+  public async updateSessionStatus(status: AutomationStatus): Promise<void> {
+    if (!this.sessionId) {
+      console.warn('[AutomationClient] No active automation session to update');
+      return;
+    }
+
+    try {
+      console.log(`[AutomationClient] 🔄 Updating session ${this.sessionId} status to ${status}`);
+
+      const response = await api.post<{ success: boolean; session_id: string; status: string }>(
+        '/automation/session/update',
+        {
+          status: status
+        },
+        {
+          headers: {
+            'session-id': this.sessionId
+          }
+        }
+      );
+
+      if (!response.success || !response.data?.success) {
+        throw new Error(response.error || 'Failed to update session status');
+      }
+
+      console.log(`✅ [AutomationClient] Session ${this.sessionId} status updated to ${status}`);
+
+    } catch (error) {
+      console.error('❌ [AutomationClient] Failed to update session status:', error);
       throw error;
     }
   }

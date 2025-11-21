@@ -1,4 +1,4 @@
-import { AutomationState, ExecutedStep, CompletedPlan } from './types';
+import { AutomationState, ExecutedStep, CompletedPlan, AutomationStatus } from './types';
 import { ParsedAutomationPlan } from '../parsers/AutomationPlanParser';
 import { RecordingSession } from '@/shared/types/recording';
 import { SystemPromptBuilder } from '../builders/SystemPromptBuilder';
@@ -73,7 +73,7 @@ export class AutomationStateManager {
       isInRecovery: false,
       recoveryAttempts: 0,
       maxRecoveryAttempts,
-      isComplete: false,
+      status: AutomationStatus.RUNNING,
       finalSuccess: false
     };
   }
@@ -110,7 +110,7 @@ export class AutomationStateManager {
       isInRecovery: session.metadata.isInRecovery,
       recoveryAttempts: session.metadata.recoveryAttempts,
       maxRecoveryAttempts: 10, // Default
-      isComplete: session.status === 'completed' || session.status === 'error',
+      status: session.status,
       finalSuccess: session.metadata.finalSuccess || false,
       finalError: session.metadata.finalError
     };
@@ -229,7 +229,7 @@ export class AutomationStateManager {
    * Mark automation as complete
    */
   public markComplete(success: boolean, error?: string): void {
-    this.state.isComplete = true;
+    this.state.status = AutomationStatus.COMPLETED;
     this.state.finalSuccess = success;
     this.state.finalError = error;
 
@@ -325,7 +325,7 @@ export class AutomationStateManager {
    * Check if complete
    */
   public isComplete(): boolean {
-    return this.state.isComplete;
+    return this.state.status == AutomationStatus.COMPLETED
   }
 
   /**

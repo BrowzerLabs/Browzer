@@ -9,6 +9,13 @@ import { ToolExecutionResult } from '@/shared/types';
  * These types are used internally and not exposed in the public API
  */
 
+export enum AutomationStatus {
+  RUNNING = 'running',
+  COMPLETED = 'completed',
+  FAILED = 'failed',
+  PAUSED = 'paused'
+}
+
 /**
  * Automation session state
  * Tracks the complete state of an ongoing automation session
@@ -36,7 +43,7 @@ export interface AutomationState {
   maxRecoveryAttempts: number;
   
   // Status
-  isComplete: boolean;
+  status: AutomationStatus;
   finalSuccess: boolean;
   finalError?: string;
 }
