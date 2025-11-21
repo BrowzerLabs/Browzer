@@ -33,12 +33,12 @@ export class AutomationClient {
       }
 
       this.sessionId = response.data.session_id;
-      console.log(`✅ [AutomationClientV2] Session created: ${this.sessionId}`);
+      console.log(`✅ [AutomationClient] Session created: ${this.sessionId}`);
 
       return response.data.message;
 
     } catch (error) {
-      console.error('❌ [AutomationClientV2] Failed to create automation plan:', error);
+      console.error('❌ [AutomationClient] Failed to create automation plan:', error);
       throw error;
     }
   }
@@ -77,18 +77,18 @@ export class AutomationClient {
         throw new Error(response.error || 'Failed to continue conversation');
       }
 
-      console.log('✅ [AutomationClientV2] Conversation continued successfully');
+      console.log('✅ [AutomationClient] Conversation continued successfully');
       return response.data.message as Anthropic.Message;
 
     } catch (error) {
-      console.error('❌ [AutomationClientV2] Failed to continue conversation:', error);
+      console.error('❌ [AutomationClient] Failed to continue conversation:', error);
       throw error;
     }
   }
 
   public async endAutomation(): Promise<void> {
     if (!this.sessionId) {
-      console.warn('[AutomationClientV2] No active automation session to end');
+      console.warn('[AutomationClient] No active automation session to end');
       return;
     }
 
@@ -97,11 +97,11 @@ export class AutomationClient {
         this.onThinking('Ending automation session...');
       }
 
-      console.log(`✅ [AutomationClientV2] Automation session ended: ${this.sessionId}`);
+      console.log(`✅ [AutomationClient] Automation session ended: ${this.sessionId}`);
       this.sessionId = null;
 
     } catch (error) {
-      console.error('❌ [AutomationClientV2] Failed to end automation:', error);
+      console.error('❌ [AutomationClient] Failed to end automation:', error);
       this.sessionId = null;
       throw error;
     }

@@ -1,6 +1,4 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { AutomationClient } from '../clients/AutomationClient';
-import { ToolRegistry } from '../utils/ToolRegistry';
 import { SystemPromptBuilder } from '../builders/SystemPromptBuilder';
 import { AutomationPlanParser } from '../parsers/AutomationPlanParser';
 import { AutomationStateManager } from './AutomationStateManager';
@@ -14,7 +12,6 @@ export class IntermediatePlanHandler {
 
   constructor(
     automationClient: AutomationClient,
-    toolRegistry: ToolRegistry,
     stateManager: AutomationStateManager
   ) {
     this.automationClient = automationClient;

@@ -5,4 +5,3 @@
  */
 
 export { UsageTracker } from './UsageTracker';
-export { ToolRegistry } from './ToolRegistry';

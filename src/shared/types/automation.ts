@@ -1,7 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
-
-import Anthropic from "@anthropic-ai/sdk";
-
 /**
  * Browser Automation Types
  * 
@@ -214,18 +210,6 @@ export interface ToolExecutionResult {
   url: string;
   // Error data
   error?: AutomationError;
-}
-
-// ============================================================================
-// Tool Registry Types (Anthropic Claude Format)
-// ============================================================================
-
-/**
- * Complete tool registry
- */
-export interface ToolRegistry {
-  tools: Anthropic.Tool[];
-  version: string;
 }
 
 // ============================================================================

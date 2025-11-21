@@ -1,6 +1,4 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { AutomationClient } from '../clients/AutomationClient';
-import { ToolRegistry } from '../utils/ToolRegistry';
 import { SystemPromptBuilder } from '../builders/SystemPromptBuilder';
 import { MessageBuilder } from '../builders/MessageBuilder';
 import { AutomationPlanParser } from '../parsers/AutomationPlanParser';
@@ -26,16 +24,13 @@ import { ToolExecutionResult, SystemPromptType } from '@/shared/types';
  */
 export class ErrorRecoveryHandler {
   private automationClient: AutomationClient;
-  private toolRegistry: ToolRegistry;
   private stateManager: AutomationStateManager;
 
   constructor(
     automationClient: AutomationClient,
-    toolRegistry: ToolRegistry,
     stateManager: AutomationStateManager
   ) {
     this.automationClient = automationClient;
-    this.toolRegistry = toolRegistry;
     this.stateManager = stateManager;
   }
 
@@ -100,10 +95,8 @@ export class ErrorRecoveryHandler {
 
     this.stateManager.compressMessages()
 
-    // Parse new plan
     const newPlan = AutomationPlanParser.parsePlan(response);
 
-    // Update state
     this.stateManager.setCurrentPlan(newPlan);
     this.stateManager.enterRecoveryMode();
 

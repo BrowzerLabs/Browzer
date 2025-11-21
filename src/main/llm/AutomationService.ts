@@ -1,9 +1,7 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { EventEmitter } from 'events';
 import { BrowserAutomationExecutor } from '@/main/automation/BrowserAutomationExecutor';
 import { RecordingStore } from '@/main/recording';
 import { AutomationClient } from './clients/AutomationClient';
-import { ToolRegistry } from './utils/ToolRegistry';
 import { UsageTracker } from './utils/UsageTracker';
 import { AutomationStateManager } from './core/AutomationStateManager';
 import { SessionManager } from './session/SessionManager';
@@ -25,7 +23,6 @@ export class AutomationService extends EventEmitter {
   
   // Core services
   private automationClient: AutomationClient;
-  private toolRegistry: ToolRegistry;
   
   // State and execution managers (initialized per session)
   private stateManager: AutomationStateManager;
@@ -49,7 +46,6 @@ export class AutomationService extends EventEmitter {
       this.emitProgress('claude_thinking', { message });
     });
     
-    this.toolRegistry = new ToolRegistry();
     this.sessionManager = sessionManager;
   }
 
@@ -96,12 +92,10 @@ export class AutomationService extends EventEmitter {
     this.planExecutor = new PlanExecutor(this.executor, this.stateManager, this); // Pass event emitter
     this.errorRecoveryHandler = new ErrorRecoveryHandler(
       this.automationClient,
-      this.toolRegistry,
       this.stateManager
     );
     this.intermediatePlanHandler = new IntermediatePlanHandler(
       this.automationClient,
-      this.toolRegistry,
       this.stateManager
     );
     this.usageTracker = new UsageTracker();
@@ -230,15 +224,6 @@ export class AutomationService extends EventEmitter {
     const response = await this.automationClient.createAutomationPlan(formatted_session, userPrompt);
 
     const plan = AutomationPlanParser.parsePlan(response);
-
-    const validation = AutomationPlanParser.validatePlan(
-      plan,
-      this.toolRegistry.getToolNames()
-    );
-
-    if (!validation.valid) {
-      throw new Error(`Invalid automation plan: ${validation.errors.join(', ')}`);
-    }
 
     const usage = UsageTracker.extractUsageFromResponse(response);
 
