@@ -1,15 +1,17 @@
 import { WebContentsView } from 'electron';
-import type { HandlerContext } from './types';
 import type { ToolExecutionResult, AutomationError } from '@/shared/types';
+
+export interface HandlerContext {
+    view: Electron.WebContentsView;
+    tabId: string;
+}
 
 export abstract class BaseHandler {
   protected view: WebContentsView;
-  protected debugger: Electron.Debugger;
   protected tabId: string;
 
   constructor(context: HandlerContext) {
     this.view = context.view;
-    this.debugger = context.debugger;
     this.tabId = context.tabId;
   }
 

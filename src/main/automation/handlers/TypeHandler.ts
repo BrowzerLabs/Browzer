@@ -1,40 +1,21 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { BaseHandler } from '../core/BaseHandler';
-import type { HandlerContext } from '../core/types';
+import { BaseHandler, HandlerContext } from '../core/BaseHandler';
 import type { ToolExecutionResult, TypeParams } from '@/shared/types';
 
-/**
- * UNIFIED TYPE HANDLER - Single Script Approach
- * 
- * This handler executes EVERYTHING in a unified approach:
- * 1. Find all candidate input elements (INPUT, TEXTAREA, contenteditable, ARIA textbox)
- * 2. Score each candidate based on attributes, text, position
- * 3. Select best match
- * 4. Focus + Scroll + Highlight
- * 5. Clear existing content (if requested)
- * 6. Type text using CDP (native keyboard events)
- * 7. Press Enter (if requested)
- * 
- * Benefits:
- * - No DOM serialization issues for finding
- * - Atomic find operation
- * - Native-like typing via CDP
- * - Handles all input types (input, textarea, contenteditable, ARIA textbox)
- * - Better reliability
- */
+
 export class TypeHandler extends BaseHandler {
   constructor(context: HandlerContext) {
     super(context);
   }
 
   /**
-   * Execute type action using unified approach
+   * Execute type action using approach
    */
   async execute(params: TypeParams): Promise<ToolExecutionResult> {
     const startTime = Date.now();
     
     try {
-      console.log('[TypeHandler] ⌨️  Starting unified type execution');
+      console.log('[TypeHandler] ⌨️  Starting type execution');
 
       // Step 1: Find and prepare input element
       const findResult = await this.executeFindAndPrepare(params);
@@ -127,7 +108,7 @@ export class TypeHandler extends BaseHandler {
     centerY?: number;
   }> {
     try {
-      console.log('[TypeHandler] 🔍 Executing unified find-and-prepare script');
+      console.log('[TypeHandler] 🔍 Executing find-and-prepare script');
 
       const script = `
         (async function() {
@@ -146,7 +127,7 @@ export class TypeHandler extends BaseHandler {
             'value', 'checked', 'selected'
           ];
           
-          console.log('[UnifiedType] 🔍 Finding input elements with:', {
+          console.log('[Type] 🔍 Finding input elements with:', {
             tag: targetTag,
             hasAttrs: Object.keys(targetAttrs).length > 0
           });
@@ -159,7 +140,7 @@ export class TypeHandler extends BaseHandler {
           // Strategy 1: Find by specific tag
           if (targetTag) {
             candidates = Array.from(document.getElementsByTagName(targetTag));
-            console.log('[UnifiedType] Found', candidates.length, 'elements with tag', targetTag);
+            console.log('[Type] Found', candidates.length, 'elements with tag', targetTag);
           }
           
           // Strategy 2: If no specific tag or no results, find ALL input-like elements
@@ -181,7 +162,7 @@ export class TypeHandler extends BaseHandler {
             ];
             
             candidates = Array.from(document.querySelectorAll(inputSelectors.join(', ')));
-            console.log('[UnifiedType] Broadened search, found', candidates.length, 'input elements');
+            console.log('[Type] Broadened search, found', candidates.length, 'input elements');
           }
           
           // Filter out disabled and readonly elements
@@ -190,7 +171,7 @@ export class TypeHandler extends BaseHandler {
             const isReadonly = el.readOnly || el.getAttribute('aria-readonly') === 'true';
             return !isDisabled && !isReadonly;
           });
-          console.log('[UnifiedType] After filtering disabled/readonly:', candidates.length);
+          console.log('[Type] After filtering disabled/readonly:', candidates.length);
           
           // Filter by stable attributes
           const stableAttrKeys = Object.keys(targetAttrs).filter(key => 
@@ -201,7 +182,7 @@ export class TypeHandler extends BaseHandler {
             candidates = candidates.filter(el => {
               return stableAttrKeys.some(key => el.getAttribute(key) === targetAttrs[key]);
             });
-            console.log('[UnifiedType] After attribute filter:', candidates.length);
+            console.log('[Type] After attribute filter:', candidates.length);
           }
           
           if (candidates.length === 0) {
@@ -311,12 +292,12 @@ export class TypeHandler extends BaseHandler {
           }
           
           const best = scored[0];
-          console.log('[UnifiedType] 🏆 Best match: score=' + best.score + ', matched by: ' + best.matchedBy.join(', '));
+          console.log('[Type] 🏆 Best match: score=' + best.score + ', matched by: ' + best.matchedBy.join(', '));
           
           if (scored.length > 1) {
-            console.log('[UnifiedType] 🥈 Second best: score=' + scored[1].score);
+            console.log('[Type] 🥈 Second best: score=' + scored[1].score);
             if (Math.abs(best.score - scored[1].score) < 10) {
-              console.warn('[UnifiedType] ⚠️ AMBIGUOUS MATCH! Scores are very close.');
+              console.warn('[Type] ⚠️ AMBIGUOUS MATCH! Scores are very close.');
             }
           }
           
@@ -328,12 +309,12 @@ export class TypeHandler extends BaseHandler {
           // Focus
           if (typeof element.focus === 'function') {
             element.focus();
-            console.log('[UnifiedType] ✅ Element focused');
+            console.log('[Type] ✅ Element focused');
           }
           
           // Scroll into view
           element.scrollIntoView({ behavior: 'auto', block: 'center', inline: 'center' });
-          console.log('[UnifiedType] 📍 Scrolling element into view...');
+          console.log('[Type] 📍 Scrolling element into view...');
           await new Promise(resolve => setTimeout(resolve, 500));
           
           // Highlight
@@ -341,7 +322,7 @@ export class TypeHandler extends BaseHandler {
           const originalOutlineOffset = element.style.outlineOffset;
           element.style.outline = '2px solid #0066ff';  // Blue for input
           element.style.outlineOffset = '2px';
-          console.log('[UnifiedType] ✅ Element highlighted');
+          console.log('[Type] ✅ Element highlighted');
           await new Promise(resolve => setTimeout(resolve, 200));
           
           // Get center coordinates for CDP click
@@ -355,7 +336,7 @@ export class TypeHandler extends BaseHandler {
             element.style.outlineOffset = originalOutlineOffset;
           }, 1000);
           
-          console.log('[UnifiedType] ✅ Input prepared successfully');
+          console.log('[Type] ✅ Input prepared successfully');
           return { success: true, centerX, centerY };
           
         })();
@@ -365,7 +346,7 @@ export class TypeHandler extends BaseHandler {
       return result;
 
     } catch (error) {
-      console.error('[TypeHandler] ❌ Unified find-and-prepare failed:', error);
+      console.error('[TypeHandler] ❌  find-and-prepare failed:', error);
       return {
         success: false,
         error: error instanceof Error ? error.message : String(error)

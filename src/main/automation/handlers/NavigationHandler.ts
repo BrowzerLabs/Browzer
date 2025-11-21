@@ -1,5 +1,4 @@
-import { BaseHandler } from '../core/BaseHandler';
-import type { HandlerContext } from '../core/types';
+import { BaseHandler, HandlerContext } from '../core/BaseHandler';
 import type { NavigateParams, WaitForElementParams, ToolExecutionResult } from '@/shared/types';
 
 
@@ -150,46 +149,4 @@ export class NavigationHandler extends BaseHandler {
     }
   }
 
-  /**
-   * Wait for navigation to complete
-   */
-  private async waitForNavigation(waitUntil: string, timeout: number): Promise<void> {
-    return new Promise((resolve, reject) => {
-      let resolved = false;
-      
-      const timer = setTimeout(() => {
-        if (!resolved) {
-          resolved = true;
-          reject(new Error('Navigation timeout'));
-        }
-      }, timeout);
-      
-      const cleanup = () => {
-        if (!resolved) {
-          resolved = true;
-          clearTimeout(timer);
-          resolve();
-        }
-      };
-      
-      if (waitUntil === 'load') {
-        // Listen for successful load
-        this.view.webContents.once('did-finish-load', cleanup);
-        
-        // Also handle navigation failures
-        this.view.webContents.once('did-fail-load', (event, errorCode, errorDescription) => {
-          if (!resolved) {
-            resolved = true;
-            clearTimeout(timer);
-            reject(new Error(`Navigation failed: ${errorDescription} (code: ${errorCode})`));
-          }
-        });
-      } else if (waitUntil === 'domcontentloaded') {
-        this.view.webContents.once('dom-ready', cleanup);
-      } else {
-        // For 'networkidle' or other, just wait a bit
-        setTimeout(cleanup, 1000);
-      }
-    });
-  }
 }

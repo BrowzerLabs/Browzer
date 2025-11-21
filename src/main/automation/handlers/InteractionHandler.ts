@@ -1,5 +1,4 @@
-import { BaseHandler } from '../core/BaseHandler';
-import type { HandlerContext } from '../core/types';
+import { BaseHandler, HandlerContext } from '../core/BaseHandler';
 import type { KeyPressParams, ScrollParams, ToolExecutionResult } from '@/shared/types';
 
 export class InteractionHandler extends BaseHandler {
@@ -80,9 +79,6 @@ export class InteractionHandler extends BaseHandler {
     }
   }
 
-  /**
-   * Execute scroll operation
-   */
   async executeScroll(params: ScrollParams): Promise<ToolExecutionResult> {
     const startTime = Date.now();
     console.log(`[InteractionHandler] 📜 Scroll:`, params);
@@ -131,7 +127,6 @@ export class InteractionHandler extends BaseHandler {
       console.log('[InteractionHandler] ✅ Scrolled');
 
       await this.sleep(500);
-      const executionTime = Date.now() - startTime;
 
       return {
         success: true,
@@ -151,9 +146,6 @@ export class InteractionHandler extends BaseHandler {
     }
   }
 
-  /**
-   * UNIFIED: Find element and focus it in one operation
-   */
   private async findAndFocusElement(params: any): Promise<{ success: boolean; centerX?: number; centerY?: number }> {
     try {
       console.log('[InteractionHandler] 🔍 Finding element to focus');
@@ -244,7 +236,6 @@ export class InteractionHandler extends BaseHandler {
       if (result.success && result.centerX && result.centerY) {
         // Additional CDP click to ensure focus
         const cdp = this.view.webContents.debugger;
-        if (!cdp.isAttached()) cdp.attach('1.3');
 
         await cdp.sendCommand('Input.dispatchMouseEvent', {
           type: 'mousePressed',

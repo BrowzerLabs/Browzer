@@ -1,17 +1,6 @@
-import { BaseHandler } from '../core/BaseHandler';
-import type { HandlerContext } from '../core/types';
+import { BaseHandler, HandlerContext } from '../core/BaseHandler';
 import type { SelectParams, CheckboxParams, SubmitParams, ToolExecutionResult } from '@/shared/types';
 
-/**
- * UNIFIED FORM HANDLER - Single Script Approach
- * 
- * Handles form interactions with unified approach:
- * - Select: Find dropdown + Select option in one script
- * - Checkbox: Find checkbox + Toggle state in one script
- * - Submit: Find form/button + Submit in one script
- * 
- * All operations use single browser script execution for maximum reliability.
- */
 export class FormHandler extends BaseHandler {
   constructor(context: HandlerContext) {
     super(context);
@@ -24,7 +13,7 @@ export class FormHandler extends BaseHandler {
     const startTime = Date.now();
 
     try {
-      console.log('[FormHandler] 📋 Executing unified select');
+      console.log('[FormHandler] 📋 Executing select');
 
       const result = await this.executeFindAndSelect(params);
 
@@ -94,7 +83,7 @@ export class FormHandler extends BaseHandler {
             'value', 'checked', 'selected'
           ];
           
-          console.log('[UnifiedSelect] 🔍 Finding select element');
+          console.log('[Select] 🔍 Finding select element');
           
           // ============================================================================
           // STEP 1: FIND SELECT ELEMENT
@@ -152,7 +141,7 @@ export class FormHandler extends BaseHandler {
             return { success: false, error: 'Element is not a SELECT' };
           }
           
-          console.log('[UnifiedSelect] ✅ Select element found');
+          console.log('[Select] ✅ Select element found');
           
           // ============================================================================
           // STEP 2: SCROLL INTO VIEW
@@ -171,7 +160,7 @@ export class FormHandler extends BaseHandler {
               if (select.options[i].value === selectValue) {
                 select.selectedIndex = i;
                 optionSelected = true;
-                console.log('[UnifiedSelect] ✅ Selected by value:', selectValue);
+                console.log('[Select] ✅ Selected by value:', selectValue);
                 break;
               }
             }
@@ -184,7 +173,7 @@ export class FormHandler extends BaseHandler {
                   select.options[i].text.includes(selectLabel)) {
                 select.selectedIndex = i;
                 optionSelected = true;
-                console.log('[UnifiedSelect] ✅ Selected by label:', selectLabel);
+                console.log('[Select] ✅ Selected by label:', selectLabel);
                 break;
               }
             }
@@ -195,7 +184,7 @@ export class FormHandler extends BaseHandler {
             if (selectIndex >= 0 && selectIndex < select.options.length) {
               select.selectedIndex = selectIndex;
               optionSelected = true;
-              console.log('[UnifiedSelect] ✅ Selected by index:', selectIndex);
+              console.log('[Select] ✅ Selected by index:', selectIndex);
             }
           }
           
@@ -209,7 +198,7 @@ export class FormHandler extends BaseHandler {
           select.dispatchEvent(new Event('change', { bubbles: true }));
           select.dispatchEvent(new Event('input', { bubbles: true }));
           
-          console.log('[UnifiedSelect] ✅ Select completed successfully');
+          console.log('[Select] ✅ Select completed successfully');
           
           return {
             success: true,
@@ -224,7 +213,7 @@ export class FormHandler extends BaseHandler {
       return result;
 
     } catch (error) {
-      console.error('[FormHandler] ❌ Unified select failed:', error);
+      console.error('[FormHandler] ❌  select failed:', error);
       return {
         success: false,
         error: error instanceof Error ? error.message : String(error)
@@ -304,7 +293,7 @@ export class FormHandler extends BaseHandler {
             'value', 'checked', 'selected'
           ];
           
-          console.log('[UnifiedCheckbox] 🔍 Finding checkbox element');
+          console.log('[Checkbox] 🔍 Finding checkbox element');
           
           // ============================================================================
           // STEP 1: FIND CHECKBOX ELEMENT
@@ -367,7 +356,7 @@ export class FormHandler extends BaseHandler {
             return { success: false, error: 'Element is not a checkbox or radio' };
           }
           
-          console.log('[UnifiedCheckbox] ✅ Checkbox element found');
+          console.log('[Checkbox] ✅ Checkbox element found');
           
           // ============================================================================
           // STEP 2: SCROLL INTO VIEW
@@ -386,9 +375,9 @@ export class FormHandler extends BaseHandler {
             checkbox.dispatchEvent(new MouseEvent('click', { bubbles: true }));
             checkbox.dispatchEvent(new Event('input', { bubbles: true }));
             
-            console.log('[UnifiedCheckbox] ✅ Checkbox toggled to:', targetChecked);
+            console.log('[Checkbox] ✅ Checkbox toggled to:', targetChecked);
           } else {
-            console.log('[UnifiedCheckbox] ℹ️ Checkbox already in desired state:', targetChecked);
+            console.log('[Checkbox] ℹ️ Checkbox already in desired state:', targetChecked);
           }
           
           return {
@@ -403,7 +392,7 @@ export class FormHandler extends BaseHandler {
       return result;
 
     } catch (error) {
-      console.error('[FormHandler] ❌ Unified checkbox failed:', error);
+      console.error('[FormHandler] ❌  checkbox failed:', error);
       return {
         success: false,
         error: error instanceof Error ? error.message : String(error)
@@ -419,7 +408,7 @@ export class FormHandler extends BaseHandler {
     console.log('[FormHandler] 📤 Submit form');
 
     try {
-      // If submitButton is specified, use ClickHandler (already unified)
+      // If submitButton is specified, use ClickHandler (already )
       if (params.submitButton) {
         return await clickHandler.execute({
           ...params.submitButton,
@@ -539,7 +528,7 @@ export class FormHandler extends BaseHandler {
             form.submit();
           }
           
-          console.log('[UnifiedSubmit] ✅ Form submitted');
+          console.log('[Submit] ✅ Form submitted');
           return { success: true };
           
         })();
@@ -549,7 +538,7 @@ export class FormHandler extends BaseHandler {
       return result;
 
     } catch (error) {
-      console.error('[FormHandler] ❌ Unified submit failed:', error);
+      console.error('[FormHandler] ❌  submit failed:', error);
       return {
         success: false,
         error: error instanceof Error ? error.message : String(error)

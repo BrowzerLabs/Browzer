@@ -1,5 +1,4 @@
-import { BaseHandler } from '../core/BaseHandler';
-import type { HandlerContext } from '../core/types';
+import { BaseHandler, HandlerContext } from '../core/BaseHandler';
 import type { ToolExecutionResult, ClickParams } from '@/shared/types';
 
 export class ClickHandler extends BaseHandler {
@@ -7,9 +6,6 @@ export class ClickHandler extends BaseHandler {
     super(context);
   }
 
-  /**
-   * Execute click action using unified single-script approach
-   */
   async execute(params: ClickParams): Promise<ToolExecutionResult> {
     const startTime = Date.now();
     
@@ -17,7 +13,6 @@ export class ClickHandler extends BaseHandler {
       console.log('[ClickHandler] 🎯 Starting unified click execution');
 
       if (params.tag) {
-        // Execute unified find + click script
         const result = await this.executeFindAndClick(params);
         
         if (result.success) {
@@ -28,7 +23,6 @@ export class ClickHandler extends BaseHandler {
             url: this.getUrl()
           };
         } else {
-          // Try fallback to click_position if provided
           if (params.click_position) {
             console.warn('[ClickHandler] ⚠️  click failed, trying position fallback');
             const positionSuccess = await this.executeClickAtPosition(
@@ -60,7 +54,6 @@ export class ClickHandler extends BaseHandler {
           });
         }
       } else if (params.click_position) {
-        // Direct position click
         console.log('[ClickHandler] 📍 Using direct click_position');
         const positionSuccess = await this.executeClickAtPosition(
           params.click_position.x,
@@ -102,11 +95,6 @@ export class ClickHandler extends BaseHandler {
     }
   }
 
-  /**
-   * UNIFIED SCRIPT: Find + Score + Click in ONE browser execution
-   * 
-   * This is the core of the unified approach - everything happens in browser context.
-   */
   private async executeFindAndClick(params: ClickParams): Promise<{ success: boolean; error?: string }> {
     try {
       console.log('[ClickHandler] 🔍 Executing unified find-and-click script');
