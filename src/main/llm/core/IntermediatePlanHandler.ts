@@ -10,7 +10,6 @@ import { SystemPromptType } from '@/shared/types';
 
 export class IntermediatePlanHandler {
   private automationClient: AutomationClient;
-  private toolRegistry: ToolRegistry;
   private stateManager: AutomationStateManager;
 
   constructor(
@@ -19,7 +18,6 @@ export class IntermediatePlanHandler {
     stateManager: AutomationStateManager
   ) {
     this.automationClient = automationClient;
-    this.toolRegistry = toolRegistry;
     this.stateManager = stateManager;
   }
 
@@ -51,7 +49,6 @@ export class IntermediatePlanHandler {
         stepNumber: es.stepNumber,
         toolName: es.toolName,
         success: es.success,
-        summary: es.result?.effects?.summary
       })),
       extractedContext: this.getExtractedContextSummary(),
       currentUrl: this.getCurrentUrl()
@@ -63,7 +60,7 @@ export class IntermediatePlanHandler {
     });
 
     const response = await this.automationClient.continueConversation(
-      SystemPromptType.AUTOMATION_PLAN_GENERATION,
+      SystemPromptType.AUTOMATION_CONTINUATION,
       this.stateManager.getOptimizedMessages(),
       this.stateManager.getCachedContext()
     );
@@ -95,10 +92,9 @@ export class IntermediatePlanHandler {
   public async handleContextExtraction(): Promise<PlanExecutionResult> {
     console.log('🔄 [IntermediatePlan] Continuing after context extraction...');
 
-    // Continue conversation with same system prompt type
     const systemPromptType = this.stateManager.getRecoveryAttempts() > 0
       ? SystemPromptType.AUTOMATION_ERROR_RECOVERY
-      : SystemPromptType.AUTOMATION_PLAN_GENERATION;
+      : SystemPromptType.AUTOMATION_CONTINUATION;
 
     const response = await this.automationClient.continueConversation(
       systemPromptType,
