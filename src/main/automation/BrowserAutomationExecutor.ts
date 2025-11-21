@@ -108,36 +108,32 @@ export class BrowserAutomationExecutor {
   }
 
   /**
-   * Extract context - Unified method for both full and viewport extraction
+   * Extract context - unified method
    */
   private async extractContext(params: {
     full?: boolean;
-    scrollTo?: 'current' | 'top' | 'bottom' | number | { 
-      element: string; 
-      backupSelectors: string[] 
-    };
+    scrollTo?: 'current' | 'top' | 'bottom' | number;
+    elementTags?: string[];
     maxElements?: number;
   }): Promise<ToolExecutionResult> {
     const startTime = Date.now();
 
-    const full = params.full ?? false;
-    const maxElements = params.maxElements ?? 200;
+    console.log('[AutomationExecutor] 📊 Extracting context:', params);
 
-    // Use unified smart context extraction
-    const result = await this.contextExtractor.extractSmartContext(
-      this.tabId,
-      full,
-      params.scrollTo,
-      maxElements
-    );
+    // Use context extraction
+    const result = await this.contextExtractor.extractContext({
+      tabId: this.tabId,
+      full: params.full,
+      scrollTo: params.scrollTo,
+      elementTags: params.elementTags,
+      maxElements: params.maxElements
+    });
 
     if (result.success && result.context) {
-      const context = result.context;
-
       return {
         success: true,
         toolName: 'extract_context',
-        context,
+        context: result.context,
         url: this.view.webContents.getURL(),
       };
     }
@@ -149,9 +145,9 @@ export class BrowserAutomationExecutor {
         lastError: result.error,
         suggestions: [
           'Page may still be loading',
-          full ? 'Try with full=false for viewport-only extraction' : 'Try with full=true for complete page context',
-          'If scrolling to element, verify selector is correct',
-          'Check if page has JavaScript errors'
+          'Try with full=true for complete page context',
+          'Check if page has JavaScript errors',
+          'Verify elementTags filter is correct (e.g., ["BUTTON", "INPUT"])'
         ]
       }
     });

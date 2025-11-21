@@ -9,7 +9,6 @@ import {
 
 export class BrowserContextExtractor {
   private view: WebContentsView | null = null;
-  private debugger: Electron.Debugger | null = null;
 
   constructor(view?: WebContentsView) {
     if (view) {
@@ -19,24 +18,13 @@ export class BrowserContextExtractor {
 
   public setView(view: WebContentsView): void {
     this.view = view;
-    this.debugger = view.webContents.debugger;
   }
 
   /**
-   * Extract complete browser context
+   * Extract browser context
    */
-  public async extractContext(
-    tabId: string,
-    options: ContextExtractionOptions = {}
-  ): Promise<ContextExtractionResult> {
+  public async extractContext(options: ContextExtractionOptions): Promise<ContextExtractionResult> {
     const startTime = Date.now();
-
-    // Default options - optimized for minimal context
-    const opts: Required<ContextExtractionOptions> = {
-      includeDOM: options.includeDOM ?? true,
-      maxInteractiveElements: options.maxInteractiveElements ?? 200,
-      timeout: options.timeout ?? 10000
-    };
 
     if (!this.view) {
       return {
@@ -47,100 +35,17 @@ export class BrowserContextExtractor {
     }
 
     try {
+      console.log('[ContextExtractor] 📊 Starting context extraction');
 
-      // Extract only DOM context (optimized)
-      const dom = opts.includeDOM ? await this.extractDOMContext(opts) : null;
+      // Execute unified extraction script
+      const result = await this.executeExtractionScript(options);
 
-      // Get basic page info
-      const url = this.view.webContents.getURL();
-      const title = this.view.webContents.getTitle();
-
-      const context: BrowserContext = {
-        extractedAt: Date.now(),
-        tabId,
-        url,
-        title,
-        dom: dom as DOMContext,
-      };
-
-      const duration = Date.now() - startTime;
-      console.log(`✅ Browser context extracted in ${duration}ms`);
-
-      return {
-        success: true,
-        context,
-        duration
-      };
-
-    } catch (error) {
-      console.error('Failed to extract browser context:', error);
-
-      return {
-        success: false,
-        error: (error as Error).message,
-        duration: Date.now() - startTime
-      };
-    }
-  }
-
-  /**
-   * Extract DOM context with semantic annotations
-   */
-  private async extractDOMContext(options: Required<ContextExtractionOptions>): Promise<DOMContext> {
-    if (!this.debugger) throw new Error('Debugger not initialized');
-
-    // Get document to ensure DOM is ready
-    await this.debugger.sendCommand('DOM.getDocument', { depth: -1 });
-
-    // Execute script to extract DOM information
-    const script = this.generateDOMExtractionScript(options);
-    const result = await this.debugger.sendCommand('Runtime.evaluate', {
-      expression: script,
-      returnByValue: true,
-      awaitPromise: true
-    });
-
-    if (result.exceptionDetails) {
-      throw new Error(`DOM extraction failed: ${result.exceptionDetails.text}`);
-    }
-
-    return result.result.value as DOMContext;
-  }
-
-  public async extractSmartContext(
-    tabId: string,
-    full = false,
-    scrollTo?: 'current' | 'top' | 'bottom' | number | { element: string; backupSelectors?: string[] },
-    maxElements = 200
-  ): Promise<ContextExtractionResult> {
-    const startTime = Date.now();
-
-    try {
-
-      let dom: DOMContext;
-
-      if (full) {
-        // Extract full page context (all elements)
-        console.log('[Context] Extracting FULL page context...');
-        dom = await this.extractDOMContext({ 
-          includeDOM: true, 
-          maxInteractiveElements: maxElements, 
-          timeout: 10000 
-        });
-      } else {
-        // Extract viewport context only
-        console.log('[Context] Extracting VIEWPORT context...');
-        
-        // Perform scroll if requested
-        if (scrollTo && scrollTo !== 'current') {
-          await this.performScroll(scrollTo);
-          
-          // Wait for scroll animations and lazy-loaded content
-          await this.sleep(2000);
-        }
-
-        // Extract viewport-specific DOM context
-        dom = await this.extractViewportDOMContext(maxElements);
+      if (!result.success) {
+        return {
+          success: false,
+          error: result.error || 'Context extraction failed',
+          duration: Date.now() - startTime
+        };
       }
 
       // Get basic page info
@@ -149,15 +54,14 @@ export class BrowserContextExtractor {
 
       const context: BrowserContext = {
         extractedAt: Date.now(),
-        tabId,
+        tabId: options.tabId,
         url,
         title,
-        dom: dom as DOMContext,
+        dom: result.dom!
       };
 
       const duration = Date.now() - startTime;
-      const contextType = full ? 'FULL' : 'VIEWPORT';
-      console.log(`✅ ${contextType} context extracted in ${duration}ms (${dom.stats.interactiveElements} elements)`);
+      console.log(`[ContextExtractor] ✅ Context extracted in ${duration}ms - ${result.dom!.stats.interactiveElements} elements`);
 
       return {
         success: true,
@@ -166,8 +70,7 @@ export class BrowserContextExtractor {
       };
 
     } catch (error) {
-      console.error('Failed to extract context:', error);
-
+      console.error('[ContextExtractor] ❌ Extraction failed:', error);
       return {
         success: false,
         error: (error as Error).message,
@@ -177,414 +80,238 @@ export class BrowserContextExtractor {
   }
 
   /**
-   * Perform smooth scroll to specified position
+   * UNIFIED SCRIPT: Scroll + Extract in ONE browser execution
    */
-  private async performScroll(
-    scrollTo: 'top' | 'bottom' | number | { element: string; backupSelectors?: string[] }
-  ): Promise<void> {
-    if (!this.view) throw new Error('No view available');
-
-    if (scrollTo === 'top') {
-      // Scroll to top
-      await this.view.webContents.executeJavaScript(`
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-      `);
-    } else if (scrollTo === 'bottom') {
-      // Scroll to bottom
-      await this.view.webContents.executeJavaScript(`
-        window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'smooth' });
-      `);
-    } else if (typeof scrollTo === 'number') {
-      // Scroll to specific Y position
-      await this.view.webContents.executeJavaScript(`
-        window.scrollTo({ top: ${scrollTo}, behavior: 'smooth' });
-      `);
-    } else if (typeof scrollTo === 'object' && scrollTo.element) {
-      // Scroll element into view
-      const selectors = [scrollTo.element, ...(scrollTo.backupSelectors || [])];
+  private async executeExtractionScript(options: ContextExtractionOptions): Promise<{
+    success: boolean;
+    error?: string;
+    dom?: DOMContext;
+  }> {
+    try {
       const script = `
-        (function() {
-          const selectors = ${JSON.stringify(selectors)};
+        (async function() {
+          // ============================================================================
+          // CONFIGURATION
+          // ============================================================================
+          const full = ${JSON.stringify(options.full || false)};
+          const scrollTo = ${JSON.stringify(options.scrollTo || 'current')};
+          const elementTags = ${JSON.stringify(options.elementTags || null)};
+          const maxElements = ${JSON.stringify(options.maxElements || 200)};
           
-          for (const selector of selectors) {
-            try {
-              const element = document.querySelector(selector);
-              if (element) {
-                element.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                return { success: true, usedSelector: selector };
-              }
-            } catch (e) {
-              continue;
+          console.log('[ContextExtract] 🔍 Config:', { full, scrollTo, elementTags, maxElements });
+          
+          // ============================================================================
+          // STEP 1: HANDLE SCROLLING
+          // ============================================================================
+          if (!full) {
+            if (scrollTo === 'top') {
+              window.scrollTo({ top: 0, behavior: 'auto' });
+              console.log('[ContextExtract] ⬆️ Scrolled to top');
+              await new Promise(resolve => setTimeout(resolve, 500));
+            } else if (scrollTo === 'bottom') {
+              window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'auto' });
+              console.log('[ContextExtract] ⬇️ Scrolled to bottom');
+              await new Promise(resolve => setTimeout(resolve, 500));
+            } else if (typeof scrollTo === 'number') {
+              window.scrollTo({ top: scrollTo, behavior: 'auto' });
+              console.log('[ContextExtract] 📍 Scrolled to position:', scrollTo);
+              await new Promise(resolve => setTimeout(resolve, 500));
             }
+            // 'current' = do nothing, stay at current scroll position
           }
           
-          return { success: false, error: 'Element not found with any selector' };
+          // ============================================================================
+          // STEP 2: FIND INTERACTIVE ELEMENTS
+          // ============================================================================
+          const interactiveSelectors = [
+            'button',
+            'a[href]',
+            'input',
+            'textarea',
+            'select',
+            '[role="button"]',
+            '[role="link"]',
+            '[role="textbox"]',
+            '[role="searchbox"]',
+            '[role="combobox"]',
+            '[role="checkbox"]',
+            '[role="radio"]',
+            '[role="tab"]',
+            '[role="menuitem"]',
+            '[contenteditable="true"]',
+            '[onclick]',
+            '[tabindex]'
+          ];
+          
+          let candidates = Array.from(document.querySelectorAll(interactiveSelectors.join(', ')));
+          console.log('[ContextExtract] Found', candidates.length, 'interactive elements');
+          
+          // Filter by element tags if specified
+          if (elementTags && elementTags.length > 0) {
+            const upperTags = elementTags.map(t => t.toUpperCase());
+            candidates = candidates.filter(el => upperTags.includes(el.tagName));
+            console.log('[ContextExtract] After tag filter:', candidates.length, 'elements');
+          }
+          
+          // ============================================================================
+          // STEP 3: FILTER BASED ON EXTRACTION MODE
+          // ============================================================================
+          let visibleElements = [];
+          
+          if (full) {
+            // Full page: extract ALL elements (visible or not)
+            visibleElements = candidates;
+            console.log('[ContextExtract] 📄 Full page mode: extracting all', visibleElements.length, 'elements');
+          } else {
+            // Viewport mode: only extract visible elements
+            visibleElements = candidates.filter(el => {
+              const rect = el.getBoundingClientRect();
+              const style = window.getComputedStyle(el);
+              
+              // Check if element is visible
+              const isVisible = rect.width > 0 && 
+                               rect.height > 0 && 
+                               style.display !== 'none' && 
+                               style.visibility !== 'hidden' &&
+                               style.opacity !== '0';
+              
+              if (!isVisible) return false;
+              
+              // Check if element is in viewport
+              const isInViewport = rect.top >= -100 && // Allow 100px above viewport
+                                  rect.left >= -100 && // Allow 100px left of viewport
+                                  rect.bottom <= window.innerHeight + 100 && // Allow 100px below viewport
+                                  rect.right <= window.innerWidth + 100; // Allow 100px right of viewport
+              
+              return isInViewport;
+            });
+            console.log('[ContextExtract] 👁️ Viewport mode: found', visibleElements.length, 'visible elements');
+          }
+          
+          // Limit to maxElements
+          if (visibleElements.length > maxElements) {
+            visibleElements = visibleElements.slice(0, maxElements);
+            console.log('[ContextExtract] ⚠️ Limited to', maxElements, 'elements');
+          }
+          
+          // ============================================================================
+          // STEP 4: EXTRACT ELEMENT DETAILS
+          // ============================================================================
+          const interactiveElements = visibleElements.map((el, index) => {
+            const rect = el.getBoundingClientRect();
+            
+            // Generate selector
+            let selector = el.tagName.toLowerCase();
+            if (el.id && !el.id.match(/^(:r[0-9a-z]+:|mui-|mat-)/)) {
+              selector = '#' + el.id;
+            } else if (el.getAttribute('data-testid')) {
+              selector = '[data-testid="' + el.getAttribute('data-testid') + '"]';
+            } else if (el.getAttribute('name')) {
+              selector = el.tagName.toLowerCase() + '[name="' + el.getAttribute('name') + '"]';
+            } else if (el.className && typeof el.className === 'string') {
+              const classes = el.className.trim().split(/\\s+/)
+                .filter(c => c && !c.match(/^(ng-|_|css-|active|focus|hover)/))
+                .slice(0, 2);
+              if (classes.length > 0) {
+                selector = el.tagName.toLowerCase() + '.' + classes.join('.');
+              }
+            }
+            
+            // Collect all attributes
+            const attributes = {};
+            for (const attr of el.attributes) {
+              attributes[attr.name] = attr.value;
+            }
+            
+            // Extract text content
+            let text = '';
+            if (el.innerText) {
+              text = el.innerText.trim().substring(0, 200);
+            } else if (el.textContent) {
+              text = el.textContent.trim().substring(0, 200);
+            }
+            
+            return {
+              selector,
+              tagName: el.tagName,
+              role: el.getAttribute('role') || undefined,
+              ariaLabel: el.getAttribute('aria-label') || undefined,
+              ariaDescription: el.getAttribute('aria-description') || undefined,
+              title: el.getAttribute('title') || undefined,
+              placeholder: el.getAttribute('placeholder') || undefined,
+              text: text || undefined,
+              value: el.value || undefined,
+              boundingBox: {
+                x: Math.round(rect.x),
+                y: Math.round(rect.y),
+                width: Math.round(rect.width),
+                height: Math.round(rect.height)
+              },
+              isDisabled: el.disabled || el.getAttribute('aria-disabled') === 'true' || false,
+              attributes
+            };
+          });
+          
+          // ============================================================================
+          // STEP 5: EXTRACT FORMS
+          // ============================================================================
+          const forms = Array.from(document.querySelectorAll('form')).map(form => {
+            const fields = Array.from(form.querySelectorAll('input, textarea, select')).map(field => {
+              // Find associated label
+              let label = '';
+              if (field.id) {
+                const labelEl = document.querySelector('label[for="' + field.id + '"]');
+                if (labelEl) label = labelEl.textContent?.trim() || '';
+              }
+              if (!label && field.parentElement?.tagName === 'LABEL') {
+                label = field.parentElement.textContent?.trim() || '';
+              }
+              
+              return {
+                name: field.getAttribute('name') || '',
+                type: field.getAttribute('type') || field.tagName.toLowerCase(),
+                label: label || undefined,
+                required: field.hasAttribute('required') || field.getAttribute('aria-required') === 'true',
+                selector: field.id ? '#' + field.id : (field.getAttribute('name') ? '[name="' + field.getAttribute('name') + '"]' : '')
+              };
+            });
+            
+            return {
+              action: form.getAttribute('action') || undefined,
+              method: form.getAttribute('method') || undefined,
+              selector: form.id ? '#' + form.id : 'form',
+              fields
+            };
+          });
+          
+          // ============================================================================
+          // STEP 6: RETURN STRUCTURED CONTEXT
+          // ============================================================================
+          const dom = {
+            forms,
+            allInteractiveElements: interactiveElements,
+            stats: {
+              totalElements: document.querySelectorAll('*').length,
+              interactiveElements: interactiveElements.length,
+              forms: forms.length
+            }
+          };
+          
+          console.log('[ContextExtract] ✅ Extraction complete:', dom.stats);
+          return { success: true, dom };
+          
         })();
       `;
-      
-      const result = await this.view.webContents.executeJavaScript(script);
-      if (!result.success) {
-        throw new Error(result.error || 'Failed to scroll to element');
-      }
-      
-      console.log(`✅ Scrolled to element: ${result.usedSelector}`);
+
+      const result = await this.view!.webContents.executeJavaScript(script);
+      return result;
+
+    } catch (error) {
+      console.error('[ContextExtractor] ❌ Script execution failed:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : String(error)
+      };
     }
   }
-
-  /**
-   * Extract DOM context for viewport only (extended viewport - includes partially visible)
-   */
-  private async extractViewportDOMContext(maxElements: number): Promise<DOMContext> {
-    if (!this.debugger) throw new Error('Debugger not initialized');
-
-    // Get document to ensure DOM is ready
-    await this.debugger.sendCommand('DOM.getDocument', { depth: -1 });
-
-    // Execute script to extract viewport-specific DOM information
-    const script = this.generateViewportDOMExtractionScript(maxElements);
-    const result = await this.debugger.sendCommand('Runtime.evaluate', {
-      expression: script,
-      returnByValue: true,
-      awaitPromise: true
-    });
-
-    if (result.exceptionDetails) {
-      throw new Error(`Viewport DOM extraction failed: ${result.exceptionDetails.text}`);
-    }
-
-    return result.result.value as DOMContext;
-  }
-
-  /**
-   * Generate script for viewport-based DOM extraction
-   * Extended viewport mode: includes elements within 100px of viewport edges
-   */
-  private generateViewportDOMExtractionScript(maxElements: number): string {
-    return `
-      (async function() {
-        const maxElements = ${maxElements};
-        
-        // Get viewport bounds with extended range (100px buffer)
-        const viewportBounds = {
-          top: window.scrollY,
-          bottom: window.scrollY + window.innerHeight,
-          left: window.scrollX,
-          right: window.scrollX + window.innerWidth
-        };
-        
-        // Helper: Check if element is visible
-        function isVisible(el) {
-          const style = window.getComputedStyle(el);
-          const rect = el.getBoundingClientRect();
-          return style.display !== 'none' && 
-                 style.visibility !== 'hidden' && 
-                 style.opacity !== '0' &&
-                 rect.width > 0 && 
-                 rect.height > 0;
-        }
-        
-        // Helper: Check if element is in extended viewport
-        function isInViewport(el) {
-          const rect = el.getBoundingClientRect();
-          const absoluteTop = rect.top + window.scrollY;
-          const absoluteBottom = rect.bottom + window.scrollY;
-          const absoluteLeft = rect.left + window.scrollX;
-          const absoluteRight = rect.right + window.scrollX;
-          
-          // Check if element intersects with extended viewport bounds
-          return !(absoluteBottom < viewportBounds.top || 
-                   absoluteTop > viewportBounds.bottom ||
-                   absoluteRight < viewportBounds.left ||
-                   absoluteLeft > viewportBounds.right);
-        }
-        
-        // Helper: Generate selector
-        function getSelector(el) {
-          if (el.id) return '#' + CSS.escape(el.id);
-          if (el.hasAttribute('data-testid')) {
-            return '[data-testid="' + el.getAttribute('data-testid') + '"]';
-          }
-          
-          let path = [];
-          let current = el;
-          while (current && current.nodeType === Node.ELEMENT_NODE && path.length < 4) {
-            let selector = current.nodeName.toLowerCase();
-            if (current.id) {
-              selector += '#' + CSS.escape(current.id);
-              path.unshift(selector);
-              break;
-            }
-            if (current.className && typeof current.className === 'string') {
-              const classes = current.className.trim().split(/\\s+/)
-                .filter(c => c && !c.match(/^(ng-|_)/))
-                .slice(0, 2)
-                .map(c => CSS.escape(c))
-                .join('.');
-              if (classes) selector += '.' + classes;
-            }
-            path.unshift(selector);
-            current = current.parentElement;
-          }
-          return path.join(' > ');
-        }
-        
-        // Helper: Extract interactive element info
-        function extractInteractiveElement(el) {
-          const rect = el.getBoundingClientRect();
-          
-          // Collect all attributes
-          const attributes = {};
-          for (const attr of el.attributes) {
-            attributes[attr.name] = attr.value;
-          }
-          
-          return {
-            selector: getSelector(el),
-            tagName: el.tagName,
-            text: (el.innerText || el.textContent || '').substring(0, 200).trim() || undefined,
-            boundingBox: {
-              x: Math.round(rect.x),
-              y: Math.round(rect.y),
-              width: Math.round(rect.width),
-              height: Math.round(rect.height)
-            },
-            isDisabled: el.disabled || el.getAttribute('aria-disabled') === 'true',
-            attributes
-          };
-        }
-        
-        // Extract forms in viewport
-        const forms = Array.from(document.querySelectorAll('form'))
-          .filter(el => isVisible(el) && isInViewport(el))
-          .slice(0, 50)
-          .map(form => ({
-            action: form.action || undefined,
-            method: form.method || undefined,
-            selector: getSelector(form),
-            fields: Array.from(form.elements)
-              .filter(el => el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT')
-              .filter(el => isVisible(el) && isInViewport(el))
-              .slice(0, 50)
-              .map(extractInteractiveElement)
-          }));
-        
-        // Extract ALL interactive elements in viewport
-        const seenSelectors = new Set();
-        const allInteractive = [];
-        
-        const interactiveSelectors = [
-          'button',
-          'a[href]',
-          'input',
-          'textarea',
-          'select',
-          '[role="button"]',
-          '[role="link"]',
-          '[role="tab"]',
-          '[role="menuitem"]',
-          '[onclick]',
-          '[tabindex]'
-        ];
-        
-        for (const selector of interactiveSelectors) {
-          const elements = document.querySelectorAll(selector);
-          for (const el of elements) {
-            if (!isVisible(el) || !isInViewport(el)) continue;
-            
-            const elSelector = getSelector(el);
-            if (seenSelectors.has(elSelector)) continue;
-            
-            seenSelectors.add(elSelector);
-            allInteractive.push(extractInteractiveElement(el));
-            
-            if (allInteractive.length >= maxElements) break;
-          }
-          if (allInteractive.length >= maxElements) break;
-        }
-        
-        // Statistics
-        const stats = {
-          totalElements: document.querySelectorAll('*').length,
-          interactiveElements: allInteractive.length,
-          forms: forms.length
-        };
-        
-        // Add viewport info to help LLM understand context
-        const viewportInfo = {
-          width: window.innerWidth,
-          height: window.innerHeight,
-          scrollY: window.scrollY,
-          scrollX: window.scrollX,
-          maxScrollY: document.documentElement.scrollHeight - window.innerHeight,
-          maxScrollX: document.documentElement.scrollWidth - window.innerWidth
-        };
-        
-        return {
-          forms,
-          allInteractiveElements: allInteractive,
-          stats,
-          viewport: viewportInfo
-        };
-      })();
-    `;
-  }
-
-  /**
-   * Sleep helper
-   */
-  private sleep(ms: number): Promise<void> {
-    return new Promise(resolve => setTimeout(resolve, ms));
-  }
-
-  /**
-   * Generate script for DOM extraction (optimized for minimal context)
-   */
-  private generateDOMExtractionScript(options: Required<ContextExtractionOptions>): string {
-    return `
-      (async function() {
-        const maxElements = ${options.maxInteractiveElements};
-        
-        // Helper: Check if element is visible (ALWAYS check, never include hidden)
-        function isVisible(el) {
-          const style = window.getComputedStyle(el);
-          const rect = el.getBoundingClientRect();
-          return style.display !== 'none' && 
-                 style.visibility !== 'hidden' && 
-                 style.opacity !== '0' &&
-                 rect.width > 0 && 
-                 rect.height > 0;
-        }
-        
-        // Helper: Generate selector
-        function getSelector(el) {
-          if (el.id) return '#' + CSS.escape(el.id);
-          if (el.hasAttribute('data-testid')) {
-            return '[data-testid="' + el.getAttribute('data-testid') + '"]';
-          }
-          
-          let path = [];
-          let current = el;
-          while (current && current.nodeType === Node.ELEMENT_NODE && path.length < 4) {
-            let selector = current.nodeName.toLowerCase();
-            if (current.id) {
-              selector += '#' + CSS.escape(current.id);
-              path.unshift(selector);
-              break;
-            }
-            if (current.className && typeof current.className === 'string') {
-              const classes = current.className.trim().split(/\\s+/)
-                .filter(c => c && !c.match(/^(ng-|_)/))
-                .slice(0, 2)
-                .map(c => CSS.escape(c))
-                .join('.');
-              if (classes) selector += '.' + classes;
-            }
-            path.unshift(selector);
-            current = current.parentElement;
-          }
-          return path.join(' > ');
-        }
-        
-        // Helper: Get nearby text for context
-        function getNearbyText(el) {
-          const parent = el.parentElement;
-          if (!parent) return '';
-          const text = parent.innerText || '';
-          return text.substring(0, 100).trim();
-        }
-        
-        // Helper: Extract interactive element info (OPTIMIZED - only essential fields)
-        function extractInteractiveElement(el) {
-          const rect = el.getBoundingClientRect();
-          
-          // Collect all attributes
-          const attributes = {};
-          for (const attr of el.attributes) {
-            attributes[attr.name] = attr.value;
-          }
-          
-          // Only include essential fields
-          return {
-            selector: getSelector(el),
-            tagName: el.tagName,
-            text: (el.innerText || el.textContent || '').substring(0, 200).trim() || undefined,
-            boundingBox: {
-              x: Math.round(rect.x),
-              y: Math.round(rect.y),
-              width: Math.round(rect.width),
-              height: Math.round(rect.height)
-            },
-            isDisabled: el.disabled || el.getAttribute('aria-disabled') === 'true',
-            attributes
-          };
-        }
-        
-        // Extract forms (critical for automation)
-        const forms = Array.from(document.querySelectorAll('form'))
-          .filter(isVisible)
-          .slice(0, 50)
-          .map(form => ({
-            action: form.action || undefined,
-            method: form.method || undefined,
-            selector: getSelector(form),
-            fields: Array.from(form.elements)
-              .filter(el => el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT')
-              .filter(isVisible)
-              .slice(0, 50)
-              .map(extractInteractiveElement)
-          }));
-        
-        // Extract ALL interactive elements (NO DUPLICATES - single source of truth)
-        // This includes buttons, inputs, links, selects, and any clickable elements
-        const seenSelectors = new Set();
-        const allInteractive = [];
-        
-        // Query all potentially interactive elements
-        const interactiveSelectors = [
-          'button',
-          'a[href]',
-          'input',
-          'textarea',
-          'select',
-          '[role="button"]',
-          '[role="link"]',
-          '[role="tab"]',
-          '[role="menuitem"]',
-          '[onclick]',
-          '[tabindex]'
-        ];
-        
-        for (const selector of interactiveSelectors) {
-          const elements = document.querySelectorAll(selector);
-          for (const el of elements) {
-            if (!isVisible(el)) continue;
-            
-            const elSelector = getSelector(el);
-            if (seenSelectors.has(elSelector)) continue;
-            
-            seenSelectors.add(elSelector);
-            allInteractive.push(extractInteractiveElement(el));
-            
-            if (allInteractive.length >= maxElements) break;
-          }
-          if (allInteractive.length >= maxElements) break;
-        }
-        
-        // Statistics
-        const stats = {
-          totalElements: document.querySelectorAll('*').length,
-          interactiveElements: allInteractive.length,
-          forms: forms.length
-        };
-        
-        return {
-          forms,
-          allInteractiveElements: allInteractive,
-          stats
-        };
-      })();
-    `;
-  }
-
-
 }
