@@ -1,4 +1,4 @@
-import { BaseHandler, HandlerContext } from '../core/BaseHandler';
+import { BaseHandler, HandlerContext } from './BaseHandler';
 import type { ToolExecutionResult, ClickParams } from '@/shared/types';
 
 export class ClickHandler extends BaseHandler {

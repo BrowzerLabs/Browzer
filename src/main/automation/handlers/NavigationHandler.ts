@@ -1,4 +1,4 @@
-import { BaseHandler, HandlerContext } from '../core/BaseHandler';
+import { BaseHandler, HandlerContext } from './BaseHandler';
 import type { NavigateParams, WaitForElementParams, ToolExecutionResult } from '@/shared/types';
 
 

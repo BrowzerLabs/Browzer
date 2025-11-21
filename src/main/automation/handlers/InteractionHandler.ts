@@ -1,4 +1,4 @@
-import { BaseHandler, HandlerContext } from '../core/BaseHandler';
+import { BaseHandler, HandlerContext } from './BaseHandler';
 import type { KeyPressParams, ScrollParams, ToolExecutionResult } from '@/shared/types';
 
 export class InteractionHandler extends BaseHandler {

@@ -1,5 +1,4 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
-import { BaseHandler, HandlerContext } from '../core/BaseHandler';
+import { BaseHandler, HandlerContext } from './BaseHandler';
 import type { ToolExecutionResult, TypeParams } from '@/shared/types';
 
 
