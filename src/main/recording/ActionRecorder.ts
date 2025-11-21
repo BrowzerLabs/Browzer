@@ -19,7 +19,6 @@ export class ActionRecorder {
   private currentTabId: string | null = null;
   private currentTabUrl: string | null = null;
   private currentTabTitle: string | null = null;
-  private currentWebContentsId: number | null = null;
 
 
 
@@ -46,16 +45,6 @@ export class ActionRecorder {
   }
 
   /**
-   * Set the current tab context for recorded actions
-   */
-  public setTabContext(tabId: string, tabUrl: string, tabTitle: string, webContentsId: number): void {
-    this.currentTabId = tabId;
-    this.currentTabUrl = tabUrl;
-    this.currentTabTitle = tabTitle;
-    this.currentWebContentsId = webContentsId;
-  }
-
-  /**
    * Switch to a different WebContentsView during active recording
    * This is the key method for multi-tab recording support
    */
@@ -79,7 +68,6 @@ export class ActionRecorder {
       this.currentTabId = tabId;
       this.currentTabUrl = tabUrl;
       this.currentTabTitle = tabTitle;
-      this.currentWebContentsId = newView.webContents.id;
 
       await this.injectEventTracker();
 
@@ -102,7 +90,6 @@ export class ActionRecorder {
     tabId?: string,
     tabUrl?: string,
     tabTitle?: string,
-    webContentsId?: number,
     recordingId?: string
   ): Promise<void> {
     if (this.isRecording) {
@@ -125,7 +112,6 @@ export class ActionRecorder {
         this.currentTabId = tabId;
         this.currentTabUrl = tabUrl;
         this.currentTabTitle = tabTitle;
-        this.currentWebContentsId = webContentsId || this.view.webContents.id;
       }
 
       // Initialize snapshot manager for this recording
@@ -167,7 +153,6 @@ export class ActionRecorder {
       this.currentTabId = null;
       this.currentTabUrl = null;
       this.currentTabTitle = null;
-      this.currentWebContentsId = null;
       
       return [...this.actions];
     } catch (error) {
@@ -210,18 +195,6 @@ export class ActionRecorder {
    */
   public getSnapshotsDirectory(recordingId: string): string {
     return this.snapshotManager.getSnapshotsDirectory(recordingId);
-  }
-
-  /**
-   * Get current tab context
-   */
-  public getCurrentTabContext(): { tabId: string | null; tabUrl: string | null; tabTitle: string | null; webContentsId: number | null } {
-    return {
-      tabId: this.currentTabId,
-      tabUrl: this.currentTabUrl,
-      tabTitle: this.currentTabTitle,
-      webContentsId: this.currentWebContentsId
-    };
   }
 
   /**
@@ -873,7 +846,6 @@ export class ActionRecorder {
       tabId: this.currentTabId || undefined,
       tabUrl: this.currentTabUrl || undefined,
       tabTitle: this.currentTabTitle || undefined,
-      webContentsId: this.currentWebContentsId || undefined,
     };
     
     // Capture snapshot asynchronously (non-blocking)
@@ -908,7 +880,7 @@ export class ActionRecorder {
       'about:',
       'chrome:',
       'chrome-extension:',
-      '/log?',
+      '/log',
       '/analytics',
       '/tracking',
     ];
@@ -937,7 +909,6 @@ export class ActionRecorder {
       tabId: this.currentTabId || undefined,
       tabUrl: this.currentTabUrl || undefined,
       tabTitle: this.currentTabTitle || undefined,
-      webContentsId: this.currentWebContentsId || undefined,
     };
 
     this.actions.push(action);

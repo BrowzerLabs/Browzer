@@ -154,8 +154,9 @@ export function SubscriptionPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-teal-50 dark:bg-slate-900">
-        <Loader2Icon className='size-7 animate-spin text-teal-500 dark:text-teal-400' />
+      <div className="min-h-screen flex flex-col gap-2 items-center justify-center bg-teal-50 dark:bg-slate-900 text-teal-500 dark:text-teal-400">
+        <Loader2Icon className='size-7 animate-spin' />
+        <p className='text-xs'>Loading Your Subscription...</p>
       </div>
     );
   }

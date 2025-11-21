@@ -9,6 +9,7 @@ import { AuthService } from '@/main/auth';
 import { SubscriptionService } from '@/main/subscription/SubscriptionService';
 import { RecordedAction, HistoryQuery, AppSettings, SignUpCredentials, SignInCredentials, UpdateProfileRequest } from '@/shared/types';
 import { CheckoutSessionRequest, PortalSessionRequest } from '@/shared/types/subscription';
+import { TabManager } from '@/main/browser';
 
 /**
  * IPCHandlers - Centralized IPC communication setup
@@ -17,6 +18,7 @@ import { CheckoutSessionRequest, PortalSessionRequest } from '@/shared/types/sub
 export class IPCHandlers {
   private settingsStore: SettingsStore;
   private passwordManager: PasswordManager;
+  private tabManager: TabManager;
   private authService: AuthService;
   private subscriptionService: SubscriptionService;
 
@@ -26,6 +28,7 @@ export class IPCHandlers {
     private windowManager: WindowManager,
     authService: AuthService,
   ) {
+    this.tabManager = this.browserManager.getTabManager();
     this.settingsStore = new SettingsStore();
     this.passwordManager = this.browserManager.getPasswordManager();
     this.authService = authService;
@@ -56,49 +59,49 @@ export class IPCHandlers {
     });
 
     ipcMain.handle('browser:create-tab', async (_, url?: string) => {
-      return this.browserManager.createTab(url);
+      return this.tabManager.createTab(url);
     });
 
     ipcMain.handle('browser:close-tab', async (_, tabId: string) => {
-      return this.browserManager.closeTab(tabId);
+      return this.tabManager.closeTab(tabId);
     });
 
     ipcMain.handle('browser:switch-tab', async (_, tabId: string) => {
-      return this.browserManager.switchToTab(tabId);
+      return this.tabManager.switchToTab(tabId);
     });
 
     ipcMain.handle('browser:get-tabs', async () => {
-      return this.browserManager.getAllTabs();
+      return this.tabManager.getAllTabs();
     });
   }
 
   private setupNavigationHandlers(): void {
     ipcMain.handle('browser:navigate', async (_, tabId: string, url: string) => {
-      return this.browserManager.navigate(tabId, url);
+      return this.tabManager.navigate(tabId, url);
     });
 
     ipcMain.handle('browser:go-back', async (_, tabId: string) => {
-      return this.browserManager.goBack(tabId);
+      return this.tabManager.goBack(tabId);
     });
 
     ipcMain.handle('browser:go-forward', async (_, tabId: string) => {
-      return this.browserManager.goForward(tabId);
+      return this.tabManager.goForward(tabId);
     });
 
     ipcMain.handle('browser:reload', async (_, tabId: string) => {
-      return this.browserManager.reload(tabId);
+      return this.tabManager.reload(tabId);
     });
 
     ipcMain.handle('browser:stop', async (_, tabId: string) => {
-      return this.browserManager.stop(tabId);
+      return this.tabManager.stop(tabId);
     });
 
     ipcMain.handle('browser:can-go-back', async (_, tabId: string) => {
-      return this.browserManager.canGoBack(tabId);
+      return this.tabManager.canGoBack(tabId);
     });
 
     ipcMain.handle('browser:can-go-forward', async (_, tabId: string) => {
-      return this.browserManager.canGoForward(tabId);
+      return this.tabManager.canGoForward(tabId);
     });
   }
 
