@@ -19,18 +19,8 @@ export class IntermediatePlanHandler {
 
   public async handleIntermediatePlanCompletion(): Promise<PlanExecutionResult> {
 
-    const lastCompletedPlan = this.stateManager.getLastCompletedPlan();
     const continuationPrompt = SystemPromptBuilder.buildIntermediatePlanContinuationPrompt({
       userGoal: this.stateManager.getUserGoal(),
-      completedPlan: {
-        analysis: lastCompletedPlan?.plan.analysis || '',
-        stepsExecuted: lastCompletedPlan?.stepsExecuted || 0
-      },
-      executedSteps: this.stateManager.getExecutedSteps().map(es => ({
-        stepNumber: es.stepNumber,
-        toolName: es.toolName,
-        success: es.success,
-      })),
       extractedContext: this.getExtractedContextSummary(),
       currentUrl: this.getCurrentUrl()
     });

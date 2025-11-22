@@ -2,82 +2,43 @@ import { RecordedAction, RecordingSession } from "@/shared/types";
 
 export class SystemPromptBuilder {
 
-  /**
-   * Build continuation prompt after intermediate plan execution
-   * 
-   * This is used when an intermediate plan completes successfully and
-   * Claude needs to generate the next plan based on extracted context.
-   */
   public static buildIntermediatePlanContinuationPrompt(params: {
     userGoal: string;
-    completedPlan: {
-      analysis: string;
-      stepsExecuted: number;
-    };
-    executedSteps: Array<{
-      stepNumber: number;
-      toolName: string;
-      success: boolean;
-      summary?: string;
-    }>;
     extractedContext?: {
       url: string;
       interactiveElements: number;
       forms: number;
-      // Full context is in the tool_result, this is just summary
     };
     currentUrl: string;
   }): string {
-    const { userGoal, completedPlan, executedSteps, extractedContext, currentUrl } = params;
+    const { userGoal, currentUrl } = params;
 
     return `**INTERMEDIATE PLAN COMPLETED SUCCESSFULLY**
-
 **Original Goal:**
 ${userGoal}
 
-**Completed Plan Analysis:**
-${completedPlan.analysis}
-
-**Executed Steps (${completedPlan.stepsExecuted} total):**
-${executedSteps.map(step => 
-  `- Step ${step.stepNumber}: ${step.toolName} - ✅ SUCCESS${step.summary ? ` (${step.summary})` : ''}`
-).join('\n')}
-
 **Current State:**
 - Current URL: ${currentUrl}
-${extractedContext ? `- Interactive elements found: ${extractedContext.interactiveElements}` : ''}
-${extractedContext ? `- Forms found: ${extractedContext.forms}` : ''}
 
 **Your Task:**
-You have successfully executed an intermediate plan. Now:
+You have successfully executed your intermediate plan. Now:
 
-1. **Analyze the extracted context** (provided in the tool_result above)
-   - Review the current page elements, selectors, and structure
-   - Understand what options are available for the next steps
+1. **Analyze the extracted context/snapshot** (the latest tool_result)
+   - Review the current page elements, attributes, and structure
    - Identify the correct elements to interact with
 
 2. **Generate the NEXT plan** to continue toward the goal:
-   - This can be another INTERMEDIATE plan (only if more analysis needed)
-   - Or a FINAL plan (if you can now complete the entire remaining tasks from the current state)
+   - This can be another INTERMEDIATE plan (only if dynamic analysis needed in further step(s))
+   - Or a FINAL plan (if you can now complete the remaining tasks from the current state)
    - Use the extracted context to choose accurate selectors
    - Start from the CURRENT state (don't repeat completed steps)
 
 3. **Decide plan type:**
    - INTERMEDIATE: ONLY if you need to execute some steps and analyze again
    - FINAL: If you can now complete all remaining steps to achieve the goal
-
-Remember: You've made progress. Focus on what remains to achieve the goal using the current page context.`;
+`;
   }
 
-  /**
-   * Build error recovery user prompt
-   * 
-   * @param errorInfo - Information about the error that occurred
-   * @param userGoal - Original user goal
-   * @param failedStep - The step that failed
-   * @param executedSteps - Steps that were successfully executed
-   * @returns Error recovery prompt
-   */
   public static buildErrorRecoveryPrompt(params: {
     errorInfo: {
       message: string;
@@ -91,24 +52,15 @@ Remember: You've made progress. Focus on what remains to achieve the goal using 
       toolName: string;
       params: unknown;
     };
-    executedSteps: Array<{
-      stepNumber: number;
-      toolName: string;
-      success: boolean;
-    }>;
+    successfullyExecutedSteps: number;
     currentUrl?: string;
   }): string {
-    const { errorInfo, userGoal, failedStep, executedSteps, currentUrl } = params;
+    const { errorInfo, userGoal, failedStep, successfullyExecutedSteps, currentUrl } = params;
 
     return `**AUTOMATION ERROR ENCOUNTERED**
 
 **Original Goal:**
 ${userGoal}
-
-**Execution Progress:**
-${executedSteps.map(step => 
-  `- Step ${step.stepNumber}: ${step.toolName} - ${step.success ? '✅ SUCCESS' : '❌ FAILED'}`
-).join('\n')}
 
 **Failed Step:**
 - Step ${failedStep.stepNumber}: ${failedStep.toolName}
@@ -128,10 +80,8 @@ ${currentUrl ? `- Current URL: ${currentUrl}` : '- URL unknown'}
 2. Generate a NEW complete automation plan that:
    - Starts from the CURRENT state (don't repeat successful steps)
    - Completes the remaining work to achieve the goal
-   - Uses correct selectors based on browser context
-   - Avoids the error that just occurred
 
-Remember: The automation has already completed ${executedSteps.filter(s => s.success).length} steps successfully. Focus on what remains to achieve the goal.`;
+Remember: The automation has already completed ${successfullyExecutedSteps} steps successfully. Focus on what remains to achieve the goal.`;
   }
 
   public static formatRecordedSession(session: RecordingSession): string {

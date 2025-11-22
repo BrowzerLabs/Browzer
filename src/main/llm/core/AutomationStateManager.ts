@@ -276,7 +276,7 @@ export class AutomationStateManager extends EventEmitter {
         toolName: failedStep.toolName,
         params: failedStep.input
       },
-      executedSteps: this.executed_steps,
+      successfullyExecutedSteps: this.executed_steps.filter(s => s.success).length,
       currentUrl: result.url
     });
 
