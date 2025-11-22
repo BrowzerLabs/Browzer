@@ -1,6 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { api } from '@/main/api';
 import { SystemPromptType } from '@/shared/types';
+import { AutomationStatus } from '..';
 
 export class AutomationClient {
   private sessionId: string | null = null;
@@ -10,55 +11,21 @@ export class AutomationClient {
     this.onThinking = onThinking;
   }
 
-  public async startAutomation(): Promise<string> {
-    try {
-      if (this.onThinking) {
-        this.onThinking('Starting automation session...');
-      }
-
-      const response = await api.post<{ session_id?: string }>('/automation/start');
-      
-      if (!response.success || !response.data) {
-        throw new Error(response.error);
-      }
-      this.sessionId = response.data.session_id;
-      return this.sessionId;
-
-    } catch (error) {
-      console.error('❌ [AutomationClient] Failed to start automation:', error);
-      throw error;
-    }
-  }
-
-  public async createAutomationPlan(params: {
-    systemPromptType: SystemPromptType;
-    userPrompt: string;
-    tools: Anthropic.Tool[];
-    cachedContext?: string;
-  }): Promise<Anthropic.Message> {
-    const { systemPromptType, userPrompt, tools, cachedContext } = params;
-    
-    if (!this.sessionId) {
-      throw new Error('No active automation session. Call startAutomation() first.');
-    }
+  public async createAutomationPlan(
+    formatted_session: string,
+    user_goal: string
+  ): Promise<Anthropic.Message> {
 
     try {
       if (this.onThinking) {
-        this.onThinking('Generating automation plan...');
-      }
+        this.onThinking('Creating automation plan...');
+      } 
 
-      const response = await api.post<{ message: any }>(
+      const response = await api.post<{ message: Anthropic.Message; session_id: string }>(
         '/automation/plan',
         {
-          system_prompt: systemPromptType,
-          user_prompt: userPrompt,
-          tools: tools,
-          cached_context: cachedContext
-        },
-        {
-          headers: {
-            'session-id': this.sessionId
-          }
+          recording_session: formatted_session,
+          user_goal
         }
       );
 
@@ -66,8 +33,10 @@ export class AutomationClient {
         throw new Error(response.error || 'Failed to create automation plan');
       }
 
-      console.log('✅ [AutomationClient] Automation plan created successfully');
-      return response.data.message as Anthropic.Message;
+      this.sessionId = response.data.session_id;
+      console.log(`✅ [AutomationClient] Session created: ${this.sessionId}`);
+
+      return response.data.message;
 
     } catch (error) {
       console.error('❌ [AutomationClient] Failed to create automation plan:', error);
@@ -75,16 +44,15 @@ export class AutomationClient {
     }
   }
 
-  public async continueConversation(params: {
-    systemPromptType: SystemPromptType;
-    messages: Anthropic.MessageParam[];
-    tools: Anthropic.Tool[];
-    cachedContext?: string;
-  }): Promise<Anthropic.Message> {
-    const { systemPromptType, messages, tools, cachedContext } = params;
+  public async continueConversation(
+    system_prompt_type: SystemPromptType,
+    messages: Anthropic.MessageParam[],
+    cachedContext: string
+  ): Promise<Anthropic.Message> {
 
     if (!this.sessionId) {
-      throw new Error('No active automation session. Call startAutomation() first.');
+      console.error('No active automation session. Call createAutomationPlan() first.');
+      throw new Error('No active automation session');
     }
 
     try {
@@ -92,23 +60,11 @@ export class AutomationClient {
         this.onThinking('Analyzing and generating next steps...');
       }
 
-      messages.forEach(message => {
-        console.log('message-role: ', message.role);
-        if (typeof message.content === 'string') {
-          console.log('message-content: ', message.content);
-        } else {
-          message.content.forEach(content => {
-            console.log('message-content: ', content);
-          })
-        }
-      })
-
-      const response = await api.post<{ message: any }>(
+      const response = await api.post<{ message: Anthropic.Message }>(
         '/automation/continue',
         {
-          system_prompt: systemPromptType,
+          system_prompt_type: system_prompt_type,
           messages: messages,
-          tools: tools,
           cached_context: cachedContext
         },
         {
@@ -131,6 +87,39 @@ export class AutomationClient {
     }
   }
 
+  public async updateSessionStatus(status: AutomationStatus): Promise<void> {
+    if (!this.sessionId) {
+      console.warn('[AutomationClient] No active automation session to update');
+      return;
+    }
+
+    try {
+      console.log(`[AutomationClient] 🔄 Updating session ${this.sessionId} status to ${status}`);
+
+      const response = await api.post<{ success: boolean; session_id: string; status: string }>(
+        '/automation/session/update',
+        {
+          status: status
+        },
+        {
+          headers: {
+            'session-id': this.sessionId
+          }
+        }
+      );
+
+      if (!response.success || !response.data?.success) {
+        throw new Error(response.error || 'Failed to update session status');
+      }
+
+      console.log(`✅ [AutomationClient] Session ${this.sessionId} status updated to ${status}`);
+
+    } catch (error) {
+      console.error('❌ [AutomationClient] Failed to update session status:', error);
+      throw error;
+    }
+  }
+
   public async endAutomation(): Promise<void> {
     if (!this.sessionId) {
       console.warn('[AutomationClient] No active automation session to end');
@@ -140,20 +129,6 @@ export class AutomationClient {
     try {
       if (this.onThinking) {
         this.onThinking('Ending automation session...');
-      }
-
-      const response = await api.post<string>(
-        '/automation/end',
-        undefined,
-        {
-          headers: {
-            'session-id': this.sessionId
-          }
-        }
-      );
-
-      if (!response.success) {
-        throw new Error(response.error || 'Failed to end automation session');
       }
 
       console.log(`✅ [AutomationClient] Automation session ended: ${this.sessionId}`);
@@ -169,7 +144,6 @@ export class AutomationClient {
   public getSessionId(): string | null {
     return this.sessionId;
   }
-
   public getUsageStats(response: Anthropic.Message): {
     inputTokens: number;
     outputTokens: number;

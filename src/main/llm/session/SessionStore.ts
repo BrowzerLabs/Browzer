@@ -15,6 +15,7 @@ import {
   AddStepOptions,
   SessionMetadata
 } from './types';
+import { AutomationStatus } from '..';
 
 /**
  * SessionStore - SQLite database for automation sessions
@@ -133,7 +134,7 @@ export class SessionStore {
       id,
       userGoal: options.userGoal,
       recordingId: options.recordingId,
-      status: 'running',
+      status: AutomationStatus.RUNNING,
       createdAt: now,
       updatedAt: now,
       metadata

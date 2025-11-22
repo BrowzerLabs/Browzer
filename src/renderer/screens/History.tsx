@@ -199,9 +199,17 @@ export function History() {
           </div>
 
           <div className="flex gap-2">
-            <Button onClick={() => { loadHistory(); loadStats(); toast.success('History Refreshed'); }} disabled={loading}>
-              <RefreshCcw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-              Refresh
+            <Button 
+              onClick={() => { 
+                loadHistory(); 
+                loadStats(); 
+                toast.success('History refreshed'); 
+              }} 
+              size='icon-lg'
+              variant='outline'
+              disabled={loading}
+            >
+              <RefreshCcw />
             </Button>
             {selectedEntries.size > 0 && (
               <Button variant="destructive" onClick={handleDeleteSelected}>
@@ -209,9 +217,14 @@ export function History() {
                 Delete Selected ({selectedEntries.size})
               </Button>
             )}
-            <Button onClick={handleClearAll} className='bg-red-100 text-red-600 hover:bg-red-200'>
-              <Trash2 className="w-4 h-4 mr-2" />
-              Clear All
+            <Button 
+              onClick={handleClearAll} 
+              className='bg-red-100 text-red-600 hover:bg-red-200'
+              size='icon-lg'
+              variant='outline'
+              title="Clear all history"
+            >
+              <Trash2 className="w-4 h-4" />
             </Button>
           </div>
         </div>

@@ -1,7 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
-
-import Anthropic from "@anthropic-ai/sdk";
-
 /**
  * Browser Automation Types
  * 
@@ -72,60 +68,52 @@ export interface PlanExecutionData {
 // ============================================================================
 // Tool Parameter Types
 // ============================================================================
+export interface ElementFinderParams {
+  tag: string;
+  text?: string
+  attributes?: Record<string, string>;  
+  boundingBox?: { x: number; y: number; width: number; height: number };
+  elementIndex?: number;           
+}
 
 /**
  * Parameters for navigate tool
  */
 export interface NavigateParams {
   url: string;
-  waitUntil?: 'load' | 'domcontentloaded' | 'networkidle';
-  timeout?: number; // milliseconds, default 30000
 }
 
 /**
  * Parameters for click tool
  */
-export interface ClickParams {
-  selector: string; // Primary CSS selector
-  backupSelectors?: string[]; // Fallback selectors to try if primary fails
-  text?: string; // Expected text content for verification
-  boundingBox?: { x: number; y: number; width: number; height: number }; // Expected position for verification
-  waitForElement?: number; // Wait time in ms before attempting click (default 1000)
-  verifyVisible?: boolean; // Ensure element is visible before clicking (default true)
+export interface ClickParams extends ElementFinderParams {
+  click_position?: { x: number; y: number };
 }
 
 /**
  * Parameters for type/input tool
  */
-export interface TypeParams {
-  selector: string;
-  backupSelectors?: string[];
+export interface TypeParams extends ElementFinderParams {
   text: string;
   clearFirst?: boolean; // Clear existing value before typing (default true)
   pressEnter?: boolean; // Press Enter after typing (default false)
-  waitForElement?: number;
 }
+
 
 /**
  * Parameters for select tool (dropdown)
  */
-export interface SelectParams {
-  selector: string;
-  backupSelectors?: string[];
+export interface SelectParams extends ElementFinderParams {
   value?: string; // Select by value attribute
   label?: string; // Select by visible text
   index?: number; // Select by index
-  waitForElement?: number;
 }
 
 /**
  * Parameters for checkbox/radio tool
  */
-export interface CheckboxParams {
-  selector: string;
-  backupSelectors?: string[];
+export interface CheckboxParams extends ElementFinderParams {
   checked: boolean; // true to check, false to uncheck
-  waitForElement?: number;
 }
 
 /**
@@ -137,13 +125,11 @@ export interface WaitForElementParams {
   timeout?: number; // milliseconds, default 10000
 }
 
-/**
- * Parameters for keyPress tool
- */
 export interface KeyPressParams {
   key: string; // e.g., 'Enter', 'Escape', 'Tab', 'ArrowDown'
   modifiers?: ('Control' | 'Shift' | 'Alt' | 'Meta')[]; // Modifier keys
-  selector?: string; // Optional: focus element before key press
+  // Optional: element to focus before key press
+  focusElement?: ElementFinderParams;
 }
 
 /**
@@ -159,8 +145,10 @@ export interface ScrollParams {
  * Parameters for submit tool
  */
 export interface SubmitParams {
-  formSelector?: string; // Optional: specific form to submit
-  submitButtonSelector?: string; // Optional: click submit button instead
+  // Optional: specific form to submit
+  form?: ElementFinderParams;
+  // Optional: click submit button instead
+  submitButton?: ElementFinderParams;
 }
 
 // ============================================================================
@@ -171,55 +159,12 @@ export interface SubmitParams {
  * Element information found during execution
  */
 export interface FoundElement {
-  selector: string; // The selector that successfully found the element
-  selectorType: 'primary' | 'backup'; // Which selector was used
   tagName: string;
   text?: string;
   attributes?: Record<string, string>;
   boundingBox: { x: number; y: number; width: number; height: number };
   isVisible: boolean;
   isEnabled: boolean;
-}
-
-/**
- * Execution effects - what happened after the action
- */
-export interface ExecutionEffects {
-  // Navigation
-  navigationOccurred: boolean;
-  newUrl?: string;
-  navigationTiming?: number; // ms after action
-  
-  // DOM changes
-  domMutations?: {
-    addedNodes: number;
-    removedNodes: number;
-    attributeChanges: number;
-  };
-  
-  // Modal/Dialog detection
-  modalAppeared?: {
-    detected: boolean;
-    selector?: string;
-    role?: string;
-    ariaLabel?: string;
-  };
-  
-  // Focus changes
-  focusChanged?: {
-    occurred: boolean;
-    newFocusSelector?: string;
-    newFocusTagName?: string;
-  };
-  
-  // Form submission
-  formSubmitted?: boolean;
-  
-  // Network activity
-  networkRequests?: number; // Count of requests triggered
-  
-  // Summary for LLM
-  summary: string; // Human-readable description of what happened
 }
 
 /**
@@ -233,6 +178,8 @@ export interface AutomationError {
     | 'ELEMENT_COVERED'
     | 'TIMEOUT'
     | 'INVALID_SELECTOR'
+    | 'INVALID_PARAMS'
+    | 'CLICK_FAILED'
     | 'NAVIGATION_FAILED'
     | 'CDP_ERROR'
     | 'EXECUTION_ERROR'
@@ -257,33 +204,12 @@ export interface AutomationError {
 export interface ToolExecutionResult {
   success: boolean;
   toolName: string;
-  executionTime: number; // milliseconds
-  
-  // Success data
-  element?: FoundElement; // Element that was acted upon
-  effects?: ExecutionEffects; // What happened after the action
   value?: any; // Return value (e.g., extracted text, attribute value)
   context?: any; // Return value (e.g., extracted text, attribute value)
-  
+  tabId?: string;
+  url: string;
   // Error data
   error?: AutomationError;
-  
-  // Metadata
-  timestamp: number;
-  tabId: string;
-  url: string;
-}
-
-// ============================================================================
-// Tool Registry Types (Anthropic Claude Format)
-// ============================================================================
-
-/**
- * Complete tool registry
- */
-export interface ToolRegistry {
-  tools: Anthropic.Tool[];
-  version: string;
 }
 
 // ============================================================================
@@ -296,8 +222,6 @@ export interface ToolRegistry {
 export interface ElementQueryResult {
   found: boolean;
   nodeId?: number;
-  selector: string;
-  selectorType: 'primary' | 'backup';
   element?: {
     tagName: string;
     text?: string;

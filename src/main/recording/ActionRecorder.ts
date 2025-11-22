@@ -272,7 +272,6 @@ export class ActionRecorder {
               width: Math.round(rect.width),
               height: Math.round(rect.height)
             },
-            parentSelector: element.parentElement ? getSelector(element.parentElement) : undefined,
             isDisabled: element.disabled || element.getAttribute('aria-disabled') === 'true' || undefined,
             attributes: attributes,
             // NEW: Position info for precise matching
@@ -470,9 +469,8 @@ export class ActionRecorder {
           if (index < 0) return null;
           
           const tagName = element.tagName.toLowerCase();
-          const parentSelector = getSelector(parent);
           
-          return parentSelector + ' > ' + tagName + ':nth-child(' + (index + 1) + ')';
+          return tagName + ':nth-child(' + (index + 1) + ')';
         }
         
         /**
