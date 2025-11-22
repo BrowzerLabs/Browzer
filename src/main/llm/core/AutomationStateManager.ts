@@ -58,7 +58,7 @@ export class AutomationStateManager extends EventEmitter {
     );
   }
 
-  private emitProgress(type: AutomationEventType, data: any): void {
+  public emitProgress(type: AutomationEventType, data: any): void {
     const event: AutomationProgressEvent = {
       type,
       data
@@ -138,16 +138,19 @@ export class AutomationStateManager extends EventEmitter {
     this.addMessage(
       MessageBuilder.buildUserMessageWithToolResults(toolResultBlocks)
     );
+    
     if (this.is_in_recovery) {
-      console.log(`🔄 [IterativeAutomation] Recovery plan completed - getting new plan from Claude`);
-      const recoveryCompletionResult = await this.intermediatePlanHandler.handleRecoveryPlanCompletion();
-      return recoveryCompletionResult;
+      if (this.current_plan.planType === 'final') {
+        this.exitRecoveryMode();
+        return { success: true, isComplete: true };
+      }
+      
+      return await this.intermediatePlanHandler.handleRecoveryPlanCompletion();
     }
 
     if (this.current_plan.planType === 'intermediate') {
       this.completePhase();
-      const intermediateContinuationResult = await this.intermediatePlanHandler.handleIntermediatePlanCompletion();
-      return intermediateContinuationResult;
+      return await this.intermediatePlanHandler.handleIntermediatePlanCompletion();
     }
 
     return { success: true, isComplete: true };

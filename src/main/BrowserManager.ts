@@ -141,15 +141,11 @@ export class BrowserManager {
     sessionId: string;
     message: string;
   }> {
-    const activeTab = this.tabManager.getActiveTab();
-    if (!activeTab) {
-      throw new Error('No active tab for automation');
-    }
-
+    const newTab = this.tabManager.createTab();
     return this.automationManager.executeAutomation(
-      activeTab,
+      newTab,
       userGoal,
-      recordedSessionId
+      recordedSessionId,
     );
   }
 

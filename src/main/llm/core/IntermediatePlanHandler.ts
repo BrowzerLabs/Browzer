@@ -17,22 +17,8 @@ export class IntermediatePlanHandler {
     this.stateManager = stateManager;
   }
 
-  /**
-   * Handle continuation after intermediate plan completion
-   */
   public async handleIntermediatePlanCompletion(): Promise<PlanExecutionResult> {
 
-    const currentPlan = this.stateManager.getCurrentPlan();
-    if (!currentPlan) {
-      return {
-        success: false,
-        isComplete: true,
-        error: 'No plan available'
-      };
-    }
-
-
-    // Build continuation prompt
     const lastCompletedPlan = this.stateManager.getLastCompletedPlan();
     const continuationPrompt = SystemPromptBuilder.buildIntermediatePlanContinuationPrompt({
       userGoal: this.stateManager.getUserGoal(),
@@ -65,11 +51,20 @@ export class IntermediatePlanHandler {
       content: response.content
     });
 
+    const thinkingText = response.content
+      .filter((block: any) => block.type === 'text')
+      .map((block: any) => block.text)
+      .join('\n');
+    
+    if (thinkingText) {
+      this.stateManager.emitProgress('claude_response', {
+        message: thinkingText,
+      });
+    }
+
     this.stateManager.compressMessages();
 
     const newPlan = AutomationPlanParser.parsePlan(response);
-
-    // Update current plan
     this.stateManager.setCurrentPlan(newPlan);
 
     return {
@@ -78,11 +73,7 @@ export class IntermediatePlanHandler {
     };
   }
 
-  /**
-   * Handle continuation after context extraction (mid-execution)
-   */
   public async handleContextExtraction(): Promise<PlanExecutionResult> {
-    console.log('🔄 [IntermediatePlan] Continuing after context extraction...');
 
     const response = await this.automationClient.continueConversation(
       SystemPromptType.AUTOMATION_CONTINUATION,
@@ -95,13 +86,20 @@ export class IntermediatePlanHandler {
       content: response.content
     });
 
+    const thinkingText = response.content
+      .filter((block: any) => block.type === 'text')
+      .map((block: any) => block.text)
+      .join('\n');
+    
+    if (thinkingText) {
+      this.stateManager.emitProgress('claude_response', {
+        message: thinkingText,
+      });
+    }
+
     this.stateManager.compressMessages();
 
-    // Parse new plan
     const newPlan = AutomationPlanParser.parsePlan(response);
-    console.log('📋 [IntermediatePlan] Plan after context extraction');
-
-    // Update current plan
     this.stateManager.setCurrentPlan(newPlan);
 
     return {
@@ -110,20 +108,7 @@ export class IntermediatePlanHandler {
     };
   }
 
-  /**
-   * Handle continuation after recovery plan completion
-   */
   public async handleRecoveryPlanCompletion(): Promise<PlanExecutionResult> {
-    console.log('✅ [IntermediatePlan] Recovery plan completed - generating new plan from context');
-
-    const currentPlan = this.stateManager.getCurrentPlan();
-    if (!currentPlan) {
-      return {
-        success: false,
-        isComplete: true,
-        error: 'No plan available'
-      };
-    }
 
     const response = await this.automationClient.continueConversation(
       SystemPromptType.AUTOMATION_ERROR_RECOVERY,
@@ -135,6 +120,17 @@ export class IntermediatePlanHandler {
       role: 'assistant',
       content: response.content
     });
+
+    const thinkingText = response.content
+      .filter((block: any) => block.type === 'text')
+      .map((block: any) => block.text)
+      .join('\n');
+    
+    if (thinkingText) {
+      this.stateManager.emitProgress('claude_response', {
+        message: thinkingText,
+      });
+    }
 
     this.stateManager.compressMessages();
 
@@ -149,9 +145,6 @@ export class IntermediatePlanHandler {
     };
   }
 
-  /**
-   * Get extracted context summary from last executed step
-   */
   private getExtractedContextSummary(): { url: string; interactiveElements: number; forms: number } | undefined {
     const executedSteps = this.stateManager.getExecutedSteps();
     if (executedSteps.length === 0) return undefined;
@@ -166,9 +159,6 @@ export class IntermediatePlanHandler {
     };
   }
 
-  /**
-   * Get current URL from last executed step
-   */
   private getCurrentUrl(): string {
     const executedSteps = this.stateManager.getExecutedSteps();
     if (executedSteps.length === 0) return '';

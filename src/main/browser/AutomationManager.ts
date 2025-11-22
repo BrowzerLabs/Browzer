@@ -15,7 +15,7 @@ export class AutomationManager {
   ) {}
 
   public async executeAutomation(
-    activeTab: Tab,
+    newTab: Tab,
     userGoal: string,
     recordedSessionId: string
   ): Promise<{
@@ -23,7 +23,7 @@ export class AutomationManager {
     sessionId: string;
     message: string;
   }> {
-    if (!activeTab || !activeTab.automationExecutor) {
+    if (!newTab || !newTab.automationExecutor) {
       dialog.showMessageBox({
         type: 'error',
         title: 'Error',
@@ -37,7 +37,7 @@ export class AutomationManager {
     }
 
     const automationService = new AutomationService(
-      activeTab.automationExecutor,
+      newTab.automationExecutor,
       this.recordingStore,
       this.sessionManager,
     );

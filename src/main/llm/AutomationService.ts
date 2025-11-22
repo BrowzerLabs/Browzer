@@ -85,7 +85,11 @@ export class AutomationService extends EventEmitter {
 
       const finalResult = this.stateManager.getFinalResult();
       
-      await this.automationClient.updateSessionStatus(AutomationStatus.COMPLETED);
+      const status = finalResult.success 
+        ? AutomationStatus.COMPLETED 
+        : AutomationStatus.FAILED;
+      
+      await this.automationClient.updateSessionStatus(status);
       
       this.emitProgress('automation_complete', {
         success: finalResult.success,
