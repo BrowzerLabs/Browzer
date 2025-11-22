@@ -115,7 +115,7 @@ export class SessionStore {
    * Create a new session
    */
   createSession(options: CreateSessionOptions): StoredSession {
-    const id = this.generateSessionId();
+    const id = options.id ?? this.generateSessionId();
     const now = Date.now();
     
     const metadata: SessionMetadata = {

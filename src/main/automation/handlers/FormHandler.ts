@@ -1,3 +1,4 @@
+import { ClickHandler } from '.';
 import { BaseHandler, HandlerContext } from './BaseHandler';
 import type { SelectParams, CheckboxParams, SubmitParams, ToolExecutionResult } from '@/shared/types';
 
@@ -6,9 +7,7 @@ export class FormHandler extends BaseHandler {
     super(context);
   }
 
-  /**
-   * Execute select dropdown operation
-   */
+  
   async executeSelect(params: SelectParams): Promise<ToolExecutionResult> {
     const startTime = Date.now();
 
@@ -403,7 +402,7 @@ export class FormHandler extends BaseHandler {
   /**
    * Execute form submit operation
    */
-  async executeSubmit(params: SubmitParams, clickHandler: any): Promise<ToolExecutionResult> {
+  async executeSubmit(params: SubmitParams, clickHandler: ClickHandler): Promise<ToolExecutionResult> {
     const startTime = Date.now();
     console.log('[FormHandler] 📤 Submit form');
 

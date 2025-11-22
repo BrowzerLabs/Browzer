@@ -12,8 +12,8 @@ import {
   AddStepOptions,
   ContextConfig,
   ContextStats,
-  SessionMetadata
 } from './types';
+import { AutomationStatus } from '..';
 
 /**
  * SessionManager - High-level session management
@@ -35,54 +35,31 @@ export class SessionManager {
     this.contextManager = new ContextManager(contextConfig);
   }
 
-  /**
-   * Create a new automation session
-   */
   createSession(options: CreateSessionOptions): StoredSession {
     return this.store.createSession(options);
   }
 
-  /**
-   * Get session by ID
-   */
   getSession(sessionId: string): StoredSession | null {
     return this.store.getSession(sessionId);
   }
 
-  /**
-   * Load session with full conversation history
-   * Used for resuming sessions
-   */
   loadSession(sessionId: string): SessionWithHistory | null {
     return this.store.getSessionWithHistory(sessionId);
   }
 
-  /**
-   * Update session status and metadata
-   */
   updateSession(sessionId: string, options: UpdateSessionOptions): void {
     this.store.updateSession(sessionId, options);
   }
 
-  /**
-   * Delete session permanently
-   */
   deleteSession(sessionId: string): void {
     this.store.deleteSession(sessionId);
   }
 
-  /**
-   * List all sessions for UI
-   */
   listSessions(limit = 50, offset = 0): SessionListItem[] {
     return this.store.listSessions(limit, offset);
   }
 
-  /**
-   * Add message to session with context optimization
-   */
   addMessage(options: AddMessageOptions): void {
-    // Estimate tokens if not provided
     if (!options.tokens) {
       const content = JSON.stringify(options.content);
       options.tokens = Math.ceil(content.length / 4);
@@ -90,18 +67,13 @@ export class SessionManager {
 
     this.store.addMessage(options);
 
-    // Check if context editing is needed
     const stats = this.getContextStats(options.sessionId);
     if (this.contextManager.shouldTriggerContextEditing(stats)) {
       this.applyContextEditing(options.sessionId);
     }
   }
 
-  /**
-   * Add executed step to session
-   */
   addStep(options: AddStepOptions): void {
-    // Estimate tokens if not provided
     if (!options.tokens && options.result) {
       const content = JSON.stringify(options.result);
       options.tokens = Math.ceil(content.length / 4);
@@ -110,10 +82,6 @@ export class SessionManager {
     this.store.addStep(options);
   }
 
-  /**
-   * Get conversation messages for Claude API
-   * Returns optimized messages with cache control
-   */
   getMessagesForAPI(sessionId: string): Anthropic.MessageParam[] {
     const messages = this.store.getMessages(sessionId);
     
@@ -193,38 +161,11 @@ export class SessionManager {
   }
 
   /**
-   * Update session metadata with usage stats
-   */
-  updateUsageStats(
-    sessionId: string,
-    usage: {
-      inputTokens: number;
-      outputTokens: number;
-      cacheCreationTokens?: number;
-      cacheReadTokens?: number;
-      cost: number;
-    }
-  ): void {
-    const session = this.store.getSession(sessionId);
-    if (!session) return;
-
-    const metadata: Partial<SessionMetadata> = {
-      totalInputTokens: session.metadata.totalInputTokens + usage.inputTokens,
-      totalOutputTokens: session.metadata.totalOutputTokens + usage.outputTokens,
-      totalCacheCreationTokens: session.metadata.totalCacheCreationTokens + (usage.cacheCreationTokens || 0),
-      totalCacheReadTokens: session.metadata.totalCacheReadTokens + (usage.cacheReadTokens || 0),
-      totalCost: session.metadata.totalCost + usage.cost
-    };
-
-    this.store.updateSession(sessionId, { metadata });
-  }
-
-  /**
    * Mark session as complete
    */
   completeSession(sessionId: string, success: boolean, error?: string): void {
     this.store.updateSession(sessionId, {
-      status: success ? 'completed' : 'error',
+      status: success ? AutomationStatus.COMPLETED : AutomationStatus.FAILED,
       completedAt: Date.now(),
       metadata: {
         finalSuccess: success,
@@ -238,7 +179,7 @@ export class SessionManager {
    */
   pauseSession(sessionId: string): void {
     this.store.updateSession(sessionId, {
-      status: 'paused'
+      status: AutomationStatus.PAUSED
     });
   }
 
@@ -247,7 +188,7 @@ export class SessionManager {
    */
   resumeSession(sessionId: string): void {
     this.store.updateSession(sessionId, {
-      status: 'running'
+      status: AutomationStatus.RUNNING
     });
   }
 

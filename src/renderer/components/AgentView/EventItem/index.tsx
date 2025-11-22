@@ -14,15 +14,11 @@ import { EventItemProps } from '../types';
 
 export function EventItem({ event, isLatest }: EventItemProps) {
   switch (event.type) {
-    case 'claude_thinking':
+    case 'thinking':
       return <ClaudeThinkingEvent event={event} isLatest={isLatest} />;
     
     case 'claude_response':
       return <ClaudeResponseEvent event={event} isLatest={isLatest} />;
-    
-    case 'plan_generated':
-      // Don't show plan_generated events in UI (stored in DB only)
-      return null;
     
     case 'step_start':
     case 'step_complete':
@@ -30,7 +26,6 @@ export function EventItem({ event, isLatest }: EventItemProps) {
       return <StepEvent event={event} isLatest={isLatest} />;
     
     case 'automation_error':
-    case 'recovery_failed':
       return <ErrorEvent event={event} isLatest={isLatest} />;
     
     default:

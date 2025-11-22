@@ -13,7 +13,7 @@ export interface Tab {
   info: TabInfo;
   videoRecorder?: VideoRecorder;
   passwordAutomation?: PasswordAutomation;
-  automationExecutor?: BrowserAutomationExecutor;
+  automationExecutor: BrowserAutomationExecutor;
   // Track selected credential for multi-step flows
   selectedCredentialId?: string;
   selectedCredentialUsername?: string;

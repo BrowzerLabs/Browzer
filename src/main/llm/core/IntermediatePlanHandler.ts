@@ -2,7 +2,6 @@ import { AutomationClient } from '../clients/AutomationClient';
 import { SystemPromptBuilder } from '../builders/SystemPromptBuilder';
 import { AutomationPlanParser } from '../parsers/AutomationPlanParser';
 import { AutomationStateManager } from './AutomationStateManager';
-import { UsageTracker } from '../utils/UsageTracker';
 import { PlanExecutionResult } from './types';
 import { SystemPromptType } from '@/shared/types';
 
@@ -22,7 +21,6 @@ export class IntermediatePlanHandler {
    * Handle continuation after intermediate plan completion
    */
   public async handleIntermediatePlanCompletion(): Promise<PlanExecutionResult> {
-    console.log('🔄 [IntermediatePlan] Continuing after intermediate plan completion...');
 
     const currentPlan = this.stateManager.getCurrentPlan();
     if (!currentPlan) {
@@ -74,12 +72,9 @@ export class IntermediatePlanHandler {
     // Update current plan
     this.stateManager.setCurrentPlan(newPlan);
 
-    const usage = UsageTracker.extractUsageFromResponse(response);
-
     return {
       success: false,
       isComplete: false,
-      usage
     };
   }
 
@@ -89,12 +84,8 @@ export class IntermediatePlanHandler {
   public async handleContextExtraction(): Promise<PlanExecutionResult> {
     console.log('🔄 [IntermediatePlan] Continuing after context extraction...');
 
-    const systemPromptType = this.stateManager.getRecoveryAttempts() > 0
-      ? SystemPromptType.AUTOMATION_ERROR_RECOVERY
-      : SystemPromptType.AUTOMATION_CONTINUATION;
-
     const response = await this.automationClient.continueConversation(
-      systemPromptType,
+      SystemPromptType.AUTOMATION_CONTINUATION,
       this.stateManager.getOptimizedMessages(),
       this.stateManager.getCachedContext()
     );
@@ -113,12 +104,9 @@ export class IntermediatePlanHandler {
     // Update current plan
     this.stateManager.setCurrentPlan(newPlan);
 
-    const usage = UsageTracker.extractUsageFromResponse(response);
-
     return {
       success: false,
       isComplete: false,
-      usage
     };
   }
 
@@ -155,12 +143,9 @@ export class IntermediatePlanHandler {
     this.stateManager.setCurrentPlan(newPlan);
     this.stateManager.exitRecoveryMode();
 
-    const usage = UsageTracker.extractUsageFromResponse(response);
-
     return {
       success: false,
       isComplete: false,
-      usage
     };
   }
 

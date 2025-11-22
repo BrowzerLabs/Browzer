@@ -131,6 +131,7 @@ export interface SessionListItem {
  * Session creation options
  */
 export interface CreateSessionOptions {
+  id?: string;
   userGoal: string;
   recordingId: string;
   cachedContext?: string;
