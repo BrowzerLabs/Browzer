@@ -58,8 +58,6 @@ export class BrowserAutomationExecutor {
         return this.navigationHandler.executeNavigate(params);
       case 'wait':
         return this.navigationHandler.executeWait(params);
-      case 'waitForElement':
-        return this.navigationHandler.executeWaitForElement(params);
       
       // Click operations
       case 'click':

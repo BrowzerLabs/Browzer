@@ -24,15 +24,9 @@ export function ClaudeThinkingEvent({ event, isLatest }: EventItemProps) {
             <Brain className="w-5 h-5 text-purple-600" />
           )}
         </div>
-        
-        <div className="flex-1 min-w-0">
-          <p className="text-sm font-medium text-purple-900 dark:text-purple-100 mb-1">
+        <p className="text-sm font-medium text-purple-900 dark:text-purple-100 mb-1">
             Browzer is thinking...
-          </p>
-          <p className="text-sm text-purple-700 dark:text-purple-300">
-            {event.data.message || 'Analyzing your request and planning the automation...'}
-          </p>
-        </div>
+        </p>
       </div>
     </Card>
   );
