@@ -75,18 +75,6 @@ export interface PlanExecutionResult {
   success: boolean;
   isComplete: boolean;
   error?: string;
-  usage?: UsageStats;
-}
-
-/**
- * Token usage statistics
- */
-export interface UsageStats {
-  inputTokens: number;
-  outputTokens: number;
-  cacheCreationTokens: number;
-  cacheReadTokens: number;
-  totalCost: number;
 }
 
 /**
@@ -95,7 +83,6 @@ export interface UsageStats {
 export interface PlanGenerationResult {
   plan: ParsedAutomationPlan;
   response: Anthropic.Message;
-  usage: UsageStats;
 }
 
 /**
@@ -124,13 +111,6 @@ export interface IterativeAutomationResult {
   executionResults: any[];
   error?: string;
   analysis?: string;
-  usage: {
-    inputTokens: number;
-    outputTokens: number;
-    cacheCreationTokens: number;
-    cacheReadTokens: number;
-    totalCost: number;
-  };
   recoveryAttempts: number;
   totalStepsExecuted: number;
 }

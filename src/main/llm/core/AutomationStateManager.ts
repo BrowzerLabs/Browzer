@@ -367,19 +367,6 @@ export class AutomationStateManager {
   }
 
   /**
-   * Update usage statistics
-   */
-  public updateUsageStats(usage: {
-    inputTokens: number;
-    outputTokens: number;
-    cacheCreationTokens?: number;
-    cacheReadTokens?: number;
-    cost: number;
-  }): void {
-    this.sessionManager.updateUsageStats(this.sessionId, usage);
-  }
-
-  /**
    * Get context statistics
    */
   public getContextStats() {

@@ -140,30 +140,4 @@ export class AutomationClient {
       throw error;
     }
   }
-
-  public getSessionId(): string | null {
-    return this.sessionId;
-  }
-  public getUsageStats(response: Anthropic.Message): {
-    inputTokens: number;
-    outputTokens: number;
-    cacheCreationTokens: number;
-    cacheReadTokens: number;
-    totalCost: number;
-  } {
-    const usage = response.usage as any;
-    
-    const inputCost = (usage.input_tokens / 1_000_000) * 3;
-    const outputCost = (usage.output_tokens / 1_000_000) * 15;
-    const cacheWriteCost = ((usage.cache_creation_input_tokens || 0) / 1_000_000) * 3.75;
-    const cacheReadCost = ((usage.cache_read_input_tokens || 0) / 1_000_000) * 0.30;
-
-    return {
-      inputTokens: usage.input_tokens,
-      outputTokens: usage.output_tokens,
-      cacheCreationTokens: usage.cache_creation_input_tokens || 0,
-      cacheReadTokens: usage.cache_read_input_tokens || 0,
-      totalCost: inputCost + outputCost + cacheWriteCost + cacheReadCost
-    };
-  }
 }

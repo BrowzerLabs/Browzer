@@ -2,7 +2,6 @@ import { EventEmitter } from 'events';
 import { BrowserAutomationExecutor } from '@/main/automation/BrowserAutomationExecutor';
 import { RecordingStore } from '@/main/recording';
 import { AutomationClient } from './clients/AutomationClient';
-import { UsageTracker } from './utils/UsageTracker';
 import { AutomationStateManager } from './core/AutomationStateManager';
 import { SessionManager } from './session/SessionManager';
 import { PlanExecutor } from './core/PlanExecutor';
@@ -11,7 +10,7 @@ import { IntermediatePlanHandler } from './core/IntermediatePlanHandler';
 import { SystemPromptBuilder } from './builders/SystemPromptBuilder';
 import { MessageBuilder } from './builders/MessageBuilder';
 import { AutomationPlanParser, ParsedAutomationPlan } from './parsers/AutomationPlanParser';
-import { IterativeAutomationResult, PlanExecutionResult, UsageStats } from './core/types';
+import { IterativeAutomationResult, PlanExecutionResult } from './core/types';
 import Anthropic from '@anthropic-ai/sdk';
 import { AutomationProgressEvent, AutomationEventType, RecordingSession } from '@/shared/types';
 
@@ -30,7 +29,6 @@ export class AutomationService extends EventEmitter {
   private planExecutor: PlanExecutor;
   private errorRecoveryHandler: ErrorRecoveryHandler;
   private intermediatePlanHandler: IntermediatePlanHandler;
-  private usageTracker: UsageTracker;
 
   constructor(
     executor: BrowserAutomationExecutor,
@@ -98,11 +96,9 @@ export class AutomationService extends EventEmitter {
       this.automationClient,
       this.stateManager
     );
-    this.usageTracker = new UsageTracker();
 
     try {
       const initialPlan = await this.generateInitialPlan();
-      this.usageTracker.addUsage(initialPlan.usage);
       this.stateManager.setCurrentPlan(initialPlan.plan);
       this.stateManager.addMessage({
         role: 'assistant',
@@ -134,10 +130,6 @@ export class AutomationService extends EventEmitter {
       while (!this.stateManager.isComplete() && !this.stateManager.isMaxRecoveryAttemptsReached()) {
         const executionResult = await this.executePlanWithRecovery();
         
-        if (executionResult.usage) {
-          this.usageTracker.addUsage(executionResult.usage);
-        }
-
         if (executionResult.isComplete) {
           this.stateManager.markComplete(executionResult.success, executionResult.error);
           break;
@@ -155,7 +147,6 @@ export class AutomationService extends EventEmitter {
         success: finalResult.success,
         totalSteps: this.stateManager.getTotalStepsExecuted(),
         recoveryAttempts: this.stateManager.getRecoveryAttempts(),
-        usage: this.usageTracker.getTotalUsage()
       });
 
       return {
@@ -163,7 +154,6 @@ export class AutomationService extends EventEmitter {
         plan: this.stateManager.getCurrentPlan(),
         executionResults: this.stateManager.getExecutedSteps(),
         error: finalResult.error,
-        usage: this.usageTracker.getTotalUsage(),
         recoveryAttempts: this.stateManager.getRecoveryAttempts(),
         totalStepsExecuted: this.stateManager.getTotalStepsExecuted()
       };
@@ -188,13 +178,6 @@ export class AutomationService extends EventEmitter {
         success: false,
         executionResults: this.stateManager?.getExecutedSteps() || [],
         error: error.message || 'Unknown error occurred',
-        usage: this.usageTracker?.getTotalUsage() || {
-          inputTokens: 0,
-          outputTokens: 0,
-          cacheCreationTokens: 0,
-          cacheReadTokens: 0,
-          totalCost: 0
-        },
         recoveryAttempts: this.stateManager?.getRecoveryAttempts() || 0,
         totalStepsExecuted: this.stateManager?.getTotalStepsExecuted() || 0
       };
@@ -207,7 +190,6 @@ export class AutomationService extends EventEmitter {
   private async generateInitialPlan(): Promise<{
     plan: ParsedAutomationPlan;
     response: Anthropic.Message;
-    usage: UsageStats;
   }> {
     if (!this.stateManager) throw new Error('State manager not initialized');
 
@@ -225,9 +207,7 @@ export class AutomationService extends EventEmitter {
 
     const plan = AutomationPlanParser.parsePlan(response);
 
-    const usage = UsageTracker.extractUsageFromResponse(response);
-
-    return { plan, response, usage };
+    return { plan, response };
   }
 
   /**

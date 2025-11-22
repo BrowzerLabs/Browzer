@@ -3,7 +3,6 @@ import { SystemPromptBuilder } from '../builders/SystemPromptBuilder';
 import { MessageBuilder } from '../builders/MessageBuilder';
 import { AutomationPlanParser } from '../parsers/AutomationPlanParser';
 import { AutomationStateManager } from './AutomationStateManager';
-import { UsageTracker } from '../utils/UsageTracker';
 import { PlanExecutionResult } from './types';
 import { ToolExecutionResult, SystemPromptType } from '@/shared/types';
 
@@ -15,12 +14,6 @@ import { ToolExecutionResult, SystemPromptType } from '@/shared/types';
  * - Request recovery plan from Claude (via AutomationClient)
  * - Parse and validate recovery plan
  * - Update state for recovery mode
- * 
- * This module centralizes error recovery logic for:
- * - Consistent error handling
- * - Easy debugging of recovery issues
- * - Proper recovery flow
- * - State management during recovery
  */
 export class ErrorRecoveryHandler {
   private automationClient: AutomationClient;
@@ -100,12 +93,9 @@ export class ErrorRecoveryHandler {
     this.stateManager.setCurrentPlan(newPlan);
     this.stateManager.enterRecoveryMode();
 
-    const usage = UsageTracker.extractUsageFromResponse(response);
-
     return {
       success: false,
       isComplete: false,
-      usage
     };
   }
 }

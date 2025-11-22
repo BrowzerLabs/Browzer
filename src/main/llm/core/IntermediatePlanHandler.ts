@@ -2,7 +2,6 @@ import { AutomationClient } from '../clients/AutomationClient';
 import { SystemPromptBuilder } from '../builders/SystemPromptBuilder';
 import { AutomationPlanParser } from '../parsers/AutomationPlanParser';
 import { AutomationStateManager } from './AutomationStateManager';
-import { UsageTracker } from '../utils/UsageTracker';
 import { PlanExecutionResult } from './types';
 import { SystemPromptType } from '@/shared/types';
 
@@ -74,12 +73,9 @@ export class IntermediatePlanHandler {
     // Update current plan
     this.stateManager.setCurrentPlan(newPlan);
 
-    const usage = UsageTracker.extractUsageFromResponse(response);
-
     return {
       success: false,
       isComplete: false,
-      usage
     };
   }
 
@@ -113,12 +109,9 @@ export class IntermediatePlanHandler {
     // Update current plan
     this.stateManager.setCurrentPlan(newPlan);
 
-    const usage = UsageTracker.extractUsageFromResponse(response);
-
     return {
       success: false,
       isComplete: false,
-      usage
     };
   }
 
@@ -155,12 +148,9 @@ export class IntermediatePlanHandler {
     this.stateManager.setCurrentPlan(newPlan);
     this.stateManager.exitRecoveryMode();
 
-    const usage = UsageTracker.extractUsageFromResponse(response);
-
     return {
       success: false,
       isComplete: false,
-      usage
     };
   }
 
