@@ -26,11 +26,7 @@ export class AutomationService extends EventEmitter {
     this.sessionManager = sessionManager;
     
     this.automationClient = new AutomationClient();
-    
     this.setupAutomationClientListeners();
-    this.stateManager.on('progress', (event: AutomationProgressEvent) => {
-      this.emitProgress(event.type, event.data);
-    });
   }
 
   private setupAutomationClientListeners(): void {
@@ -71,6 +67,10 @@ export class AutomationService extends EventEmitter {
       this.automationClient,
       this.executor
     );
+    this.stateManager.on('progress', (event: AutomationProgressEvent) => {
+      this.emitProgress(event.type, event.data);
+    });
+    
     try {
       await this.stateManager.generateInitialPlan();
 
