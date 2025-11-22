@@ -28,6 +28,9 @@ export class AutomationService extends EventEmitter {
     this.automationClient = new AutomationClient();
     
     this.setupAutomationClientListeners();
+    this.stateManager.on('progress', (event: AutomationProgressEvent) => {
+      this.emitProgress(event.type, event.data);
+    });
   }
 
   private setupAutomationClientListeners(): void {
@@ -51,8 +54,7 @@ export class AutomationService extends EventEmitter {
   private emitProgress(type: AutomationEventType, data: any): void {
     const event: AutomationProgressEvent = {
       type,
-      data,
-      timestamp: Date.now()
+      data
     };
     this.emit('progress', event);
   }

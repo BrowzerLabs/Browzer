@@ -15,7 +15,6 @@ export type AutomationEventType =
 export interface AutomationProgressEvent {
   type: AutomationEventType;
   data: any;
-  timestamp: number;
 }
 
 export interface ElementFinderParams {

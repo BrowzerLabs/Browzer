@@ -61,8 +61,7 @@ export class AutomationStateManager extends EventEmitter {
   private emitProgress(type: AutomationEventType, data: any): void {
     const event: AutomationProgressEvent = {
       type,
-      data,
-      timestamp: Date.now()
+      data
     };
     this.emit('progress', event);
   }
@@ -87,7 +86,6 @@ export class AutomationStateManager extends EventEmitter {
     if (thinkingText) {
       this.emitProgress('claude_response', {
         message: thinkingText,
-        planType: plan.planType
       });
     }
   }
@@ -165,13 +163,9 @@ export class AutomationStateManager extends EventEmitter {
     error?: string;
   }> {
     if (this.executed_steps.length >= MAX_AUTOMATION_STEPS) {
-      this.emit('progress', {
-        type: 'automation_complete',
-        data: {
-          success: false,
-          message: `Maximum ${MAX_AUTOMATION_STEPS} execution steps reached`,
-        },
-        timestamp: Date.now()
+      this.emitProgress('automation_complete', {
+        success: false,
+        error: `Maximum execution steps limit (${MAX_AUTOMATION_STEPS}) reached`
       });
       
       return {
@@ -180,17 +174,13 @@ export class AutomationStateManager extends EventEmitter {
       };
     }
 
-    this.emit('progress', {
-      type: 'step_start',
-      data: {
-        stepNumber,
-        totalSteps,
-        toolName: step.toolName,
-        toolUseId: step.toolUseId,
-        params: step.input,
-        status: 'running'
-      },
-      timestamp: Date.now()
+    this.emitProgress('step_start', {
+      stepNumber,
+      totalSteps,
+      toolName: step.toolName,
+      toolUseId: step.toolUseId,
+      params: step.input,
+      status: 'running'
     });
 
     try {
@@ -211,18 +201,14 @@ export class AutomationStateManager extends EventEmitter {
       if (!result.success || result.error) {
         console.error(`❌ Step ${stepNumber} failed: ${result.error || 'Unknown error'}`);
 
-        this.emit('progress', {
-          type: 'step_error',
-          data: {
-            stepNumber,
-            totalSteps,
-            toolName: step.toolName,
-            toolUseId: step.toolUseId,
-            error: result.error,
-            duration,
-            status: 'error'
-          },
-          timestamp: Date.now()
+        this.emitProgress('step_error', {
+          stepNumber,
+          totalSteps,
+          toolName: step.toolName,
+          toolUseId: step.toolUseId,
+          error: result.error,
+          duration,
+          status: 'error'
         });
         
         return {
@@ -232,19 +218,16 @@ export class AutomationStateManager extends EventEmitter {
         };
       }
 
-      this.emit('progress', {
-        type: 'step_complete',
-        data: {
-          stepNumber,
-          totalSteps,
-          toolName: step.toolName,
+      this.emitProgress('step_complete', {
+        stepNumber,
+        totalSteps,
+        toolName: step.toolName,
           toolUseId: step.toolUseId,
           result: result,
           duration,
           status: 'success'
-        },
-        timestamp: Date.now()
-      });
+        }
+      );
       
       return {
         success: true,
