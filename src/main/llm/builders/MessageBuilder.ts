@@ -22,10 +22,6 @@ import { ToolExecutionResult } from '@/shared/types';
  * - Smart compression of analysis tool results
  */
 export class MessageBuilder {
-  /**
-   * Build tool result blocks for all executed steps in a plan
-   * IMPORTANT: Also includes tool_result for declare_plan_metadata if it was called
-   */
   public static buildToolResultsForPlan(
     plan: ParsedAutomationPlan,
     executedSteps: ExecutedStep[]
@@ -148,41 +144,6 @@ export class MessageBuilder {
     return toolResults;
   }
 
-  /**
-   * Build tool result for a single step
-   */
-  public static buildSingleToolResult(
-    toolUseId: string,
-    result: ToolExecutionResult,
-    toolName: string
-  ): Anthropic.Messages.ToolResultBlockParam {
-    // For extract_context and take_snapshot, include full context/snapshot
-    if (toolName === 'extract_context' || toolName === 'take_snapshot') {
-      // extract_context returns 'context', take_snapshot returns 'data'
-      const contextData = result.context || (result as any).data || (result as any).snapshot || result.value;
-      return {
-        type: 'tool_result',
-        tool_use_id: toolUseId,
-        content: JSON.stringify(contextData, null, 2)
-      };
-    }
-
-    // For other tools, simple success message
-    return {
-      type: 'tool_result',
-      tool_use_id: toolUseId,
-      content: JSON.stringify({
-        success: result.success,
-        message: result.success
-          ? `✅ ${toolName} executed successfully`
-          : `❌ ${toolName} execution failed: ${result.error?.message || 'Unknown error'}`,
-      })
-    };
-  }
-
-  /**
-   * Build user message with tool results
-   */
   public static buildUserMessageWithToolResults(
     toolResults: Anthropic.Messages.ToolResultBlockParam[]
   ): Anthropic.MessageParam {

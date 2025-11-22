@@ -191,7 +191,7 @@ export class BrowserManager {
 
   public getActiveAutomationExecutor(): BrowserAutomationExecutor | null {
     const activeTab = this.tabManager.getActiveTab();
-    return activeTab?.automationExecutor || null;
+    return activeTab.automationExecutor;
   }
 
   // ============================================================================

@@ -8,10 +8,10 @@ import { TypeHandler } from './handlers/TypeHandler';
 import { FormHandler } from './handlers/FormHandler';
 import { NavigationHandler } from './handlers/NavigationHandler';
 import { InteractionHandler } from './handlers/InteractionHandler';
+import { HandlerContext } from './handlers/BaseHandler';
 
 export class BrowserAutomationExecutor {
   private view: WebContentsView;
-  private debugger: Electron.Debugger;
   private tabId: string;
   
   private contextExtractor: BrowserContextExtractor;
@@ -25,13 +25,12 @@ export class BrowserAutomationExecutor {
 
   constructor(view: WebContentsView, tabId: string) {
     this.view = view;
-    this.debugger = view.webContents.debugger;
     this.tabId = tabId;
     
     this.contextExtractor = new BrowserContextExtractor(view);
     this.snapshotCapture = new ViewportSnapshotCapture(view);
     
-    const context = { view, debugger: this.debugger, tabId };
+    const context: HandlerContext = { view, tabId };
     this.clickHandler = new ClickHandler(context);
     this.typeHandler = new TypeHandler(context);
     this.formHandler = new FormHandler(context);
@@ -39,17 +38,6 @@ export class BrowserAutomationExecutor {
     this.interactionHandler = new InteractionHandler(context);
   }
 
-  /**
-   * Execute a tool by name - Main entry point for LLM automation
-   * 
-   * This method routes tool calls from the LLM to the appropriate handler.
-   * Each handler is responsible for executing the tool and returning a
-   * standardized ToolExecutionResult.
-   * 
-   * @param toolName - Name of the tool to execute
-   * @param params - Tool parameters
-   * @returns Tool execution result with success/error information
-   */
   public async executeTool(toolName: string, params: any): Promise<ToolExecutionResult> {
 
     switch (toolName) {
@@ -105,9 +93,7 @@ export class BrowserAutomationExecutor {
     }
   }
 
-  /**
-   * Extract context - unified method
-   */
+
   private async extractContext(params: {
     full?: boolean;
     scrollTo?: 'current' | 'top' | 'bottom' | number;
@@ -115,8 +101,6 @@ export class BrowserAutomationExecutor {
     maxElements?: number;
   }): Promise<ToolExecutionResult> {
     const startTime = Date.now();
-
-    console.log('[AutomationExecutor] 📊 Extracting context:', params);
 
     // Use context extraction
     const result = await this.contextExtractor.extractContext({

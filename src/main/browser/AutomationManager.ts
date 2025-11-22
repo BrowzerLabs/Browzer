@@ -1,30 +1,19 @@
-import { WebContentsView } from 'electron';
+import { WebContentsView, dialog } from 'electron';
 import { AutomationService } from '@/main/llm';
 import { RecordingStore } from '@/main/recording';
 import { Tab } from './types';
 import { SessionManager } from '@/main/llm/session/SessionManager';
+import { AutomationProgressEvent } from '@/shared/types';
 
-/**
- * AutomationManager - Manages LLM automation sessions
- * 
- * Responsibilities:
- * - Execute LLM-powered automation
- * - Manage automation sessions
- * - Forward progress events to renderer
- * - Load/delete automation sessions
- */
 export class AutomationManager {
   private automationSessions: Map<string, AutomationService> = new Map();
 
   constructor(
     private recordingStore: RecordingStore,
     private sessionManager: SessionManager,
-    private browserUIView?: WebContentsView,
+    private browserUIView: WebContentsView,
   ) {}
 
-  /**
-   * Execute LLM-powered automation on active tab
-   */
   public async executeAutomation(
     activeTab: Tab,
     userGoal: string,
@@ -35,28 +24,31 @@ export class AutomationManager {
     message: string;
   }> {
     if (!activeTab || !activeTab.automationExecutor) {
-      throw new Error('No active tab or automation executor');
+      dialog.showMessageBox({
+        type: 'error',
+        title: 'Error',
+        message: 'No active tab or automation. At least one tab must be open.'
+      });
+      return {
+        success: false,
+        sessionId: '',
+        message: 'No active tab or automation. At least one tab must be open.'
+      };
     }
 
-    // Create AutomationService with shared SessionManager
-    const llmService = new AutomationService(
+    const automationService = new AutomationService(
       activeTab.automationExecutor,
       this.recordingStore,
       this.sessionManager,
     );
 
-    // Start automation execution (non-blocking)
-    const automationPromise = llmService.executeAutomation(userGoal, recordedSessionId, 20);
+    const automationPromise = automationService.executeAutomation(userGoal, recordedSessionId, 20);
 
-    // Wait for session to be created
     await new Promise(resolve => setTimeout(resolve, 100));
-    const sessionId = llmService.getSessionId();
+    const sessionId = automationService.getSessionId();
 
-    // Store service with persistent session ID
-    this.automationSessions.set(sessionId, llmService);
-
-    // Set up progress event forwarding
-    llmService.on('progress', (event) => {
+    this.automationSessions.set(sessionId, automationService);
+    automationService.on('progress', (event: AutomationProgressEvent) => {
       if (this.browserUIView && !this.browserUIView.webContents.isDestroyed()) {
         this.browserUIView.webContents.send('automation:progress', {
           sessionId,
@@ -65,7 +57,6 @@ export class AutomationManager {
       }
     });
 
-    // Handle automation completion/error (non-blocking)
     automationPromise
       .then(result => {
         if (this.browserUIView && !this.browserUIView.webContents.isDestroyed()) {
@@ -97,14 +88,16 @@ export class AutomationManager {
     };
   }
 
-  /**
-   * Load automation session from database
-   */
   public async loadAutomationSession(sessionId: string): Promise<any> {
     try {
       const sessionData = this.sessionManager.loadSession(sessionId);
       
       if (!sessionData) {
+        dialog.showMessageBox({
+          type: 'error',
+          title: 'Error',
+          message: 'Session not found'
+        });
         return null;
       }
       
