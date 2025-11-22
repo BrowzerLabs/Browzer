@@ -2,13 +2,13 @@ import Anthropic from '@anthropic-ai/sdk';
 import { api } from '@/main/api';
 import { SystemPromptType } from '@/shared/types';
 import { AutomationStatus } from '..';
+import { EventEmitter } from 'events';
 
-export class AutomationClient {
+export class AutomationClient extends EventEmitter {
   private sessionId: string | null = null;
-  private onThinking?: (message: string) => void;
 
-  constructor(onThinking?: (message: string) => void) {
-    this.onThinking = onThinking;
+  constructor() {
+    super();
   }
 
   public async createAutomationPlan(
@@ -17,9 +17,7 @@ export class AutomationClient {
   ): Promise<Anthropic.Message> {
 
     try {
-      if (this.onThinking) {
-        this.onThinking('Creating automation plan...');
-      } 
+      this.emit('thinking', 'Creating automation plan...');
 
       const response = await api.post<{ message: Anthropic.Message; session_id: string }>(
         '/automation/plan',
@@ -56,9 +54,7 @@ export class AutomationClient {
     }
 
     try {
-      if (this.onThinking) {
-        this.onThinking('Analyzing and generating next steps...');
-      }
+      this.emit('thinking', 'Analyzing and generating next steps...');
 
       const response = await api.post<{ message: Anthropic.Message }>(
         '/automation/continue',
@@ -94,7 +90,7 @@ export class AutomationClient {
     }
 
     try {
-      console.log(`[AutomationClient] 🔄 Updating session ${this.sessionId} status to ${status}`);
+      
 
       const response = await api.post<{ success: boolean; session_id: string; status: string }>(
         '/automation/session/update',
@@ -112,31 +108,11 @@ export class AutomationClient {
         throw new Error(response.error || 'Failed to update session status');
       }
 
-      console.log(`✅ [AutomationClient] Session ${this.sessionId} status updated to ${status}`);
+      this.sessionId = null
+      this.emit('automation_complete', `Session status updated to ${status}`);
 
     } catch (error) {
       console.error('❌ [AutomationClient] Failed to update session status:', error);
-      throw error;
-    }
-  }
-
-  public async endAutomation(): Promise<void> {
-    if (!this.sessionId) {
-      console.warn('[AutomationClient] No active automation session to end');
-      return;
-    }
-
-    try {
-      if (this.onThinking) {
-        this.onThinking('Ending automation session...');
-      }
-
-      console.log(`✅ [AutomationClient] Automation session ended: ${this.sessionId}`);
-      this.sessionId = null;
-
-    } catch (error) {
-      console.error('❌ [AutomationClient] Failed to end automation:', error);
-      this.sessionId = null;
       throw error;
     }
   }

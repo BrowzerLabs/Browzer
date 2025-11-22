@@ -10,7 +10,7 @@ import { IntermediatePlanHandler } from './core/IntermediatePlanHandler';
 import { SystemPromptBuilder } from './builders/SystemPromptBuilder';
 import { MessageBuilder } from './builders/MessageBuilder';
 import { AutomationPlanParser, ParsedAutomationPlan } from './parsers/AutomationPlanParser';
-import { IterativeAutomationResult, PlanExecutionResult } from './core/types';
+import { IterativeAutomationResult, PlanExecutionResult, AutomationStatus } from './core/types';
 import Anthropic from '@anthropic-ai/sdk';
 import { AutomationProgressEvent, AutomationEventType, RecordingSession } from '@/shared/types';
 
@@ -38,25 +38,35 @@ export class AutomationService extends EventEmitter {
     super(); // Initialize EventEmitter
     this.executor = executor;
     this.recordingStore = recordingStore;
-    
-    // Pass thinking callback to AutomationClient
-    this.automationClient = new AutomationClient((message: string) => {
-      this.emitProgress('claude_thinking', { message });
-    });
-    
     this.sessionManager = sessionManager;
+    
+    this.automationClient = new AutomationClient();
+    
+    this.setupAutomationClientListeners();
   }
 
-  /**
-   * Get current session ID
-   */
+  private setupAutomationClientListeners(): void {
+    this.automationClient.on('thinking', (message: string) => {
+      this.emitProgress('thinking', { message });
+    });
+
+    this.automationClient.on('automation_complete', (message: string) => {
+      this.emitProgress('automation_complete', { message });
+    });
+
+    this.automationClient.on('error', (error: Error) => {
+      console.error('❌ [AutomationService] AutomationClient error:', error);
+      this.emitProgress('automation_error', {
+        error: error.message,
+        stack: error.stack
+      });
+    });
+  }
+
   public getSessionId(): string | null {
     return this.stateManager?.getSessionId() || null;
   }
 
-  /**
-   * Emit progress event for real-time UI updates
-   */
   private emitProgress(type: AutomationEventType, data: any): void {
     const event: AutomationProgressEvent = {
       type,
@@ -79,7 +89,6 @@ export class AutomationService extends EventEmitter {
     recordedSessionId: string,
     maxRecoveryAttempts = 7
   ): Promise<IterativeAutomationResult> {
-    // Initialize session-specific managers with persistent storage
     this.recordedSession = this.recordingStore.getRecording(recordedSessionId);
     this.stateManager = new AutomationStateManager(
       userGoal,
@@ -105,7 +114,6 @@ export class AutomationService extends EventEmitter {
         content: initialPlan.response.content
       });
 
-      // Extract Claude's thinking/reasoning text
       const thinkingText = initialPlan.response.content
         .filter((block: any) => block.type === 'text')
         .map((block: any) => block.text)
@@ -139,8 +147,8 @@ export class AutomationService extends EventEmitter {
       // Return final result
       const finalResult = this.stateManager.getFinalResult();
       
-      // End automation session
-      await this.automationClient.endAutomation();
+      // Update session status to completed
+      await this.automationClient.updateSessionStatus(AutomationStatus.COMPLETED);
       
       // Emit completion event
       this.emitProgress('automation_complete', {
@@ -161,11 +169,11 @@ export class AutomationService extends EventEmitter {
     } catch (error: any) {
       console.error('❌ [IterativeAutomation] Fatal error:', error);
       
-      // End automation session even on error
+      // Update session status to failed even on error
       try {
-        await this.automationClient.endAutomation();
+        await this.automationClient.updateSessionStatus(AutomationStatus.FAILED);
       } catch (endError) {
-        console.error('❌ [IterativeAutomation] Failed to end automation session:', endError);
+        console.error('❌ [IterativeAutomation] Failed to update session status:', endError);
       }
       
       // Emit error event

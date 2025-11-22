@@ -14,7 +14,7 @@ import { EventItemProps } from '../types';
 
 export function EventItem({ event, isLatest }: EventItemProps) {
   switch (event.type) {
-    case 'claude_thinking':
+    case 'thinking':
       return <ClaudeThinkingEvent event={event} isLatest={isLatest} />;
     
     case 'claude_response':

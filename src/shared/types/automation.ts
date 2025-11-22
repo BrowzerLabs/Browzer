@@ -10,7 +10,7 @@
  */
 export type AutomationEventType =
   | 'automation_started'
-  | 'claude_thinking'
+  | 'thinking'
   | 'claude_response'
   | 'plan_generated'
   | 'plan_executing'
