@@ -21,7 +21,6 @@ export class IntermediatePlanHandler {
    * Handle continuation after intermediate plan completion
    */
   public async handleIntermediatePlanCompletion(): Promise<PlanExecutionResult> {
-    console.log('🔄 [IntermediatePlan] Continuing after intermediate plan completion...');
 
     const currentPlan = this.stateManager.getCurrentPlan();
     if (!currentPlan) {

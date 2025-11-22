@@ -109,7 +109,6 @@ export class AutomationClient extends EventEmitter {
       }
 
       this.sessionId = null
-      this.emit('automation_complete', `Session status updated to ${status}`);
 
     } catch (error) {
       console.error('❌ [AutomationClient] Failed to update session status:', error);

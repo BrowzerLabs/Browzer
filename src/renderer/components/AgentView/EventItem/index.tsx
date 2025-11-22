@@ -26,7 +26,6 @@ export function EventItem({ event, isLatest }: EventItemProps) {
       return <StepEvent event={event} isLatest={isLatest} />;
     
     case 'automation_error':
-    case 'recovery_failed':
       return <ErrorEvent event={event} isLatest={isLatest} />;
     
     default:

@@ -8,7 +8,7 @@ export class AutomationPlanParser {
     const steps: AutomationStep[] = [];
     let analysis = '';
     let stepOrder = 0;
-    let planMetadata: { planType?: 'intermediate' | 'final'; } | null = null;
+    let planType: 'intermediate' | 'final' = 'final';
     let metadataToolUseId: string | undefined = undefined;
 
     for (const block of response.content) {
@@ -16,7 +16,7 @@ export class AutomationPlanParser {
         analysis += block.text + '\n';
       } else if (block.type === 'tool_use') {
         if (block.name === 'declare_plan_metadata') {
-          planMetadata = block.input as any;
+          planType = (block.input as any).planType ?? 'final';
           metadataToolUseId = block.id;
         } else {
           steps.push({
@@ -28,9 +28,6 @@ export class AutomationPlanParser {
         }
       }
     }
-
-    const planType = planMetadata?.planType ?? 'final';
-  
 
     return {
       steps,

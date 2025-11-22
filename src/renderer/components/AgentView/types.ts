@@ -4,7 +4,7 @@
  * Local types specific to the AgentView component tree
  */
 
-import { RecordingSession } from '@/shared/types';
+import { AutomationProgressEvent, RecordingSession } from '@/shared/types';
 import { AutomationSession, SessionListItem } from '@/renderer/stores/automationStore';
 
 /**
@@ -62,6 +62,6 @@ export interface SessionHistoryProps {
  * Props for Event Items
  */
 export interface EventItemProps {
-  event: any;
+  event: AutomationProgressEvent;
   isLatest?: boolean;
 }
