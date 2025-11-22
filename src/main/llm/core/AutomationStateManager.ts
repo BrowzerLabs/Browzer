@@ -1,12 +1,19 @@
-import { ExecutedStep, CompletedPlan, AutomationStatus, ParsedAutomationPlan } from './types';
+import { ExecutedStep, CompletedPlan, AutomationStatus, ParsedAutomationPlan, PlanExecutionResult, AutomationStep } from './types';
 import { RecordingSession } from '@/shared/types/recording';
 import { SystemPromptBuilder } from '../builders/SystemPromptBuilder';
 import { SessionManager } from '../session/SessionManager';
 import { ContextWindowManager } from '../utils/ContextWindowManager';
 import Anthropic from '@anthropic-ai/sdk';
 import { MessageCompressionManager } from '../utils/MessageCompressionManager';
+import { IntermediatePlanHandler } from '.';
+import { AutomationClient, AutomationPlanParser, MessageBuilder } from '..';
+import { MAX_AUTOMATION_STEPS } from '@/shared/constants/limits';
+import { EventEmitter } from 'events';
+import { BrowserAutomationExecutor } from '@/main/automation';
+import { AutomationEventType, AutomationProgressEvent, SystemPromptType, ToolExecutionResult } from '@/shared/types';
 
-export class AutomationStateManager {
+export class AutomationStateManager extends EventEmitter {
+  private session_id: string;
   private user_goal: string;
   private cached_context: string;
   private session_manager: SessionManager;
@@ -17,17 +24,21 @@ export class AutomationStateManager {
   private phase_number: number = 1;
   private completed_plans: CompletedPlan[] = [];
   private is_in_recovery: boolean = false;
-  
   private status: AutomationStatus = AutomationStatus.RUNNING;
   private final_error?: string;
-  
-  private session_id: string;
+
+  private executor: BrowserAutomationExecutor;
+  private automationClient: AutomationClient;
+  private intermediatePlanHandler: IntermediatePlanHandler;
 
   constructor(
     userGoal: string,
     recordedSession: RecordingSession,
     sessionManager: SessionManager,
+    automationClient: AutomationClient,
+    executor: BrowserAutomationExecutor
   ) {
+    super();
     this.user_goal = userGoal;
     this.cached_context = SystemPromptBuilder.formatRecordedSession(recordedSession);
     this.session_manager = sessionManager;
@@ -38,6 +49,275 @@ export class AutomationStateManager {
       cachedContext: this.cached_context
     });
     this.session_id = session.id;
+
+    this.automationClient = automationClient;
+    this.executor = executor;
+    this.intermediatePlanHandler = new IntermediatePlanHandler(
+      this.automationClient,
+      this
+    );
+  }
+
+  private emitProgress(type: AutomationEventType, data: any): void {
+    const event: AutomationProgressEvent = {
+      type,
+      data,
+      timestamp: Date.now()
+    };
+    this.emit('progress', event);
+  }
+
+  public async generateInitialPlan(): Promise<void> {
+    this.addMessage({
+      role: 'user',
+      content: this.user_goal
+    });
+    const response = await this.automationClient.createAutomationPlan(this.cached_context, this.user_goal);
+    const plan = AutomationPlanParser.parsePlan(response);
+    this.current_plan = plan;
+    this.addMessage({
+      role: 'assistant',
+      content: response.content
+    });
+    const thinkingText = response.content
+        .filter((block: any) => block.type === 'text')
+        .map((block: any) => block.text)
+        .join('\n');
+      
+    if (thinkingText) {
+      this.emitProgress('claude_response', {
+        message: thinkingText,
+        planType: plan.planType
+      });
+    }
+  }
+
+  public async executePlanWithRecovery(): Promise<PlanExecutionResult> {
+    if (!this.current_plan) {
+      return { success: false, isComplete: true, error: 'No plan to execute. Please Try Again' };
+    }
+
+    const totalSteps = this.current_plan.steps.length;
+    for (let i = 0; i < this.current_plan.steps.length; i++) {
+      const step = this.current_plan.steps[i];
+      const stepNumber = this.executed_steps.length + 1;
+      const isLastStep = i === this.current_plan.steps.length - 1;
+
+      const stepResult = await this.executeStep(step, stepNumber, totalSteps);
+
+      if (this.executed_steps.length >= MAX_AUTOMATION_STEPS) {
+        return { 
+          success: false, 
+          isComplete: true, 
+          error: stepResult.error ?? 'Maximum execution steps limit reached. Please restart another automation.'
+        };
+      }
+
+      if (!stepResult.success || stepResult.error) {
+        const recoveryResult = await this.handleError(step, stepResult.result);
+        return recoveryResult;
+      }
+
+      if (this.isAnalysisTool(step.toolName) && isLastStep) {
+        const toolResultBlocks = MessageBuilder.buildToolResultsForPlan(
+          this.current_plan,
+          this.executed_steps
+        );
+        this.addMessage(
+          MessageBuilder.buildUserMessageWithToolResults(toolResultBlocks)
+        );
+        const continuationResult = await this.intermediatePlanHandler.handleContextExtraction();
+        return continuationResult;
+      }
+    }
+
+    console.log(`✅ [IterativeAutomation] Plan completed - ${this.current_plan.steps.length} steps executed`);
+    const toolResultBlocks = MessageBuilder.buildToolResultsForPlan(
+      this.current_plan,
+      this.executed_steps
+    );
+
+    this.addMessage(
+      MessageBuilder.buildUserMessageWithToolResults(toolResultBlocks)
+    );
+    if (this.is_in_recovery) {
+      console.log(`🔄 [IterativeAutomation] Recovery plan completed - getting new plan from Claude`);
+      const recoveryCompletionResult = await this.intermediatePlanHandler.handleRecoveryPlanCompletion();
+      return recoveryCompletionResult;
+    }
+
+    if (this.current_plan.planType === 'intermediate') {
+      this.completePhase();
+      const intermediateContinuationResult = await this.intermediatePlanHandler.handleIntermediatePlanCompletion();
+      return intermediateContinuationResult;
+    }
+
+    return { success: true, isComplete: true };
+  }
+
+  private async executeStep(
+    step: AutomationStep,
+    stepNumber: number,
+    totalSteps: number
+  ): Promise<{
+    success: boolean;
+    result?: any;
+    error?: string;
+  }> {
+    if (this.executed_steps.length >= MAX_AUTOMATION_STEPS) {
+      this.emit('progress', {
+        type: 'automation_complete',
+        data: {
+          success: false,
+          message: `Maximum ${MAX_AUTOMATION_STEPS} execution steps reached`,
+        },
+        timestamp: Date.now()
+      });
+      
+      return {
+        success: false,
+        error: `Maximum execution steps limit (${MAX_AUTOMATION_STEPS}) reached`
+      };
+    }
+
+    this.emit('progress', {
+      type: 'step_start',
+      data: {
+        stepNumber,
+        totalSteps,
+        toolName: step.toolName,
+        toolUseId: step.toolUseId,
+        params: step.input,
+        status: 'running'
+      },
+      timestamp: Date.now()
+    });
+
+    try {
+      const startTime = Date.now();
+      const result = await this.executor.executeTool(step.toolName, step.input);
+      const duration = Date.now() - startTime;
+
+      const executedStep: ExecutedStep = {
+        stepNumber,
+        toolName: step.toolName,
+        success: result.success,
+        result,
+        error: result.success ? undefined : (result.error?.message || 'Unknown error')
+      };
+
+      this.addExecutedStep(executedStep);
+
+      if (!result.success || result.error) {
+        console.error(`❌ Step ${stepNumber} failed: ${result.error || 'Unknown error'}`);
+
+        this.emit('progress', {
+          type: 'step_error',
+          data: {
+            stepNumber,
+            totalSteps,
+            toolName: step.toolName,
+            toolUseId: step.toolUseId,
+            error: result.error,
+            duration,
+            status: 'error'
+          },
+          timestamp: Date.now()
+        });
+        
+        return {
+          success: false,
+          result,
+          error: result.error?.message || 'Automation failed'
+        };
+      }
+
+      this.emit('progress', {
+        type: 'step_complete',
+        data: {
+          stepNumber,
+          totalSteps,
+          toolName: step.toolName,
+          toolUseId: step.toolUseId,
+          result: result,
+          duration,
+          status: 'success'
+        },
+        timestamp: Date.now()
+      });
+      
+      return {
+        success: true,
+        result
+      };
+    } catch (error) {
+      console.error(`❌ Step ${stepNumber} failed:`, error);
+
+      const executedStep: ExecutedStep = {
+        stepNumber,
+        toolName: step.toolName,
+        success: false,
+        error: error.message
+      };
+      this.addExecutedStep(executedStep);
+
+      return {
+        success: false,
+        error: error.message
+      };
+    }
+  }
+
+  public async handleError(
+    failedStep: any,
+    result: ToolExecutionResult
+  ): Promise<PlanExecutionResult> {
+    const toolResults = MessageBuilder.buildToolResultsForErrorRecovery(
+      this.current_plan,
+      this.executed_steps
+    );
+
+    const errorPrompt = SystemPromptBuilder.buildErrorRecoveryPrompt({
+      errorInfo: {
+        message: result.error?.message || 'Unknown error',
+        code: result.error?.code,
+        details: result.error?.details,
+        suggestions: result.error?.details?.suggestions
+      },
+      userGoal: this.user_goal,
+      failedStep: {
+        stepNumber: this.executed_steps.length,
+        toolName: failedStep.toolName,
+        params: failedStep.input
+      },
+      executedSteps: this.executed_steps,
+      currentUrl: result.url
+    });
+
+    this.addMessage(
+      MessageBuilder.buildUserMessageWithToolResultsAndText(toolResults, errorPrompt)
+    );
+
+    const response = await this.automationClient.continueConversation(
+      SystemPromptType.AUTOMATION_ERROR_RECOVERY,
+      this.getOptimizedMessages(),
+      this.getCachedContext()
+    );
+
+    this.addMessage({
+      role: 'assistant',
+      content: response.content
+    });
+    this.compressMessages()
+
+    const newPlan = AutomationPlanParser.parsePlan(response);
+    this.setCurrentPlan(newPlan);
+    this.enterRecoveryMode();
+
+    return {
+      success: false,
+      isComplete: false,
+    };
   }
 
   public getSessionId(): string {
@@ -137,10 +417,6 @@ export class AutomationStateManager {
     }
 
     return result.optimizedMessages;
-  }
-
-  public getContextWindowStats() {
-    return ContextWindowManager.getStats(this.messages);
   }
 
   public getCachedContext(): string | undefined {
