@@ -1,10 +1,3 @@
-/**
- * ErrorEvent Component
- * 
- * Displays automation errors and recovery failures
- */
-
-import React from 'react';
 import { AlertCircle } from 'lucide-react';
 import { Card } from '@/renderer/ui/card';
 import { cn } from '@/renderer/lib/utils';

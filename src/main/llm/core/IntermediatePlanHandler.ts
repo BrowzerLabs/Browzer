@@ -85,12 +85,8 @@ export class IntermediatePlanHandler {
   public async handleContextExtraction(): Promise<PlanExecutionResult> {
     console.log('🔄 [IntermediatePlan] Continuing after context extraction...');
 
-    const systemPromptType = this.stateManager.getRecoveryAttempts() > 0
-      ? SystemPromptType.AUTOMATION_ERROR_RECOVERY
-      : SystemPromptType.AUTOMATION_CONTINUATION;
-
     const response = await this.automationClient.continueConversation(
-      systemPromptType,
+      SystemPromptType.AUTOMATION_CONTINUATION,
       this.stateManager.getOptimizedMessages(),
       this.stateManager.getCachedContext()
     );

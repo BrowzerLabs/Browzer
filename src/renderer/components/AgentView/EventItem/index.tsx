@@ -20,10 +20,6 @@ export function EventItem({ event, isLatest }: EventItemProps) {
     case 'claude_response':
       return <ClaudeResponseEvent event={event} isLatest={isLatest} />;
     
-    case 'plan_generated':
-      // Don't show plan_generated events in UI (stored in DB only)
-      return null;
-    
     case 'step_start':
     case 'step_complete':
     case 'step_error':

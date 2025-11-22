@@ -1,26 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import Anthropic from '@anthropic-ai/sdk';
-import { ParsedAutomationPlan } from '../parsers/AutomationPlanParser';
-import { ExecutedStep } from '../core/types';
-import { ToolExecutionResult } from '@/shared/types';
+import { ExecutedStep, ParsedAutomationPlan } from '../core/types';
 
-/**
- * MessageBuilder - Builds tool result messages for Claude conversations
- * 
- * Responsibilities:
- * - Build tool_result blocks from executed steps
- * - Format context data for Claude
- * - Create error messages
- * - Handle multi-step tool results
- * - Optimize analysis tool results for context window efficiency
- * 
- * This module centralizes all message building logic for:
- * - Consistent message formatting
- * - Easy debugging of conversation flow
- * - Proper tool result handling
- * - Context data formatting
- * - Smart compression of analysis tool results
- */
 export class MessageBuilder {
   public static buildToolResultsForPlan(
     plan: ParsedAutomationPlan,
@@ -71,11 +52,6 @@ export class MessageBuilder {
     return toolResultBlocks;
   }
 
-  /**
-   * Build tool results for error recovery
-   * Includes both successful and failed steps
-   * IMPORTANT: Also includes tool_result for declare_plan_metadata if it was called
-   */
   public static buildToolResultsForErrorRecovery(
     plan: ParsedAutomationPlan,
     executedSteps: ExecutedStep[]
@@ -153,9 +129,6 @@ export class MessageBuilder {
     };
   }
 
-  /**
-   * Build user message with tool results and text prompt
-   */
   public static buildUserMessageWithToolResultsAndText(
     toolResults: any[],
     textPrompt: string

@@ -5,7 +5,6 @@ export type AutomationEventType =
   | 'automation_started'
   | 'thinking'
   | 'claude_response'
-  | 'plan_generated'
   | 'step_start'
   | 'step_progress'
   | 'step_complete'

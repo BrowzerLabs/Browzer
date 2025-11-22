@@ -9,21 +9,18 @@ import { ErrorRecoveryHandler } from './core/ErrorRecoveryHandler';
 import { IntermediatePlanHandler } from './core/IntermediatePlanHandler';
 import { SystemPromptBuilder } from './builders/SystemPromptBuilder';
 import { MessageBuilder } from './builders/MessageBuilder';
-import { AutomationPlanParser, ParsedAutomationPlan } from './parsers/AutomationPlanParser';
-import { IterativeAutomationResult, PlanExecutionResult, AutomationStatus } from './core/types';
+import { AutomationPlanParser } from './parsers/AutomationPlanParser';
+import { IterativeAutomationResult, PlanExecutionResult, AutomationStatus, ParsedAutomationPlan } from './core/types';
 import Anthropic from '@anthropic-ai/sdk';
 import { AutomationProgressEvent, AutomationEventType, RecordingSession } from '@/shared/types';
 
 export class AutomationService extends EventEmitter {
-  // External dependencies
   private executor: BrowserAutomationExecutor;
   private recordingStore: RecordingStore;
   private recordedSession: RecordingSession | null = null;
   
-  // Core services
   private automationClient: AutomationClient;
   
-  // State and execution managers (initialized per session)
   private stateManager: AutomationStateManager;
   private sessionManager: SessionManager;
   private planExecutor: PlanExecutor;
@@ -81,22 +78,19 @@ export class AutomationService extends EventEmitter {
    * 
    * @param userGoal - What the user wants to automate
    * @param recordedSessionId - Optional recorded session as reference
-   * @param maxRecoveryAttempts - Maximum number of error recovery attempts (default: 7)
    * @returns Automation result with recovery information
    */
   public async executeAutomation(
     userGoal: string,
     recordedSessionId: string,
-    maxRecoveryAttempts = 7
   ): Promise<IterativeAutomationResult> {
     this.recordedSession = this.recordingStore.getRecording(recordedSessionId);
     this.stateManager = new AutomationStateManager(
       userGoal,
       this.recordedSession,
-      maxRecoveryAttempts,
       this.sessionManager
     );
-    this.planExecutor = new PlanExecutor(this.executor, this.stateManager, this); // Pass event emitter
+    this.planExecutor = new PlanExecutor(this.executor, this.stateManager, this);
     this.errorRecoveryHandler = new ErrorRecoveryHandler(
       this.automationClient,
       this.stateManager
@@ -126,16 +120,8 @@ export class AutomationService extends EventEmitter {
           planType: initialPlan.plan.planType
         });
       }
-      
-      // Emit plan generated event
-      this.emitProgress('plan_generated', {
-        plan: initialPlan.plan,
-        planType: initialPlan.plan.planType,
-        totalSteps: initialPlan.plan.totalSteps,
-      });
 
-      // Step 2: Execute plan with error recovery loop
-      while (!this.stateManager.isComplete() && !this.stateManager.isMaxRecoveryAttemptsReached()) {
+      while (!this.stateManager.isComplete()) {
         const executionResult = await this.executePlanWithRecovery();
         
         if (executionResult.isComplete) {
@@ -144,17 +130,13 @@ export class AutomationService extends EventEmitter {
         }
       }
 
-      // Return final result
       const finalResult = this.stateManager.getFinalResult();
       
-      // Update session status to completed
       await this.automationClient.updateSessionStatus(AutomationStatus.COMPLETED);
       
-      // Emit completion event
       this.emitProgress('automation_complete', {
         success: finalResult.success,
         totalSteps: this.stateManager.getTotalStepsExecuted(),
-        recoveryAttempts: this.stateManager.getRecoveryAttempts(),
       });
 
       return {
@@ -162,21 +144,13 @@ export class AutomationService extends EventEmitter {
         plan: this.stateManager.getCurrentPlan(),
         executionResults: this.stateManager.getExecutedSteps(),
         error: finalResult.error,
-        recoveryAttempts: this.stateManager.getRecoveryAttempts(),
         totalStepsExecuted: this.stateManager.getTotalStepsExecuted()
       };
 
     } catch (error: any) {
       console.error('❌ [IterativeAutomation] Fatal error:', error);
       
-      // Update session status to failed even on error
-      try {
-        await this.automationClient.updateSessionStatus(AutomationStatus.FAILED);
-      } catch (endError) {
-        console.error('❌ [IterativeAutomation] Failed to update session status:', endError);
-      }
-      
-      // Emit error event
+      await this.automationClient.updateSessionStatus(AutomationStatus.FAILED);
       this.emitProgress('automation_error', {
         error: error.message || 'Unknown error occurred',
         stack: error.stack
@@ -186,7 +160,6 @@ export class AutomationService extends EventEmitter {
         success: false,
         executionResults: this.stateManager?.getExecutedSteps() || [],
         error: error.message || 'Unknown error occurred',
-        recoveryAttempts: this.stateManager?.getRecoveryAttempts() || 0,
         totalStepsExecuted: this.stateManager?.getTotalStepsExecuted() || 0
       };
     }
@@ -218,10 +191,6 @@ export class AutomationService extends EventEmitter {
     return { plan, response };
   }
 
-  /**
-   * Execute plan with error recovery
-   * Returns execution result and whether we're complete
-   */
   private async executePlanWithRecovery(): Promise<PlanExecutionResult> {
     if (!this.stateManager || !this.planExecutor || !this.errorRecoveryHandler || !this.intermediatePlanHandler) {
       throw new Error('Managers not initialized');
@@ -258,7 +227,6 @@ export class AutomationService extends EventEmitter {
       }
 
       // Handle extract_context tool ONLY if it's the last step
-      // This means the plan is designed to extract context and return to Claude
       if (stepResult.isAnalysisTool && isLastStep) {
         // Build tool results for all executed steps in this plan
         const toolResultBlocks = MessageBuilder.buildToolResultsForPlan(

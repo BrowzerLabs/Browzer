@@ -42,7 +42,7 @@ export class AutomationManager {
       this.sessionManager,
     );
 
-    const automationPromise = automationService.executeAutomation(userGoal, recordedSessionId, 20);
+    const automationPromise = automationService.executeAutomation(userGoal, recordedSessionId);
 
     await new Promise(resolve => setTimeout(resolve, 100));
     const sessionId = automationService.getSessionId();

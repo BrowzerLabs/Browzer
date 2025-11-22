@@ -2,32 +2,14 @@
 import { EventEmitter } from 'events';
 import { BrowserAutomationExecutor } from '@/main/automation/BrowserAutomationExecutor';
 import { AutomationStateManager } from './AutomationStateManager';
-import { PlanExecutionResult, ExecutedStep } from './types';
-import { ParsedAutomationPlan, AutomationStep } from '../parsers/AutomationPlanParser';
+import { PlanExecutionResult, ExecutedStep, AutomationStep, ParsedAutomationPlan } from './types';
 import { MAX_AUTOMATION_STEPS } from '@/shared/constants/limits';
 
-/**
- * PlanExecutor - Executes automation plans step-by-step
- * 
- * Responsibilities:
- * - Execute plan steps sequentially
- * - Track execution progress
- * - Handle step failures
- * - Detect special tools (extract_context, take_snapshot)
- * - Return execution results
- * - Emit real-time progress events
- * 
- * This module centralizes plan execution logic for:
- * - Consistent execution flow
- * - Easy debugging of execution issues
- * - Proper error handling
- * - Step tracking
- */
 export class PlanExecutor {
   private static readonly MAX_STEPS = MAX_AUTOMATION_STEPS;
   private executor: BrowserAutomationExecutor;
   private stateManager: AutomationStateManager;
-  private eventEmitter?: EventEmitter;
+  private eventEmitter: EventEmitter;
 
   constructor(
     executor: BrowserAutomationExecutor,
@@ -39,10 +21,6 @@ export class PlanExecutor {
     this.eventEmitter = eventEmitter;
   }
 
-  /**
-   * Execute a single step from the plan
-   * Returns execution result and whether to continue
-   */
   public async executeStep(
     step: AutomationStep,
     stepNumber: number,
