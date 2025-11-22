@@ -10,7 +10,7 @@ export function useRecording() {
   const [isRecording, setIsRecording] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [actions, setActions] = useState<RecordedAction[]>([]);
-  const { showSidebar, setActiveTab } = useSidebarStore();
+  const { showSidebar } = useSidebarStore();
 
   // Check recording status on mount
   useEffect(() => {
@@ -33,15 +33,13 @@ export function useRecording() {
       if (success) {
         setIsRecording(true);
         setActions([]);
-        // Auto-open sidebar and switch to recording tab when recording starts
-        setActiveTab('recording');
         showSidebar();
       }
       return success;
     } finally {
       setIsLoading(false);
     }
-  }, [showSidebar, setActiveTab]);
+  }, [showSidebar]);
 
   const stopRecording = useCallback(async () => {
     setIsLoading(true);

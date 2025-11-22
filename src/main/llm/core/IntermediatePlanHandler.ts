@@ -1,41 +1,20 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { AutomationClient } from '../clients/AutomationClient';
-import { ToolRegistry } from '../utils/ToolRegistry';
 import { SystemPromptBuilder } from '../builders/SystemPromptBuilder';
-import { MessageBuilder } from '../builders/MessageBuilder';
 import { AutomationPlanParser } from '../parsers/AutomationPlanParser';
 import { AutomationStateManager } from './AutomationStateManager';
 import { UsageTracker } from '../utils/UsageTracker';
 import { PlanExecutionResult } from './types';
 import { SystemPromptType } from '@/shared/types';
 
-/**
- * IntermediatePlanHandler - Handles intermediate plan continuation
- * 
- * Responsibilities:
- * - Detect intermediate vs final plans
- * - Build continuation prompts
- * - Request next plan from AutomationClient
- * - Handle phase transitions
- * 
- * This module centralizes intermediate plan logic for:
- * - Multi-phase automation support
- * - Context-based decision making
- * - Proper phase tracking
- * - State management across phases
- */
 export class IntermediatePlanHandler {
   private automationClient: AutomationClient;
-  private toolRegistry: ToolRegistry;
   private stateManager: AutomationStateManager;
 
   constructor(
     automationClient: AutomationClient,
-    toolRegistry: ToolRegistry,
     stateManager: AutomationStateManager
   ) {
     this.automationClient = automationClient;
-    this.toolRegistry = toolRegistry;
     this.stateManager = stateManager;
   }
 
@@ -67,29 +46,22 @@ export class IntermediatePlanHandler {
         stepNumber: es.stepNumber,
         toolName: es.toolName,
         success: es.success,
-        summary: es.result?.effects?.summary
       })),
       extractedContext: this.getExtractedContextSummary(),
       currentUrl: this.getCurrentUrl()
     });
 
-    // Add user message with continuation prompt only
     this.stateManager.addMessage({
       role: 'user',
       content: continuationPrompt
     });
 
-    // Continue conversation with automation system prompt
-    const tools = this.toolRegistry.getToolDefinitions();
+    const response = await this.automationClient.continueConversation(
+      SystemPromptType.AUTOMATION_CONTINUATION,
+      this.stateManager.getOptimizedMessages(),
+      this.stateManager.getCachedContext()
+    );
 
-    const response = await this.automationClient.continueConversation({
-      systemPromptType: SystemPromptType.AUTOMATION_PLAN_GENERATION,
-      messages: this.stateManager.getOptimizedMessages(),
-      tools,
-      cachedContext: this.stateManager.getCachedContext()
-    });
-
-    // Add assistant response to conversation
     this.stateManager.addMessage({
       role: 'assistant',
       content: response.content
@@ -97,7 +69,6 @@ export class IntermediatePlanHandler {
 
     this.stateManager.compressMessages();
 
-    // Parse new plan
     const newPlan = AutomationPlanParser.parsePlan(response);
 
     // Update current plan
@@ -118,21 +89,16 @@ export class IntermediatePlanHandler {
   public async handleContextExtraction(): Promise<PlanExecutionResult> {
     console.log('🔄 [IntermediatePlan] Continuing after context extraction...');
 
-    // Continue conversation with same system prompt type
     const systemPromptType = this.stateManager.getRecoveryAttempts() > 0
       ? SystemPromptType.AUTOMATION_ERROR_RECOVERY
-      : SystemPromptType.AUTOMATION_PLAN_GENERATION;
+      : SystemPromptType.AUTOMATION_CONTINUATION;
 
-    const tools = this.toolRegistry.getToolDefinitions();
-
-    const response = await this.automationClient.continueConversation({
+    const response = await this.automationClient.continueConversation(
       systemPromptType,
-      messages: this.stateManager.getOptimizedMessages(),
-      tools,
-      cachedContext: this.stateManager.getCachedContext()
-    });
+      this.stateManager.getOptimizedMessages(),
+      this.stateManager.getCachedContext()
+    );
 
-    // Add assistant response to conversation
     this.stateManager.addMessage({
       role: 'assistant',
       content: response.content
@@ -171,18 +137,12 @@ export class IntermediatePlanHandler {
       };
     }
 
+    const response = await this.automationClient.continueConversation(
+      SystemPromptType.AUTOMATION_ERROR_RECOVERY,
+      this.stateManager.getOptimizedMessages(),
+      this.stateManager.getCachedContext()
+    );
 
-    // Continue conversation to get new plan
-    const tools = this.toolRegistry.getToolDefinitions();
-
-    const response = await this.automationClient.continueConversation({
-      systemPromptType: SystemPromptType.AUTOMATION_ERROR_RECOVERY,
-      messages: this.stateManager.getOptimizedMessages(),
-      tools,
-      cachedContext: this.stateManager.getCachedContext()
-    });
-
-    // Add assistant response
     this.stateManager.addMessage({
       role: 'assistant',
       content: response.content

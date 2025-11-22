@@ -1,9 +1,7 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { EventEmitter } from 'events';
 import { BrowserAutomationExecutor } from '@/main/automation/BrowserAutomationExecutor';
 import { RecordingStore } from '@/main/recording';
 import { AutomationClient } from './clients/AutomationClient';
-import { ToolRegistry } from './utils/ToolRegistry';
 import { UsageTracker } from './utils/UsageTracker';
 import { AutomationStateManager } from './core/AutomationStateManager';
 import { SessionManager } from './session/SessionManager';
@@ -15,36 +13,16 @@ import { MessageBuilder } from './builders/MessageBuilder';
 import { AutomationPlanParser, ParsedAutomationPlan } from './parsers/AutomationPlanParser';
 import { IterativeAutomationResult, PlanExecutionResult, UsageStats } from './core/types';
 import Anthropic from '@anthropic-ai/sdk';
-import { AutomationProgressEvent, AutomationEventType, SystemPromptType } from '@/shared/types';
+import { AutomationProgressEvent, AutomationEventType, RecordingSession } from '@/shared/types';
 
-/**
- * AutomationService - Smart ReAct-based browser automation orchestrator
- * 
- * **Architecture:**
- * - AutomationStateManager: Manages session state and conversation history
- * - PlanExecutor: Executes automation plans step-by-step
- * - ErrorRecoveryHandler: Handles errors and generates recovery plans
- * - IntermediatePlanHandler: Manages multi-phase automation
- * - UsageTracker: Tracks token usage and costs
- * - MessageBuilder: Builds tool result messages
- * 
- * **Flow:**
- * 1. Generate initial plan from user goal
- * 2. Execute plan steps sequentially
- * 3. On error: Trigger error recovery
- * 4. On analysis tool: Continue conversation with context
- * 5. On intermediate plan: Generate next phase
- * 6. Repeat until success or max recovery attempts
- * 
- */
 export class AutomationService extends EventEmitter {
   // External dependencies
   private executor: BrowserAutomationExecutor;
   private recordingStore: RecordingStore;
+  private recordedSession: RecordingSession | null = null;
   
   // Core services
   private automationClient: AutomationClient;
-  private toolRegistry: ToolRegistry;
   
   // State and execution managers (initialized per session)
   private stateManager: AutomationStateManager;
@@ -68,7 +46,6 @@ export class AutomationService extends EventEmitter {
       this.emitProgress('claude_thinking', { message });
     });
     
-    this.toolRegistry = new ToolRegistry();
     this.sessionManager = sessionManager;
   }
 
@@ -105,31 +82,25 @@ export class AutomationService extends EventEmitter {
     maxRecoveryAttempts = 7
   ): Promise<IterativeAutomationResult> {
     // Initialize session-specific managers with persistent storage
-    const recordedSession = this.recordingStore.getRecording(recordedSessionId);
+    this.recordedSession = this.recordingStore.getRecording(recordedSessionId);
     this.stateManager = new AutomationStateManager(
       userGoal,
-      recordedSession,
+      this.recordedSession,
       maxRecoveryAttempts,
       this.sessionManager
     );
     this.planExecutor = new PlanExecutor(this.executor, this.stateManager, this); // Pass event emitter
     this.errorRecoveryHandler = new ErrorRecoveryHandler(
       this.automationClient,
-      this.toolRegistry,
       this.stateManager
     );
     this.intermediatePlanHandler = new IntermediatePlanHandler(
       this.automationClient,
-      this.toolRegistry,
       this.stateManager
     );
     this.usageTracker = new UsageTracker();
 
     try {
-      // Step 1: Start automation session
-      await this.automationClient.startAutomation();
-      
-      // Step 2: Generate initial plan (thinking event emitted by AutomationClient)
       const initialPlan = await this.generateInitialPlan();
       this.usageTracker.addUsage(initialPlan.usage);
       this.stateManager.setCurrentPlan(initialPlan.plan);
@@ -241,7 +212,6 @@ export class AutomationService extends EventEmitter {
     if (!this.stateManager) throw new Error('State manager not initialized');
 
     const userPrompt = this.stateManager.getUserGoal();
-    const tools = this.toolRegistry.getToolDefinitions();
 
     // Add user message to conversation
     this.stateManager.addMessage({
@@ -249,26 +219,11 @@ export class AutomationService extends EventEmitter {
       content: userPrompt
     });
 
-    // Generate plan
-    const response = await this.automationClient.createAutomationPlan({
-      systemPromptType: SystemPromptType.AUTOMATION_PLAN_GENERATION,
-      userPrompt,
-      tools,
-      cachedContext: this.stateManager.getCachedContext()
-    });
+    const formatted_session = SystemPromptBuilder.formatRecordedSession(this.recordedSession);
 
-    // Parse plan
+    const response = await this.automationClient.createAutomationPlan(formatted_session, userPrompt);
+
     const plan = AutomationPlanParser.parsePlan(response);
-
-    // Validate plan
-    const validation = AutomationPlanParser.validatePlan(
-      plan,
-      this.toolRegistry.getToolNames()
-    );
-
-    if (!validation.valid) {
-      throw new Error(`Invalid automation plan: ${validation.errors.join(', ')}`);
-    }
 
     const usage = UsageTracker.extractUsageFromResponse(response);
 

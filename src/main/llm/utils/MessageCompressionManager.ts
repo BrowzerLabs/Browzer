@@ -30,7 +30,7 @@ export class MessageCompressionManager {
   private static readonly ERROR_MARKER = 'AUTOMATION ERROR ENCOUNTERED';
   private static readonly UNEXECUTED_MARKER = 'Not executed - automation stopped before reaching this step';
   private static readonly COMPRESSED_ANALYSIS = 
-    '✅ Analysis completed successfully, full result was provided to model and has been compressed to save context';
+    '✅ Analysis completed successfully, full result provided & compressed to save context';
   
   private static readonly COMPRESSED_ERROR = 
     '⚠️ Previous error compressed';

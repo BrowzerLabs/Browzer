@@ -1,58 +1,22 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
-import { BaseHandler } from '../core/BaseHandler';
-import type { HandlerContext } from '../core/types';
+import { BaseHandler, HandlerContext } from './BaseHandler';
 import type { NavigateParams, WaitForElementParams, ToolExecutionResult } from '@/shared/types';
 
-/**
- * NavigationHandler - Handles navigation and waiting operations
- * 
- * Provides operations for:
- * - Page navigation with various wait strategies
- * - Simple wait/sleep operations
- * - Wait for element to appear/disappear
- * 
- * This handler ensures navigation is reliable and waits are properly timed.
- */
+
 export class NavigationHandler extends BaseHandler {
   constructor(context: HandlerContext) {
     super(context);
   }
 
-  /**
-   * Execute navigate operation
-   */
   async executeNavigate(params: NavigateParams): Promise<ToolExecutionResult> {
     const startTime = Date.now();
     
     try {
-      const waitUntil = params.waitUntil || 'load';
-      const timeout = params.timeout || 30000;
-      
-      // Set up navigation promise BEFORE calling loadURL to avoid race condition
-      const navigationPromise = this.waitForNavigation(waitUntil, timeout);
-      
-      // Start navigation
       await this.view.webContents.loadURL(params.url);
-      
-      // Wait for navigation to complete
-      await navigationPromise;
-
-      const executionTime = Date.now() - startTime;
-      const currentUrl = this.getUrl();
 
       return {
         success: true,
         toolName: 'navigate',
-        executionTime,
-        effects: {
-          navigationOccurred: true,
-          newUrl: currentUrl,
-          navigationTiming: executionTime,
-          summary: `Successfully navigated to ${currentUrl}`
-        },
-        timestamp: Date.now(),
-        tabId: this.tabId,
-        url: currentUrl
+        url: this.getUrl()
       };
 
     } catch (error) {
@@ -67,9 +31,6 @@ export class NavigationHandler extends BaseHandler {
     }
   }
 
-  /**
-   * Execute simple wait operation
-   */
   async executeWait(params: { duration: number }): Promise<ToolExecutionResult> {
     const startTime = Date.now();
 
@@ -84,20 +45,10 @@ export class NavigationHandler extends BaseHandler {
     return {
       success: true,
       toolName: 'wait',
-      executionTime,
-      effects: {
-        navigationOccurred: false,
-        summary: `Waited for ${duration}ms`
-      },
-      timestamp: Date.now(),
-      tabId: this.tabId,
       url: this.getUrl()
     };
   }
 
-  /**
-   * Execute wait for element operation
-   */
   async executeWaitForElement(params: WaitForElementParams): Promise<ToolExecutionResult> {
     const startTime = Date.now();
 
@@ -184,13 +135,6 @@ export class NavigationHandler extends BaseHandler {
       return {
         success: true,
         toolName: 'waitForElement',
-        executionTime,
-        effects: {
-          navigationOccurred: false,
-          summary: `Element reached state: ${state}`
-        },
-        timestamp: Date.now(),
-        tabId: this.tabId,
         url: this.getUrl()
       };
 
@@ -205,46 +149,4 @@ export class NavigationHandler extends BaseHandler {
     }
   }
 
-  /**
-   * Wait for navigation to complete
-   */
-  private async waitForNavigation(waitUntil: string, timeout: number): Promise<void> {
-    return new Promise((resolve, reject) => {
-      let resolved = false;
-      
-      const timer = setTimeout(() => {
-        if (!resolved) {
-          resolved = true;
-          reject(new Error('Navigation timeout'));
-        }
-      }, timeout);
-      
-      const cleanup = () => {
-        if (!resolved) {
-          resolved = true;
-          clearTimeout(timer);
-          resolve();
-        }
-      };
-      
-      if (waitUntil === 'load') {
-        // Listen for successful load
-        this.view.webContents.once('did-finish-load', cleanup);
-        
-        // Also handle navigation failures
-        this.view.webContents.once('did-fail-load', (event, errorCode, errorDescription) => {
-          if (!resolved) {
-            resolved = true;
-            clearTimeout(timer);
-            reject(new Error(`Navigation failed: ${errorDescription} (code: ${errorCode})`));
-          }
-        });
-      } else if (waitUntil === 'domcontentloaded') {
-        this.view.webContents.once('dom-ready', cleanup);
-      } else {
-        // For 'networkidle' or other, just wait a bit
-        setTimeout(cleanup, 1000);
-      }
-    });
-  }
 }

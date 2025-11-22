@@ -1,10 +1,8 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
-import { AutomationState, ExecutedStep, CompletedPlan } from './types';
+import { AutomationState, ExecutedStep, CompletedPlan, AutomationStatus } from './types';
 import { ParsedAutomationPlan } from '../parsers/AutomationPlanParser';
 import { RecordingSession } from '@/shared/types/recording';
 import { SystemPromptBuilder } from '../builders/SystemPromptBuilder';
 import { SessionManager } from '../session/SessionManager';
-import { MessageBuilder } from '../builders/MessageBuilder';
 import { ContextWindowManager } from '../utils/ContextWindowManager';
 import Anthropic from '@anthropic-ai/sdk';
 import { MessageCompressionManager } from '../utils/MessageCompressionManager';
@@ -75,7 +73,7 @@ export class AutomationStateManager {
       isInRecovery: false,
       recoveryAttempts: 0,
       maxRecoveryAttempts,
-      isComplete: false,
+      status: AutomationStatus.RUNNING,
       finalSuccess: false
     };
   }
@@ -112,7 +110,7 @@ export class AutomationStateManager {
       isInRecovery: session.metadata.isInRecovery,
       recoveryAttempts: session.metadata.recoveryAttempts,
       maxRecoveryAttempts: 10, // Default
-      isComplete: session.status === 'completed' || session.status === 'error',
+      status: session.status,
       finalSuccess: session.metadata.finalSuccess || false,
       finalError: session.metadata.finalError
     };
@@ -166,7 +164,6 @@ export class AutomationStateManager {
       sessionId: this.sessionId,
       stepNumber: step.stepNumber,
       toolName: step.toolName,
-      effects: step.result?.effects, // Store effects as input context
       result: this.isAnalysisTool(step.toolName) ? `${step.toolName} executed successfully` : step.result,
       success: step.success,
       error: step.error
@@ -232,7 +229,7 @@ export class AutomationStateManager {
    * Mark automation as complete
    */
   public markComplete(success: boolean, error?: string): void {
-    this.state.isComplete = true;
+    this.state.status = AutomationStatus.COMPLETED;
     this.state.finalSuccess = success;
     this.state.finalError = error;
 
@@ -328,7 +325,7 @@ export class AutomationStateManager {
    * Check if complete
    */
   public isComplete(): boolean {
-    return this.state.isComplete;
+    return this.state.status == AutomationStatus.COMPLETED
   }
 
   /**

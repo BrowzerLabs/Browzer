@@ -1,36 +1,22 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { WebContentsView } from 'electron';
 import type { ToolExecutionResult } from '@/shared/types';
 import { BrowserContextExtractor } from '@/main/context/BrowserContextExtractor';
 import { ViewportSnapshotCapture } from './ViewportSnapshotCapture';
 
-// Import handlers
 import { ClickHandler } from './handlers/ClickHandler';
 import { TypeHandler } from './handlers/TypeHandler';
 import { FormHandler } from './handlers/FormHandler';
 import { NavigationHandler } from './handlers/NavigationHandler';
 import { InteractionHandler } from './handlers/InteractionHandler';
 
-/**
- * BrowserAutomationExecutor - Main orchestrator for browser automation
- * 
- * Architecture:
- * - ClickHandler: Click operations with multi-strategy execution
- * - TypeHandler: Text input with React/Vue framework support
- * - FormHandler: Select, checkbox, and form submission
- * - NavigationHandler: Page navigation and wait operations
- * - InteractionHandler: Keyboard and scroll interactions
- */
 export class BrowserAutomationExecutor {
   private view: WebContentsView;
   private debugger: Electron.Debugger;
   private tabId: string;
   
-  // Context and snapshot services
   private contextExtractor: BrowserContextExtractor;
   private snapshotCapture: ViewportSnapshotCapture;
   
-  // Specialized handlers
   private clickHandler: ClickHandler;
   private typeHandler: TypeHandler;
   private formHandler: FormHandler;
@@ -42,11 +28,9 @@ export class BrowserAutomationExecutor {
     this.debugger = view.webContents.debugger;
     this.tabId = tabId;
     
-    // Initialize services
     this.contextExtractor = new BrowserContextExtractor(view);
     this.snapshotCapture = new ViewportSnapshotCapture(view);
     
-    // Initialize handlers with shared context
     const context = { view, debugger: this.debugger, tabId };
     this.clickHandler = new ClickHandler(context);
     this.typeHandler = new TypeHandler(context);
@@ -124,41 +108,33 @@ export class BrowserAutomationExecutor {
   }
 
   /**
-   * Extract context - Unified method for both full and viewport extraction
+   * Extract context - unified method
    */
   private async extractContext(params: {
     full?: boolean;
-    scrollTo?: 'current' | 'top' | 'bottom' | number | { 
-      element: string; 
-      backupSelectors: string[] 
-    };
+    scrollTo?: 'current' | 'top' | 'bottom' | number;
+    elementTags?: string[];
     maxElements?: number;
   }): Promise<ToolExecutionResult> {
     const startTime = Date.now();
 
-    const full = params.full ?? false;
-    const maxElements = params.maxElements ?? 200;
+    console.log('[AutomationExecutor] 📊 Extracting context:', params);
 
-    // Use unified smart context extraction
-    const result = await this.contextExtractor.extractSmartContext(
-      this.tabId,
-      full,
-      params.scrollTo,
-      maxElements
-    );
+    // Use context extraction
+    const result = await this.contextExtractor.extractContext({
+      tabId: this.tabId,
+      full: params.full,
+      scrollTo: params.scrollTo,
+      elementTags: params.elementTags,
+      maxElements: params.maxElements
+    });
 
     if (result.success && result.context) {
-      const context = result.context;
-      const executionTime = Date.now() - startTime;
-
       return {
         success: true,
         toolName: 'extract_context',
-        executionTime,
-        context,
-        timestamp: Date.now(),
-        tabId: this.tabId,
-        url: context.url
+        context: result.context,
+        url: this.view.webContents.getURL(),
       };
     }
 
@@ -169,9 +145,9 @@ export class BrowserAutomationExecutor {
         lastError: result.error,
         suggestions: [
           'Page may still be loading',
-          full ? 'Try with full=false for viewport-only extraction' : 'Try with full=true for complete page context',
-          'If scrolling to element, verify selector is correct',
-          'Check if page has JavaScript errors'
+          'Try with full=true for complete page context',
+          'Check if page has JavaScript errors',
+          'Verify elementTags filter is correct (e.g., ["BUTTON", "INPUT"])'
         ]
       }
     });
@@ -239,10 +215,7 @@ export class BrowserAutomationExecutor {
     return {
       success: false,
       toolName,
-      executionTime: Date.now() - startTime,
       error,
-      timestamp: Date.now(),
-      tabId: this.tabId,
       url: this.view.webContents.getURL()
     };
   }

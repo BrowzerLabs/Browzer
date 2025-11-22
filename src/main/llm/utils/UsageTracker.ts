@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { UsageStats } from '../core/types';
 import Anthropic from '@anthropic-ai/sdk';
 
@@ -74,39 +73,5 @@ export class UsageTracker {
    */
   public getTotalUsage(): UsageStats {
     return { ...this.totalUsage };
-  }
-
-  /**
-   * Get usage summary as string
-   */
-  public getSummary(): string {
-    const u = this.totalUsage;
-    return `Tokens: ${u.inputTokens} in, ${u.outputTokens} out | Cache: ${u.cacheCreationTokens} write, ${u.cacheReadTokens} read | Cost: $${u.totalCost.toFixed(4)}`;
-  }
-
-  /**
-   * Reset usage tracking
-   */
-  public reset(): void {
-    this.totalUsage = {
-      inputTokens: 0,
-      outputTokens: 0,
-      cacheCreationTokens: 0,
-      cacheReadTokens: 0,
-      totalCost: 0
-    };
-  }
-
-  /**
-   * Accumulate two usage stats (static utility)
-   */
-  public static accumulate(current: UsageStats, additional: UsageStats): UsageStats {
-    return {
-      inputTokens: current.inputTokens + additional.inputTokens,
-      outputTokens: current.outputTokens + additional.outputTokens,
-      cacheCreationTokens: current.cacheCreationTokens + additional.cacheCreationTokens,
-      cacheReadTokens: current.cacheReadTokens + additional.cacheReadTokens,
-      totalCost: current.totalCost + additional.totalCost
-    };
   }
 }
