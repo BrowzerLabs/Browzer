@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import { AgentHeader } from './AgentHeader';
 import { AgentChatArea } from './AgentChatArea';
 import { AgentFooter } from './AgentFooter';
-import { useAgentView } from './hooks';
+import { useAutomation } from './hooks';
 
 export default function AgentView() {
   const {
@@ -21,7 +21,7 @@ export default function AgentView() {
     handleNewSession,
     handleRecordingSelect,
     handlePromptChange,
-  } = useAgentView();
+  } = useAutomation();
 
   useEffect(() => {
     loadRecordings();

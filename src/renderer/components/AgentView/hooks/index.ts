@@ -1,1 +1,1 @@
-export { useAgentView } from './useAgentView';
+export { useAutomation } from './useAutomation';

@@ -2,7 +2,7 @@ import { useState, useCallback, useEffect } from 'react';
 import { useAutomationStore } from '@/renderer/stores/automationStore';
 import { RecordingSession } from '@/shared/types';
 
-export function useAgentView() {
+export function useAutomation() {
   const {
     viewState,
     currentSession,
@@ -26,27 +26,27 @@ export function useAgentView() {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
-    console.log('[useAgentView] Setting up automation event listeners');
+    console.log('[useAutomation] Setting up automation event listeners');
 
     const unsubProgress = window.browserAPI.onAutomationProgress((data: any) => {
-      console.log('[useAgentView] Progress event:', data.event.type);
+      console.log('[useAutomation] Progress event:', data.event.type);
       addEvent(data.sessionId, data.event);
     });
 
     const unsubComplete = window.browserAPI.onAutomationComplete((data: any) => {
-      console.log('[useAgentView] Automation completed:', data.sessionId);
+      console.log('[useAutomation] Automation completed:', data.sessionId);
       completeAutomation(data.sessionId, data.result);
       setIsSubmitting(false);
     });
 
     const unsubError = window.browserAPI.onAutomationError((data: any) => {
-      console.error('[useAgentView] Automation error:', data.error);
+      console.error('[useAutomation] Automation error:', data.error);
       errorAutomation(data.sessionId, data.error);
       setIsSubmitting(false);
     });
 
     return () => {
-      console.log('[useAgentView] Cleaning up event listeners');
+      console.log('[useAutomation] Cleaning up event listeners');
       unsubProgress();
       unsubComplete();
       unsubError();
@@ -54,7 +54,7 @@ export function useAgentView() {
   }, [addEvent, completeAutomation, errorAutomation]);
 
   useEffect(() => {
-    console.log('[useAgentView] Loading session history');
+    console.log('[useAutomation] Loading session history');
     loadSessionHistory();
   }, [loadSessionHistory]);
 
@@ -63,7 +63,7 @@ export function useAgentView() {
       const allRecordings = await window.browserAPI.getAllRecordings();
       setRecordings(allRecordings);
     } catch (error) {
-      console.error('[useAgentView] Failed to load recordings:', error);
+      console.error('[useAutomation] Failed to load recordings:', error);
     }
   }, []);
 
@@ -84,11 +84,11 @@ export function useAgentView() {
         // Start automation with persistent session ID
         startAutomation(userPrompt, selectedRecordingId, result.sessionId);
       } else {
-        console.error('[useAgentView] Automation failed to start');
+        console.error('[useAutomation] Automation failed to start');
         setIsSubmitting(false);
       }
     } catch (error) {
-      console.error('[useAgentView] Error starting automation:', error);
+      console.error('[useAutomation] Error starting automation:', error);
       setIsSubmitting(false);
     }
   }, [userPrompt, selectedRecordingId, isSubmitting, startAutomation]);
