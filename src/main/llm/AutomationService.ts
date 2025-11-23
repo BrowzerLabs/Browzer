@@ -2,7 +2,6 @@ import { EventEmitter } from 'events';
 import { BrowserAutomationExecutor } from '@/main/automation/BrowserAutomationExecutor';
 import { RecordingStore } from '@/main/recording';
 import { AutomationClient } from './clients/AutomationClient';
-import { AutomationStateManager } from './core/AutomationStateManager';
 import { StreamingAutomationStateManager } from './core/StreamingAutomationStateManager';
 import { SessionManager } from './session/SessionManager';
 import { IterativeAutomationResult } from './core/types';
@@ -13,7 +12,7 @@ export class AutomationService extends EventEmitter {
   private recordingStore: RecordingStore;
   private recordedSession: RecordingSession | null = null;
   private automationClient: AutomationClient;
-  private stateManager: AutomationStateManager | StreamingAutomationStateManager;
+  private stateManager: StreamingAutomationStateManager;
   private sessionManager: SessionManager;
 
   constructor(
@@ -121,72 +120,4 @@ export class AutomationService extends EventEmitter {
       };
     }
   }
-
-  public async executeAutomation(
-    userGoal: string,
-    recordedSessionId: string,
-  ): Promise<IterativeAutomationResult> {
-    this.recordedSession = this.recordingStore.getRecording(recordedSessionId);
-    this.stateManager = new AutomationStateManager(
-      userGoal,
-      this.recordedSession,
-      this.sessionManager,
-      this.automationClient,
-      this.executor
-    );
-    this.stateManager.on('progress', (event: AutomationProgressEvent) => {
-      this.emitProgress(event.type, event.data);
-    });
-    
-    try {
-      await this.stateManager.generateInitialPlan();
-
-      while (!this.stateManager.isComplete()) {
-        const executionResult = await this.stateManager.executePlanWithRecovery();
-        
-        if (executionResult.isComplete) {
-          this.stateManager.markComplete(executionResult.success, executionResult.error);
-          break;
-        }
-      }
-
-      const finalResult = this.stateManager.getFinalResult();
-      
-      const status = finalResult.success 
-        ? AutomationStatus.COMPLETED 
-        : AutomationStatus.FAILED;
-      
-      await this.automationClient.updateSessionStatus(status);
-      
-      this.emitProgress('automation_complete', {
-        success: finalResult.success,
-        totalSteps: this.stateManager.getTotalStepsExecuted(),
-      });
-
-      return {
-        success: finalResult.success,
-        plan: this.stateManager.getCurrentPlan(),
-        executionResults: this.stateManager.getExecutedSteps(),
-        error: finalResult.error,
-        totalStepsExecuted: this.stateManager.getTotalStepsExecuted()
-      };
-
-    } catch (error: any) {
-      console.error('❌ [IterativeAutomation] Fatal error:', error);
-      
-      await this.automationClient.updateSessionStatus(AutomationStatus.FAILED);
-      this.emitProgress('automation_error', {
-        error: error.message || 'Unknown error occurred',
-        stack: error.stack
-      });
-
-      return {
-        success: false,
-        executionResults: this.stateManager?.getExecutedSteps() || [],
-        error: error.message || 'Unknown error occurred',
-        totalStepsExecuted: this.stateManager?.getTotalStepsExecuted() || 0
-      };
-    }
-  }
-
 }
