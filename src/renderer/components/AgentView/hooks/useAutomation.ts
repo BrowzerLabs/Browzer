@@ -90,6 +90,8 @@ export function useAutomation() {
     } catch (error) {
       console.error('[useAutomation] Error starting automation:', error);
       setIsSubmitting(false);
+    }finally{
+      setIsSubmitting(false);
     }
   }, [userPrompt, selectedRecordingId, isSubmitting, startAutomation]);
 
