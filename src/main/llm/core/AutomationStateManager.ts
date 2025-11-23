@@ -32,11 +32,9 @@ export class AutomationStateManager extends EventEmitter {
   private automationClient: AutomationClient;
   private intermediatePlanHandler: IntermediatePlanHandler;
 
-  private currentThinkingText: string = '';
   private currentToolCalls: any[] = [];
   private streamingMessage: any = null;
   private isStreaming: boolean = false;
-  private toolInputBuffers?: Map<number, { tool_use_id: string; tool_name: string; partial_json: string }>;
 
   constructor(
     userGoal: string,
@@ -78,7 +76,6 @@ export class AutomationStateManager extends EventEmitter {
   }
 
   private resetStreamBuffers(): void {
-    this.currentThinkingText = '';
     this.currentToolCalls = [];
     this.streamingMessage = null;
   }

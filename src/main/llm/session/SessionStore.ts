@@ -52,7 +52,7 @@ export class SessionStore {
         id TEXT PRIMARY KEY,
         user_goal TEXT NOT NULL,
         recording_id TEXT NOT NULL,
-        status TEXT NOT NULL CHECK(status IN ('running', 'completed', 'error', 'paused')),
+        status TEXT NOT NULL CHECK(status IN ('running', 'completed', 'failed', 'paused')),
         created_at INTEGER NOT NULL,
         updated_at INTEGER NOT NULL,
         completed_at INTEGER,
