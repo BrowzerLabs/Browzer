@@ -2,6 +2,7 @@ import { WebContents } from 'electron';
 import { ApiClient, ApiConfig } from './ApiClient';
 import { SSEClient, SSEConfig } from './SSEClient';
 import { initializeApi } from './api';
+import { initializeSSEClient } from './sse';
 import { EventEmitter } from 'events';
 
 export enum ConnectionStatus {
@@ -83,6 +84,7 @@ export class ConnectionService extends EventEmitter {
     };
 
     this.sseClient = new SSEClient(sseConfig);
+    initializeSSEClient(this.sseClient);
 
     await this.sseClient.connect();
   }

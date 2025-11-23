@@ -31,6 +31,11 @@ export class AutomationStateManager extends EventEmitter {
   private automationClient: AutomationClient;
   private intermediatePlanHandler: IntermediatePlanHandler;
 
+  private currentThinkingText: string = '';
+  private currentToolCalls: any[] = [];
+  private streamingMessage: any = null;
+  private isStreaming: boolean = false;
+
   constructor(
     userGoal: string,
     recordedSession: RecordingSession,
@@ -66,6 +71,103 @@ export class AutomationStateManager extends EventEmitter {
     this.emit('progress', event);
   }
 
+  private resetStreamBuffers(): void {
+    this.currentThinkingText = '';
+    this.currentToolCalls = [];
+    this.streamingMessage = null;
+  }
+
+  private setupStreamListeners(): void {
+    this.automationClient.removeAllListeners('text_delta');
+    this.automationClient.removeAllListeners('tool_use_complete');
+    this.automationClient.removeAllListeners('stream_complete');
+    this.automationClient.removeAllListeners('stream_error');
+
+    this.automationClient.on('text_delta', (data: any) => {
+      this.currentThinkingText += data.text;
+      
+      this.emitProgress('claude_response', {
+        message: this.currentThinkingText,
+      });
+    });
+
+    this.automationClient.on('tool_use_complete', (data: any) => {
+      console.log(`🔧 [StateManager] Tool call complete: ${data.tool_name}`);
+      this.currentToolCalls.push({
+        id: data.tool_use_id,
+        name: data.tool_name,
+        input: data.input
+      });
+    });
+
+    this.automationClient.on('stream_complete', (data: any) => {
+      console.log('✅ [StateManager] Stream complete');
+      this.streamingMessage = data.message;
+    });
+
+    this.automationClient.on('stream_error', (data: any) => {
+      console.error('❌ [StateManager] Stream error:', data.error);
+      this.emitProgress('automation_error', {
+        error: data.error
+      });
+    });
+  }
+
+  public async generateInitialPlanStream(): Promise<void> {
+    this.resetStreamBuffers();
+    this.setupStreamListeners();
+    this.isStreaming = true;
+
+    this.addMessage({
+      role: 'user',
+      content: this.user_goal
+    });
+
+    const sessionId = await this.automationClient.createAutomationPlanStream(
+      this.cached_context,
+      this.user_goal
+    );
+
+    console.log(`🚀 [StateManager] Streaming session: ${sessionId}`);
+
+    await this.waitForStreamComplete();
+
+    if (this.streamingMessage) {
+      const plan = AutomationPlanParser.parsePlan(this.streamingMessage);
+      this.current_plan = plan;
+      
+      this.addMessage({
+        role: 'assistant',
+        content: this.streamingMessage.content
+      });
+
+      console.log(`📋 [StateManager] Plan generated: ${plan.planType}, ${plan.steps.length} steps`);
+    } else {
+      throw new Error('Stream completed but no message received');
+    }
+
+    this.isStreaming = false;
+  }
+
+  private async waitForStreamComplete(): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        reject(new Error('Stream timeout'));
+      }, 120000); // 2 minute timeout
+
+      const checkComplete = () => {
+        if (this.streamingMessage) {
+          clearTimeout(timeout);
+          resolve();
+        } else {
+          setTimeout(checkComplete, 100);
+        }
+      };
+
+      checkComplete();
+    });
+  }
+
   public async generateInitialPlan(): Promise<void> {
     this.addMessage({
       role: 'user',
@@ -88,6 +190,73 @@ export class AutomationStateManager extends EventEmitter {
         message: thinkingText,
       });
     }
+  }
+
+  public async executePlanWithRecoveryStream(): Promise<PlanExecutionResult> {
+    if (!this.current_plan) {
+      return { success: false, isComplete: true, error: 'No plan to execute. Please Try Again' };
+    }
+
+    const totalSteps = this.current_plan.steps.length;
+    for (let i = 0; i < this.current_plan.steps.length; i++) {
+      const step = this.current_plan.steps[i];
+      const stepNumber = this.executed_steps.length + 1;
+      const isLastStep = i === this.current_plan.steps.length - 1;
+
+      const stepResult = await this.executeStep(step, stepNumber, totalSteps);
+
+      if (this.executed_steps.length >= MAX_AUTOMATION_STEPS) {
+        return { 
+          success: false, 
+          isComplete: true, 
+          error: stepResult.error ?? 'Maximum execution steps limit reached. Please restart another automation.'
+        };
+      }
+
+      if (!stepResult.success || stepResult.error) {
+        const recoveryResult = await this.handleError(step, stepResult.result);
+        return recoveryResult;
+      }
+
+      if (this.isAnalysisTool(step.toolName) && isLastStep) {
+        const toolResultBlocks = MessageBuilder.buildToolResultsForPlan(
+          this.current_plan,
+          this.executed_steps
+        );
+        this.addMessage(
+          MessageBuilder.buildUserMessageWithToolResults(toolResultBlocks)
+        );
+        // Use streaming version
+        const continuationResult = await this.intermediatePlanHandler.handleContextExtractionStream();
+        return continuationResult;
+      }
+    }
+
+    console.log(`✅ [IterativeAutomation] Plan completed - ${this.current_plan.steps.length} steps executed`);
+    const toolResultBlocks = MessageBuilder.buildToolResultsForPlan(
+      this.current_plan,
+      this.executed_steps
+    );
+
+    this.addMessage(
+      MessageBuilder.buildUserMessageWithToolResults(toolResultBlocks)
+    );
+    
+    if (this.is_in_recovery) {
+      if (this.current_plan.planType === 'final') {
+        this.exitRecoveryMode();
+        return { success: true, isComplete: true };
+      }
+      
+      return await this.intermediatePlanHandler.handleRecoveryPlanCompletionStream();
+    }
+
+    if (this.current_plan.planType === 'intermediate') {
+      this.completePhase();
+      return await this.intermediatePlanHandler.handleIntermediatePlanCompletionStream();
+    }
+
+    return { success: true, isComplete: true };
   }
 
   public async executePlanWithRecovery(): Promise<PlanExecutionResult> {

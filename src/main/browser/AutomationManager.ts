@@ -42,7 +42,7 @@ export class AutomationManager {
       this.sessionManager,
     );
 
-    const automationPromise = automationService.executeAutomation(userGoal, recordedSessionId);
+    const automationPromise = automationService.executeAutomationStream(userGoal, recordedSessionId);
 
     await new Promise(resolve => setTimeout(resolve, 200));
     const sessionId = automationService.getSessionId();
@@ -101,18 +101,15 @@ export class AutomationManager {
         return null;
       }
       
-      // Parse messages into individual events
       const events: any[] = [];
       
       for (const msg of sessionData.messages) {
         const content = Array.isArray(msg.content) ? msg.content : [msg.content];
         
         if (msg.role === 'assistant') {
-          // Assistant messages contain text blocks and tool_use blocks
           for (const block of content) {
             if (typeof block === 'object' && block !== null) {
               if (block.type === 'text') {
-                // Claude's thinking/response
                 events.push({
                   id: `msg_${msg.id}_text`,
                   sessionId: sessionData.session.id,
@@ -121,7 +118,6 @@ export class AutomationManager {
                   timestamp: msg.createdAt
                 });
               } else if (block.type === 'tool_use') {
-                // Tool call (step start)
                 events.push({
                   id: `msg_${msg.id}_tool_${block.id}`,
                   sessionId: sessionData.session.id,
@@ -138,17 +134,14 @@ export class AutomationManager {
             }
           }
         } else if (msg.role === 'user') {
-          // User messages contain tool_result blocks
           for (const block of content) {
             if (typeof block === 'object' && block !== null && block.type === 'tool_result') {
-              // Tool result (step complete or error)
               const isError = block.is_error || false;
               const resultContent = Array.isArray(block.content) ? block.content[0] : block.content;
               const resultText = typeof resultContent === 'object' && resultContent.type === 'text' 
                 ? resultContent.text 
                 : typeof resultContent === 'string' ? resultContent : JSON.stringify(resultContent);
               
-              // Try to parse result as JSON to extract structured data
               let parsedResult: any = null;
               try {
                 parsedResult = JSON.parse(resultText);
@@ -174,7 +167,6 @@ export class AutomationManager {
         }
       }
       
-      // Convert to format expected by renderer
       return {
         sessionId: sessionData.session.id,
         userGoal: sessionData.session.userGoal,
@@ -192,9 +184,6 @@ export class AutomationManager {
     }
   }
 
-  /**
-   * Get automation session history (limited list for sidebar)
-   */
   public async getAutomationSessionHistory(limit = 5): Promise<any[]> {
     try {
       const sessions = this.sessionManager.listSessions(limit, 0);
@@ -215,12 +204,8 @@ export class AutomationManager {
     }
   }
 
-  /**
-   * Get all automation sessions (for automation screen)
-   */
   public async getAutomationSessions(): Promise<any[]> {
     try {
-      // Get all sessions (no limit)
       const sessions = this.sessionManager.listSessions(1000, 0);
       
       return sessions.map(session => ({
@@ -239,9 +224,6 @@ export class AutomationManager {
     }
   }
 
-  /**
-   * Get detailed session information
-   */
   public async getAutomationSessionDetails(sessionId: string): Promise<any> {
     try {
       const session = this.sessionManager.getSession(sessionId);
@@ -250,7 +232,6 @@ export class AutomationManager {
         throw new Error(`Session ${sessionId} not found`);
       }
 
-      // Return session with all available details
       return session;
     } catch (error) {
       console.error('[AutomationManager] Failed to load session details:', error);
@@ -258,20 +239,14 @@ export class AutomationManager {
     }
   }
 
-  /**
-   * Resume a paused or failed automation session
-   */
   public async resumeAutomationSession(sessionId: string): Promise<any> {
     try {
-      // Load the session
       const session = this.sessionManager.getSession(sessionId);
       
       if (!session) {
         throw new Error(`Session ${sessionId} not found`);
       }
 
-      // TODO: Implement resume logic
-      // For now, just return the session info
       console.log('[AutomationManager] Resume session:', sessionId);
       
       return {
@@ -285,9 +260,6 @@ export class AutomationManager {
     }
   }
 
-  /**
-   * Delete automation session
-   */
   public async deleteAutomationSession(sessionId: string): Promise<boolean> {
     try {
       this.sessionManager.deleteSession(sessionId);
@@ -298,9 +270,6 @@ export class AutomationManager {
     }
   }
 
-  /**
-   * Clean up
-   */
   public destroy(): void {
     this.automationSessions.clear();
   }

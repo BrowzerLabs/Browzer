@@ -8,6 +8,7 @@ import { SystemPromptType } from '@/shared/types';
 export class IntermediatePlanHandler {
   private automationClient: AutomationClient;
   private stateManager: AutomationStateManager;
+  private streamingMessage: any = null;
 
   constructor(
     automationClient: AutomationClient,
@@ -15,6 +16,78 @@ export class IntermediatePlanHandler {
   ) {
     this.automationClient = automationClient;
     this.stateManager = stateManager;
+  }
+
+  private setupStreamListeners(): void {
+    this.streamingMessage = null;
+
+    this.automationClient.removeAllListeners('stream_complete');
+    this.automationClient.on('stream_complete', (data: any) => {
+      this.streamingMessage = data.message;
+    });
+  }
+
+  private async waitForStreamComplete(): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        reject(new Error('Stream timeout'));
+      }, 120000);
+
+      const checkComplete = () => {
+        if (this.streamingMessage) {
+          clearTimeout(timeout);
+          resolve();
+        } else {
+          setTimeout(checkComplete, 100);
+        }
+      };
+
+      checkComplete();
+    });
+  }
+
+  public async handleIntermediatePlanCompletionStream(): Promise<PlanExecutionResult> {
+    this.setupStreamListeners();
+
+    const continuationPrompt = SystemPromptBuilder.buildIntermediatePlanContinuationPrompt({
+      userGoal: this.stateManager.getUserGoal(),
+      extractedContext: this.getExtractedContextSummary(),
+      currentUrl: this.getCurrentUrl()
+    });
+
+    this.stateManager.addMessage({
+      role: 'user',
+      content: continuationPrompt
+    });
+
+    // Start streaming
+    await this.automationClient.continueConversationStream(
+      SystemPromptType.AUTOMATION_CONTINUATION,
+      this.stateManager.getOptimizedMessages(),
+      this.stateManager.getCachedContext()
+    );
+
+    // Wait for completion
+    await this.waitForStreamComplete();
+
+    if (this.streamingMessage) {
+      this.stateManager.addMessage({
+        role: 'assistant',
+        content: this.streamingMessage.content
+      });
+
+      this.stateManager.compressMessages();
+
+      const newPlan = AutomationPlanParser.parsePlan(this.streamingMessage);
+      this.stateManager.setCurrentPlan(newPlan);
+    } else {
+      throw new Error('Stream completed but no message received');
+    }
+
+    return {
+      success: false,
+      isComplete: false,
+    };
   }
 
   public async handleIntermediatePlanCompletion(): Promise<PlanExecutionResult> {
@@ -63,6 +136,37 @@ export class IntermediatePlanHandler {
     };
   }
 
+  public async handleContextExtractionStream(): Promise<PlanExecutionResult> {
+    this.setupStreamListeners();
+
+    await this.automationClient.continueConversationStream(
+      SystemPromptType.AUTOMATION_CONTINUATION,
+      this.stateManager.getOptimizedMessages(),
+      this.stateManager.getCachedContext()
+    );
+
+    await this.waitForStreamComplete();
+
+    if (this.streamingMessage) {
+      this.stateManager.addMessage({
+        role: 'assistant',
+        content: this.streamingMessage.content
+      });
+
+      this.stateManager.compressMessages();
+
+      const newPlan = AutomationPlanParser.parsePlan(this.streamingMessage);
+      this.stateManager.setCurrentPlan(newPlan);
+    } else {
+      throw new Error('Stream completed but no message received');
+    }
+
+    return {
+      success: false,
+      isComplete: false,
+    };
+  }
+
   public async handleContextExtraction(): Promise<PlanExecutionResult> {
 
     const response = await this.automationClient.continueConversation(
@@ -91,6 +195,39 @@ export class IntermediatePlanHandler {
 
     const newPlan = AutomationPlanParser.parsePlan(response);
     this.stateManager.setCurrentPlan(newPlan);
+
+    return {
+      success: false,
+      isComplete: false,
+    };
+  }
+
+  public async handleRecoveryPlanCompletionStream(): Promise<PlanExecutionResult> {
+    this.setupStreamListeners();
+
+    await this.automationClient.continueConversationStream(
+      SystemPromptType.AUTOMATION_ERROR_RECOVERY,
+      this.stateManager.getOptimizedMessages(),
+      this.stateManager.getCachedContext()
+    );
+
+    await this.waitForStreamComplete();
+
+    if (this.streamingMessage) {
+      this.stateManager.addMessage({
+        role: 'assistant',
+        content: this.streamingMessage.content
+      });
+
+      this.stateManager.compressMessages();
+
+      const newPlan = AutomationPlanParser.parsePlan(this.streamingMessage);
+
+      this.stateManager.setCurrentPlan(newPlan);
+      this.stateManager.exitRecoveryMode();
+    } else {
+      throw new Error('Stream completed but no message received');
+    }
 
     return {
       success: false,

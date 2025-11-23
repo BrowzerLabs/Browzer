@@ -55,6 +55,83 @@ export class AutomationService extends EventEmitter {
     this.emit('progress', event);
   }
 
+  public async executeAutomationStream(
+    userGoal: string,
+    recordedSessionId: string,
+  ): Promise<IterativeAutomationResult> {
+    this.recordedSession = this.recordingStore.getRecording(recordedSessionId);
+    this.stateManager = new AutomationStateManager(
+      userGoal,
+      this.recordedSession,
+      this.sessionManager,
+      this.automationClient,
+      this.executor
+    );
+    this.stateManager.on('progress', (event: AutomationProgressEvent) => {
+      this.emitProgress(event.type, event.data);
+    });
+    
+    try {
+      await this.stateManager.generateInitialPlanStream();
+
+      const MAX_ITERATIONS = 50;
+      let iterations = 0;
+
+      while (!this.stateManager.isComplete()) {
+        if (++iterations > MAX_ITERATIONS) {
+          console.error(`❌ [AutomationService] Maximum iterations (${MAX_ITERATIONS}) reached`);
+          this.stateManager.markComplete(false, 'Maximum automation iterations exceeded');
+          break;
+        }
+
+        console.log(`🔄 [AutomationService] Iteration ${iterations}/${MAX_ITERATIONS}`);
+        const executionResult = await this.stateManager.executePlanWithRecoveryStream();
+        
+        if (executionResult.isComplete) {
+          this.stateManager.markComplete(executionResult.success, executionResult.error);
+          break;
+        }
+      }
+
+      const finalResult = this.stateManager.getFinalResult();
+      
+      const status = finalResult.success 
+        ? AutomationStatus.COMPLETED 
+        : AutomationStatus.FAILED;
+      
+      await this.automationClient.updateSessionStatus(status);
+      
+      this.emitProgress('automation_complete', {
+        success: finalResult.success,
+        totalSteps: this.stateManager.getTotalStepsExecuted(),
+      });
+
+      return {
+        success: finalResult.success,
+        plan: this.stateManager.getCurrentPlan(),
+        executionResults: this.stateManager.getExecutedSteps(),
+        error: finalResult.error,
+        totalStepsExecuted: this.stateManager.getTotalStepsExecuted()
+      };
+
+    } catch (error: any) {
+      console.error('❌ [IterativeAutomation] Fatal error:', error);
+      
+      await this.automationClient.updateSessionStatus(AutomationStatus.FAILED);
+      this.emitProgress('automation_error', {
+        error: error.message || 'Unknown error occurred',
+        stack: error.stack
+      });
+
+      return {
+        success: false,
+        executionResults: this.stateManager?.getExecutedSteps() || [],
+        error: error.message || 'Unknown error occurred',
+        totalStepsExecuted: this.stateManager?.getTotalStepsExecuted() || 0
+      };
+    }
+  }
+
   public async executeAutomation(
     userGoal: string,
     recordedSessionId: string,
@@ -74,7 +151,17 @@ export class AutomationService extends EventEmitter {
     try {
       await this.stateManager.generateInitialPlan();
 
+      const MAX_ITERATIONS = 50;
+      let iterations = 0;
+
       while (!this.stateManager.isComplete()) {
+        if (++iterations > MAX_ITERATIONS) {
+          console.error(`❌ [AutomationService] Maximum iterations (${MAX_ITERATIONS}) reached`);
+          this.stateManager.markComplete(false, 'Maximum automation iterations exceeded');
+          break;
+        }
+
+        console.log(`🔄 [AutomationService] Iteration ${iterations}/${MAX_ITERATIONS}`);
         const executionResult = await this.stateManager.executePlanWithRecovery();
         
         if (executionResult.isComplete) {
