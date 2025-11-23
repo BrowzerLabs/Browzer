@@ -18,15 +18,6 @@ export class IntermediatePlanHandler {
     this.stateManager = stateManager;
   }
 
-  private setupStreamListeners(): void {
-    this.streamingMessage = null;
-
-    this.automationClient.removeAllListeners('stream_complete');
-    this.automationClient.on('stream_complete', (data: any) => {
-      this.streamingMessage = data.message;
-    });
-  }
-
   private async waitForStreamComplete(): Promise<void> {
     return new Promise((resolve, reject) => {
       const timeout = setTimeout(() => {
@@ -34,7 +25,10 @@ export class IntermediatePlanHandler {
       }, 120000);
 
       const checkComplete = () => {
-        if (this.streamingMessage) {
+        // Get streaming message from state manager
+        const message = this.stateManager.getStreamingMessage();
+        if (message) {
+          this.streamingMessage = message;
           clearTimeout(timeout);
           resolve();
         } else {
@@ -47,7 +41,7 @@ export class IntermediatePlanHandler {
   }
 
   public async handleIntermediatePlanCompletionStream(): Promise<PlanExecutionResult> {
-    this.setupStreamListeners();
+    this.streamingMessage = null;
 
     const continuationPrompt = SystemPromptBuilder.buildIntermediatePlanContinuationPrompt({
       userGoal: this.stateManager.getUserGoal(),
@@ -137,7 +131,7 @@ export class IntermediatePlanHandler {
   }
 
   public async handleContextExtractionStream(): Promise<PlanExecutionResult> {
-    this.setupStreamListeners();
+    this.streamingMessage = null;
 
     await this.automationClient.continueConversationStream(
       SystemPromptType.AUTOMATION_CONTINUATION,
@@ -203,7 +197,7 @@ export class IntermediatePlanHandler {
   }
 
   public async handleRecoveryPlanCompletionStream(): Promise<PlanExecutionResult> {
-    this.setupStreamListeners();
+    this.streamingMessage = null;
 
     await this.automationClient.continueConversationStream(
       SystemPromptType.AUTOMATION_ERROR_RECOVERY,

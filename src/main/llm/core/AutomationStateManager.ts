@@ -11,6 +11,7 @@ import { MAX_AUTOMATION_STEPS } from '@/shared/constants/limits';
 import { EventEmitter } from 'events';
 import { BrowserAutomationExecutor } from '@/main/automation';
 import { AutomationEventType, AutomationProgressEvent, SystemPromptType, ToolExecutionResult } from '@/shared/types';
+import { api, sse } from '@/main/api';
 
 export class AutomationStateManager extends EventEmitter {
   private session_id: string;
@@ -35,6 +36,7 @@ export class AutomationStateManager extends EventEmitter {
   private currentToolCalls: any[] = [];
   private streamingMessage: any = null;
   private isStreaming: boolean = false;
+  private toolInputBuffers?: Map<number, { tool_use_id: string; tool_name: string; partial_json: string }>;
 
   constructor(
     userGoal: string,
@@ -61,6 +63,10 @@ export class AutomationStateManager extends EventEmitter {
       this.automationClient,
       this
     );
+
+    sse.on('automation', (data: any) => {
+      console.log('Automation event received:', data);
+    });
   }
 
   public emitProgress(type: AutomationEventType, data: any): void {
@@ -77,58 +83,31 @@ export class AutomationStateManager extends EventEmitter {
     this.streamingMessage = null;
   }
 
-  private setupStreamListeners(): void {
-    this.automationClient.removeAllListeners('text_delta');
-    this.automationClient.removeAllListeners('tool_use_complete');
-    this.automationClient.removeAllListeners('stream_complete');
-    this.automationClient.removeAllListeners('stream_error');
-
-    this.automationClient.on('text_delta', (data: any) => {
-      this.currentThinkingText += data.text;
-      
-      this.emitProgress('claude_response', {
-        message: this.currentThinkingText,
-      });
-    });
-
-    this.automationClient.on('tool_use_complete', (data: any) => {
-      console.log(`🔧 [StateManager] Tool call complete: ${data.tool_name}`);
-      this.currentToolCalls.push({
-        id: data.tool_use_id,
-        name: data.tool_name,
-        input: data.input
-      });
-    });
-
-    this.automationClient.on('stream_complete', (data: any) => {
-      console.log('✅ [StateManager] Stream complete');
-      this.streamingMessage = data.message;
-    });
-
-    this.automationClient.on('stream_error', (data: any) => {
-      console.error('❌ [StateManager] Stream error:', data.error);
-      this.emitProgress('automation_error', {
-        error: data.error
-      });
-    });
-  }
-
   public async generateInitialPlanStream(): Promise<void> {
     this.resetStreamBuffers();
-    this.setupStreamListeners();
     this.isStreaming = true;
 
     this.addMessage({
       role: 'user',
       content: this.user_goal
     });
+    this.emitProgress('thinking', {
+      message: 'Creating automation plan...'
+    })
 
-    const sessionId = await this.automationClient.createAutomationPlanStream(
-      this.cached_context,
-      this.user_goal
+    const response = await api.post<{ message: any; session_id: string }>(
+      '/automation/plan/stream',
+      {
+        recording_session: this.cached_context,
+        user_goal: this.user_goal
+      }
     );
 
-    console.log(`🚀 [StateManager] Streaming session: ${sessionId}`);
+    if (!response.success || !response.data?.session_id) {
+      throw new Error(response.error || 'Failed to create automation plan');
+    }
+    this.session_id = response.data.session_id;
+    console.log(`🚀 [StateManager] Streaming session: ${this.session_id}`);
 
     await this.waitForStreamComplete();
 
@@ -153,7 +132,7 @@ export class AutomationStateManager extends EventEmitter {
     return new Promise((resolve, reject) => {
       const timeout = setTimeout(() => {
         reject(new Error('Stream timeout'));
-      }, 120000); // 2 minute timeout
+      }, 120000);
 
       const checkComplete = () => {
         if (this.streamingMessage) {
@@ -226,9 +205,7 @@ export class AutomationStateManager extends EventEmitter {
         this.addMessage(
           MessageBuilder.buildUserMessageWithToolResults(toolResultBlocks)
         );
-        // Use streaming version
-        const continuationResult = await this.intermediatePlanHandler.handleContextExtractionStream();
-        return continuationResult;
+        return await this.intermediatePlanHandler.handleContextExtractionStream();
       }
     }
 
@@ -554,6 +531,10 @@ export class AutomationStateManager extends EventEmitter {
     this.final_error = error;
 
     this.session_manager.completeSession(this.session_id, success, error);
+  }
+
+  public getStreamingMessage() {
+    return this.streamingMessage
   }
 
   public getMessages(): Anthropic.MessageParam[] {

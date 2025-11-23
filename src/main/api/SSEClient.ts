@@ -117,8 +117,6 @@ export class SSEClient extends EventEmitter {
     this.eventSource.onerror = (error: any) => {
       console.error('[SSEClient] SSE error:', error.message);
       
-      // EventSource automatically tries to reconnect, but we want more control
-      // readyState: 0 = CONNECTING, 1 = OPEN, 2 = CLOSED
       if (this.eventSource?.readyState === 2) {
         console.log('[SSEClient] Connection closed, will attempt reconnection');
         this.cleanup();
@@ -128,10 +126,8 @@ export class SSEClient extends EventEmitter {
           this.scheduleReconnect();
         }
       } else if (this.eventSource?.readyState === 0) {
-        // Still connecting, wait a bit
         console.log('[SSEClient] Connection in progress...');
       } else {
-        // Emit error but don't stop reconnection
         this.emit('error', error);
       }
     };
@@ -158,6 +154,11 @@ export class SSEClient extends EventEmitter {
     this.eventSource.addEventListener('notification', (event: MessageEvent) => {
       const data = JSON.parse(event.data);
       this.browserUIWebContents.send('notification', data);
+    });
+
+    this.eventSource.addEventListener('automation', (event: MessageEvent) => {
+      const data = JSON.parse(event.data);
+      this.emit('automation', data);
     });
   }
 

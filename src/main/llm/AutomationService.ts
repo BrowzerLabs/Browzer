@@ -72,19 +72,7 @@ export class AutomationService extends EventEmitter {
     });
     
     try {
-      await this.stateManager.generateInitialPlanStream();
-
-      const MAX_ITERATIONS = 50;
-      let iterations = 0;
-
       while (!this.stateManager.isComplete()) {
-        if (++iterations > MAX_ITERATIONS) {
-          console.error(`❌ [AutomationService] Maximum iterations (${MAX_ITERATIONS}) reached`);
-          this.stateManager.markComplete(false, 'Maximum automation iterations exceeded');
-          break;
-        }
-
-        console.log(`🔄 [AutomationService] Iteration ${iterations}/${MAX_ITERATIONS}`);
         const executionResult = await this.stateManager.executePlanWithRecoveryStream();
         
         if (executionResult.isComplete) {
@@ -151,17 +139,7 @@ export class AutomationService extends EventEmitter {
     try {
       await this.stateManager.generateInitialPlan();
 
-      const MAX_ITERATIONS = 50;
-      let iterations = 0;
-
       while (!this.stateManager.isComplete()) {
-        if (++iterations > MAX_ITERATIONS) {
-          console.error(`❌ [AutomationService] Maximum iterations (${MAX_ITERATIONS}) reached`);
-          this.stateManager.markComplete(false, 'Maximum automation iterations exceeded');
-          break;
-        }
-
-        console.log(`🔄 [AutomationService] Iteration ${iterations}/${MAX_ITERATIONS}`);
         const executionResult = await this.stateManager.executePlanWithRecovery();
         
         if (executionResult.isComplete) {

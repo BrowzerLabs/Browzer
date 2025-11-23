@@ -12,8 +12,6 @@ export interface StreamEvent {
 
 export class AutomationClient extends EventEmitter {
   private sessionId: string | null = null;
-  private isStreaming: boolean = false;
-  private streamEventHandlers: Map<string, (data: any) => void> = new Map();
 
   constructor() {
     super();
@@ -34,24 +32,27 @@ export class AutomationClient extends EventEmitter {
       const sseClient = sse; // Capture in local variable for type safety
 
       const eventTypes = [
+        'automation_start',
+        'continuation_start',
         'message_start',
         'content_block_start',
         'text_delta',
         'tool_use_start',
         'tool_input_delta',
         'tool_use_complete',
+        'tool_use_error',
         'content_block_stop',
         'message_delta',
         'message_stop',
         'stream_complete',
-        'stream_error',
-        'automation_start',
-        'continuation_start'
+        'stream_error'
       ];
 
       eventTypes.forEach(eventType => {
         sseClient.on(eventType, (data: any) => {
-          if (data.session_id === this.sessionId && this.isStreaming) {
+          // Only process if we have an active session and the event is for our session
+          if (this.sessionId && data.session_id === this.sessionId) {
+            console.log(`📡 [AutomationClient] Received: ${eventType} for session ${data.session_id}`);
             this.handleStreamEvent(eventType, data);
           }
         });
@@ -64,40 +65,8 @@ export class AutomationClient extends EventEmitter {
   }
 
   private handleStreamEvent(eventType: string, data: any): void {
-    console.log(`📡 [AutomationClient] Stream event: ${eventType}`);
-
-    this.emit('stream_event', { type: eventType, data });
+    // Emit to state manager
     this.emit(eventType, data);
-
-    const handler = this.streamEventHandlers.get(eventType);
-    if (handler) {
-      handler(data);
-    }
-  }
-
-  private async subscribeToAutomation(sessionId: string): Promise<void> {
-    try {
-      const response = await api.post(
-        `/automation/subscribe/${sessionId}`,
-        {
-          electron_id: process.env.ELECTRON_ID || 'electron-app'
-        },
-        {
-          headers: {
-            'session-id': sessionId
-          }
-        }
-      );
-
-      if (!response.success) {
-        throw new Error('Failed to subscribe to automation channel');
-      }
-
-      console.log(`✅ [AutomationClient] Subscribed to automation:${sessionId}`);
-    } catch (error) {
-      console.error('❌ [AutomationClient] Failed to subscribe:', error);
-      throw error;
-    }
   }
 
   public async createAutomationPlanStream(
@@ -107,7 +76,6 @@ export class AutomationClient extends EventEmitter {
     try {
       this.emit('thinking', 'Creating automation plan...');
 
-      // Call streaming endpoint
       const response = await api.post<{ message: any; session_id: string }>(
         '/automation/plan/stream',
         {
@@ -121,17 +89,11 @@ export class AutomationClient extends EventEmitter {
       }
 
       this.sessionId = response.data.session_id;
-      this.isStreaming = true;
-
-      await this.subscribeToAutomation(this.sessionId);
-
-      console.log(`✅ [AutomationClient] Streaming session created: ${this.sessionId}`);
-
+      console.log(`✅ [AutomationClient] Session started: ${this.sessionId}`);
       return this.sessionId;
 
     } catch (error) {
       console.error('❌ [AutomationClient] Failed to create streaming automation plan:', error);
-      this.isStreaming = false;
       throw error;
     }
   }
@@ -157,8 +119,6 @@ export class AutomationClient extends EventEmitter {
       }
 
       this.sessionId = response.data.session_id;
-      console.log(`✅ [AutomationClient] Session created: ${this.sessionId}`);
-
       return response.data.message;
 
     } catch (error) {
@@ -179,7 +139,6 @@ export class AutomationClient extends EventEmitter {
 
     try {
       this.emit('thinking', 'Analyzing and generating next steps...');
-      this.isStreaming = true;
 
       const response = await api.post<{ success: boolean; session_id: string }>(
         '/automation/continue/stream',
@@ -203,7 +162,6 @@ export class AutomationClient extends EventEmitter {
 
     } catch (error) {
       console.error('❌ [AutomationClient] Failed to continue conversation:', error);
-      this.isStreaming = false;
       throw error;
     }
   }
@@ -275,7 +233,6 @@ export class AutomationClient extends EventEmitter {
       }
 
       this.sessionId = null;
-      this.isStreaming = false;
 
     } catch (error) {
       console.error('❌ [AutomationClient] Failed to update session status:', error);
@@ -284,12 +241,8 @@ export class AutomationClient extends EventEmitter {
   }
 
   public stopStreaming(): void {
-    this.isStreaming = false;
+    this.sessionId = null;
     console.log('[AutomationClient] Streaming stopped');
-  }
-
-  public getIsStreaming(): boolean {
-    return this.isStreaming;
   }
 
   public getSessionId(): string | null {
