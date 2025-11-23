@@ -1,22 +1,8 @@
-/**
- * AgentView - Main Component
- * 
- * Orchestrates the entire AgentView with modular sub-components
- * 
- * Features:
- * - Two view modes: new_session and existing_session
- * - Session history display
- * - Real-time event streaming
- * - Persistent session storage
- * - Recording selection
- * - Prompt input
- */
-
-import React, { useEffect } from 'react';
+import { useEffect } from 'react';
 import { AgentHeader } from './AgentHeader';
 import { AgentChatArea } from './AgentChatArea';
 import { AgentFooter } from './AgentFooter';
-import { useAgentView, useAutomationEvents, useSessionManagement } from './hooks';
+import { useAgentView } from './hooks';
 
 export default function AgentView() {
   const {
@@ -35,16 +21,8 @@ export default function AgentView() {
     handleNewSession,
     handleRecordingSelect,
     handlePromptChange,
-    setIsSubmitting,
   } = useAgentView();
 
-  // Subscribe to automation events
-  useAutomationEvents(setIsSubmitting);
-
-  // Load session history
-  useSessionManagement();
-
-  // Load recordings on mount
   useEffect(() => {
     loadRecordings();
   }, [loadRecordings]);
@@ -53,7 +31,6 @@ export default function AgentView() {
 
   return (
     <section className="flex flex-col h-full overflow-hidden">
-      {/* Header */}
       <AgentHeader
         viewMode={viewState}
         selectedRecordingId={selectedRecordingId}
@@ -64,7 +41,6 @@ export default function AgentView() {
         isDisabled={isDisabled}
       />
 
-      {/* Chat Area - Takes remaining space and handles overflow */}
       <AgentChatArea
           viewMode={viewState}
           currentSession={currentSession}
@@ -74,7 +50,6 @@ export default function AgentView() {
           onSessionSelect={handleSessionSelect}
         />
 
-      {/* Footer */}
       <AgentFooter
         userPrompt={userPrompt}
         selectedRecordingId={selectedRecordingId}

@@ -1,11 +1,4 @@
-/**
- * useAgentView Hook
- * 
- * Main state management and orchestration logic for AgentView
- * Handles view state, form submission, and coordination between sub-components
- */
-
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useAutomationStore } from '@/renderer/stores/automationStore';
 import { RecordingSession } from '@/shared/types';
 
@@ -23,14 +16,48 @@ export function useAgentView() {
     startAutomation,
     startNewSession,
     loadStoredSession,
+    loadSessionHistory,
+    addEvent,
+    completeAutomation,
+    errorAutomation,
   } = useAutomationStore();
 
   const [recordings, setRecordings] = useState<RecordingSession[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  /**
-   * Load recordings from main process
-   */
+  useEffect(() => {
+    console.log('[useAgentView] Setting up automation event listeners');
+
+    const unsubProgress = window.browserAPI.onAutomationProgress((data: any) => {
+      console.log('[useAgentView] Progress event:', data.event.type);
+      addEvent(data.sessionId, data.event);
+    });
+
+    const unsubComplete = window.browserAPI.onAutomationComplete((data: any) => {
+      console.log('[useAgentView] Automation completed:', data.sessionId);
+      completeAutomation(data.sessionId, data.result);
+      setIsSubmitting(false);
+    });
+
+    const unsubError = window.browserAPI.onAutomationError((data: any) => {
+      console.error('[useAgentView] Automation error:', data.error);
+      errorAutomation(data.sessionId, data.error);
+      setIsSubmitting(false);
+    });
+
+    return () => {
+      console.log('[useAgentView] Cleaning up event listeners');
+      unsubProgress();
+      unsubComplete();
+      unsubError();
+    };
+  }, [addEvent, completeAutomation, errorAutomation]);
+
+  useEffect(() => {
+    console.log('[useAgentView] Loading session history');
+    loadSessionHistory();
+  }, [loadSessionHistory]);
+
   const loadRecordings = useCallback(async () => {
     try {
       const allRecordings = await window.browserAPI.getAllRecordings();
@@ -40,9 +67,6 @@ export function useAgentView() {
     }
   }, []);
 
-  /**
-   * Handle form submission
-   */
   const handleSubmit = useCallback(async () => {
     if (!userPrompt.trim() || !selectedRecordingId || isSubmitting) {
       return;
@@ -69,36 +93,23 @@ export function useAgentView() {
     }
   }, [userPrompt, selectedRecordingId, isSubmitting, startAutomation]);
 
-  /**
-   * Handle session selection from history
-   */
   const handleSessionSelect = useCallback(async (sessionId: string) => {
     await loadStoredSession(sessionId);
   }, [loadStoredSession]);
 
-  /**
-   * Handle new session creation
-   */
   const handleNewSession = useCallback(() => {
     startNewSession();
   }, [startNewSession]);
 
-  /**
-   * Handle recording selection
-   */
   const handleRecordingSelect = useCallback((recordingId: string | null) => {
     setSelectedRecording(recordingId);
   }, [setSelectedRecording]);
 
-  /**
-   * Handle prompt change
-   */
   const handlePromptChange = useCallback((prompt: string) => {
     setUserPrompt(prompt);
   }, [setUserPrompt]);
 
   return {
-    // State
     viewState,
     currentSession,
     sessionHistory,
@@ -108,8 +119,6 @@ export function useAgentView() {
     isSubmitting,
     isLoadingSession,
     isLoadingHistory,
-
-    // Actions
     loadRecordings,
     handleSubmit,
     handleSessionSelect,

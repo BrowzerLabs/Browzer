@@ -1,10 +1,3 @@
-/**
- * useAutomationEvents Hook
- * 
- * Handles subscription to automation events from main process
- * Updates store when progress, completion, or error events are received
- */
-
 import { useEffect } from 'react';
 import { useAutomationStore } from '@/renderer/stores/automationStore';
 
@@ -13,18 +6,18 @@ export function useAutomationEvents(setIsSubmitting: (value: boolean) => void) {
 
   useEffect(() => {
     // Subscribe to automation progress events
-    const unsubProgress = window.browserAPI.onAutomationProgress((data) => {
+    const unsubProgress = window.browserAPI.onAutomationProgress((data: any) => {
       addEvent(data.sessionId, data.event);
     });
 
     // Subscribe to automation completion events
-    const unsubComplete = window.browserAPI.onAutomationComplete((data) => {
+    const unsubComplete = window.browserAPI.onAutomationComplete((data: any) => {
       completeAutomation(data.sessionId, data.result);
       setIsSubmitting(false);
     });
 
     // Subscribe to automation error events
-    const unsubError = window.browserAPI.onAutomationError((data) => {
+    const unsubError = window.browserAPI.onAutomationError((data: any) => {
       errorAutomation(data.sessionId, data.error);
       setIsSubmitting(false);
     });

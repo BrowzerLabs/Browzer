@@ -18,6 +18,7 @@ import {
 } from '@/renderer/ui/select';
 import { Button } from '@/renderer/ui/button';
 import { AgentHeaderProps } from './types';
+import { AutomationStatus } from '@/main/llm';
 
 export function AgentHeader({
   viewMode,
@@ -66,9 +67,9 @@ export function AgentHeader({
           
           {currentSession && (
             <span>
-              {currentSession.status === 'running' && <Loader2 className="size-4 animate-spin text-primary" />}
-              {currentSession.status === 'completed' && <CheckCircle2 className="size-4 text-teal-600"  />}
-              {currentSession.status === 'error' && <XCircle className="size-4 text-red-600" />}
+              {currentSession.status === AutomationStatus.RUNNING && <Loader2 className="size-4 animate-spin text-primary" />}
+              {currentSession.status === AutomationStatus.COMPLETED && <CheckCircle2 className="size-4 text-teal-600"  />}
+              {currentSession.status === AutomationStatus.FAILED && <XCircle className="size-4 text-red-600" />}
             </span>
           )}
         </div>

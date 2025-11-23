@@ -44,7 +44,7 @@ export class AutomationManager {
 
     const automationPromise = automationService.executeAutomation(userGoal, recordedSessionId);
 
-    await new Promise(resolve => setTimeout(resolve, 100));
+    await new Promise(resolve => setTimeout(resolve, 200));
     const sessionId = automationService.getSessionId();
 
     this.automationSessions.set(sessionId, automationService);

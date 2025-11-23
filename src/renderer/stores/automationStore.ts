@@ -1,26 +1,20 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { AutomationProgressEvent } from '@/shared/types';
+import { AutomationEventType, AutomationProgressEvent } from '@/shared/types';
+import { AutomationStatus } from '@/main/llm';
 
-/**
- * Automation Event Item for Chat Display
- */
 export interface AutomationEventItem {
   id: string;
   sessionId: string;
-  type: string;
+  type: AutomationEventType;
   data: any;
-  timestamp: number;
 }
 
-/**
- * Automation Session State
- */
 export interface AutomationSession {
   sessionId: string;
   userGoal: string;
   recordingId: string;
-  status: 'idle' | 'running' | 'completed' | 'error';
+  status: AutomationStatus;
   events: AutomationEventItem[];
   result?: any;
   error?: string;
@@ -28,85 +22,44 @@ export interface AutomationSession {
   endTime?: number;
 }
 
-/**
- * Session List Item (for sidebar)
- */
 export interface SessionListItem {
   sessionId: string;
   userGoal: string;
   recordingId: string;
-  status: 'running' | 'completed' | 'error' | 'paused';
+  status: AutomationStatus;
   createdAt: number;
   updatedAt: number;
   messageCount: number;
   stepCount: number;
 }
 
-/**
- * View State for AgentView
- */
 export type ViewState = 'new_session' | 'existing_session';
 
-/**
- * Automation Store State
- */
 interface AutomationStore {
-  // View state
   viewState: ViewState;
-  
-  // Current session
   currentSession: AutomationSession | null;
-  
-  // Session history (last 5 sessions)
   sessionHistory: SessionListItem[];
-  
-  // Selected recording for new automation
   selectedRecordingId: string | null;
-  
-  // User input
   userPrompt: string;
-  
-  // Loading states
   isLoadingSession: boolean;
   isLoadingHistory: boolean;
-  
-  // Actions - View State
   setViewState: (state: ViewState) => void;
   startNewSession: () => void;
-  
-  // Actions - Recording
   setSelectedRecording: (recordingId: string | null) => void;
   setUserPrompt: (prompt: string) => void;
-  
-  // Actions - Session Management
   startAutomation: (userGoal: string, recordingId: string, sessionId: string) => void;
   loadStoredSession: (sessionId: string) => Promise<void>;
   loadSessionHistory: () => Promise<void>;
-  
-  // Actions - Events
   addEvent: (sessionId: string, event: AutomationProgressEvent) => void;
   completeAutomation: (sessionId: string, result: any) => void;
   errorAutomation: (sessionId: string, error: string) => void;
-  
-  // Actions - Cleanup
   clearSession: () => void;
   resetPrompt: () => void;
 }
 
-/**
- * Automation Store with Persistence
- * 
- * This store persists the automation session state so it survives:
- * - Tab switches
- * - Sidebar toggles
- * - Component unmounts
- * 
- * The state is stored in localStorage and automatically rehydrated.
- */
 export const useAutomationStore = create<AutomationStore>()(
   persist(
     (set, get) => ({
-      // Initial state
       viewState: 'new_session',
       currentSession: null,
       sessionHistory: [],
@@ -114,13 +67,9 @@ export const useAutomationStore = create<AutomationStore>()(
       userPrompt: '',
       isLoadingSession: false,
       isLoadingHistory: false,
-      
-      // Set view state
       setViewState: (state) => {
         set({ viewState: state });
       },
-      
-      // Start new session (reset to new session state)
       startNewSession: () => {
         set({
           viewState: 'new_session',
@@ -130,23 +79,20 @@ export const useAutomationStore = create<AutomationStore>()(
         });
       },
       
-      // Set selected recording
       setSelectedRecording: (recordingId) => {
         set({ selectedRecordingId: recordingId });
       },
       
-      // Set user prompt
       setUserPrompt: (prompt) => {
         set({ userPrompt: prompt });
       },
       
-      // Start new automation session
       startAutomation: (userGoal, recordingId, sessionId) => {
         const newSession: AutomationSession = {
           sessionId,
           userGoal,
           recordingId,
-          status: 'running',
+          status: AutomationStatus.RUNNING,
           events: [],
           startTime: Date.now()
         };
@@ -159,16 +105,13 @@ export const useAutomationStore = create<AutomationStore>()(
         });
       },
       
-      // Load stored session from database
       loadStoredSession: async (sessionId) => {
         set({ isLoadingSession: true });
         
         try {
-          // Call IPC to load session from main process
           const sessionData = await window.browserAPI.loadAutomationSession(sessionId);
           
           if (sessionData) {
-            // Convert stored session to AutomationSession format
             const session: AutomationSession = {
               sessionId: sessionData.sessionId,
               userGoal: sessionData.userGoal,
@@ -194,12 +137,10 @@ export const useAutomationStore = create<AutomationStore>()(
         }
       },
       
-      // Load session history
       loadSessionHistory: async () => {
         set({ isLoadingHistory: true });
         
         try {
-          // Call IPC to get session list from main process
           const history = await window.browserAPI.getAutomationSessionHistory(5);
           
           set({
@@ -212,33 +153,35 @@ export const useAutomationStore = create<AutomationStore>()(
         }
       },
       
-      // Add progress event to current session
       addEvent: (sessionId, event) => {
         const { currentSession } = get();
         
-        if (!currentSession || currentSession.sessionId !== sessionId) {
-          return; // Ignore events from old sessions
+        if (!currentSession) {
+          console.warn('[AutomationStore] No current session, ignoring event');
+          return;
         }
         
-        // For step_complete and step_error, update the existing step_start event
+        if (currentSession.sessionId !== sessionId) {
+          console.warn(`[AutomationStore] Event for old session ${sessionId}, current is ${currentSession.sessionId}`);
+          return;
+        }
+        
         if (event.type === 'step_complete' || event.type === 'step_error') {
           const toolUseId = event.data.toolUseId;
-          const existingEventIndex = currentSession.events.findIndex(
-            e => e.type === 'step_start' && e.data.toolUseId === toolUseId
+          const existingIndex = currentSession.events.findIndex(
+            e => e.data.toolUseId === toolUseId && e.type === 'step_start'
           );
           
-          if (existingEventIndex !== -1) {
-            // Update the existing event
+          if (existingIndex !== -1) {
             const updatedEvents = [...currentSession.events];
-            updatedEvents[existingEventIndex] = {
-              ...updatedEvents[existingEventIndex],
+            updatedEvents[existingIndex] = {
+              ...updatedEvents[existingIndex],
               type: event.type,
               data: {
-                ...updatedEvents[existingEventIndex].data,
+                ...updatedEvents[existingIndex].data,
                 ...event.data,
                 status: event.type === 'step_complete' ? 'success' : 'error'
-              },
-              timestamp: event.timestamp
+              }
             };
             
             set({
@@ -251,13 +194,11 @@ export const useAutomationStore = create<AutomationStore>()(
           }
         }
         
-        // For other events, add as new
         const eventItem: AutomationEventItem = {
           id: `${event.data.toolUseId || sessionId}-${Date.now()}-${Math.random()}`,
           sessionId,
           type: event.type,
-          data: event.data,
-          timestamp: event.timestamp
+          data: event.data
         };
         
         set({
@@ -268,7 +209,6 @@ export const useAutomationStore = create<AutomationStore>()(
         });
       },
       
-      // Mark automation as completed
       completeAutomation: (sessionId, result) => {
         const { currentSession } = get();
         
@@ -279,14 +219,13 @@ export const useAutomationStore = create<AutomationStore>()(
         set({
           currentSession: {
             ...currentSession,
-            status: 'completed',
+            status: AutomationStatus.COMPLETED,
             result,
             endTime: Date.now()
           }
         });
       },
       
-      // Mark automation as errored
       errorAutomation: (sessionId, error) => {
         const { currentSession } = get();
         
@@ -297,14 +236,13 @@ export const useAutomationStore = create<AutomationStore>()(
         set({
           currentSession: {
             ...currentSession,
-            status: 'error',
+            status: AutomationStatus.FAILED,
             error,
             endTime: Date.now()
           }
         });
       },
       
-      // Clear current session
       clearSession: () => {
         set({
           viewState: 'new_session',
@@ -313,18 +251,15 @@ export const useAutomationStore = create<AutomationStore>()(
         });
       },
       
-      // Reset prompt only
       resetPrompt: () => {
         set({ userPrompt: '' });
       }
     }),
     {
-      name: 'automation-storage', // localStorage key
+      name: 'automation-storage',
       partialize: (state) => ({
-        // Only persist these fields
-        currentSession: state.currentSession,
+        currentSessionId: state.currentSession?.sessionId,
         selectedRecordingId: state.selectedRecordingId
-        // Don't persist userPrompt - it should be cleared
       })
     }
   )

@@ -1,11 +1,3 @@
-/**
- * SessionHistory Component
- * 
- * Displays list of recent automation sessions
- * Shows in "new_session" view mode
- */
-
-import React from 'react';
 import { Clock, CheckCircle2, XCircle, Loader2, MessageSquare } from 'lucide-react';
 import { Card } from '@/renderer/ui/card';
 import { Badge } from '@/renderer/ui/badge';
@@ -80,7 +72,7 @@ export function SessionHistory({
               >
                 {session.status === 'running' && <Loader2 className="w-3 h-3 animate-spin" />}
                 {session.status === 'completed' && <CheckCircle2 className="w-3 h-3" />}
-                {session.status === 'error' && <XCircle className="w-3 h-3" />}
+                {session.status === 'failed' && <XCircle className="w-3 h-3" />}
                 {session.status}
               </Badge>
             </div>
