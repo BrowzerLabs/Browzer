@@ -122,6 +122,10 @@ export class StreamingAutomationStateManager extends EventEmitter {
       case 'stream_error':
         this.handleStreamError(data);
         break;
+
+      default:
+        console.warn(`Unknown event type: ${eventType}`);
+        break;
     }
   }
 
@@ -168,7 +172,6 @@ export class StreamingAutomationStateManager extends EventEmitter {
       block.text += text;
       this.currentThinkingText += text;
 
-      // Emit with message_id so UI can update the same item
       this.emitProgress('thinking', {
         message: this.currentThinkingText,
         messageId: this.currentThinkingMessageId
