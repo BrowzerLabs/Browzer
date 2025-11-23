@@ -4,11 +4,6 @@ export class SystemPromptBuilder {
 
   public static buildIntermediatePlanContinuationPrompt(params: {
     userGoal: string;
-    extractedContext?: {
-      url: string;
-      interactiveElements: number;
-      forms: number;
-    };
     currentUrl: string;
   }): string {
     const { userGoal, currentUrl } = params;

@@ -3,6 +3,7 @@ import { BrowserAutomationExecutor } from '@/main/automation/BrowserAutomationEx
 import { RecordingStore } from '@/main/recording';
 import { AutomationClient } from './clients/AutomationClient';
 import { AutomationStateManager } from './core/AutomationStateManager';
+import { StreamingAutomationStateManager } from './core/StreamingAutomationStateManager';
 import { SessionManager } from './session/SessionManager';
 import { IterativeAutomationResult } from './core/types';
 import { AutomationProgressEvent, AutomationEventType, RecordingSession, AutomationStatus } from '@/shared/types';
@@ -12,7 +13,7 @@ export class AutomationService extends EventEmitter {
   private recordingStore: RecordingStore;
   private recordedSession: RecordingSession | null = null;
   private automationClient: AutomationClient;
-  private stateManager: AutomationStateManager;
+  private stateManager: AutomationStateManager | StreamingAutomationStateManager;
   private sessionManager: SessionManager;
 
   constructor(
@@ -60,7 +61,7 @@ export class AutomationService extends EventEmitter {
     recordedSessionId: string,
   ): Promise<IterativeAutomationResult> {
     this.recordedSession = this.recordingStore.getRecording(recordedSessionId);
-    this.stateManager = new AutomationStateManager(
+    this.stateManager = new StreamingAutomationStateManager(
       userGoal,
       this.recordedSession,
       this.sessionManager,
@@ -72,10 +73,10 @@ export class AutomationService extends EventEmitter {
     });
     
     try {
-      await this.stateManager.generateInitialPlanStream();
+      await this.stateManager.generateInitialPlan();
       
       while (!this.stateManager.isComplete()) {
-        const executionResult = await this.stateManager.executePlanWithRecoveryStream();
+        const executionResult = await this.stateManager.executePlanWithRecovery();
         
         if (executionResult.isComplete) {
           this.stateManager.markComplete(executionResult.success, executionResult.error);
@@ -84,7 +85,6 @@ export class AutomationService extends EventEmitter {
       }
 
       const finalResult = this.stateManager.getFinalResult();
-      
       const status = finalResult.success 
         ? AutomationStatus.COMPLETED 
         : AutomationStatus.FAILED;

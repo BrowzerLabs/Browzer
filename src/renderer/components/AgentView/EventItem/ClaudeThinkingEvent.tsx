@@ -1,16 +1,11 @@
-/**
- * ClaudeThinkingEvent Component
- * 
- * Displays Claude's thinking/reasoning process
- */
-
-import React from 'react';
 import { Brain, Loader2 } from 'lucide-react';
 import { Card } from '@/renderer/ui/card';
 import { cn } from '@/renderer/lib/utils';
 import { EventItemProps } from '../types';
 
 export function ClaudeThinkingEvent({ event, isLatest }: EventItemProps) {
+  const thinkingText = event.data?.message || 'Browzer is thinking...';
+  
   return (
     <Card className={cn(
       "p-4 border-l-4 border-l-purple-500 bg-purple-50/50 dark:bg-purple-950/20",
@@ -24,9 +19,14 @@ export function ClaudeThinkingEvent({ event, isLatest }: EventItemProps) {
             <Brain className="w-5 h-5 text-purple-600" />
           )}
         </div>
-        <p className="text-sm font-medium text-purple-900 dark:text-purple-100 mb-1">
-            Browzer is thinking...
-        </p>
+        <div className="flex-1 min-w-0">
+          <p className="text-xs font-semibold text-purple-700 dark:text-purple-300 mb-1">
+            Browzer's Reasoning
+          </p>
+          <p className="text-sm text-purple-900 dark:text-purple-100 whitespace-pre-wrap break-words">
+            {thinkingText}
+          </p>
+        </div>
       </div>
     </Card>
   );

@@ -166,6 +166,33 @@ export const useAutomationStore = create<AutomationStore>()(
           return;
         }
         
+        // Handle thinking events - update existing or create new based on messageId
+        if (event.type === 'thinking' && event.data.messageId) {
+          const existingIndex = currentSession.events.findIndex(
+            e => e.type === 'thinking' && e.data.messageId === event.data.messageId
+          );
+          
+          if (existingIndex !== -1) {
+            // Update existing thinking event with new text
+            const updatedEvents = [...currentSession.events];
+            updatedEvents[existingIndex] = {
+              ...updatedEvents[existingIndex],
+              data: {
+                ...event.data
+              }
+            };
+            
+            set({
+              currentSession: {
+                ...currentSession,
+                events: updatedEvents
+              }
+            });
+            return;
+          }
+        }
+        
+        // Handle step completion/error - update existing step_start event
         if (event.type === 'step_complete' || event.type === 'step_error') {
           const toolUseId = event.data.toolUseId;
           const existingIndex = currentSession.events.findIndex(
@@ -194,8 +221,9 @@ export const useAutomationStore = create<AutomationStore>()(
           }
         }
         
+        // Create new event
         const eventItem: AutomationEventItem = {
-          id: `${event.data.toolUseId || sessionId}-${Date.now()}-${Math.random()}`,
+          id: event.data.messageId || `${event.data.toolUseId || sessionId}-${Date.now()}-${Math.random()}`,
           sessionId,
           type: event.type,
           data: event.data

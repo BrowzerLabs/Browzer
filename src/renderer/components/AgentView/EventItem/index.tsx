@@ -1,11 +1,3 @@
-/**
- * EventItem Component
- * 
- * Router component that renders the appropriate event component
- * based on the event type
- */
-
-import React from 'react';
 import { ClaudeThinkingEvent } from './ClaudeThinkingEvent';
 import { StepEvent } from './StepEvent';
 import { ErrorEvent } from './ErrorEvent';

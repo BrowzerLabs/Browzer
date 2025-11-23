@@ -1,11 +1,11 @@
 import { ExecutedStep, CompletedPlan, ParsedAutomationPlan, PlanExecutionResult, AutomationStep } from './types';
-import { RecordingSession, AutomationStatus } from '@/shared/types';
+import { RecordingSession, AutomationStatus, QueuedTool } from '@/shared/types';
 import { SystemPromptBuilder } from '../builders/SystemPromptBuilder';
 import { SessionManager } from '../session/SessionManager';
 import { ContextWindowManager } from '../utils/ContextWindowManager';
 import Anthropic from '@anthropic-ai/sdk';
 import { MessageCompressionManager } from '../utils/MessageCompressionManager';
-import { IntermediatePlanHandler, StreamingToolExecutor } from '.';
+import { IntermediatePlanHandler } from '.';
 import { AutomationClient, AutomationPlanParser, MessageBuilder } from '..';
 import { MAX_AUTOMATION_STEPS } from '@/shared/constants/limits';
 import { EventEmitter } from 'events';
@@ -35,10 +35,12 @@ export class AutomationStateManager extends EventEmitter {
   private currentToolCalls: any[] = [];
   private streamingMessage: any = null;
   private isStreaming: boolean = false;
-  private streamingExecutor: StreamingToolExecutor | null = null;
   private contentBlocks: Map<number, any> = new Map();
-  private sseListenersSetup: boolean = false;
   private currentThinkingText: string = '';
+  private toolQueue: Map<number, QueuedTool> = new Map();
+  private nextExecutionIndex: number = 0;
+  private isExecuting: boolean = false;
+  private totalSteps: number = 0;
 
   constructor(
     userGoal: string,
@@ -68,8 +70,7 @@ export class AutomationStateManager extends EventEmitter {
 
     sse.on('automation', (data: any) => {
       console.log("Automation Stream Data: ", data)
-      const eventType = data.type;
-      this.handleSSEEvent(eventType, data);
+      this.handleSSEEvent(data.type, data);
     });
   }
 
@@ -85,7 +86,8 @@ export class AutomationStateManager extends EventEmitter {
     switch (eventType) {
       case 'automation_start':
       case 'continuation_start':
-        this.handleStreamStart(data);
+        this.resetStreamBuffers();
+        this.isStreaming = true;
         break;
 
       case 'message_start':
@@ -105,7 +107,7 @@ export class AutomationStateManager extends EventEmitter {
         break;
 
       case 'tool_input_delta':
-        this.handleToolInputDelta(data);
+        console.log("Tool Input Delta: ", data)
         break;
 
       case 'tool_use_complete':
@@ -135,30 +137,6 @@ export class AutomationStateManager extends EventEmitter {
       default:
         console.warn(`⚠️ [StateManager] Unknown event type: ${eventType}`);
     }
-  }
-
-  private handleStreamStart(data: any): void {
-    console.log('🚀 [StateManager] Stream started');
-    this.resetStreamBuffers();
-    this.isStreaming = true;
-    
-    // Initialize streaming executor
-    this.streamingExecutor = new StreamingToolExecutor(this.executor);
-    
-    // Forward executor events to progress
-    this.streamingExecutor.on('step_start', (stepData: any) => {
-      this.emitProgress('step_start', stepData);
-    });
-    
-    this.streamingExecutor.on('step_complete', (stepData: any) => {
-      this.addExecutedStep(stepData.executedStep);
-      this.emitProgress('step_complete', stepData);
-    });
-    
-    this.streamingExecutor.on('step_error', (stepData: any) => {
-      this.addExecutedStep(stepData.executedStep);
-      this.emitProgress('step_error', stepData);
-    });
   }
 
   private handleMessageStart(data: any): void {
@@ -208,32 +186,31 @@ export class AutomationStateManager extends EventEmitter {
       input: {}
     });
     
-    if (this.streamingExecutor) {
-      this.streamingExecutor.handleToolStart({ index, tool_use_id, tool_name });
-    }
-  }
-
-  private handleToolInputDelta(data: any): void {
-    const { index, partial_json } = data;
-    
-    if (this.streamingExecutor) {
-      this.streamingExecutor.handleToolInputDelta({ index, partial_json });
-    }
+    this.toolQueue.set(data.index, {
+      index: data.index,
+      toolUseId: data.tool_use_id,
+      toolName: data.tool_name,
+      input: null,
+      status: 'buffering'
+    });
   }
 
   private handleToolUseComplete(data: any): void {
-    const { index, tool_use_id, tool_name, input } = data;
+    const { index, tool_name, input } = data;
     console.log(`✅ [StateManager] Tool use complete: ${tool_name}`);
     
-    // Update content block with complete input
     const block = this.contentBlocks.get(index);
     if (block && block.type === 'tool_use') {
       block.input = input;
     }
     
-    // Trigger execution in streaming executor
-    if (this.streamingExecutor) {
-      this.streamingExecutor.handleToolComplete({ index, tool_use_id, tool_name, input });
+    const tool = this.toolQueue.get(data.index);
+    if (tool) {
+      tool.input = data.input;
+      tool.status = 'ready';
+      this.processQueue();
+    } else {
+      console.warn(`⚠️ [StreamExecutor] Tool ${data.index} not found in queue`);
     }
   }
 
@@ -253,20 +230,16 @@ export class AutomationStateManager extends EventEmitter {
   private handleStreamComplete(data: any): void {
     console.log('🏁 [StateManager] Stream complete');
     
-    // Build final message from content blocks
     if (this.streamingMessage) {
       this.streamingMessage.content = Array.from(this.contentBlocks.values());
       
-      // Store the message from the stream data if available
       if (data.message) {
         this.streamingMessage = data.message;
       }
     }
     
-    // Notify streaming executor that stream is complete
-    if (this.streamingExecutor) {
-      this.streamingExecutor.handleStreamComplete(data);
-    }
+    this.totalSteps = this.toolQueue.size;
+    this.processQueue();
     
     this.isStreaming = false;
   }
@@ -278,6 +251,115 @@ export class AutomationStateManager extends EventEmitter {
     this.emitProgress('automation_error', {
       error: data.error
     });
+  }
+
+  private async processQueue(): Promise<void> {
+    if (this.isExecuting) {
+      return;
+    }
+
+    this.isExecuting = true;
+
+    try {
+      while (true) {
+        const tool = this.toolQueue.get(this.nextExecutionIndex);
+        
+        if (!tool) {
+          break;
+        }
+
+        if (tool.status !== 'ready') {
+          break;
+        }
+
+        await this.executeTool(tool);
+        this.nextExecutionIndex++;
+      }
+    } finally {
+      this.isExecuting = false;
+    }
+  }
+
+  private async executeTool(tool: QueuedTool): Promise<void> {
+    tool.status = 'executing';
+    
+    const stepNumber = tool.index + 1;
+    
+    console.log(`⚡ [StreamExecutor] Executing: ${tool.toolName} (${stepNumber}/${this.totalSteps || '?'})`);
+    
+    this.emit('step_start', {
+      stepNumber,
+      totalSteps: this.totalSteps,
+      toolName: tool.toolName,
+      toolUseId: tool.toolUseId,
+      params: tool.input,
+      status: 'running'
+    });
+
+    try {
+      const startTime = Date.now();
+      const result = await this.executor.executeTool(tool.toolName, tool.input);
+      const duration = Date.now() - startTime;
+
+      const executedStep: ExecutedStep = {
+        stepNumber,
+        toolName: tool.toolName,
+        success: result.success,
+        result,
+        error: result.success ? undefined : (result.error?.message || 'Unknown error')
+      };
+
+      if (!result.success || result.error) {
+        console.error(`❌ [StreamExecutor] Step ${stepNumber} failed: ${result.error?.message}`);
+        tool.status = 'error';
+
+        this.emit('step_error', {
+          stepNumber,
+          totalSteps: this.totalSteps,
+          toolName: tool.toolName,
+          toolUseId: tool.toolUseId,
+          error: result.error,
+          duration,
+          status: 'error',
+          executedStep
+        });
+      } else {
+        console.log(`✅ [StreamExecutor] Step ${stepNumber} completed in ${duration}ms`);
+        tool.status = 'completed';
+
+        this.emit('step_complete', {
+          stepNumber,
+          totalSteps: this.totalSteps,
+          toolName: tool.toolName,
+          toolUseId: tool.toolUseId,
+          result: result,
+          duration,
+          status: 'success',
+          executedStep
+        });
+      }
+    } catch (error: any) {
+      console.error(`❌ [StreamExecutor] Step ${stepNumber} exception:`, error);
+      tool.status = 'error';
+
+      const executedStep: ExecutedStep = {
+        stepNumber,
+        toolName: tool.toolName,
+        success: false,
+        error: error.message
+      };
+
+      this.emit('step_error', {
+        stepNumber,
+        totalSteps: this.totalSteps,
+        toolName: tool.toolName,
+        toolUseId: tool.toolUseId,
+        error: { message: error.message },
+        duration: 0,
+        status: 'error',
+        executedStep
+      });
+    }
   }
 
   private resetStreamBuffers(): void {
@@ -312,11 +394,7 @@ export class AutomationStateManager extends EventEmitter {
     console.log(`🚀 [StateManager] Streaming session: ${this.session_id}`);
 
     await this.waitForStreamComplete();
-
-    if (this.streamingExecutor) {
-      console.log('⏳ [StateManager] Waiting for tool execution to complete...');
-      await this.streamingExecutor.waitForCompletion();
-    }
+    await this.waitForCompletion();
 
     if (this.streamingMessage) {
       const plan = AutomationPlanParser.parsePlan(this.streamingMessage);
@@ -332,6 +410,22 @@ export class AutomationStateManager extends EventEmitter {
       throw new Error('Stream completed but no message received');
     }
   }
+
+  public async waitForCompletion(): Promise<void> {
+    return new Promise((resolve) => {
+      const checkInterval = setInterval(() => {
+        const allCompleted = Array.from(this.toolQueue.values()).every(
+          tool => tool.status === 'completed' || tool.status === 'error'
+        );
+
+        if (allCompleted && this.toolQueue.size > 0) {
+          clearInterval(checkInterval);
+          resolve();
+        }
+      }, 100);
+    });
+  }
+
 
   private async waitForStreamComplete(): Promise<void> {
     return new Promise((resolve, reject) => {
@@ -639,10 +733,7 @@ export class AutomationStateManager extends EventEmitter {
     );
 
     await this.waitForStreamComplete();
-
-    if (this.streamingExecutor) {
-      await this.streamingExecutor.waitForCompletion();
-    }
+    await this.waitForCompletion();
 
     if (this.streamingMessage) {
       this.addMessage({

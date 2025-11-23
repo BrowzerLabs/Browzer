@@ -24,6 +24,14 @@ export enum AutomationStatus {
   PAUSED = 'paused'
 }
 
+export interface QueuedTool {
+  index: number;
+  toolUseId: string;
+  toolName: string;
+  input: any;
+  status: 'buffering' | 'ready' | 'executing' | 'completed' | 'error';
+}
+
 export interface ElementFinderParams {
   tag: string;
   text?: string
