@@ -4,8 +4,8 @@ import { RecordingStore } from '@/main/recording';
 import { AutomationClient } from './clients/AutomationClient';
 import { AutomationStateManager } from './core/AutomationStateManager';
 import { SessionManager } from './session/SessionManager';
-import { AutomationStatus, IterativeAutomationResult } from './core/types';
-import { AutomationProgressEvent, AutomationEventType, RecordingSession } from '@/shared/types';
+import { IterativeAutomationResult } from './core/types';
+import { AutomationProgressEvent, AutomationEventType, RecordingSession, AutomationStatus } from '@/shared/types';
 
 export class AutomationService extends EventEmitter {
   private executor: BrowserAutomationExecutor;

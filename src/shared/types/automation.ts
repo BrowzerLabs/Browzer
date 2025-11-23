@@ -17,6 +17,13 @@ export interface AutomationProgressEvent {
   data: any;
 }
 
+export enum AutomationStatus {
+  RUNNING = 'running',
+  COMPLETED = 'completed',
+  FAILED = 'failed',
+  PAUSED = 'paused'
+}
+
 export interface ElementFinderParams {
   tag: string;
   text?: string

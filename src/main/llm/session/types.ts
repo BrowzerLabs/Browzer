@@ -1,5 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk';
-import { AutomationStatus } from '..';
+import { AutomationStatus } from '@/shared/types';
 
 export interface StoredSession {
   id: string;

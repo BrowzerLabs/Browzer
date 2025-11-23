@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { AutomationEventType, AutomationProgressEvent } from '@/shared/types';
-import { AutomationStatus } from '@/main/llm';
+import { AutomationStatus } from '@/shared/types';
 
 export interface AutomationEventItem {
   id: string;

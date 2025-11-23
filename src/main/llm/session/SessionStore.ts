@@ -15,7 +15,7 @@ import {
   AddStepOptions,
   SessionMetadata
 } from './types';
-import { AutomationStatus } from '..';
+import { AutomationStatus } from '@/shared/types';
 
 /**
  * SessionStore - SQLite database for automation sessions

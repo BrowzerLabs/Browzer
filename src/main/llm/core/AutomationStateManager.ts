@@ -1,5 +1,5 @@
-import { ExecutedStep, CompletedPlan, AutomationStatus, ParsedAutomationPlan, PlanExecutionResult, AutomationStep } from './types';
-import { RecordingSession } from '@/shared/types/recording';
+import { ExecutedStep, CompletedPlan, ParsedAutomationPlan, PlanExecutionResult, AutomationStep } from './types';
+import { RecordingSession, AutomationStatus } from '@/shared/types';
 import { SystemPromptBuilder } from '../builders/SystemPromptBuilder';
 import { SessionManager } from '../session/SessionManager';
 import { ContextWindowManager } from '../utils/ContextWindowManager';

@@ -16,15 +16,6 @@ export interface ParsedAutomationPlan {
   metadataToolUseId?: string;
 }
 
-
-export enum AutomationStatus {
-  RUNNING = 'running',
-  COMPLETED = 'completed',
-  FAILED = 'failed',
-  PAUSED = 'paused'
-}
-
-
 export interface ExecutedStep {
   stepNumber: number;
   toolName: string;

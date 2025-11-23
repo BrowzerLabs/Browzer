@@ -1,7 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { api } from '@/main/api';
-import { SystemPromptType } from '@/shared/types';
-import { AutomationStatus } from '..';
+import { SystemPromptType, AutomationStatus } from '@/shared/types';
 import { EventEmitter } from 'events';
 
 export class AutomationClient extends EventEmitter {

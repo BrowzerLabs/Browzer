@@ -18,7 +18,7 @@ import {
 } from '@/renderer/ui/select';
 import { Button } from '@/renderer/ui/button';
 import { AgentHeaderProps } from './types';
-import { AutomationStatus } from '@/main/llm';
+import { AutomationStatus } from '@/shared/types';
 
 export function AgentHeader({
   viewMode,

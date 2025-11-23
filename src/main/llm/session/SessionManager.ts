@@ -13,7 +13,7 @@ import {
   ContextConfig,
   ContextStats,
 } from './types';
-import { AutomationStatus } from '..';
+import { AutomationStatus } from '@/shared/types';
 
 /**
  * SessionManager - High-level session management
