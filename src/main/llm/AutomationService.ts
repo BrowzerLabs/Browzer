@@ -72,7 +72,8 @@ export class AutomationService extends EventEmitter {
     });
     
     try {
-      this.stateManager.generateInitialPlanStream();
+      await this.stateManager.generateInitialPlanStream();
+      
       while (!this.stateManager.isComplete()) {
         const executionResult = await this.stateManager.executePlanWithRecoveryStream();
         
