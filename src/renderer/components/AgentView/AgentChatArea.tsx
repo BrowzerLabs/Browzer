@@ -7,7 +7,6 @@
  */
 
 import React, { useRef, useEffect } from 'react';
-import { SessionHistory } from './SessionHistory';
 import { EventItem } from './EventItem';
 import { AgentChatAreaProps } from './types';
 
@@ -20,22 +19,23 @@ export function AgentChatArea({
 }: AgentChatAreaProps) {
   const chatEndRef = useRef<HTMLDivElement>(null);
 
-  // Auto-scroll to bottom when new events arrive
   useEffect(() => {
     if (viewMode === 'existing_session' && chatEndRef.current) {
       chatEndRef.current.scrollIntoView({ behavior: 'smooth' });
     }
   }, [currentSession?.events, viewMode]);
 
-  // Show session history in new_session mode
   if (viewMode === 'new_session') {
     return (
-      // 
-      <p>Session history</p>
+      <div className="flex flex-col items-center justify-center h-full text-center px-6">
+        <h3 className="text-lg font-semibold mb-2">Record & Automate</h3>
+        <p className="text-sm text-muted-foreground max-w-sm">
+          Select a recorded session from above select and describe what you want to automate in the input below to get started.
+        </p>
+      </div>
     );
   }
 
-  // Show event stream in existing_session mode
   if (viewMode === 'existing_session' && currentSession) {
     console.log("currenstSession: ", currentSession)
     return (
@@ -62,7 +62,6 @@ export function AgentChatArea({
     );
   }
 
-  // Loading state
   return (
     <div className="flex items-center justify-center h-full">
       <div className="text-center">

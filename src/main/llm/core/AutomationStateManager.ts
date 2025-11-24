@@ -202,7 +202,7 @@ export class AutomationStateManager extends EventEmitter {
       this.addExecutedStep(executedStep);
 
       if (!result.success || result.error) {
-        console.error(`❌ Step ${stepNumber} failed: ${result.error || 'Unknown error'}`);
+        console.error(`❌ Step ${stepNumber} failed: ${result.error?.message || 'Unknown error'}`);
 
         this.emitProgress('step_error', {
           stepNumber,
@@ -237,7 +237,7 @@ export class AutomationStateManager extends EventEmitter {
         result
       };
     } catch (error) {
-      console.error(`❌ Step ${stepNumber} failed:`, error);
+      console.error(`❌ Step ${stepNumber} failed:`, error.message, error.stack);
 
       const executedStep: ExecutedStep = {
         stepNumber,
