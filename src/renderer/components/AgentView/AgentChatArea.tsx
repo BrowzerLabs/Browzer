@@ -30,11 +30,8 @@ export function AgentChatArea({
   // Show session history in new_session mode
   if (viewMode === 'new_session') {
     return (
-      <SessionHistory
-        sessions={sessionHistory}
-        isLoading={isLoadingHistory}
-        onSessionSelect={onSessionSelect}
-      />
+      // 
+      <p>Session history</p>
     );
   }
 
