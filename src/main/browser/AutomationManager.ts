@@ -88,6 +88,16 @@ export class AutomationManager {
     };
   }
 
+  public stopAutomation(sessionId: string): void {
+    const automationService = this.automationSessions.get(sessionId);
+    if (automationService) {
+      console.log(`🛑 [AutomationManager] Stopping automation session: ${sessionId}`);
+      automationService.stopAutomation();
+    } else {
+      console.warn(`⚠️ [AutomationManager] No active automation found for session: ${sessionId}`);
+    }
+  }
+
   public async loadAutomationSession(sessionId: string): Promise<any> {
     try {
       const sessionData = this.sessionManager.loadSession(sessionId);

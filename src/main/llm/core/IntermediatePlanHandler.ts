@@ -3,7 +3,7 @@ import { SystemPromptBuilder } from '../builders/SystemPromptBuilder';
 import { AutomationPlanParser } from '../parsers/AutomationPlanParser';
 import { AutomationStateManager } from './AutomationStateManager';
 import { PlanExecutionResult } from './types';
-import { SystemPromptType } from '@/shared/types';
+import { AutomationStatus, SystemPromptType } from '@/shared/types';
 
 export class IntermediatePlanHandler {
   private automationClient: AutomationClient;
@@ -58,7 +58,7 @@ export class IntermediatePlanHandler {
     this.stateManager.setCurrentPlan(newPlan);
 
     return {
-      success: false,
+      status: AutomationStatus.RUNNING,
       isComplete: false,
     };
   }
@@ -93,7 +93,7 @@ export class IntermediatePlanHandler {
     this.stateManager.setCurrentPlan(newPlan);
 
     return {
-      success: false,
+      status: AutomationStatus.RUNNING,
       isComplete: false,
     };
   }
@@ -130,7 +130,7 @@ export class IntermediatePlanHandler {
     this.stateManager.exitRecoveryMode();
 
     return {
-      success: false,
+      status: AutomationStatus.RUNNING,
       isComplete: false,
     };
   }

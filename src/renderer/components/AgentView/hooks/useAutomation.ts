@@ -20,6 +20,7 @@ export function useAutomation() {
     addEvent,
     completeAutomation,
     errorAutomation,
+    stopAutomation,
   } = useAutomationStore();
 
   const [recordings, setRecordings] = useState<RecordingSession[]>([]);
@@ -109,6 +110,13 @@ export function useAutomation() {
     setUserPrompt(prompt);
   }, [setUserPrompt]);
 
+  const handleStopAutomation = useCallback(async () => {
+    if (currentSession && isSubmitting) {
+      await stopAutomation(currentSession.sessionId);
+      setIsSubmitting(false);
+    }
+  }, [currentSession, isSubmitting, stopAutomation]);
+
   return {
     viewState,
     currentSession,
@@ -125,6 +133,7 @@ export function useAutomation() {
     handleNewSession,
     handleRecordingSelect,
     handlePromptChange,
+    handleStopAutomation,
     setIsSubmitting,
   };
 }

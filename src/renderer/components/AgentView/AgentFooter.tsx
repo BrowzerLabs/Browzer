@@ -1,14 +1,5 @@
-/**
- * AgentFooter Component
- * 
- * Input area for user prompts with:
- * - Textarea for multi-line input
- * - Submit button
- * - Keyboard shortcuts (Enter to submit, Shift+Enter for new line)
- */
-
 import React from 'react';
-import { ArrowUp, Loader2 } from 'lucide-react';
+import { ArrowUp, Square } from 'lucide-react';
 import { InputGroup, InputGroupTextarea, InputGroupAddon, InputGroupButton } from '@/renderer/ui/input-group';
 import { AgentFooterProps } from './types';
 
@@ -19,6 +10,7 @@ export function AgentFooter({
   isDisabled,
   onPromptChange,
   onSubmit,
+  onStop,
 }: AgentFooterProps) {
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -46,11 +38,12 @@ export function AgentFooter({
               variant="default"
               className="rounded-full"
               size="icon-xs"
-              disabled={!canSubmit}
-              onClick={onSubmit}
+              disabled={isSubmitting ? false : !canSubmit}
+              onClick={isSubmitting ? onStop : onSubmit}
+              title={isSubmitting ? "Stop automation" : "Send message"}
             >
               {isSubmitting ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
+                <Square className="size-2" />
               ) : (
                 <ArrowUp className="w-4 h-4" />
               )}

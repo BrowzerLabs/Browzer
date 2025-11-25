@@ -1,4 +1,4 @@
-import { ToolExecutionResult } from '@/shared/types';
+import { AutomationStatus, ToolExecutionResult } from '@/shared/types';
 
 
 export interface AutomationStep {
@@ -31,7 +31,7 @@ export interface CompletedPlan {
 }
 
 export interface PlanExecutionResult {
-  success: boolean;
+  status: AutomationStatus;
   isComplete: boolean;
   error?: string;
 }

@@ -13,6 +13,7 @@ import { ScrollArea } from '@/renderer/ui/scroll-area';
 import { Separator } from '@/renderer/ui/separator';
 import { Play, Trash2, Clock, CheckCircle2, XCircle, Pause, MessageSquare, ListChecks, Calendar } from 'lucide-react';
 import { format } from 'date-fns';
+import { AutomationStatus } from '@/shared/types';
 
 interface AutomationDialogProps {
   session: SessionListItem | null;
@@ -50,13 +51,13 @@ export function AutomationDialog({ session, open, onOpenChange, onResume, onDele
 
   const getStatusIcon = () => {
     switch (session.status) {
-      case 'running':
+      case AutomationStatus.RUNNING:
         return <Clock className="w-5 h-5 animate-pulse text-blue-600" />;
-      case 'completed':
+      case AutomationStatus.COMPLETED:
         return <CheckCircle2 className="w-5 h-5 text-green-600" />;
-      case 'error':
+      case AutomationStatus.STOPPED:
         return <XCircle className="w-5 h-5 text-red-600" />;
-      case 'paused':
+      case AutomationStatus.STOPPED:
         return <Pause className="w-5 h-5 text-yellow-600" />;
       default:
         return null;
@@ -65,13 +66,13 @@ export function AutomationDialog({ session, open, onOpenChange, onResume, onDele
 
   const getStatusColor = () => {
     switch (session.status) {
-      case 'running':
+      case AutomationStatus.RUNNING:
         return 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200';
-      case 'completed':
+      case AutomationStatus.COMPLETED:
         return 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200';
-      case 'error':
+      case AutomationStatus.STOPPED:
         return 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200';
-      case 'paused':
+      case AutomationStatus.STOPPED:
         return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200';
       default:
         return 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200';
@@ -191,7 +192,7 @@ export function AutomationDialog({ session, open, onOpenChange, onResume, onDele
 
         {/* Actions */}
         <div className="flex gap-2 pt-4 border-t">
-          {(session.status === 'paused' || session.status === 'error') && (
+          {(session.status === AutomationStatus.STOPPED || session.status === AutomationStatus.FAILED) && (
             <Button
               onClick={() => {
                 onResume(session.sessionId);

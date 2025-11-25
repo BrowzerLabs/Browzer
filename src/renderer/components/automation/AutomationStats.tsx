@@ -6,7 +6,7 @@ interface AutomationStatsProps {
   running: number;
   completed: number;
   failed: number;
-  paused: number;
+  stopped:number;
   totalSteps: number;
   totalMessages: number;
 }
@@ -16,7 +16,7 @@ export function AutomationStats({
   running,
   completed,
   failed,
-  paused,
+  stopped,
   totalSteps,
   totalMessages,
 }: AutomationStatsProps) {
@@ -50,8 +50,8 @@ export function AutomationStats({
       bgColor: 'bg-red-50 dark:bg-red-900/20',
     },
     {
-      label: 'Paused',
-      value: paused,
+      label: 'Stopped',
+      value: stopped,
       icon: Pause,
       color: 'text-yellow-600 dark:text-yellow-400',
       bgColor: 'bg-yellow-50 dark:bg-yellow-900/20',

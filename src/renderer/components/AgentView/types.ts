@@ -47,6 +47,7 @@ export interface AgentFooterProps {
   isDisabled: boolean;
   onPromptChange: (prompt: string) => void;
   onSubmit: () => void;
+  onStop: () => void;
 }
 
 /**

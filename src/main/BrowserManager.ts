@@ -121,8 +121,6 @@ export class BrowserManager {
     return this.recordingManager.deleteRecording(id);
   }
 
-  // Automation Management (delegated to AutomationManager)
-
   public async executeIterativeAutomation(
     userGoal: string,
     recordedSessionId: string
@@ -137,6 +135,10 @@ export class BrowserManager {
       userGoal,
       recordedSessionId,
     );
+  }
+  
+  public stopAutomation(sessionId: string): void {
+    this.automationManager.stopAutomation(sessionId);
   }
 
   public async loadAutomationSession(sessionId: string): Promise<any> {

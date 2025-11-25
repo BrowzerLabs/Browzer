@@ -10,7 +10,8 @@ export type AutomationEventType =
   | 'step_complete'
   | 'step_error'
   | 'automation_complete'
-  | 'automation_error';
+  | 'automation_error'
+  | 'automation_stopped';
 
 export interface AutomationProgressEvent {
   type: AutomationEventType;
@@ -21,7 +22,7 @@ export enum AutomationStatus {
   RUNNING = 'running',
   COMPLETED = 'completed',
   FAILED = 'failed',
-  PAUSED = 'paused'
+  STOPPED = 'stopped'
 }
 
 export interface ElementFinderParams {

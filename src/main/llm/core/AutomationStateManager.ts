@@ -92,11 +92,15 @@ export class AutomationStateManager extends EventEmitter {
 
   public async executePlanWithRecovery(): Promise<PlanExecutionResult> {
     if (!this.current_plan) {
-      return { success: false, isComplete: true, error: 'No plan to execute. Please Try Again' };
+      return { status: AutomationStatus.FAILED, isComplete: true, error: 'No plan to execute. Please Try Again' };
     }
 
     const totalSteps = this.current_plan.steps.length;
     for (let i = 0; i < this.current_plan.steps.length; i++) {
+      if (this.status === AutomationStatus.STOPPED) {
+        return { status: AutomationStatus.STOPPED, isComplete: true, error: 'Automation stopped' };
+      }
+      
       const step = this.current_plan.steps[i];
       const stepNumber = this.executed_steps.length + 1;
       const isLastStep = i === this.current_plan.steps.length - 1;
@@ -105,15 +109,14 @@ export class AutomationStateManager extends EventEmitter {
 
       if (this.executed_steps.length >= MAX_AUTOMATION_STEPS) {
         return { 
-          success: false, 
+          status: AutomationStatus.STOPPED, 
           isComplete: true, 
-          error: stepResult.error ?? 'Maximum execution steps limit reached. Please restart another automation.'
+          error: 'Maximum execution steps limit reached. Please restart another automation.'
         };
       }
 
       if (!stepResult.success || stepResult.error) {
-        const recoveryResult = await this.handleError(step, stepResult.result);
-        return recoveryResult;
+        return await this.handleError(step, stepResult.result);
       }
 
       if (this.isAnalysisTool(step.toolName) && isLastStep) {
@@ -124,12 +127,10 @@ export class AutomationStateManager extends EventEmitter {
         this.addMessage(
           MessageBuilder.buildUserMessageWithToolResults(toolResultBlocks)
         );
-        const continuationResult = await this.intermediatePlanHandler.handleContextExtraction();
-        return continuationResult;
+        return await this.intermediatePlanHandler.handleContextExtraction();
       }
     }
 
-    console.log(`✅ [IterativeAutomation] Plan completed - ${this.current_plan.steps.length} steps executed`);
     const toolResultBlocks = MessageBuilder.buildToolResultsForPlan(
       this.current_plan,
       this.executed_steps
@@ -142,7 +143,7 @@ export class AutomationStateManager extends EventEmitter {
     if (this.is_in_recovery) {
       if (this.current_plan.planType === 'final') {
         this.exitRecoveryMode();
-        return { success: true, isComplete: true };
+        return { status: AutomationStatus.COMPLETED, isComplete: true };
       }
       
       return await this.intermediatePlanHandler.handleRecoveryPlanCompletion();
@@ -153,7 +154,7 @@ export class AutomationStateManager extends EventEmitter {
       return await this.intermediatePlanHandler.handleIntermediatePlanCompletion();
     }
 
-    return { success: true, isComplete: true };
+    return { status: AutomationStatus.COMPLETED, isComplete: true };
   }
 
   private async executeStep(
@@ -301,8 +302,9 @@ export class AutomationStateManager extends EventEmitter {
     this.enterRecoveryMode();
 
     return {
-      success: false,
+      status: AutomationStatus.RUNNING,
       isComplete: false,
+      error: 'Recovery mode initiated - continuing with updated plan'
     };
   }
 
@@ -380,11 +382,11 @@ export class AutomationStateManager extends EventEmitter {
     }
   }
 
-  public markComplete(success: boolean, error?: string): void {
-    this.status = success ? AutomationStatus.COMPLETED : AutomationStatus.FAILED;
+  public markComplete(status: AutomationStatus, error?: string): void {
+    this.status = status
     this.final_error = error;
 
-    this.session_manager.completeSession(this.session_id, success, error);
+    this.session_manager.completeSession(this.session_id, status, error);
   }
 
   public getMessages(): Anthropic.MessageParam[] {
@@ -397,7 +399,6 @@ export class AutomationStateManager extends EventEmitter {
       this.user_goal
     );
 
-    // Update in-memory state with optimized messages if compression was applied
     if (result.compressionApplied) {
       this.messages = result.optimizedMessages;
     }
@@ -425,8 +426,8 @@ export class AutomationStateManager extends EventEmitter {
     return this.is_in_recovery;
   }
 
-  public isComplete(): boolean {
-    return this.status == AutomationStatus.COMPLETED || this.status == AutomationStatus.FAILED;
+  public isRunning(): boolean {
+    return this.status === AutomationStatus.RUNNING;
   }
 
   public getTotalStepsExecuted(): number {
@@ -435,7 +436,7 @@ export class AutomationStateManager extends EventEmitter {
 
   public getFinalResult(): { success: boolean; error?: string } {
     return {
-      success: this.status == AutomationStatus.COMPLETED,
+      success: this.status === AutomationStatus.COMPLETED,
       error: this.final_error
     };
   }

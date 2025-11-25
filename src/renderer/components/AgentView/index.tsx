@@ -21,6 +21,7 @@ export default function AgentView() {
     handleNewSession,
     handleRecordingSelect,
     handlePromptChange,
+    handleStopAutomation,
   } = useAutomation();
 
   useEffect(() => {
@@ -57,6 +58,7 @@ export default function AgentView() {
         isDisabled={isDisabled}
         onPromptChange={handlePromptChange}
         onSubmit={handleSubmit}
+        onStop={handleStopAutomation}
       />
     </section>
   );

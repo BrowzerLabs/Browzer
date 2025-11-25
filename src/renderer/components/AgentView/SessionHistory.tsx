@@ -3,6 +3,7 @@ import { Card } from '@/renderer/ui/card';
 import { Badge } from '@/renderer/ui/badge';
 import { SessionHistoryProps } from './types';
 import { cn } from '@/renderer/lib/utils';
+import { AutomationStatus } from '@/shared/types';
 
 export function SessionHistory({
   sessions,
@@ -63,16 +64,16 @@ export function SessionHistory({
 
               <Badge
                 variant={
-                  session.status === 'running' ? 'default' :
-                  session.status === 'completed' ? 'success' :
-                  session.status === 'paused' ? 'secondary' :
+                  session.status === AutomationStatus.RUNNING ? 'default' :
+                  session.status === AutomationStatus.COMPLETED ? 'success' :
+                  session.status === AutomationStatus.STOPPED ? 'secondary' :
                   'destructive'
                 }
                 className="gap-1 flex-shrink-0"
               >
-                {session.status === 'running' && <Loader2 className="w-3 h-3 animate-spin" />}
-                {session.status === 'completed' && <CheckCircle2 className="w-3 h-3" />}
-                {session.status === 'failed' && <XCircle className="w-3 h-3" />}
+                {session.status === AutomationStatus.RUNNING && <Loader2 className="w-3 h-3 animate-spin" />}
+                {session.status === AutomationStatus.COMPLETED && <CheckCircle2 className="w-3 h-3" />}
+                {session.status === AutomationStatus.STOPPED && <XCircle className="w-3 h-3" />}
                 {session.status}
               </Badge>
             </div>

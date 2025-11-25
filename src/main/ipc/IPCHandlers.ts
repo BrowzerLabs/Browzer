@@ -335,6 +335,10 @@ export class IPCHandlers {
     ipcMain.handle('automation:execute-llm', async (_, userGoal: string, recordedSessionId: string) => {
      return await this.browserManager.executeIterativeAutomation(userGoal, recordedSessionId);
     });
+    ipcMain.handle('automation:stop', async (_, sessionId: string) => {
+      this.browserManager.stopAutomation(sessionId);
+      return { success: true };
+    });
     ipcMain.handle('automation:load-session', async (_, sessionId: string) => {
       return await this.browserManager.loadAutomationSession(sessionId);
     });

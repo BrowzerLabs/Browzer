@@ -17,42 +17,25 @@ import {
 } from './types';
 import { AutomationStatus } from '@/shared/types';
 
-/**
- * SessionStore - SQLite database for automation sessions
- * 
- * Provides persistent storage for:
- * - Session metadata and status
- * - Complete conversation history
- * - Executed steps with results
- * - Cache metadata for optimization
- * 
- * Uses better-sqlite3 for synchronous, high-performance database operations.
- */
 export class SessionStore {
   private db: Database.Database;
 
   constructor(dbPath?: string) {
-    // Use app data directory by default
     const defaultPath = path.join(app.getPath('userData'), 'automation-sessions.db');
     this.db = new Database(dbPath || defaultPath);
     
-    // Enable WAL mode for better concurrency
     this.db.pragma('journal_mode = WAL');
     
     this.initializeDatabase();
   }
 
-  /**
-   * Initialize database schema
-   */
   private initializeDatabase(): void {
-    // Sessions table
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS automation_sessions (
         id TEXT PRIMARY KEY,
         user_goal TEXT NOT NULL,
         recording_id TEXT NOT NULL,
-        status TEXT NOT NULL CHECK(status IN ('running', 'completed', 'error', 'paused')),
+        status TEXT NOT NULL CHECK(status IN ('running', 'completed', 'error', 'stopped')),
         created_at INTEGER NOT NULL,
         updated_at INTEGER NOT NULL,
         completed_at INTEGER,
@@ -63,7 +46,6 @@ export class SessionStore {
       CREATE INDEX IF NOT EXISTS idx_sessions_status ON automation_sessions(status);
     `);
 
-    // Messages table
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS session_messages (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -79,7 +61,6 @@ export class SessionStore {
       CREATE INDEX IF NOT EXISTS idx_messages_session ON session_messages(session_id, created_at);
     `);
 
-    // Steps table
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS session_steps (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -99,7 +80,6 @@ export class SessionStore {
       CREATE INDEX IF NOT EXISTS idx_steps_session ON session_steps(session_id, step_number);
     `);
 
-    // Cache metadata table
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS session_cache (
         session_id TEXT PRIMARY KEY,
@@ -111,9 +91,6 @@ export class SessionStore {
     `);
   }
 
-  /**
-   * Create a new session
-   */
   createSession(options: CreateSessionOptions): StoredSession {
     const id = options.id ?? this.generateSessionId();
     const now = Date.now();
@@ -155,7 +132,6 @@ export class SessionStore {
       JSON.stringify(session.metadata)
     );
 
-    // Initialize cache metadata if cached context provided
     if (options.cachedContext) {
       this.db.prepare(`
         INSERT INTO session_cache (session_id, cached_context, cache_breakpoints)
@@ -166,9 +142,6 @@ export class SessionStore {
     return session;
   }
 
-  /**
-   * Get session by ID
-   */
   getSession(sessionId: string): StoredSession | null {
     const stmt = this.db.prepare(`
       SELECT * FROM automation_sessions WHERE id = ?
@@ -180,9 +153,6 @@ export class SessionStore {
     return this.rowToSession(row);
   }
 
-  /**
-   * Get session with full history
-   */
   getSessionWithHistory(sessionId: string): SessionWithHistory | null {
     const session = this.getSession(sessionId);
     if (!session) return null;

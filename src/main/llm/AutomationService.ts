@@ -44,7 +44,14 @@ export class AutomationService extends EventEmitter {
   }
 
   public getSessionId(): string | null {
-    return this.stateManager.getSessionId() || null;
+    return this.stateManager?.getSessionId() || null;
+  }
+
+  public stopAutomation(): void {
+    this.stateManager.markComplete(AutomationStatus.STOPPED, 'Automation stopped by user');
+    this.emitProgress('automation_stopped', {
+      message: 'Automation stopped by user'
+    });
   }
 
   private emitProgress(type: AutomationEventType, data: any): void {
@@ -74,11 +81,11 @@ export class AutomationService extends EventEmitter {
     try {
       await this.stateManager.generateInitialPlan();
 
-      while (!this.stateManager.isComplete()) {
+      while (this.stateManager.isRunning()) {
         const executionResult = await this.stateManager.executePlanWithRecovery();
         
         if (executionResult.isComplete) {
-          this.stateManager.markComplete(executionResult.success, executionResult.error);
+          this.stateManager.markComplete(executionResult.status, executionResult.error);
           break;
         }
       }

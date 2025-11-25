@@ -125,6 +125,8 @@ export const createBrowserAPI = (): BrowserAPI => ({
     invoke('automation:resume-session', sessionId),
   deleteAutomationSession: (sessionId: string) => 
     invoke('automation:delete-session', sessionId),
+  stopAutomation: (sessionId: string) => 
+    invoke('automation:stop', sessionId),
 
   // Event listeners - Tab events
   onTabsUpdated: (callback) => 

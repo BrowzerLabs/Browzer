@@ -53,6 +53,7 @@ interface AutomationStore {
   addEvent: (sessionId: string, event: AutomationProgressEvent) => void;
   completeAutomation: (sessionId: string, result: any) => void;
   errorAutomation: (sessionId: string, error: string) => void;
+  stopAutomation: (sessionId: string) => Promise<void>;
   clearSession: () => void;
   resetPrompt: () => void;
 }
@@ -238,6 +239,24 @@ export const useAutomationStore = create<AutomationStore>()(
             ...currentSession,
             status: AutomationStatus.FAILED,
             error,
+            endTime: Date.now()
+          }
+        });
+      },
+      
+      stopAutomation: async (sessionId) => {
+        const { currentSession } = get();
+        if (!currentSession || currentSession.sessionId !== sessionId) {
+          console.error('Cannot stop automation: session not found or mismatched');
+          return;
+        }
+        
+        await window.browserAPI.stopAutomation(sessionId);
+        set({
+          currentSession: {
+            ...currentSession,
+            status: AutomationStatus.STOPPED,
+            error: 'Automation stopped by user',
             endTime: Date.now()
           }
         });
