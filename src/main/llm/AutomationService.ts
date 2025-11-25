@@ -119,11 +119,13 @@ export class AutomationService extends EventEmitter {
 
     } catch (error: any) {
       console.error('❌ [IterativeAutomation] Fatal error:', error);
-      
-      await this.automationClient.updateSessionStatus(AutomationStatus.FAILED);
       this.emitProgress('automation_error', {
         error: error.message || 'Unknown error occurred',
         stack: error.stack
+      });
+      
+      this.automationClient.updateSessionStatus(AutomationStatus.FAILED).catch((error) => {
+        console.error('❌ [IterativeAutomation] Failed to update session status:', error);
       });
 
       return {

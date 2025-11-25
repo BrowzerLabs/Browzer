@@ -100,6 +100,8 @@ export class AutomationStateManager extends EventEmitter {
     for (let i = 0; i < this.current_plan.steps.length; i++) {
       if (this.status === AutomationStatus.STOPPED) {
         return { status: AutomationStatus.STOPPED, isComplete: true, error: 'Automation stopped' };
+      }else if (this.status === AutomationStatus.FAILED) {
+        return { status: AutomationStatus.FAILED, isComplete: true, error: 'Automation failed' };
       }
       
       const step = this.current_plan.steps[i];
