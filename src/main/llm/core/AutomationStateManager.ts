@@ -5,7 +5,6 @@ import { SessionManager } from '../session/SessionManager';
 import { ContextWindowManager } from '../utils/ContextWindowManager';
 import Anthropic from '@anthropic-ai/sdk';
 import { MessageCompressionManager } from '../utils/MessageCompressionManager';
-import { IntermediatePlanHandler } from '.';
 import { AutomationClient, AutomationPlanParser, MessageBuilder } from '..';
 import { MAX_AUTOMATION_STEPS } from '@/shared/constants/limits';
 import { EventEmitter } from 'events';
@@ -29,7 +28,7 @@ export class AutomationStateManager extends EventEmitter {
 
   private executor: BrowserAutomationExecutor;
   private automationClient: AutomationClient;
-  private intermediatePlanHandler: IntermediatePlanHandler;
+  private current_url: string;
 
   constructor(
     userGoal: string,
@@ -52,10 +51,7 @@ export class AutomationStateManager extends EventEmitter {
 
     this.automationClient = automationClient;
     this.executor = executor;
-    this.intermediatePlanHandler = new IntermediatePlanHandler(
-      this.automationClient,
-      this
-    );
+    this.current_url = recordedSession.url;
   }
 
   public emitProgress(type: AutomationEventType, data: any): void {
@@ -79,8 +75,8 @@ export class AutomationStateManager extends EventEmitter {
       content: response.content
     });
     const thinkingText = response.content
-        .filter((block: any) => block.type === 'text')
-        .map((block: any) => block.text)
+        .filter((block: Anthropic.ContentBlock) => block.type === 'text')
+        .map((block: Anthropic.TextBlock) => block.text)
         .join('\n');
       
     if (thinkingText) {
@@ -127,7 +123,38 @@ export class AutomationStateManager extends EventEmitter {
         this.addMessage(
           MessageBuilder.buildUserMessageWithToolResults(toolResultBlocks)
         );
-        return await this.intermediatePlanHandler.handleContextExtraction();
+
+        const response = await this.automationClient.continueConversation(
+          SystemPromptType.AUTOMATION_CONTINUATION,
+          this.optimizedMessages(),
+          this.cached_context
+        );
+
+        this.addMessage({
+          role: 'assistant',
+          content: response.content
+        });
+
+        const thinkingText = response.content
+          .filter((block: Anthropic.ContentBlock) => block.type === 'text')
+          .map((block: Anthropic.TextBlock) => block.text)
+          .join('\n');
+        
+        if (thinkingText) {
+          this.emitProgress('claude_response', {
+            message: thinkingText,
+          });
+        }
+
+        this.compressMessages();
+
+        const newPlan = AutomationPlanParser.parsePlan(response);
+        this.setCurrentPlan(newPlan);
+
+        return {
+          status: AutomationStatus.RUNNING,
+          isComplete: false,
+        };
       }
     }
 
@@ -146,12 +173,84 @@ export class AutomationStateManager extends EventEmitter {
         return { status: AutomationStatus.COMPLETED, isComplete: true };
       }
       
-      return await this.intermediatePlanHandler.handleRecoveryPlanCompletion();
+      const response = await this.automationClient.continueConversation(
+        SystemPromptType.AUTOMATION_ERROR_RECOVERY,
+        this.optimizedMessages(),
+        this.cached_context
+      );
+
+      this.addMessage({
+        role: 'assistant',
+        content: response.content
+      });
+
+      const thinkingText = response.content
+        .filter((block: Anthropic.ContentBlock) => block.type === 'text')
+        .map((block: Anthropic.TextBlock) => block.text)
+        .join('\n');
+      
+      if (thinkingText) {
+        this.emitProgress('claude_response', {
+          message: thinkingText,
+        });
+      }
+
+      this.compressMessages();
+
+      const newPlan = AutomationPlanParser.parsePlan(response);
+
+      this.setCurrentPlan(newPlan);
+      this.exitRecoveryMode();
+
+      return {
+        status: AutomationStatus.RUNNING,
+        isComplete: false,
+      };
     }
 
     if (this.current_plan.planType === 'intermediate') {
       this.completePhase();
-      return await this.intermediatePlanHandler.handleIntermediatePlanCompletion();
+      const continuationPrompt = SystemPromptBuilder.buildIntermediatePlanContinuationPrompt({
+        userGoal: this.user_goal,
+        currentUrl: this.current_url
+      });
+
+      this.addMessage({
+        role: 'user',
+        content: continuationPrompt
+      });
+
+      const response = await this.automationClient.continueConversation(
+        SystemPromptType.AUTOMATION_CONTINUATION,
+        this.optimizedMessages(),
+        this.cached_context
+      );
+
+      this.addMessage({
+        role: 'assistant',
+        content: response.content
+      });
+
+      const thinkingText = response.content
+        .filter((block: Anthropic.ContentBlock) => block.type === 'text')
+        .map((block: Anthropic.TextBlock) => block.text)
+        .join('\n');
+      
+      if (thinkingText) {
+        this.emitProgress('claude_response', {
+          message: thinkingText,
+        });
+      }
+
+      this.compressMessages();
+
+      const newPlan = AutomationPlanParser.parsePlan(response);
+      this.setCurrentPlan(newPlan);
+
+      return {
+        status: AutomationStatus.RUNNING,
+        isComplete: false,
+      };
     }
 
     return { status: AutomationStatus.COMPLETED, isComplete: true };
@@ -287,8 +386,8 @@ export class AutomationStateManager extends EventEmitter {
 
     const response = await this.automationClient.continueConversation(
       SystemPromptType.AUTOMATION_ERROR_RECOVERY,
-      this.getOptimizedMessages(),
-      this.getCachedContext()
+      this.optimizedMessages(),
+      this.cached_context
     );
 
     this.addMessage({
@@ -393,7 +492,7 @@ export class AutomationStateManager extends EventEmitter {
     return this.messages;
   }
 
-  public getOptimizedMessages(): Anthropic.MessageParam[] {
+  public optimizedMessages(): Anthropic.MessageParam[] {
     const result = ContextWindowManager.optimizeMessages(
       this.messages,
       this.user_goal
@@ -404,10 +503,6 @@ export class AutomationStateManager extends EventEmitter {
     }
 
     return result.optimizedMessages;
-  }
-
-  public getCachedContext(): string | undefined {
-    return this.cached_context;
   }
 
   public getCurrentPlan(): ParsedAutomationPlan | undefined {
