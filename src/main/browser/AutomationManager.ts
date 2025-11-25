@@ -126,7 +126,7 @@ export class AutomationManager {
                 events.push({
                   id: `msg_${msg.id}_text`,
                   sessionId: sessionData.session.id,
-                  type: 'claude_response',
+                  type: 'text_response',
                   data: { message: block.text },
                   timestamp: msg.createdAt
                 });

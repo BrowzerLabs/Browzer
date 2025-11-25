@@ -1,24 +1,18 @@
-/**
- * EventItem Component
- * 
- * Router component that renders the appropriate event component
- * based on the event type
- */
-
-import React from 'react';
-import { ClaudeThinkingEvent } from './ClaudeThinkingEvent';
+import { ThinkingEvent } from './ThinkingEvent';
 import { StepEvent } from './StepEvent';
 import { ErrorEvent } from './ErrorEvent';
-import { ClaudeResponseEvent } from './ClaudeResponseEvent';
+import { TextEvent } from './TextEvent';
+import { AutomationStoppedEvent } from './AutomationStoppedEvent';
+import { AutomationCompleteEvent } from './AutomationCompleteEvent';
 import { EventItemProps } from '../types';
 
 export function EventItem({ event, isLatest }: EventItemProps) {
   switch (event.type) {
     case 'thinking':
-      return <ClaudeThinkingEvent event={event} isLatest={isLatest} />;
+      return <ThinkingEvent event={event} isLatest={isLatest} />;
     
-    case 'claude_response':
-      return <ClaudeResponseEvent event={event} isLatest={isLatest} />;
+    case 'text_response':
+      return <TextEvent event={event} isLatest={isLatest} />;
     
     case 'step_start':
     case 'step_complete':
@@ -27,6 +21,12 @@ export function EventItem({ event, isLatest }: EventItemProps) {
     
     case 'automation_error':
       return <ErrorEvent event={event} isLatest={isLatest} />;
+    
+    case 'automation_stopped':
+      return <AutomationStoppedEvent event={event} isLatest={isLatest} />;
+    
+    case 'automation_complete':
+      return <AutomationCompleteEvent event={event} isLatest={isLatest} />;
     
     default:
       // Generic event display for unknown types

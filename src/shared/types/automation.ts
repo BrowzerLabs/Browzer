@@ -2,9 +2,8 @@
  * Progress event types for real-time UI updates
  */
 export type AutomationEventType =
-  | 'automation_started'
   | 'thinking'
-  | 'claude_response'
+  | 'text_response'
   | 'step_start'
   | 'step_progress'
   | 'step_complete'

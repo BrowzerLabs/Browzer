@@ -80,7 +80,7 @@ export class AutomationStateManager extends EventEmitter {
         .join('\n');
       
     if (thinkingText) {
-      this.emitProgress('claude_response', {
+      this.emitProgress('text_response', {
         message: thinkingText,
       });
     }
@@ -141,7 +141,7 @@ export class AutomationStateManager extends EventEmitter {
           .join('\n');
         
         if (thinkingText) {
-          this.emitProgress('claude_response', {
+          this.emitProgress('text_response', {
             message: thinkingText,
           });
         }
@@ -190,7 +190,7 @@ export class AutomationStateManager extends EventEmitter {
         .join('\n');
       
       if (thinkingText) {
-        this.emitProgress('claude_response', {
+        this.emitProgress('text_response', {
           message: thinkingText,
         });
       }
@@ -237,7 +237,7 @@ export class AutomationStateManager extends EventEmitter {
         .join('\n');
       
       if (thinkingText) {
-        this.emitProgress('claude_response', {
+        this.emitProgress('text_response', {
           message: thinkingText,
         });
       }
