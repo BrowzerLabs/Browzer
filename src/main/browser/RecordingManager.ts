@@ -99,7 +99,7 @@ export class RecordingManager {
         dialog.showMessageBox({
           type: 'warning',
           title: 'Video Recording Failed',
-          message: 'Video recording failed to start. Continuing with action recording only.',
+          message: 'Video recording failed to start. Please ensure to provide Screen Recording permissions in System Preferences > Security & Privacy > Privacy > Screen Recording for Browzer.',
           buttons: ['OK']
         }).then(() => {
           this.activeVideoRecorder = null;
