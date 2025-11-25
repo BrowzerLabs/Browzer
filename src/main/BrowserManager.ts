@@ -1,4 +1,4 @@
-import { BaseWindow, WebContentsView } from 'electron';
+import { BaseWindow, WebContentsView, dialog } from 'electron';
 import { RecordedAction, TabInfo } from '@/shared/types';
 import { RecordingStore } from '@/main/recording';
 import { HistoryService } from '@/main/history/HistoryService';
@@ -13,14 +13,6 @@ import {
   DebuggerManager,
 } from './browser';
 
-/**
- * BrowserManager - Orchestrates browser functionality using modular components
- * - TabManager: Tab lifecycle and state
- * - RecordingManager: Recording orchestration
- * - AutomationManager: LLM automation sessions
- * - NavigationManager: URL handling
- * - DebuggerManager: CDP debugger lifecycle
- */
 export class BrowserManager {
   // Modular components
   private tabManager: TabManager;
@@ -82,14 +74,14 @@ export class BrowserManager {
     return this.tabManager;
   }
 
-  // ============================================================================
-  // Recording Management (delegated to RecordingManager)
-  // ============================================================================
-
   public async startRecording(): Promise<boolean> {
     const activeTab = this.tabManager.getActiveTab();
     if (!activeTab) {
-      alert('No active tab to record')
+      dialog.showMessageBox({
+        type: 'error',
+        title: 'No tab active to record.',
+        message: 'Please ensure at least one tab is active for recording'
+      });
       return false;
     }
 
@@ -129,10 +121,6 @@ export class BrowserManager {
     return this.recordingManager.deleteRecording(id);
   }
 
-  // ============================================================================
-  // Automation Management (delegated to AutomationManager)
-  // ============================================================================
-
   public async executeIterativeAutomation(
     userGoal: string,
     recordedSessionId: string
@@ -141,16 +129,16 @@ export class BrowserManager {
     sessionId: string;
     message: string;
   }> {
-    const activeTab = this.tabManager.getActiveTab();
-    if (!activeTab) {
-      throw new Error('No active tab for automation');
-    }
-
+    const newTab = this.tabManager.createTab();
     return this.automationManager.executeAutomation(
-      activeTab,
+      newTab,
       userGoal,
-      recordedSessionId
+      recordedSessionId,
     );
+  }
+  
+  public stopAutomation(sessionId: string): void {
+    this.automationManager.stopAutomation(sessionId);
   }
 
   public async loadAutomationSession(sessionId: string): Promise<any> {
@@ -177,9 +165,7 @@ export class BrowserManager {
     return this.automationManager.deleteAutomationSession(sessionId);
   }
 
-  // ============================================================================
   // Service Accessors (for IPCHandlers)
-  // ============================================================================
 
   public getHistoryService(): HistoryService {
     return this.historyService;
@@ -191,12 +177,10 @@ export class BrowserManager {
 
   public getActiveAutomationExecutor(): BrowserAutomationExecutor | null {
     const activeTab = this.tabManager.getActiveTab();
-    return activeTab?.automationExecutor || null;
+    return activeTab.automationExecutor;
   }
 
-  // ============================================================================
   // Layout Management
-  // ============================================================================
 
   public updateLayout(_windowWidth: number, _windowHeight: number, sidebarWidth = 0): void {
     this.tabManager.updateLayout(sidebarWidth);
@@ -227,10 +211,6 @@ export class BrowserManager {
       this.tabManager.createTab(url);
     }
   }
-
-  // ============================================================================
-  // Cleanup
-  // ============================================================================
 
   public destroy(): void {
     this.tabManager.destroy();

@@ -59,7 +59,8 @@ export class IPCHandlers {
     });
 
     ipcMain.handle('browser:create-tab', async (_, url?: string) => {
-      return this.tabManager.createTab(url);
+      const tab = this.tabManager.createTab(url);
+      return tab.info;
     });
 
     ipcMain.handle('browser:close-tab', async (_, tabId: string) => {
@@ -334,6 +335,10 @@ export class IPCHandlers {
   private setupAutomationHandlers(): void {
     ipcMain.handle('automation:execute-llm', async (_, userGoal: string, recordedSessionId: string) => {
      return await this.browserManager.executeIterativeAutomation(userGoal, recordedSessionId);
+    });
+    ipcMain.handle('automation:stop', async (_, sessionId: string) => {
+      this.browserManager.stopAutomation(sessionId);
+      return { success: true };
     });
     ipcMain.handle('automation:load-session', async (_, sessionId: string) => {
       return await this.browserManager.loadAutomationSession(sessionId);
