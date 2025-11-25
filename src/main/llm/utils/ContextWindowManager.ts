@@ -35,21 +35,12 @@ export class ContextWindowManager {
   private static readonly RECENT_TURNS_TO_KEEP = 10; // Keep last 10 conversation turns in full
   private static readonly MIN_MESSAGES_TO_COMPRESS = 20; // Only compress if we have 20+ messages
 
-  /**
-   * Optimize messages to fit within context window
-   * 
-   * This is the main entry point for context optimization.
-   * Call this before sending messages to Claude API.
-   */
   public static optimizeMessages(
     messages: Anthropic.MessageParam[],
     userGoal: string
   ): {
     optimizedMessages: Anthropic.MessageParam[];
     compressionApplied: boolean;
-    originalTokens: number;
-    optimizedTokens: number;
-    tokensSaved: number;
   } {
     const originalTokens = this.estimateTokens(messages);
 
@@ -59,9 +50,6 @@ export class ContextWindowManager {
       return {
         optimizedMessages: messages,
         compressionApplied: false,
-        originalTokens,
-        optimizedTokens: originalTokens,
-        tokensSaved: 0
       };
     }
 
@@ -81,21 +69,9 @@ export class ContextWindowManager {
     return {
       optimizedMessages,
       compressionApplied: true,
-      originalTokens,
-      optimizedTokens,
-      tokensSaved
     };
   }
 
-  /**
-   * Apply hybrid optimization: Sliding window + Summarization
-   * 
-   * Strategy:
-   * 1. Identify conversation "turns" (user message + assistant response pairs)
-   * 2. Keep recent N turns in full detail
-   * 3. Summarize older turns into condensed history
-   * 4. Preserve critical information (goal, successful steps, current state)
-   */
   private static applyHybridOptimization(
     messages: Anthropic.MessageParam[],
     userGoal: string
@@ -104,11 +80,9 @@ export class ContextWindowManager {
       return messages;
     }
 
-    // Split messages into turns (pairs of user + assistant messages)
     const turns = this.splitIntoTurns(messages);
 
     if (turns.length <= this.RECENT_TURNS_TO_KEEP) {
-      // Not enough turns to compress
       return messages;
     }
 
@@ -131,10 +105,6 @@ export class ContextWindowManager {
     return optimizedMessages;
   }
 
-  /**
-   * Split messages into conversation turns
-   * A turn = user message + assistant response (may include multiple tool calls/results)
-   */
   private static splitIntoTurns(messages: Anthropic.MessageParam[]): Array<{
     turnNumber: number;
     messages: Anthropic.MessageParam[];
@@ -167,15 +137,6 @@ export class ContextWindowManager {
     return turns;
   }
 
-  /**
-   * Summarize older turns into condensed execution history
-   * 
-   * This creates a compact representation that preserves:
-   * - User's original goal
-   * - Successful steps executed
-   * - Current progress state
-   * - Key errors encountered (without full details)
-   */
   private static summarizeOlderTurns(
     olderTurns: Array<{ turnNumber: number; messages: Anthropic.MessageParam[] }>,
     userGoal: string

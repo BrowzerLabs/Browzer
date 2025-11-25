@@ -43,7 +43,7 @@ export class TabManager extends EventEmitter {
     super();
   }
 
-  public createTab(url?: string): TabInfo {
+  public createTab(url?: string): Tab {
     const previousActiveTabId = this.activeTabId;
     const tabId = `tab-${++this.tabCounter}`;
     
@@ -108,7 +108,7 @@ export class TabManager extends EventEmitter {
     
     this.emit('tab:created', tab, previousActiveTabId);
 
-    return tabInfo;
+    return tab;
   }
 
   public closeTab(tabId: string): boolean {
@@ -184,8 +184,10 @@ export class TabManager extends EventEmitter {
   }
 
   public navigate(tabId: string, url: string): boolean {
-    const tab = this.tabs.get(tabId);
-    if (!tab) return false;
+    let tab = this.tabs.get(tabId);
+    if (!tab){
+      tab = this.createTab(url);
+    }
 
     const normalizedURL = this.navigationManager.normalizeURL(url);
     tab.view.webContents.loadURL(normalizedURL);
