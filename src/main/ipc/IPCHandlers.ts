@@ -59,7 +59,8 @@ export class IPCHandlers {
     });
 
     ipcMain.handle('browser:create-tab', async (_, url?: string) => {
-      return this.tabManager.createTab(url);
+      const tab = this.tabManager.createTab(url);
+      return tab.info;
     });
 
     ipcMain.handle('browser:close-tab', async (_, tabId: string) => {

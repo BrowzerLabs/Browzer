@@ -28,7 +28,7 @@ export class ConnectionService extends EventEmitter {
 
     const apiConfig: ApiConfig = {
       baseURL: this.apiBaseURL,
-      timeout: 50000,
+      timeout: 70000,
     };
 
     this.apiClient = new ApiClient(apiConfig);
