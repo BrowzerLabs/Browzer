@@ -172,16 +172,17 @@ export class TypeHandler extends BaseHandler {
           });
           console.log('[Type] After filtering disabled/readonly:', candidates.length);
           
-          // Filter by stable attributes
           const stableAttrKeys = Object.keys(targetAttrs).filter(key => 
             !DYNAMIC_ATTRIBUTES.includes(key) && targetAttrs[key]
+          );
+          const dynamicAttrKeys = Object.keys(targetAttrs).filter(key => 
+            DYNAMIC_ATTRIBUTES.includes(key) && targetAttrs[key]
           );
           
           if (stableAttrKeys.length > 0) {
             candidates = candidates.filter(el => {
               return stableAttrKeys.some(key => el.getAttribute(key) === targetAttrs[key]);
             });
-            console.log('[Type] After attribute filter:', candidates.length);
           }
           
           if (candidates.length === 0) {
@@ -221,6 +222,45 @@ export class TypeHandler extends BaseHandler {
                 else if (key === 'type') score += 10;
                 else score += 5;
                 matchedBy.push('attr:' + key);
+              }
+            }
+            
+            for (const key of dynamicAttrKeys) {
+              const elValue = el.getAttribute(key);
+              const targetValue = targetAttrs[key];
+              
+              if (elValue === targetValue) {
+                if (key === 'class') {
+                  const elClasses = (elValue || '').split(/\s+/);
+                  const targetClasses = (targetValue || '').split(/\s+/);
+                  const matchingClasses = targetClasses.filter(c => elClasses.includes(c));
+                  if (matchingClasses.length > 0) {
+                    const classScore = Math.min(matchingClasses.length * 1, 4);
+                    score += classScore;
+                    matchedBy.push('dyn:class(' + matchingClasses.length + ')');
+                  }
+                } else if (key === 'style') {
+                  score += 1;
+                  matchedBy.push('dyn:style');
+                } else if (key.startsWith('aria-')) {
+                  score += 3;
+                  matchedBy.push('dyn:' + key);
+                } else if (key.startsWith('data-')) {
+                  score += 2;
+                  matchedBy.push('dyn:' + key);
+                } else {
+                  score += 2;
+                  matchedBy.push('dyn:' + key);
+                }
+              } else if (key === 'class' && elValue && targetValue) {
+                const elClasses = elValue.split(/\s+/);
+                const targetClasses = targetValue.split(/\s+/);
+                const matchingClasses = targetClasses.filter(c => elClasses.includes(c));
+                if (matchingClasses.length > 0) {
+                  const classScore = Math.min(matchingClasses.length * 1, 4);
+                  score += classScore;
+                  matchedBy.push('dyn:class-partial(' + matchingClasses.length + ')');
+                }
               }
             }
             

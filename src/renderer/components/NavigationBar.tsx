@@ -120,7 +120,7 @@ export function NavigationBar({
           onBlur={() => setIsEditing(false)}
           onKeyDown={handleKeyDown}
           placeholder="Search or enter address"
-          className="rounded-full focus-visible:ring-1 focus-visible:ring-gray-300 focus-visible:border-gray-300"
+          className="rounded-full focus-visible:ring-1 focus-visible:ring-gray-300 focus-visible:border-gray-800 dark:focus-visible:border-gray-200"
         />
       </div>
 
