@@ -1,46 +1,31 @@
-/**
- * AgentChatArea Component
- * 
- * Main content area that displays:
- * - Session history (in new_session mode)
- * - Event stream (in existing_session mode)
- */
-
-import React, { useRef, useEffect } from 'react';
-import { SessionHistory } from './SessionHistory';
+import { useRef, useEffect } from 'react';
 import { EventItem } from './EventItem';
 import { AgentChatAreaProps } from './types';
 
 export function AgentChatArea({
+  agentMode,
   viewMode,
   currentSession,
-  sessionHistory,
-  isLoadingHistory,
-  onSessionSelect,
 }: AgentChatAreaProps) {
   const chatEndRef = useRef<HTMLDivElement>(null);
 
-  // Auto-scroll to bottom when new events arrive
   useEffect(() => {
     if (viewMode === 'existing_session' && chatEndRef.current) {
       chatEndRef.current.scrollIntoView({ behavior: 'smooth' });
     }
   }, [currentSession?.events, viewMode]);
 
-  // Show session history in new_session mode
   if (viewMode === 'new_session') {
     return (
-      <SessionHistory
-        sessions={sessionHistory}
-        isLoading={isLoadingHistory}
-        onSessionSelect={onSessionSelect}
-      />
+      <div className="flex flex-col items-center justify-center h-full text-center px-6">
+        <h3 className="text-lg font-semibold mb-2">{
+          agentMode === 'ask' ? 'Ask anything about the current page...' : 'Describe what you want to automate...'
+        }</h3>
+      </div>
     );
   }
 
-  // Show event stream in existing_session mode
   if (viewMode === 'existing_session' && currentSession) {
-    console.log("currenstSession: ", currentSession)
     return (
       <div className="flex-1 overflow-y-auto overflow-x-hidden min-h-0">
         <div className="py-4 space-y-3 max-w-4xl mx-auto">
@@ -65,7 +50,6 @@ export function AgentChatArea({
     );
   }
 
-  // Loading state
   return (
     <div className="flex items-center justify-center h-full">
       <div className="text-center">

@@ -117,7 +117,7 @@ function Tab({ tab, isActive, onClick, onClose, width }: TabProps) {
 
       {width > 100 && (
         <span className="flex-1 truncate text-sm min-w-0">
-          {tab.isLoading ? 'Loading...' : tab.title || 'New Tab'}
+          {tab.isLoading ? <span className="text-gray-500">Loading...</span> : tab.title || 'New Tab'}
         </span>
       )}
 

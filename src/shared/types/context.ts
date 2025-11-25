@@ -18,7 +18,6 @@ export interface InteractiveElement {
     height: number;
   };
   isDisabled: boolean;
-  parentSelector?: string;
   attributes: Record<string, string>;
 }
 
@@ -181,9 +180,11 @@ export interface BrowserContext {
  * Context extraction options
  */
 export interface ContextExtractionOptions {
-  includeDOM?: boolean;
-  maxInteractiveElements?: number; // Limit number of elements
-  timeout?: number; // Max extraction time in ms
+  tabId: string; // Required: Tab identifier
+  full?: boolean; // Extract full page (overrides scrollTo)
+  scrollTo?: 'current' | 'top' | 'bottom' | number; // Scroll position before extraction
+  elementTags?: string[]; // Filter: only extract these element types (e.g., ['BUTTON', 'INPUT'])
+  maxElements?: number; // Limit number of elements (default: 200)
 }
 
 /**

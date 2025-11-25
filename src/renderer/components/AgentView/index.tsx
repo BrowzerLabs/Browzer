@@ -1,22 +1,8 @@
-/**
- * AgentView - Main Component
- * 
- * Orchestrates the entire AgentView with modular sub-components
- * 
- * Features:
- * - Two view modes: new_session and existing_session
- * - Session history display
- * - Real-time event streaming
- * - Persistent session storage
- * - Recording selection
- * - Prompt input
- */
-
-import React, { useEffect } from 'react';
+import { useEffect } from 'react';
 import { AgentHeader } from './AgentHeader';
 import { AgentChatArea } from './AgentChatArea';
 import { AgentFooter } from './AgentFooter';
-import { useAgentView, useAutomationEvents, useSessionManagement } from './hooks';
+import { useAutomation } from './hooks';
 
 export default function AgentView() {
   const {
@@ -29,43 +15,42 @@ export default function AgentView() {
     isSubmitting,
     isLoadingSession,
     isLoadingHistory,
+    agentMode,
     loadRecordings,
     handleSubmit,
     handleSessionSelect,
     handleNewSession,
     handleRecordingSelect,
     handlePromptChange,
-    setIsSubmitting,
-  } = useAgentView();
+    handleStopAutomation,
+    handleModeChange,
+    handleAskSubmit,
+  } = useAutomation();
 
-  // Subscribe to automation events
-  useAutomationEvents(setIsSubmitting);
-
-  // Load session history
-  useSessionManagement();
-
-  // Load recordings on mount
   useEffect(() => {
     loadRecordings();
   }, [loadRecordings]);
 
   const isDisabled = currentSession?.status === 'running';
+  const onSubmit = agentMode === 'ask' ? handleAskSubmit : handleSubmit;
 
   return (
     <section className="flex flex-col h-full overflow-hidden">
-      {/* Header */}
-      <AgentHeader
-        viewMode={viewState}
-        selectedRecordingId={selectedRecordingId}
-        recordings={recordings}
-        currentSession={currentSession}
-        onRecordingSelect={handleRecordingSelect}
-        onNewSession={handleNewSession}
-        isDisabled={isDisabled}
-      />
+      {/* Only show AgentHeader in automate mode */}
+      {agentMode === 'automate' && (
+        <AgentHeader
+          viewMode={viewState}
+          selectedRecordingId={selectedRecordingId}
+          recordings={recordings}
+          currentSession={currentSession}
+          onRecordingSelect={handleRecordingSelect}
+          onNewSession={handleNewSession}
+          isDisabled={isDisabled}
+        />
+      )}
 
-      {/* Chat Area - Takes remaining space and handles overflow */}
       <AgentChatArea
+          agentMode={agentMode}
           viewMode={viewState}
           currentSession={currentSession}
           sessionHistory={sessionHistory}
@@ -74,14 +59,16 @@ export default function AgentView() {
           onSessionSelect={handleSessionSelect}
         />
 
-      {/* Footer */}
       <AgentFooter
         userPrompt={userPrompt}
         selectedRecordingId={selectedRecordingId}
         isSubmitting={isSubmitting}
         isDisabled={isDisabled}
+        agentMode={agentMode}
         onPromptChange={handlePromptChange}
-        onSubmit={handleSubmit}
+        onSubmit={onSubmit}
+        onStop={handleStopAutomation}
+        onModeChange={handleModeChange}
       />
     </section>
   );

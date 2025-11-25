@@ -1,14 +1,4 @@
-/**
- * AgentHeader Component
- * 
- * Header section with:
- * - Recording session selector (disabled in existing session)
- * - New session button (visible in existing session)
- * - Status badge
- */
-
-import React from 'react';
-import { Plus, Loader2, CheckCircle2, XCircle } from 'lucide-react';
+import { Plus, Loader2, CheckCircle2, XCircle, Clock } from 'lucide-react';
 import {
   Select,
   SelectContent,
@@ -18,6 +8,7 @@ import {
 } from '@/renderer/ui/select';
 import { Button } from '@/renderer/ui/button';
 import { AgentHeaderProps } from './types';
+import { AutomationStatus } from '@/shared/types';
 
 export function AgentHeader({
   viewMode,
@@ -66,20 +57,29 @@ export function AgentHeader({
           
           {currentSession && (
             <span>
-              {currentSession.status === 'running' && <Loader2 className="size-4 animate-spin text-primary" />}
-              {currentSession.status === 'completed' && <CheckCircle2 className="size-4 text-teal-600"  />}
-              {currentSession.status === 'error' && <XCircle className="size-4 text-red-600" />}
+              {currentSession.status === AutomationStatus.RUNNING && <Loader2 className="size-4 animate-spin text-primary" />}
+              {currentSession.status === AutomationStatus.COMPLETED && <CheckCircle2 className="size-4 text-teal-600"  />}
+              {currentSession.status === AutomationStatus.FAILED && <XCircle className="size-4 text-red-600" />}
             </span>
           )}
         </div>
-        <Button
+        <div className="flex items-center gap-2">
+          <Button
+          size="icon"
+          onClick={() => window.browserAPI.navigate('1', 'browzer://automation')}
+
+          >
+            <Clock />
+          </Button>
+          <Button
             variant="ghost"
             size="icon"
             onClick={onNewSession}
             className="gap-2"
-          >
-            <Plus className="w-4 h-4" />
-        </Button>
+            >
+            <Plus />
+          </Button>
+        </div>
     </div>
   );
 }
