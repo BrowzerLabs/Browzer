@@ -1,4 +1,4 @@
-import { WebContentsView } from 'electron';
+import { WebContentsView, dialog } from 'electron';
 import { ActionRecorder, VideoRecorder, RecordingStore } from '@/main/recording';
 import { RecordedAction, RecordingSession, RecordingTabInfo } from '@/shared/types';
 import { stat } from 'fs/promises';
@@ -71,12 +71,17 @@ export class RecordingManager {
       });
       
       this.centralRecorder.setMaxActionsCallback(() => {
-        alert('🛑 Max actions limit reached, triggering auto-stop');
-        // Notify renderer to show save form immediately
-        if (this.browserUIView && !this.browserUIView.webContents.isDestroyed()) {
-          this.browserUIView.webContents.send('recording:max-actions-reached');
-        }
-      });
+        dialog.showMessageBox({
+          type: 'warning',
+          title: 'Recording Limit Reached',
+          message: 'Maximum actions limit reached. Recording will stop automatically.',
+          buttons: ['OK']
+        }).then(() => {
+          if (this.browserUIView && !this.browserUIView.webContents.isDestroyed()) {
+            this.browserUIView.webContents.send('recording:max-actions-reached');
+          }
+        });
+      }); 
 
       // Start action recording with tab context and recordingId for snapshots
       await this.centralRecorder.startRecording(
@@ -91,8 +96,14 @@ export class RecordingManager {
       const videoStarted = await this.activeVideoRecorder.startRecording(this.recordingState.recordingId);
       
       if (!videoStarted) {
-        alert('⚠️ Video recording failed to start, continuing with action recording only');
-        this.activeVideoRecorder = null;
+        dialog.showMessageBox({
+          type: 'warning',
+          title: 'Video Recording Failed',
+          message: 'Video recording failed to start. Continuing with action recording only.',
+          buttons: ['OK']
+        }).then(() => {
+          this.activeVideoRecorder = null;
+        });
       }
       
       this.recordingState.isRecording = true;
