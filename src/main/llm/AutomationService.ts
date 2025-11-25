@@ -85,6 +85,12 @@ export class AutomationService extends EventEmitter {
         const executionResult = await this.stateManager.executePlanWithRecovery();
         
         if (executionResult.isComplete) {
+          if(executionResult.error) {
+            this.emitProgress('automation_error', {
+              error: executionResult.error,
+              stack: executionResult.error
+            });
+          }
           this.stateManager.markComplete(executionResult.status, executionResult.error);
           break;
         }

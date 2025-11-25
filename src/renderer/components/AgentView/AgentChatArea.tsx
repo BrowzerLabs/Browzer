@@ -1,21 +1,10 @@
-/**
- * AgentChatArea Component
- * 
- * Main content area that displays:
- * - Session history (in new_session mode)
- * - Event stream (in existing_session mode)
- */
-
-import React, { useRef, useEffect } from 'react';
+import { useRef, useEffect } from 'react';
 import { EventItem } from './EventItem';
 import { AgentChatAreaProps } from './types';
 
 export function AgentChatArea({
   viewMode,
   currentSession,
-  sessionHistory,
-  isLoadingHistory,
-  onSessionSelect,
 }: AgentChatAreaProps) {
   const chatEndRef = useRef<HTMLDivElement>(null);
 
@@ -37,7 +26,6 @@ export function AgentChatArea({
   }
 
   if (viewMode === 'existing_session' && currentSession) {
-    console.log("currenstSession: ", currentSession)
     return (
       <div className="flex-1 overflow-y-auto overflow-x-hidden min-h-0">
         <div className="py-4 space-y-3 max-w-4xl mx-auto">

@@ -43,7 +43,7 @@ export function AgentFooter({
               title={isSubmitting ? "Stop automation" : "Send message"}
             >
               {isSubmitting ? (
-                <Square className="size-2" />
+                <Square className="size-2 bg-white" />
               ) : (
                 <ArrowUp className="w-4 h-4" />
               )}

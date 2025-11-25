@@ -157,13 +157,8 @@ export const useAutomationStore = create<AutomationStore>()(
       addEvent: (sessionId, event) => {
         const { currentSession } = get();
         
-        if (!currentSession) {
-          console.warn('[AutomationStore] No current session, ignoring event');
-          return;
-        }
-        
-        if (currentSession.sessionId !== sessionId) {
-          console.warn(`[AutomationStore] Event for old session ${sessionId}, current is ${currentSession.sessionId}`);
+        if (!currentSession || (sessionId !== currentSession.sessionId)) {
+          alert('No current session found');
           return;
         }
         

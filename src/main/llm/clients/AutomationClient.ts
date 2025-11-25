@@ -16,8 +16,6 @@ export class AutomationClient extends EventEmitter {
   ): Promise<Anthropic.Message> {
 
     try {
-      this.emit('thinking', 'Creating automation plan...');
-
       const response = await api.post<{ message: Anthropic.Message; session_id: string }>(
         '/automation/plan',
         {

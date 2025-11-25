@@ -63,6 +63,9 @@ export class AutomationStateManager extends EventEmitter {
   }
 
   public async generateInitialPlan(): Promise<void> {
+    this.emitProgress('thinking', {
+      message: 'Analyzing recorded session & goal to generate initial plan...'
+    });
     this.addMessage({
       role: 'user',
       content: this.user_goal

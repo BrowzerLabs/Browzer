@@ -27,27 +27,22 @@ export function useAutomation() {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
-    console.log('[useAutomation] Setting up automation event listeners');
 
     const unsubProgress = window.browserAPI.onAutomationProgress((data: any) => {
-      console.log('[useAutomation] Progress event:', data.event.type);
       addEvent(data.sessionId, data.event);
     });
 
     const unsubComplete = window.browserAPI.onAutomationComplete((data: any) => {
-      console.log('[useAutomation] Automation completed:', data.sessionId);
       completeAutomation(data.sessionId, data.result);
       setIsSubmitting(false);
     });
 
     const unsubError = window.browserAPI.onAutomationError((data: any) => {
-      console.error('[useAutomation] Automation error:', data.error);
       errorAutomation(data.sessionId, data.error);
       setIsSubmitting(false);
     });
 
     return () => {
-      console.log('[useAutomation] Cleaning up event listeners');
       unsubProgress();
       unsubComplete();
       unsubError();
@@ -55,7 +50,6 @@ export function useAutomation() {
   }, [addEvent, completeAutomation, errorAutomation]);
 
   useEffect(() => {
-    console.log('[useAutomation] Loading session history');
     loadSessionHistory();
   }, [loadSessionHistory]);
 
@@ -82,14 +76,11 @@ export function useAutomation() {
       );
 
       if (result.success) {
-        // Start automation with persistent session ID
         startAutomation(userPrompt, selectedRecordingId, result.sessionId);
       } else {
-        console.error('[useAutomation] Automation failed to start');
         setIsSubmitting(false);
       }
     } catch (error) {
-      console.error('[useAutomation] Error starting automation:', error);
       setIsSubmitting(false);
     }
   }, [userPrompt, selectedRecordingId, isSubmitting, startAutomation]);
