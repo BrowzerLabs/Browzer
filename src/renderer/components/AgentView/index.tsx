@@ -15,6 +15,7 @@ export default function AgentView() {
     isSubmitting,
     isLoadingSession,
     isLoadingHistory,
+    agentMode,
     loadRecordings,
     handleSubmit,
     handleSessionSelect,
@@ -22,6 +23,8 @@ export default function AgentView() {
     handleRecordingSelect,
     handlePromptChange,
     handleStopAutomation,
+    handleModeChange,
+    handleAskSubmit,
   } = useAutomation();
 
   useEffect(() => {
@@ -29,20 +32,25 @@ export default function AgentView() {
   }, [loadRecordings]);
 
   const isDisabled = currentSession?.status === 'running';
+  const onSubmit = agentMode === 'ask' ? handleAskSubmit : handleSubmit;
 
   return (
     <section className="flex flex-col h-full overflow-hidden">
-      <AgentHeader
-        viewMode={viewState}
-        selectedRecordingId={selectedRecordingId}
-        recordings={recordings}
-        currentSession={currentSession}
-        onRecordingSelect={handleRecordingSelect}
-        onNewSession={handleNewSession}
-        isDisabled={isDisabled}
-      />
+      {/* Only show AgentHeader in automate mode */}
+      {agentMode === 'automate' && (
+        <AgentHeader
+          viewMode={viewState}
+          selectedRecordingId={selectedRecordingId}
+          recordings={recordings}
+          currentSession={currentSession}
+          onRecordingSelect={handleRecordingSelect}
+          onNewSession={handleNewSession}
+          isDisabled={isDisabled}
+        />
+      )}
 
       <AgentChatArea
+          agentMode={agentMode}
           viewMode={viewState}
           currentSession={currentSession}
           sessionHistory={sessionHistory}
@@ -56,9 +64,11 @@ export default function AgentView() {
         selectedRecordingId={selectedRecordingId}
         isSubmitting={isSubmitting}
         isDisabled={isDisabled}
+        agentMode={agentMode}
         onPromptChange={handlePromptChange}
-        onSubmit={handleSubmit}
+        onSubmit={onSubmit}
         onStop={handleStopAutomation}
+        onModeChange={handleModeChange}
       />
     </section>
   );

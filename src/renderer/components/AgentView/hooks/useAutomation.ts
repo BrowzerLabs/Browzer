@@ -1,6 +1,8 @@
 import { useState, useCallback, useEffect } from 'react';
 import { useAutomationStore } from '@/renderer/stores/automationStore';
 import { RecordingSession } from '@/shared/types';
+import { AgentMode } from '../types';
+import { toast } from 'sonner';
 
 export function useAutomation() {
   const {
@@ -25,6 +27,7 @@ export function useAutomation() {
 
   const [recordings, setRecordings] = useState<RecordingSession[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [agentMode, setAgentMode] = useState<AgentMode>('automate');
 
   useEffect(() => {
 
@@ -108,6 +111,20 @@ export function useAutomation() {
     }
   }, [currentSession, isSubmitting, stopAutomation]);
 
+  const handleModeChange = useCallback((mode: AgentMode) => {
+    setAgentMode(mode);
+  }, []);
+
+  const handleAskSubmit = useCallback(() => {
+    if (!userPrompt.trim()) {
+      toast.error('Please enter a prompt');
+      return;
+    }
+    console.log('[Ask Mode] User submitted:', userPrompt);
+    toast.info(userPrompt);
+    setUserPrompt('');
+  }, [userPrompt, setUserPrompt]);
+
   return {
     viewState,
     currentSession,
@@ -118,6 +135,7 @@ export function useAutomation() {
     isSubmitting,
     isLoadingSession,
     isLoadingHistory,
+    agentMode,
     loadRecordings,
     handleSubmit,
     handleSessionSelect,
@@ -125,6 +143,8 @@ export function useAutomation() {
     handleRecordingSelect,
     handlePromptChange,
     handleStopAutomation,
+    handleModeChange,
+    handleAskSubmit,
     setIsSubmitting,
   };
 }

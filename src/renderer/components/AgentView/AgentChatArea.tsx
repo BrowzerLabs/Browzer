@@ -3,6 +3,7 @@ import { EventItem } from './EventItem';
 import { AgentChatAreaProps } from './types';
 
 export function AgentChatArea({
+  agentMode,
   viewMode,
   currentSession,
 }: AgentChatAreaProps) {
@@ -17,10 +18,9 @@ export function AgentChatArea({
   if (viewMode === 'new_session') {
     return (
       <div className="flex flex-col items-center justify-center h-full text-center px-6">
-        <h3 className="text-lg font-semibold mb-2">Record & Automate</h3>
-        <p className="text-sm text-muted-foreground max-w-sm">
-          Select a recorded session from above select and describe what you want to automate in the input below to get started.
-        </p>
+        <h3 className="text-lg font-semibold mb-2">{
+          agentMode === 'ask' ? 'Ask anything about the current page...' : 'Describe what you want to automate...'
+        }</h3>
       </div>
     );
   }

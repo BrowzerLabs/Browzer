@@ -1,14 +1,4 @@
-/**
- * AgentHeader Component
- * 
- * Header section with:
- * - Recording session selector (disabled in existing session)
- * - New session button (visible in existing session)
- * - Status badge
- */
-
-import React from 'react';
-import { Plus, Loader2, CheckCircle2, XCircle } from 'lucide-react';
+import { Plus, Loader2, CheckCircle2, XCircle, Clock } from 'lucide-react';
 import {
   Select,
   SelectContent,
@@ -73,14 +63,23 @@ export function AgentHeader({
             </span>
           )}
         </div>
-        <Button
+        <div className="flex items-center gap-2">
+          <Button
+          size="icon"
+          onClick={() => window.browserAPI.navigate('1', 'browzer://automation')}
+
+          >
+            <Clock />
+          </Button>
+          <Button
             variant="ghost"
             size="icon"
             onClick={onNewSession}
             className="gap-2"
-          >
-            <Plus className="w-4 h-4" />
-        </Button>
+            >
+            <Plus />
+          </Button>
+        </div>
     </div>
   );
 }

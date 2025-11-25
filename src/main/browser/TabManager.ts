@@ -184,8 +184,10 @@ export class TabManager extends EventEmitter {
   }
 
   public navigate(tabId: string, url: string): boolean {
-    const tab = this.tabs.get(tabId);
-    if (!tab) return false;
+    let tab = this.tabs.get(tabId);
+    if (!tab){
+      tab = this.createTab(url);
+    }
 
     const normalizedURL = this.navigationManager.normalizeURL(url);
     tab.view.webContents.loadURL(normalizedURL);
