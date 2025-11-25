@@ -1,5 +1,5 @@
 import React from 'react';
-import { ArrowUp, Square, Plus, MessageSquare, Bot } from 'lucide-react';
+import { ArrowUp, Square, MessageSquare, Bot } from 'lucide-react';
 import { InputGroup, InputGroupTextarea, InputGroupAddon, InputGroupButton } from '@/renderer/ui/input-group';
 import {
   DropdownMenu,
@@ -7,8 +7,8 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/renderer/ui/dropdown-menu';
-import { AgentFooterProps, AgentMode } from './types';
-import { cn } from '@/renderer/lib/utils';
+import { AgentFooterProps } from './types';
+import { Button } from '@/renderer/ui/button';
 
 export function AgentFooter({
   userPrompt,
@@ -54,29 +54,26 @@ export function AgentFooter({
           <InputGroupAddon align="block-end">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <InputGroupButton
+                <Button
                   variant="outline"
-                  className={cn(
-                    "rounded-full",
-                    agentMode === 'ask' ? 'text-primary' : 'bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground'
-                  )}
                   size="sm"
+                  className='rounded-full'
                 >
                   {agentMode === 'ask' ? (
-                    <MessageSquare className="size-3" />
+                    <span className='flex items-center gap-2'><MessageSquare className="size-3" /> Ask</span>
                   ) : (
-                    <Bot className="size-3" />
+                    <span className='flex items-center gap-2'><Bot className="size-3" /> Automate</span>
                   )}
-                </InputGroupButton>
+                </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent
                 side="top"
                 align="start"
                 className="[--radius:0.95rem]"
               >
-                <DropdownMenuItem onClick={() => onModeChange('ask')}>
+                <DropdownMenuItem onClick={() => onModeChange('ask')} disabled>
                   <MessageSquare className="w-4 h-4 mr-2" />
-                  Ask
+                  Ask (coming soon)
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => onModeChange('automate')}>
                   <Bot className="w-4 h-4 mr-2" />

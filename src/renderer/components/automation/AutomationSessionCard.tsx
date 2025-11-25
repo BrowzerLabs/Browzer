@@ -108,7 +108,7 @@ export function AutomationSessionCard({ session, onView, onResume, onDelete }: A
           View
         </Button>
 
-        {(session.status === AutomationStatus.FAILED || session.status === AutomationStatus.STOPPED) && (
+        {/* {(session.status === AutomationStatus.FAILED || session.status === AutomationStatus.STOPPED) && (
           <Button
             variant="default"
             size="sm"
@@ -118,7 +118,7 @@ export function AutomationSessionCard({ session, onView, onResume, onDelete }: A
             <Play className="w-3 h-3 mr-1" />
             Resume
           </Button>
-        )}
+        )} */}
 
         <Button
           variant="destructive"
