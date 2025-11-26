@@ -7,18 +7,13 @@ export class TypeHandler extends BaseHandler {
     super(context);
   }
 
-  /**
-   * Execute type action using approach
-   */
   async execute(params: TypeParams): Promise<ToolExecutionResult> {
     const startTime = Date.now();
     
     try {
       console.log('[TypeHandler] ⌨️  Starting type execution');
 
-      // Step 1: Find and prepare input element
       const findResult = await this.executeFindAndPrepare(params);
-      
       if (!findResult.success) {
         return this.createErrorResult('type', startTime, {
           code: 'ELEMENT_NOT_FOUND',
@@ -38,17 +33,14 @@ export class TypeHandler extends BaseHandler {
       const { centerX, centerY } = findResult;
       console.log(`[TypeHandler] ✅ Input found and prepared at (${centerX}, ${centerY})`);
 
-      // Step 2: Focus the element using CDP click
       await this.focusElement(centerX!, centerY!);
       await this.sleep(150);
 
-      // Step 3: Clear existing content if requested
-      if (params.clearFirst !== false) { // Default true
+      if (params.clearFirst !== false) {
         await this.clearInput();
         await this.sleep(100);
       }
 
-      // Step 4: Type the text using CDP
       const typeSuccess = await this.typeText(params.text);
       if (!typeSuccess) {
         return this.createErrorResult('type', startTime, {
@@ -64,14 +56,12 @@ export class TypeHandler extends BaseHandler {
         });
       }
 
-      // Step 5: Press Enter if requested
       if (params.pressEnter) {
         await this.sleep(100);
         await this.pressKey('Enter');
         console.log('[TypeHandler] ↵ Pressed Enter');
       }
 
-      // Wait for effects
       await this.sleep(300);
 
       const executionTime = Date.now() - startTime;
@@ -95,11 +85,6 @@ export class TypeHandler extends BaseHandler {
     }
   }
 
-  /**
-   * UNIFIED SCRIPT: Find + Score + Prepare input element
-   * 
-   * Returns the center coordinates of the best matching input element
-   */
   private async executeFindAndPrepare(params: TypeParams): Promise<{
     success: boolean;
     error?: string;

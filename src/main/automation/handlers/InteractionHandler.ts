@@ -10,7 +10,6 @@ export class InteractionHandler extends BaseHandler {
     const startTime = Date.now();
 
     try {
-      // Focus element if specified (using unified find + focus)
       if (params.focusElement) {
         const focusResult = await this.findAndFocusElement(params.focusElement);
         
@@ -21,7 +20,6 @@ export class InteractionHandler extends BaseHandler {
         }
       }
 
-      // Build modifiers
       let modifiersBitmask = 0;
       if (params.modifiers) {
         for (const mod of params.modifiers) {
@@ -35,7 +33,6 @@ export class InteractionHandler extends BaseHandler {
       const cdp = this.view.webContents.debugger;
       if (!cdp.isAttached()) cdp.attach('1.3');
 
-      // Key down
       await cdp.sendCommand('Input.dispatchKeyEvent', {
         type: 'keyDown',
         key: params.key,
@@ -45,7 +42,6 @@ export class InteractionHandler extends BaseHandler {
 
       await this.sleep(50);
 
-      // Key up
       await cdp.sendCommand('Input.dispatchKeyEvent', {
         type: 'keyUp',
         key: params.key,
@@ -85,7 +81,6 @@ export class InteractionHandler extends BaseHandler {
 
     try {
       if (params.toElement) {
-        // Scroll to element
         const scrollScript = `
           (function() {
             const el = document.querySelector(${JSON.stringify(params.toElement)});
@@ -107,7 +102,6 @@ export class InteractionHandler extends BaseHandler {
           });
         }
       } else {
-        // Scroll by direction/amount
         const direction = params.direction || 'down';
         const amount = params.amount || 500;
 
@@ -163,10 +157,8 @@ export class InteractionHandler extends BaseHandler {
             'value', 'checked', 'selected'
           ];
           
-          // Find candidates
           let candidates = Array.from(document.getElementsByTagName(targetTag));
           
-          // Filter by stable attributes
           const stableAttrKeys = Object.keys(targetAttrs).filter(key => 
             !DYNAMIC_ATTRIBUTES.includes(key) && targetAttrs[key]
           );
@@ -181,7 +173,6 @@ export class InteractionHandler extends BaseHandler {
             return { success: false, error: 'No matching elements found' };
           }
           
-          // Score candidates
           const scored = candidates.map(el => {
             let score = 0;
             
@@ -213,12 +204,10 @@ export class InteractionHandler extends BaseHandler {
           const best = scored[0];
           const element = best.element;
           
-          // Focus element
           if (typeof element.focus === 'function') {
             element.focus();
           }
           
-          // Scroll into view
           element.scrollIntoView({ behavior: 'auto', block: 'center', inline: 'center' });
           await new Promise(resolve => setTimeout(resolve, 300));
           
@@ -234,7 +223,6 @@ export class InteractionHandler extends BaseHandler {
       const result = await this.view.webContents.executeJavaScript(script);
       
       if (result.success && result.centerX && result.centerY) {
-        // Additional CDP click to ensure focus
         const cdp = this.view.webContents.debugger;
 
         await cdp.sendCommand('Input.dispatchMouseEvent', {

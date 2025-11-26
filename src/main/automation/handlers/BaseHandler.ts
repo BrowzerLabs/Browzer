@@ -15,9 +15,6 @@ export abstract class BaseHandler {
     this.tabId = context.tabId;
   }
 
-  /**
-   * Get current page URL
-   */
   protected getUrl(): string {
     return this.view.webContents.getURL();
   }
@@ -36,9 +33,6 @@ export abstract class BaseHandler {
     };
   }
 
-  /**
-   * Sleep utility
-   */
   protected sleep(ms: number): Promise<void> {
     return new Promise(resolve => setTimeout(resolve, ms));
   }

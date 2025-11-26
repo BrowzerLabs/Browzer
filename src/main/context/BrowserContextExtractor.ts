@@ -37,7 +37,6 @@ export class BrowserContextExtractor {
     try {
       console.log('[ContextExtractor] 📊 Starting context extraction');
 
-      // Execute unified extraction script
       const result = await this.executeExtractionScript(options);
 
       if (!result.success) {
@@ -253,36 +252,50 @@ export class BrowserContextExtractor {
           });
           
           // ============================================================================
-          // STEP 5: EXTRACT FORMS
+          // STEP 5: EXTRACT FORMS (only if elementTags is empty OR contains 'FORM')
           // ============================================================================
-          const forms = Array.from(document.querySelectorAll('form')).map(form => {
-            const fields = Array.from(form.querySelectorAll('input, textarea, select')).map(field => {
-              // Find associated label
-              let label = '';
-              if (field.id) {
-                const labelEl = document.querySelector('label[for="' + field.id + '"]');
-                if (labelEl) label = labelEl.textContent?.trim() || '';
-              }
-              if (!label && field.parentElement?.tagName === 'LABEL') {
-                label = field.parentElement.textContent?.trim() || '';
-              }
+          let forms = [];
+          
+          // Only extract forms if:
+          // 1. elementTags is not provided (null/undefined) - extract everything
+          // 2. elementTags is empty array - extract everything  
+          // 3. elementTags contains 'FORM' - specifically requested
+          const shouldExtractForms = !elementTags || elementTags.length === 0 || 
+                                     elementTags.map(t => t.toUpperCase()).includes('FORM');
+          
+          if (shouldExtractForms) {
+            forms = Array.from(document.querySelectorAll('form')).map(form => {
+              const fields = Array.from(form.querySelectorAll('input, textarea, select')).map(field => {
+                // Find associated label
+                let label = '';
+                if (field.id) {
+                  const labelEl = document.querySelector('label[for="' + field.id + '"]');
+                  if (labelEl) label = labelEl.textContent?.trim() || '';
+                }
+                if (!label && field.parentElement?.tagName === 'LABEL') {
+                  label = field.parentElement.textContent?.trim() || '';
+                }
+                
+                return {
+                  name: field.getAttribute('name') || '',
+                  type: field.getAttribute('type') || field.tagName.toLowerCase(),
+                  label: label || undefined,
+                  required: field.hasAttribute('required') || field.getAttribute('aria-required') === 'true',
+                  selector: field.id ? '#' + field.id : (field.getAttribute('name') ? '[name="' + field.getAttribute('name') + '"]' : '')
+                };
+              });
               
               return {
-                name: field.getAttribute('name') || '',
-                type: field.getAttribute('type') || field.tagName.toLowerCase(),
-                label: label || undefined,
-                required: field.hasAttribute('required') || field.getAttribute('aria-required') === 'true',
-                selector: field.id ? '#' + field.id : (field.getAttribute('name') ? '[name="' + field.getAttribute('name') + '"]' : '')
+                action: form.getAttribute('action') || undefined,
+                method: form.getAttribute('method') || undefined,
+                selector: form.id ? '#' + form.id : 'form',
+                fields
               };
             });
-            
-            return {
-              action: form.getAttribute('action') || undefined,
-              method: form.getAttribute('method') || undefined,
-              selector: form.id ? '#' + form.id : 'form',
-              fields
-            };
-          });
+            console.log('[ContextExtract] 📝 Extracted', forms.length, 'forms');
+          } else {
+            console.log('[ContextExtract] ⏭️ Skipping form extraction (FORM not in elementTags)');
+          }
           
           // ============================================================================
           // STEP 6: RETURN STRUCTURED CONTEXT
