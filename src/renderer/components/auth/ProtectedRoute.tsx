@@ -56,7 +56,7 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
   // Loading state
   if (loading) {
     return (
-      <div className="h-screen flex flex-col gap-2 items-center justify-center animate-pulse">
+      <div className="h-screen flex flex-col gap-2 items-center justify-center animate-pulse text-primary dark:text-cyan-200">
         <ShieldCheckIcon className="size-10" />
         <p className='text-xs'>Verifying wheather its really you</p>
       </div>

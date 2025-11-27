@@ -48,6 +48,23 @@ let mainWindow: MainWindow | null = null;
 
 const createWindow = () => {
   mainWindow = new MainWindow();
+  
+  const window = mainWindow.getWindow();
+  if (window) {
+    // Use 'close' event to cleanup before window is destroyed
+    window.on('close', () => {
+      console.log('[Main] Window closing, cleaning up...');
+      if (mainWindow) {
+        mainWindow.destroy();
+      }
+    });
+    
+    // Use 'closed' event to nullify reference after window is destroyed
+    window.on('closed', () => {
+      mainWindow = null;
+      console.log('[Main] Window closed, ready for dock icon click');
+    });
+  }
 };
 
 
@@ -71,7 +88,9 @@ app.on('window-all-closed', () => {
 });
 
 app.on('activate', () => {
-  if (mainWindow === null) {
+  if (mainWindow === null || mainWindow.getWindow() === null) {
+    mainWindow = null;
     createWindow();
+    console.log('Main Window recreated');
   }
 });

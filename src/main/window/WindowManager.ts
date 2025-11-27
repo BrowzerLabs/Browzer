@@ -88,6 +88,9 @@ export class WindowManager {
   }
 
   public destroy(): void {
-    this.baseWindow.close();
+    // Only nullify references - don't call close() as it causes infinite loop
+    // The window is already being closed when this is called from the 'close' event
+    this.baseWindow = null;
+    this.browserUIView = null;
   }
 }

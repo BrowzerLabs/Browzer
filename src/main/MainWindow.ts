@@ -101,8 +101,12 @@ export class MainWindow {
   }
 
   public destroy(): void {
-    this.ipcHandlers.cleanup();
-    this.browserManager.destroy();
-    this.windowManager.destroy();
+    try {
+      this.ipcHandlers.cleanup();
+      this.browserManager.destroy();
+      this.windowManager.destroy();
+    } catch (error) {
+      console.log('[MainWindow] Cleanup error (safe to ignore):', error);
+    }
   }
 }

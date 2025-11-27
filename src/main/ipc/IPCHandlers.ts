@@ -459,6 +459,116 @@ export class IPCHandlers {
   }
 
   public cleanup(): void {
+    const handlers = [
+      // Tab handlers
+      'browser:initialize',
+      'browser:create-tab',
+      'browser:close-tab',
+      'browser:switch-tab',
+      'browser:get-tabs',
+      // Navigation handlers
+      'browser:navigate',
+      'browser:go-back',
+      'browser:go-forward',
+      'browser:reload',
+      'browser:stop',
+      'browser:can-go-back',
+      'browser:can-go-forward',
+      // Sidebar handlers
+      'browser:set-sidebar-state',
+      // Recording handlers
+      'browser:start-recording',
+      'browser:stop-recording',
+      'browser:save-recording',
+      'browser:get-all-recordings',
+      'browser:delete-recording',
+      'browser:is-recording',
+      'browser:get-recorded-actions',
+      'browser:export-recording',
+      'video:open-file',
+      'video:get-file-url',
+      // Settings handlers
+      'settings:get-all',
+      'settings:get-category',
+      'settings:update',
+      'settings:update-category',
+      'settings:reset-all',
+      'settings:reset-category',
+      'settings:export',
+      'settings:import',
+      // History handlers
+      'history:get-all',
+      'history:search',
+      'history:get-today',
+      'history:get-last-n-days',
+      'history:delete-entry',
+      'history:delete-entries',
+      'history:delete-by-date-range',
+      'history:clear-all',
+      'history:get-stats',
+      'history:get-most-visited',
+      'history:get-recently-visited',
+      // Window handlers
+      'window:toggle-maximize',
+      // Password handlers
+      'password:get-all',
+      'password:save',
+      'password:get-for-origin',
+      'password:get-password',
+      'password:update',
+      'password:delete',
+      'password:delete-multiple',
+      'password:search',
+      'password:get-blacklist',
+      'password:add-to-blacklist',
+      'password:remove-from-blacklist',
+      'password:is-blacklisted',
+      'password:export',
+      'password:import',
+      'password:get-stats',
+      // Automation handlers
+      'automation:execute-llm',
+      'automation:stop',
+      'automation:load-session',
+      'automation:get-session-history',
+      'automation:get-sessions',
+      'automation:get-session-details',
+      'automation:resume-session',
+      'automation:delete-session',
+      // Auth handlers
+      'auth:sign-up',
+      'auth:sign-in',
+      'auth:sign-in-google',
+      'auth:sign-out',
+      'auth:get-session',
+      'auth:get-user',
+      'auth:refresh-session',
+      'auth:update-profile',
+      'auth:verify-token',
+      'auth:resend-confirmation',
+      'auth:send-password-reset',
+      'auth:update-password',
+      // Subscription handlers
+      'subscription:get-plans',
+      'subscription:get-current',
+      'subscription:create-checkout',
+      'subscription:create-portal',
+      'subscription:use-credits',
+      'subscription:sync',
+      'subscription:has-credits',
+      'subscription:get-credits-remaining',
+      // Shell handlers
+      'shell:open-external',
+      // Deep link handlers
+      'deeplink:hide-tabs',
+      'deeplink:show-tabs',
+      'deeplink:navigate-tab',
+    ];
+
+    handlers.forEach(channel => {
+      ipcMain.removeHandler(channel);
+    });
+
     ipcMain.removeAllListeners();
   }
 }

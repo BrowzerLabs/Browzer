@@ -149,6 +149,10 @@ export class TabManager extends EventEmitter {
     
     this.emit('tab:closed', tabId, newActiveTabId, wasActiveTab);
     
+    if (this.tabs.size === 0) {
+      this.baseWindow.close();
+    }
+    
     return true;
   }
 
@@ -291,9 +295,20 @@ export class TabManager extends EventEmitter {
 
   public destroy(): void {
     this.tabs.forEach(tab => {
-      this.debuggerManager.cleanupDebugger(tab.view, tab.id);
-      this.baseWindow.contentView.removeChildView(tab.view);
-      tab.view.webContents.close();
+      try {
+        this.debuggerManager.cleanupDebugger(tab.view, tab.id);
+        
+        // Only try to remove/close if not already destroyed
+        if (tab.view && !tab.view.webContents.isDestroyed()) {
+          if (this.baseWindow && !this.baseWindow.isDestroyed()) {
+            this.baseWindow.contentView.removeChildView(tab.view);
+          }
+          tab.view.webContents.close();
+        }
+      } catch (error) {
+        // Ignore errors during cleanup - objects may already be destroyed
+        console.log('[TabManager] Cleanup error (safe to ignore):', error);
+      }
     });
     this.tabs.clear();
   }
