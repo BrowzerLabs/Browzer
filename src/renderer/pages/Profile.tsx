@@ -18,6 +18,7 @@ import {
   CheckCircle2Icon
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { CopyableInput } from '../components/common/CopyableInput';
 
 export default function Profile() {
   const { user, updateProfile, loading } = useAuth();
@@ -230,19 +231,7 @@ export default function Profile() {
               )}
             </div>
 
-            <div className="flex items-center justify-between py-3">
-              <div className="flex items-center gap-3">
-                <User className="h-5 w-5 text-slate-400" />
-                <div>
-                  <p className="text-sm font-medium text-slate-900 dark:text-white">
-                    User ID
-                  </p>
-                  <p className="text-sm text-slate-600 dark:text-slate-400 font-mono">
-                    {user.id.slice(0, 20)}...
-                  </p>
-                </div>
-              </div>
-            </div>
+            <CopyableInput value={user.id} label="User ID"/>
           </CardContent>
         </Card>
 

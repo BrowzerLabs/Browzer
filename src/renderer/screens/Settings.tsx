@@ -87,7 +87,7 @@ export function Settings() {
       </div>
 
       {/* Settings Content */}
-      <div className='flex flex-1 overflow-hidden'>
+      <div className='flex flex-1'>
         <Tabs
           value={activeTab}
           onValueChange={setActiveTab}
