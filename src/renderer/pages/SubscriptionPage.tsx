@@ -31,6 +31,7 @@ export function SubscriptionPage() {
   const [loading, setLoading] = useState(true);
   const [upgrading, setUpgrading] = useState(false);
   const [syncing, setSyncing] = useState(false);
+  const [portalLoading, setPortalLoading] = useState(false);
 
   useEffect(() => {
     loadSubscription();
@@ -86,6 +87,7 @@ export function SubscriptionPage() {
 
   const handleManageSubscription = async () => {
     try {
+      setPortalLoading(true);
       const response = await window.subscriptionAPI.createPortalSession({
         return_url: 'browzer://subscription',
       });
@@ -98,6 +100,8 @@ export function SubscriptionPage() {
     } catch (error) {
       console.error('Failed to open portal:', error);
       alert('Failed to open subscription portal');
+    } finally {
+      setPortalLoading(false);
     }
   };
 
@@ -279,12 +283,19 @@ export function SubscriptionPage() {
                   <span className="text-sm">Billing</span>
                 </div>
                 <Button
+                  size="lg"
                   variant="outline"
                   onClick={handleManageSubscription}
                   className="gap-2"
+                  disabled={portalLoading}
                 >
-                  Manage Billing
-                  <ExternalLink className="w-4 h-4" />
+                  {
+                    portalLoading ? (
+                      <Loader2Icon className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <span className="flex items-center gap-2">Manage Billing <ExternalLink className="w-4 h-4" /></span>
+                    )
+                  }
                 </Button>
               </div>
             )}
