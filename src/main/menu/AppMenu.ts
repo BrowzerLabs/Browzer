@@ -1,5 +1,4 @@
-import { app, Menu, dialog } from 'electron';
-import log from 'electron-log';
+import { app, BaseWindow, BrowserWindow, Menu } from 'electron';
 import { TabManager } from '@/main/browser/TabManager';
 import { UpdateService } from '@/main/UpdateService';
 
@@ -27,6 +26,18 @@ export class AppMenu {
   ) {
     this.tabManager = tabManager;
     this.updateService = updateService;
+  }
+
+  private hasActiveWindow(): boolean {
+    return BaseWindow.getAllWindows().length > 0;
+  }
+
+  private ensureWindow(): boolean {
+    if (!this.hasActiveWindow()) {
+      app.emit('activate');
+      return false;
+    }
+    return true;
   }
 
   public setupMenu(): void {
@@ -63,15 +74,18 @@ export class AppMenu {
             label: 'New Tab',
             accelerator: this.keys.newTab,
             click: () => {
-              this.tabManager.createTab();
+              if (this.ensureWindow()) {
+                this.tabManager.createTab();
+              }
             },
           },
           {
             label: 'New Window',
             accelerator: this.keys.newWindow,
             click: () => {
-              // For now, create a new tab. In future, this could open a new window
-              this.tabManager.createTab();
+              if (this.ensureWindow()) {
+                this.tabManager.createTab();
+              }
             },
           },
           { type: 'separator' as const },
@@ -79,6 +93,7 @@ export class AppMenu {
             label: 'Close Tab',
             accelerator: this.keys.closeTab,
             click: () => {
+              if (!this.hasActiveWindow()) return;
               const { activeTabId } = this.tabManager.getAllTabs();
               if (activeTabId) {
                 this.tabManager.closeTab(activeTabId);
@@ -128,6 +143,7 @@ export class AppMenu {
             label: 'Back',
             accelerator: this.keys.back,
             click: () => {
+              if (!this.hasActiveWindow()) return;
               const activeTabId = this.tabManager.getActiveTabId();
               if (activeTabId) {
                 this.tabManager.goBack(activeTabId);
@@ -138,6 +154,7 @@ export class AppMenu {
             label: 'Forward',
             accelerator: this.keys.forward,
             click: () => {
+              if (!this.hasActiveWindow()) return;
               const activeTabId = this.tabManager.getActiveTabId();
               if (activeTabId) {
                 this.tabManager.goForward(activeTabId);
@@ -149,6 +166,7 @@ export class AppMenu {
             label: 'Reload',
             accelerator: this.keys.reload,
             click: () => {
+              if (!this.hasActiveWindow()) return;
               const activeTabId = this.tabManager.getActiveTabId();
               if (activeTabId) {
                 this.tabManager.reload(activeTabId);
@@ -159,6 +177,7 @@ export class AppMenu {
             label: 'Force Reload',
             accelerator: this.keys.forceReload,
             click: () => {
+              if (!this.hasActiveWindow()) return;
               const activeTabId = this.tabManager.getActiveTabId();
               if (activeTabId) {
                 this.tabManager.reload(activeTabId);
@@ -184,6 +203,7 @@ export class AppMenu {
             label: 'Select Next Tab',
             accelerator: this.keys.nextTab,
             click: () => {
+              if (!this.hasActiveWindow()) return;
               this.tabManager.selectNextTab();
             },
           },
@@ -191,6 +211,7 @@ export class AppMenu {
             label: 'Select Previous Tab',
             accelerator: this.keys.prevTab,
             click: () => {
+              if (!this.hasActiveWindow()) return;
               this.tabManager.selectPreviousTab();
             },
           },
@@ -200,6 +221,7 @@ export class AppMenu {
             label: `Select Tab ${i + 1}`,
             accelerator: this.isMac ? `Cmd+${i + 1}` : `Ctrl+${i + 1}`,
             click: () => {
+              if (!this.hasActiveWindow()) return;
               this.tabManager.selectTabByIndex(i);
             },
           })),
@@ -224,13 +246,17 @@ export class AppMenu {
           {
             label: 'Learn More',
             click: () => {
-              this.tabManager.createTab('https://trybrowzer.com');
+              if (this.ensureWindow()) {
+                this.tabManager.createTab('https://trybrowzer.com');
+              }
             },
           },
           {
             label: 'Documentation',
             click: () => {
-              this.tabManager.createTab('https://docs.trybrowzer.com');
+              if (this.ensureWindow()) {
+                this.tabManager.createTab('https://docs.trybrowzer.com');
+              }
             },
           },
           { type: 'separator' as const },
