@@ -2,7 +2,7 @@ import { app, WebContents, dialog } from 'electron';
 import { autoUpdater, UpdateInfo, ProgressInfo } from 'electron-updater';
 import log from 'electron-log';
 
-export class UpdaterManager {
+export class UpdateService {
   private webContents: WebContents | null = null;
   private updateCheckInterval: NodeJS.Timeout | null = null;
   private isDownloading = false;

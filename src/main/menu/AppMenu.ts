@@ -1,11 +1,11 @@
 import { app, Menu, dialog } from 'electron';
 import log from 'electron-log';
 import { TabManager } from '@/main/browser/TabManager';
-import { UpdaterManager } from '@/main/updater';
+import { UpdateService } from '@/main/UpdateService';
 
 export class AppMenu {
   private tabManager: TabManager;
-  private updaterManager: UpdaterManager;
+  private updateService: UpdateService;
 
   private isMac = process.platform === 'darwin';
 
@@ -23,10 +23,10 @@ export class AppMenu {
 
   constructor(
     tabManager: TabManager,
-    updaterManager: UpdaterManager
+    updateService: UpdateService
   ) {
     this.tabManager = tabManager;
-    this.updaterManager = updaterManager;
+    this.updateService = updateService;
   }
 
   public setupMenu(): void {
@@ -257,6 +257,6 @@ export class AppMenu {
   }
 
   private async handleCheckForUpdates(): Promise<void> {
-    await this.updaterManager.checkForUpdates(true);
+    await this.updateService.checkForUpdates(true);
   }
 }

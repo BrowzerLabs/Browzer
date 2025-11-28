@@ -4,18 +4,18 @@ import { DeepLinkService } from '@/main/deeplink/DeepLinkService';
 import { ConnectionService } from './api';
 import { AuthService } from '@/main/auth/AuthService';
 import { AppMenu } from '@/main/menu/AppMenu';
-import { UpdaterManager } from './updater';
+import { UpdateService } from './UpdateService';
 import { BaseWindow, WebContentsView, dialog } from 'electron';
 import path from 'node:path';
 
-export class MainWindow {
+export class MainService {
   private browserManager: BrowserManager;
   private connectionService: ConnectionService;
   private authService: AuthService;
   private ipcHandlers: IPCHandlers;
   private deepLinkService: DeepLinkService;
   private appMenu: AppMenu;
-  private updaterManager: UpdaterManager;
+  private updateService: UpdateService;
   private baseWindow: BaseWindow | null = null;
   private browserView: WebContentsView | null = null;
   private sidebarVisible = true;
@@ -51,7 +51,7 @@ export class MainWindow {
 
     this.browserManager = new BrowserManager(this.baseWindow, this.browserView);
 
-    this.updaterManager = new UpdaterManager(this.browserView.webContents);
+    this.updateService = new UpdateService(this.browserView.webContents);
 
     this.deepLinkService = new DeepLinkService(this.baseWindow, this.browserView.webContents);
 
@@ -67,7 +67,7 @@ export class MainWindow {
       this.authService
     );
 
-    this.appMenu = new AppMenu(this.browserManager.getTabManager(), this.updaterManager);
+    this.appMenu = new AppMenu(this.browserManager.getTabManager(), this.updateService);
     this.appMenu.setupMenu();
 
     if (MAIN_WINDOW_VITE_DEV_SERVER_URL) {

@@ -1,6 +1,6 @@
 import { app, protocol, net, dialog } from 'electron';
 import started from 'electron-squirrel-startup';
-import { MainWindow } from './main/MainWindow';
+import { MainService } from './main/MainService';
 import path from 'path';
 
 if (started) {
@@ -48,15 +48,15 @@ protocol.registerSchemesAsPrivileged([
   }
 ]);
 
-let mainWindow: MainWindow | null = null;
+let mainService: MainService | null = null;
 
 const createWindow = () => {
-  mainWindow = new MainWindow();
+  mainService = new MainService();
   
-  const baseWindow = mainWindow.getBaseWindow();
+  const baseWindow = mainService.getBaseWindow();
   if (baseWindow) {
     baseWindow.on('closed', () => {
-      mainWindow = null;
+      mainService = null;
     });
   }
 };
@@ -80,15 +80,15 @@ app.on('window-all-closed', () => {
 });
 
 app.on('before-quit', () => {
-  if (mainWindow) {
-    mainWindow.destroy();
-    mainWindow = null;
+  if (mainService) {
+    mainService.destroy();
+    mainService = null;
   }
 });
 
 app.on('activate', () => {
-  if (mainWindow === null || mainWindow.getBaseWindow() === null) {
-    mainWindow = null;
+  if (mainService === null || mainService.getBaseWindow() === null) {
+    mainService = null;
     createWindow();
   }
 });
