@@ -1,12 +1,10 @@
-import { useState, useEffect, KeyboardEvent } from 'react';
-import { ArrowLeft, ArrowRight, RotateCw, X, Lock, Globe, Circle, Square, Settings, Clock, User, MoreVertical, Video, ChevronRight, ChevronLeft, Loader2, LogOut, DiamondIcon, Download } from 'lucide-react';
+import { ArrowLeft, ArrowRight, RotateCw, X, Circle, Square, Settings, Clock, MoreVertical, Video, ChevronRight, ChevronLeft, Loader2, LogOut, DiamondIcon, Download } from 'lucide-react';
 import type { TabInfo } from '@/shared/types';
 import { cn } from '@/renderer/lib/utils';
 import { useSidebarStore } from '@/renderer/store/useSidebarStore';
 import { useRecording } from '@/renderer/hooks/useRecording';
 import { useAuth } from '@/renderer/hooks/useAuth';
 import { useUpdateProgress } from '@/renderer/hooks/useUpdateProgress';
-import { Input } from '@/renderer/ui/input';
 import ThemeToggle from '@/renderer/ui/theme-toggle';
 import { Button } from '@/renderer/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/renderer/ui/avatar';
@@ -17,6 +15,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/renderer/ui/dropdown-menu';
+import { AddressBar } from '@/renderer/components/AddressBar';
 
 interface NavigationBarProps {
   activeTab: TabInfo | null;
@@ -35,37 +34,16 @@ export function NavigationBar({
   onReload,
   onStop,
 }: NavigationBarProps) {
-  const [urlInput, setUrlInput] = useState('');
-  const [isEditing, setIsEditing] = useState(false);
   const { isVisible: isSidebarVisible, toggleSidebar } = useSidebarStore();
   const { isRecording, isLoading, toggleRecording } = useRecording();
   const { user, signOut, loading } = useAuth();
   const { isDownloading, progress, version } = useUpdateProgress();
 
-  // Update URL input when active tab changes
-  useEffect(() => {
-    if (activeTab && !isEditing) {
-      setUrlInput(activeTab.url);
-    }
-  }, [activeTab, isEditing]);
-
-  const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter') {
-      onNavigate(urlInput);
-      setIsEditing(false);
-      (e.target as HTMLInputElement).blur();
-    } else if (e.key === 'Escape') {
-      setUrlInput(activeTab?.url || '');
-      setIsEditing(false);
-      (e.target as HTMLInputElement).blur();
-    }
-  };
-
   const handleSignOut = async () => {
     await signOut();
   };
 
-  const isSecure = activeTab?.url.startsWith('https://');
+  const isSecure = activeTab?.url.startsWith('https://') ?? false;
 
   return (
     <div className="flex items-center h-12 px-3 gap-2">
@@ -100,29 +78,11 @@ export function NavigationBar({
         </NavButton>
       </div>
 
-      {/* Address Bar */}
-      <div className="flex-1 flex items-center rounded-lg pl-3 h-9 gap-2">
-        {/* Security Icon */}
-        <div className="flex-shrink-0">
-          {isSecure ? (
-            <Lock className="w-4 h-4 text-green-500" />
-          ) : (
-            <Globe className="w-4 h-4 text-gray-500" />
-          )}
-        </div>
-
-        {/* URL Input */}
-        <Input
-          type="text"
-          value={urlInput}
-          onChange={(e) => setUrlInput(e.target.value)}
-          onFocus={() => setIsEditing(true)}
-          onBlur={() => setIsEditing(false)}
-          onKeyDown={handleKeyDown}
-          placeholder="Search or enter address"
-          className="rounded-full focus-visible:ring-1 focus-visible:ring-gray-300 focus-visible:border-gray-800 dark:focus-visible:border-gray-200"
-        />
-      </div>
+      <AddressBar
+        currentUrl={activeTab?.url || ''}
+        isSecure={isSecure}
+        onNavigate={onNavigate}
+      />
 
       {/* Update Progress Indicator */}
       {isDownloading && (

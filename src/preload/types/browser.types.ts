@@ -1,8 +1,6 @@
-import type { TabInfo, HistoryEntry, HistoryQuery, HistoryStats, AppSettings } from '@/shared/types';
+import type { TabInfo, HistoryEntry, HistoryQuery, HistoryStats, AppSettings, AutocompleteSuggestion } from '@/shared/types';
 
-/**
- * Browser API - Handles tab management, navigation, and browser operations
- */
+
 export interface BrowserAPI {
   // Initialization
   initializeBrowser: () => Promise<boolean>;
@@ -86,6 +84,10 @@ export interface BrowserAPI {
   getHistoryStats: () => Promise<HistoryStats>;
   getMostVisited: (limit?: number) => Promise<HistoryEntry[]>;
   getRecentlyVisited: (limit?: number) => Promise<HistoryEntry[]>;
+
+  // Autocomplete
+  getAutocompleteSuggestions: (query: string) => Promise<AutocompleteSuggestion[]>;
+  getSearchSuggestions: (query: string) => Promise<string[]>;
 
   // LLM Automation
   executeLLMAutomation: (userGoal: string, recordedSessionId: string) => Promise<{

@@ -110,6 +110,10 @@ export const createBrowserAPI = (): BrowserAPI => ({
   getMostVisited: (limit?: number) => invoke('history:get-most-visited', limit),
   getRecentlyVisited: (limit?: number) => invoke('history:get-recently-visited', limit),
 
+  // Autocomplete API
+  getAutocompleteSuggestions: (query: string) => invoke('autocomplete:get-suggestions', query),
+  getSearchSuggestions: (query: string) => invoke('autocomplete:get-search-suggestions', query),
+
   // LLM Automation API
   executeLLMAutomation: (userGoal: string, recordedSessionId: string) =>
     invoke('automation:execute-llm', userGoal, recordedSessionId),
