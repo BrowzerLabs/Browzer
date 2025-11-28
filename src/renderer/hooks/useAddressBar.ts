@@ -2,47 +2,28 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import type { AutocompleteSuggestion } from '@/shared/types';
 
 interface UseAddressBarOptions {
-  /** Debounce delay in milliseconds */
   debounceMs?: number;
-  /** Minimum characters before fetching suggestions */
   minChars?: number;
-  /** Include Google search suggestions */
   includeSearchSuggestions?: boolean;
 }
 
 interface UseAddressBarReturn {
-  /** Current input value */
   inputValue: string;
-  /** Set input value */
   setInputValue: (value: string) => void;
-  /** Autocomplete suggestions */
+  setInputValueSilent: (value: string) => void;
   suggestions: AutocompleteSuggestion[];
-  /** Google search suggestions */
   searchSuggestions: string[];
-  /** Whether suggestions are loading */
   isLoading: boolean;
-  /** Whether dropdown is open */
   isOpen: boolean;
-  /** Set dropdown open state */
   setIsOpen: (open: boolean) => void;
-  /** Currently selected suggestion index (-1 for none) */
   selectedIndex: number;
-  /** Set selected index */
   setSelectedIndex: (index: number) => void;
-  /** Handle keyboard navigation */
   handleKeyDown: (e: React.KeyboardEvent<HTMLInputElement>) => string | null;
-  /** Clear suggestions */
   clearSuggestions: () => void;
-  /** Get total suggestion count (combined) */
   totalSuggestions: number;
-  /** Fetch suggestions manually */
   fetchSuggestions: (query: string) => Promise<void>;
 }
 
-/**
- * Custom hook for managing address bar autocomplete state
- * Handles debouncing, keyboard navigation, and suggestion fetching
- */
 export function useAddressBar(options: UseAddressBarOptions = {}): UseAddressBarReturn {
   const {
     debounceMs = 150,
@@ -50,7 +31,7 @@ export function useAddressBar(options: UseAddressBarOptions = {}): UseAddressBar
     includeSearchSuggestions = true,
   } = options;
 
-  const [inputValue, setInputValue] = useState('');
+  const [inputValue, setInputValueState] = useState('');
   const [suggestions, setSuggestions] = useState<AutocompleteSuggestion[]>([]);
   const [searchSuggestions, setSearchSuggestions] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -59,24 +40,27 @@ export function useAddressBar(options: UseAddressBarOptions = {}): UseAddressBar
 
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const lastTabVisibilityRef = useRef<boolean | null>(null);
 
-  // Hide/show tabs when dropdown opens/closes
+  const showDropdown = isOpen && (suggestions.length > 0 || searchSuggestions.length > 0);
+
   useEffect(() => {
-    if (isOpen) {
+    // Only call API when visibility actually changes
+    if (lastTabVisibilityRef.current === showDropdown) {
+      return;
+    }
+    lastTabVisibilityRef.current = showDropdown;
+
+    if (showDropdown) {
       window.browserAPI.hideAllTabs();
     } else {
       window.browserAPI.showAllTabs();
     }
-  }, [isOpen]);
+  }, [showDropdown]);
 
-  // Calculate total suggestions
   const totalSuggestions = suggestions.length + searchSuggestions.length;
 
-  /**
-   * Fetch suggestions from the main process
-   */
   const fetchSuggestions = useCallback(async (query: string) => {
-    // Cancel any pending request
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
     }
@@ -92,14 +76,11 @@ export function useAddressBar(options: UseAddressBarOptions = {}): UseAddressBar
     setIsLoading(true);
 
     try {
-      // Fetch autocomplete suggestions (history + URL detection)
       const autocompleteSuggestions = await window.browserAPI.getAutocompleteSuggestions(query);
       setSuggestions(autocompleteSuggestions);
 
-      // Fetch Google search suggestions if enabled
       if (includeSearchSuggestions && !isLikelyUrl(query)) {
         const googleSuggestions = await window.browserAPI.getSearchSuggestions(query);
-        // Filter out suggestions that are already in autocomplete
         const existingUrls = new Set(autocompleteSuggestions.map((s: { title: string }) => s.title.toLowerCase()));
         const filteredSearchSuggestions = googleSuggestions.filter(
           (s: string) => !existingUrls.has(s.toLowerCase())
@@ -120,28 +101,26 @@ export function useAddressBar(options: UseAddressBarOptions = {}): UseAddressBar
     }
   }, [minChars, includeSearchSuggestions]);
 
-  /**
-   * Debounced input change handler
-   */
-  const handleInputChange = useCallback((value: string) => {
-    setInputValue(value);
+  const setInputValueSilent = useCallback((value: string) => {
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+    }
+    setInputValueState(value);
+  }, []);
 
-    // Clear existing timer
+  const handleInputChange = useCallback((value: string) => {
+    setInputValueState(value);
+
     if (debounceTimerRef.current) {
       clearTimeout(debounceTimerRef.current);
     }
 
-    // Set new debounced fetch
     debounceTimerRef.current = setTimeout(() => {
       fetchSuggestions(value);
     }, debounceMs);
   }, [debounceMs, fetchSuggestions]);
 
-  /**
-   * Handle keyboard navigation
-   * Returns the URL to navigate to, or null if no navigation should occur
-   */
-  const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>): string | null => {
+    const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>): string | null => {
     if (!isOpen && e.key !== 'ArrowDown') {
       return null;
     }
@@ -171,7 +150,7 @@ export function useAddressBar(options: UseAddressBarOptions = {}): UseAddressBar
           if (selectedIndex < suggestions.length) {
             // It's an autocomplete suggestion
             const selected = suggestions[selectedIndex];
-            setInputValue(selected.url);
+            setInputValueState(selected.url);
             setIsOpen(false);
             return selected.url;
           } else {
@@ -179,7 +158,7 @@ export function useAddressBar(options: UseAddressBarOptions = {}): UseAddressBar
             const searchIndex = selectedIndex - suggestions.length;
             const searchQuery = searchSuggestions[searchIndex];
             const searchUrl = `https://www.google.com/search?q=${encodeURIComponent(searchQuery)}`;
-            setInputValue(searchUrl);
+            setInputValueState(searchUrl);
             setIsOpen(false);
             return searchUrl;
           }
@@ -206,9 +185,6 @@ export function useAddressBar(options: UseAddressBarOptions = {}): UseAddressBar
     }
   }, [isOpen, inputValue, selectedIndex, suggestions, searchSuggestions, totalSuggestions, fetchSuggestions]);
 
-  /**
-   * Clear all suggestions
-   */
   const clearSuggestions = useCallback(() => {
     setSuggestions([]);
     setSearchSuggestions([]);
@@ -216,7 +192,6 @@ export function useAddressBar(options: UseAddressBarOptions = {}): UseAddressBar
     setSelectedIndex(-1);
   }, []);
 
-  // Cleanup on unmount
   useEffect(() => {
     return () => {
       if (debounceTimerRef.current) {
@@ -231,6 +206,7 @@ export function useAddressBar(options: UseAddressBarOptions = {}): UseAddressBar
   return {
     inputValue,
     setInputValue: handleInputChange,
+    setInputValueSilent,
     suggestions,
     searchSuggestions,
     isLoading,
@@ -245,29 +221,22 @@ export function useAddressBar(options: UseAddressBarOptions = {}): UseAddressBar
   };
 }
 
-/**
- * Check if input looks like a URL
- */
 function isLikelyUrl(input: string): boolean {
   const trimmed = input.trim();
   
-  // Has protocol
   if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
     return true;
   }
   
-  // Has common TLD
   const tldPattern = /\.(com|org|net|io|dev|co|app|edu|gov|me|info|biz|tv|cc|ai|xyz)($|\/)/i;
   if (tldPattern.test(trimmed)) {
     return true;
   }
   
-  // Looks like domain (contains dot and no spaces)
   if (trimmed.includes('.') && !trimmed.includes(' ') && trimmed.length > 3) {
     return true;
   }
   
-  // localhost or IP address
   if (trimmed.startsWith('localhost') || /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}/.test(trimmed)) {
     return true;
   }

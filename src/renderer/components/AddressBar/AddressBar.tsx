@@ -4,15 +4,12 @@ import { cn } from '@/renderer/lib/utils';
 import { useAddressBar } from '@/renderer/hooks/useAddressBar';
 import { AutocompleteSuggestionType } from '@/shared/types';
 import type { AutocompleteSuggestion } from '@/shared/types';
+import { Input } from '@/renderer/ui/input';
 
 interface AddressBarProps {
-  /** Current URL to display */
   currentUrl: string;
-  /** Whether the current URL is secure (https) */
   isSecure: boolean;
-  /** Callback when user navigates to a URL */
   onNavigate: (url: string) => void;
-  /** Optional className for the container */
   className?: string;
 }
 
@@ -29,6 +26,7 @@ export function AddressBar({
   const {
     inputValue,
     setInputValue,
+    setInputValueSilent,
     suggestions,
     searchSuggestions,
     isLoading,
@@ -44,16 +42,12 @@ export function AddressBar({
     includeSearchSuggestions: true,
   });
 
-  
-
-  // Sync input value with current URL when not editing
   useEffect(() => {
     if (!isEditing) {
-      setInputValue(currentUrl);
+      setInputValueSilent(currentUrl);
     }
-  }, [currentUrl, isEditing, setInputValue]);
+  }, [currentUrl, isEditing, setInputValueSilent]);
 
-  // Handle click outside to close dropdown
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (
@@ -71,20 +65,7 @@ export function AddressBar({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [setIsOpen]);
 
-  /**
-   * Handle input focus
-   */
-  const handleFocus = useCallback(() => {
-    setIsEditing(true);
-    // Select all text on focus (like Chrome)
-    inputRef.current?.select();
-  }, []);
-
-  /**
-   * Handle input blur
-   */
   const handleBlur = useCallback(() => {
-    // Delay to allow click on suggestion
     setTimeout(() => {
       if (!dropdownRef.current?.contains(document.activeElement)) {
         setIsEditing(false);
@@ -93,51 +74,44 @@ export function AddressBar({
     }, 150);
   }, [setIsOpen]);
 
-  /**
-   * Handle keyboard events
-   */
   const handleKeyDown = useCallback((e: KeyboardEvent<HTMLInputElement>) => {
     const navigateUrl = handleAutocompleteKeyDown(e);
     
     if (navigateUrl) {
       onNavigate(navigateUrl);
       setIsEditing(false);
+      clearSuggestions();
       inputRef.current?.blur();
     }
     
     if (e.key === 'Escape') {
-      setInputValue(currentUrl);
+      setInputValueSilent(currentUrl);
       setIsEditing(false);
+      clearSuggestions();
       inputRef.current?.blur();
     }
-  }, [handleAutocompleteKeyDown, onNavigate, setInputValue, currentUrl]);
+  }, [handleAutocompleteKeyDown, onNavigate, setInputValueSilent, currentUrl, clearSuggestions]);
 
   /**
    * Handle suggestion click
    */
   const handleSuggestionClick = useCallback((suggestion: AutocompleteSuggestion) => {
-    setInputValue(suggestion.url);
+    setInputValueSilent(suggestion.url);
     onNavigate(suggestion.url);
     setIsOpen(false);
     setIsEditing(false);
     clearSuggestions();
-  }, [setInputValue, onNavigate, setIsOpen, clearSuggestions]);
+  }, [setInputValueSilent, onNavigate, setIsOpen, clearSuggestions]);
 
-  /**
-   * Handle search suggestion click
-   */
   const handleSearchSuggestionClick = useCallback((query: string) => {
     const searchUrl = `https://www.google.com/search?q=${encodeURIComponent(query)}`;
-    setInputValue(searchUrl);
+    setInputValueSilent(searchUrl);
     onNavigate(searchUrl);
     setIsOpen(false);
     setIsEditing(false);
     clearSuggestions();
-  }, [setInputValue, onNavigate, setIsOpen, clearSuggestions]);
+  }, [setInputValueSilent, onNavigate, setIsOpen, clearSuggestions]);
 
-  /**
-   * Get icon for suggestion type
-   */
   const getSuggestionIcon = (type: AutocompleteSuggestionType) => {
     switch (type) {
       case AutocompleteSuggestionType.HISTORY:
@@ -155,47 +129,36 @@ export function AddressBar({
 
   return (
     <div className={cn('relative flex-1', className)}>
-      {/* Input Container */}
-      <div className="flex items-center rounded-full bg-muted/50 dark:bg-muted/30 h-9 px-3 gap-2 border border-transparent focus-within:border-primary/30 focus-within:bg-background transition-all">
-        {/* Security Icon */}
-        <div className="flex-shrink-0">
-          {isSecure ? (
-            <Lock className="w-4 h-4 text-green-500" />
-          ) : (
-            <Globe className="w-4 h-4 text-muted-foreground" />
-          )}
-        </div>
+      {isSecure ? (
+        <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-green-500 z-10" />
+      ) : (
+        <Globe className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground z-10" />
+      )}
 
-        {/* URL Input */}
-        <input
-          ref={inputRef}
-          type="text"
-          value={inputValue}
-          onChange={(e) => setInputValue(e.target.value)}
-          onFocus={handleFocus}
-          onBlur={handleBlur}
-          onKeyDown={handleKeyDown}
-          placeholder="Search or enter address"
-          className="flex-1 bg-transparent outline-none text-sm placeholder:text-muted-foreground"
-          autoComplete="off"
-          autoCorrect="off"
-          autoCapitalize="off"
-          spellCheck={false}
-        />
+      <Input
+        ref={inputRef}
+        type="text"
+        value={inputValue}
+        onChange={(e) => setInputValue(e.target.value)}
+        onBlur={handleBlur}
+        onKeyDown={handleKeyDown}
+        placeholder="Search or enter address"
+        className="h-9 pl-9 pr-9 rounded-full bg-muted/50 dark:bg-muted/30 text-sm placeholder:text-muted-foreground border-transparent focus:border-primary/30 focus:bg-background transition-all"
+        autoComplete="off"
+        autoCorrect="off"
+        autoCapitalize="off"
+        spellCheck={false}
+      />
 
-        {/* Loading indicator */}
-        {isLoading && (
-          <Loader2 className="w-4 h-4 text-muted-foreground animate-spin" />
-        )}
-      </div>
+      {isLoading && (
+        <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground animate-spin z-10" />
+      )}
 
-      {/* Autocomplete Dropdown */}
       {showDropdown && (
         <div
           ref={dropdownRef}
           className="absolute top-full left-0 right-0 mt-1 bg-popover border border-border rounded-lg shadow-lg overflow-hidden z-50"
         >
-          {/* Autocomplete Suggestions */}
           {suggestions.map((suggestion, index) => (
             <SuggestionItem
               key={suggestion.id}
@@ -207,12 +170,10 @@ export function AddressBar({
             />
           ))}
 
-          {/* Divider between autocomplete and search suggestions */}
           {suggestions.length > 0 && searchSuggestions.length > 0 && (
             <div className="border-t border-border" />
           )}
 
-          {/* Google Search Suggestions */}
           {searchSuggestions.map((query, index) => {
             const globalIndex = suggestions.length + index;
             return (
@@ -231,9 +192,7 @@ export function AddressBar({
   );
 }
 
-/**
- * Individual suggestion item component
- */
+
 interface SuggestionItemProps {
   suggestion: AutocompleteSuggestion;
   isSelected: boolean;
@@ -258,7 +217,6 @@ function SuggestionItem({
       onClick={onClick}
       onMouseEnter={onMouseEnter}
     >
-      {/* Favicon or type icon */}
       <div className="flex-shrink-0 w-5 h-5 flex items-center justify-center">
         {suggestion.favicon ? (
           <img
@@ -266,7 +224,6 @@ function SuggestionItem({
             alt=""
             className="w-4 h-4 rounded"
             onError={(e) => {
-              // Fallback to icon on error
               e.currentTarget.style.display = 'none';
             }}
           />
@@ -275,7 +232,6 @@ function SuggestionItem({
         )}
       </div>
 
-      {/* Content */}
       <div className="flex-1 min-w-0">
         <div className="text-sm font-medium truncate">
           {suggestion.title}
@@ -287,14 +243,12 @@ function SuggestionItem({
         )}
       </div>
 
-      {/* URL preview for history items */}
       {suggestion.type === AutocompleteSuggestionType.HISTORY && (
         <div className="flex-shrink-0 text-xs text-muted-foreground max-w-[200px] truncate">
           {formatUrl(suggestion.url)}
         </div>
       )}
 
-      {/* Visit count badge for frequently visited */}
       {suggestion.visitCount && suggestion.visitCount > 5 && (
         <div className="flex-shrink-0 text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
           {suggestion.visitCount}
@@ -304,9 +258,6 @@ function SuggestionItem({
   );
 }
 
-/**
- * Search suggestion item component
- */
 interface SearchSuggestionItemProps {
   query: string;
   isSelected: boolean;
@@ -329,17 +280,14 @@ function SearchSuggestionItem({
       onClick={onClick}
       onMouseEnter={onMouseEnter}
     >
-      {/* Search icon */}
       <div className="flex-shrink-0 w-5 h-5 flex items-center justify-center">
         <Search className="w-4 h-4 text-muted-foreground" />
       </div>
 
-      {/* Query text */}
       <div className="flex-1 min-w-0">
         <div className="text-sm truncate">{query}</div>
       </div>
 
-      {/* Google search label */}
       <div className="flex-shrink-0 text-xs text-muted-foreground">
         Search Google
       </div>
@@ -347,14 +295,10 @@ function SearchSuggestionItem({
   );
 }
 
-/**
- * Format URL for display (remove protocol and trailing slash)
- */
 function formatUrl(url: string): string {
   try {
     const urlObj = new URL(url);
     let formatted = urlObj.hostname + urlObj.pathname;
-    // Remove trailing slash
     if (formatted.endsWith('/')) {
       formatted = formatted.slice(0, -1);
     }

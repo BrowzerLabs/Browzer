@@ -645,6 +645,9 @@ export class IPCHandlers extends EventEmitter {
       'deeplink:hide-tabs',
       'deeplink:show-tabs',
       'deeplink:navigate-tab',
+
+      'autocomplete:get-suggestions',
+      'autocomplete:get-search-suggestions',
     ];
 
     handlers.forEach(channel => {
