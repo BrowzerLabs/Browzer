@@ -1,5 +1,4 @@
 import { BrowserManager } from '@/main/BrowserManager';
-import { WindowManager } from '@/main/window/WindowManager';
 import { LayoutManager } from '@/main/window/LayoutManager';
 import { IPCHandlers } from '@/main/ipc/IPCHandlers';
 import { DeepLinkService } from '@/main/deeplink/DeepLinkService';
@@ -7,9 +6,10 @@ import { ConnectionService } from './api';
 import { AuthService } from '@/main/auth/AuthService';
 import { AppMenu } from '@/main/menu/AppMenu';
 import { UpdaterManager } from './updater';
+import { BaseWindow, WebContentsView } from 'electron';
+import path from 'node:path';
 
 export class MainWindow {
-  private windowManager: WindowManager;
   private layoutManager: LayoutManager;
   private browserManager: BrowserManager;
   private connectionService: ConnectionService;
@@ -18,95 +18,114 @@ export class MainWindow {
   private deepLinkService: DeepLinkService;
   private appMenu: AppMenu;
   private updaterManager: UpdaterManager;
+  private baseWindow: BaseWindow | null = null;
+  private browserView: WebContentsView | null = null;
+  
 
   constructor() {
-    this.windowManager = new WindowManager();
+    this.baseWindow = new BaseWindow({
+      width: 1400,
+      height: 900,
+      minWidth: 900,
+      minHeight: 700,
+      titleBarStyle: 'hiddenInset',
+      trafficLightPosition: { x: 10, y: 10 },
+      show: false,
+      transparent: true,
+      darkTheme: true,
+      titleBarOverlay: false
+    });
+
+    this.browserView = new WebContentsView({
+      webPreferences: {
+        preload: path.join(__dirname, 'preload.js'),
+        contextIsolation: true,
+        nodeIntegration: false,
+        sandbox: true,
+        transparent: true,
+        zoomFactor: 1,
+      },
+    });
+
+    this.baseWindow.contentView.addChildView(this.browserView);
     
-    const baseWindow = this.windowManager.getWindow();
-    const browserUIView = this.windowManager.getBrowserUIView();
-    
-    this.layoutManager = new LayoutManager(baseWindow);
+    this.layoutManager = new LayoutManager(this.baseWindow);
 
-    this.browserManager = new BrowserManager(baseWindow, browserUIView);
+    this.browserManager = new BrowserManager(this.baseWindow, this.browserView);
 
-    this.updaterManager = new UpdaterManager(browserUIView.webContents);
+    this.updaterManager = new UpdaterManager(this.browserView.webContents);
 
-    this.deepLinkService = new DeepLinkService(baseWindow, browserUIView.webContents);
+    this.deepLinkService = new DeepLinkService(this.baseWindow, this.browserView.webContents);
 
-    this.connectionService = new ConnectionService(browserUIView.webContents);
+    this.connectionService = new ConnectionService(this.browserView.webContents);
 
     this.authService = new AuthService(this.browserManager, this.connectionService);
-    this.authService.restoreSession().catch(err => {
-      console.error('Failed to initialize AuthService:', err);
-    });
     
-    // Set refresh callback for automatic token refresh
     this.connectionService.setRefreshCallback(() => this.authService.refreshSession());
     
     this.ipcHandlers = new IPCHandlers(
+      this.baseWindow,
+      this.browserView,
       this.browserManager,
       this.layoutManager,
-      this.windowManager,
       this.authService
     );
 
-    // Setup application menu
     this.appMenu = new AppMenu(this.browserManager.getTabManager(), this.updaterManager);
     this.appMenu.setupMenu();
 
-    this.windowManager.setupBrowserUI();
+    if (MAIN_WINDOW_VITE_DEV_SERVER_URL) {
+      this.browserView.webContents.loadURL(MAIN_WINDOW_VITE_DEV_SERVER_URL);
+    } else {
+      this.browserView.webContents.loadFile(
+      path.join(__dirname, `../renderer/${MAIN_WINDOW_VITE_NAME}/index.html`),
+      );
+    }
 
     this.updateLayout();
 
-    baseWindow.on('resize', () => {
-      this.updateLayout();
-    });
+    this.setUpWindowEvents();
 
     setTimeout(() => {
-      this.windowManager.show();
-    }, 100);
+      this.baseWindow.show();
+    }, 200);
   }
 
-  /**
-   * Update layout when sidebar state or window size changes
-   */
-  private updateLayout(): void {
-    const browserUIView = this.windowManager.getBrowserUIView();
-    const baseWindow = this.windowManager.getWindow();
-    
-    if (!baseWindow) return;
+  private setUpWindowEvents(): void {
+    if (!this.baseWindow) return;
 
-    const bounds = baseWindow.getBounds();
+    this.baseWindow.on('resize', () => {
+      this.updateLayout();
+    });
+  }
+
+  private updateLayout(): void {
+    const bounds = this.baseWindow.getBounds();
     const sidebarState = this.layoutManager.getSidebarState();
     const sidebarWidth = sidebarState.visible 
       ? Math.floor(bounds.width * (sidebarState.widthPercent / 100))
       : 0;
 
-    // Update agent UI bounds
-    if (browserUIView) {
+    if (this.browserView) {
       const browserUIBounds = this.layoutManager.calculateBrowserUIBounds();
-      browserUIView.setBounds(browserUIBounds);
+      this.browserView.setBounds(browserUIBounds);
     }
 
-    // Update browser manager with window dimensions and sidebar width
     this.browserManager.updateLayout(bounds.width, bounds.height, sidebarWidth);
   }
 
   public getWindow() {
-    return this.windowManager.getWindow();
+    return this.baseWindow;
   }
 
   public getBrowserUIView() {
-    return this.windowManager.getBrowserUIView();
+    return this.browserView;
   }
 
   public destroy(): void {
-    try {
-      this.ipcHandlers.cleanup();
-      this.browserManager.destroy();
-      this.windowManager.destroy();
-    } catch (error) {
-      console.log('[MainWindow] Cleanup error (safe to ignore):', error);
-    }
+    this.ipcHandlers.cleanup();
+    this.browserManager.destroy();
+    this.baseWindow = null;
+    this.browserView = null;
   }
 }

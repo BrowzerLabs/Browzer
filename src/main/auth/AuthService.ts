@@ -26,9 +26,12 @@ export class AuthService {
     this.browserManager = browserManager;
     this.connectionService = connectionService;
     
-    // Listen to token refresh events from TokenManager
     tokenManager.on('token-refresh-needed', () => {
       this.handleTokenRefresh();
+    });
+
+    this.restoreSession().catch(err => {
+      console.error('Failed to initialize AuthService:', err);
     });
   }
 

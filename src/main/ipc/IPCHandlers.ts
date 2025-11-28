@@ -1,8 +1,6 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
-import { ipcMain, shell } from 'electron';
+import { BaseWindow, WebContentsView, ipcMain, shell } from 'electron';
 import { BrowserManager } from '@/main/BrowserManager';
 import { LayoutManager } from '@/main/window/LayoutManager';
-import { WindowManager } from '@/main/window/WindowManager';
 import { SettingsStore } from '@/main/settings/SettingsStore';
 import { PasswordManager } from '@/main/password/PasswordManager';
 import { AuthService } from '@/main/auth';
@@ -11,23 +9,24 @@ import { RecordedAction, HistoryQuery, AppSettings, SignUpCredentials, SignInCre
 import { CheckoutSessionRequest, PortalSessionRequest } from '@/shared/types/subscription';
 import { TabManager } from '@/main/browser';
 
-/**
- * IPCHandlers - Centralized IPC communication setup
- * Registers all IPC handlers for main <-> renderer communication
- */
 export class IPCHandlers {
   private settingsStore: SettingsStore;
   private passwordManager: PasswordManager;
   private tabManager: TabManager;
   private authService: AuthService;
   private subscriptionService: SubscriptionService;
+  private baseWindow: BaseWindow;
+  private browserView: WebContentsView;
 
   constructor(
+    baseWindow: BaseWindow,
+    browserView: WebContentsView,
     private browserManager: BrowserManager,
     private layoutManager: LayoutManager,
-    private windowManager: WindowManager,
     authService: AuthService,
   ) {
+    this.baseWindow = baseWindow;
+    this.browserView = browserView;
     this.tabManager = this.browserManager.getTabManager();
     this.settingsStore = new SettingsStore();
     this.passwordManager = this.browserManager.getPasswordManager();
@@ -245,20 +244,15 @@ export class IPCHandlers {
   }
 
   private updateLayout(): void {
-    const browserUIView = this.windowManager.getBrowserUIView();
-    const baseWindow = this.windowManager.getWindow();
-    
-    if (!baseWindow) return;
-
-    const bounds = baseWindow.getBounds();
+    const bounds = this.baseWindow.getBounds();
     const sidebarState = this.layoutManager.getSidebarState();
     const sidebarWidth = sidebarState.visible 
       ? Math.floor(bounds.width * (sidebarState.widthPercent / 100))
       : 0;
 
-    if (browserUIView) {
+    if (this.browserView) {
       const browserUIBounds = this.layoutManager.calculateBrowserUIBounds();
-      browserUIView.setBounds(browserUIBounds);
+      this.browserView.setBounds(browserUIBounds);
     }
     
     this.browserManager.updateLayout(bounds.width, bounds.height, sidebarWidth);
@@ -266,13 +260,10 @@ export class IPCHandlers {
 
   private setupWindowHandlers(): void {
     ipcMain.handle('window:toggle-maximize', async () => {
-      const window = this.windowManager.getWindow();
-      if (window) {
-        if (window.isMaximized()) {
-          window.unmaximize();
+      if (this.baseWindow.isMaximized()) {
+          this.baseWindow.unmaximize();
         } else {
-          window.maximize();
-        }
+          this.baseWindow.maximize();
       }
     });
   }
