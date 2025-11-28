@@ -173,10 +173,6 @@ export class TabManager extends EventEmitter {
     tab.view.setVisible(true);
     this.activeTabId = tabId;
 
-    // Bring to front (re-add to ensure it's on top)
-    this.baseWindow.contentView.removeChildView(tab.view);
-    this.baseWindow.contentView.addChildView(tab.view);
-
     this.emit('tabs:changed');
     
     if (previousTabId && previousTabId !== tabId) {
@@ -444,14 +440,14 @@ export class TabManager extends EventEmitter {
 
   public hideAllTabs(): void {
     this.tabs.forEach(tab => {
-      tab.view.setBounds({ x: 0, y: 0, width: 0, height: 0 });
+      tab.view.setVisible(false);
     });
   }
 
   public showAllTabs(): void {
     this.tabs.forEach(tab => {
       if (tab.id === this.activeTabId) {
-        this.updateTabViewBounds(tab.view, this.currentSidebarWidth);
+        tab.view.setVisible(true);
       }
     });
   }
