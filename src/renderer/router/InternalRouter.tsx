@@ -4,9 +4,6 @@ import Profile from '@/renderer/pages/Profile';
 import { ROUTES } from '@/shared/routes';
 import { SubscriptionPage } from '@/renderer/pages/SubscriptionPage';
 
-/**
- * Internal page routes - Maps route names to React components
- */
 const ROUTE_COMPONENTS: Record<string, React.ComponentType> = {
   profile: Profile,
   settings: Settings,
@@ -26,14 +23,12 @@ export function InternalRouter() {
       const hash = window.location.hash;
       console.log('InternalRouter: Checking route:', hash);
       
-      // Extract route name from hash (e.g., #/settings -> settings)
       const routeName = hash.replace('#/', '') as InternalRouteName;
       
       if (routeName && ROUTES[routeName]) {
         console.log('InternalRouter: Matched route:', routeName);
         setCurrentRoute(routeName);
         
-        // Update document title
         document.title = `${ROUTES[routeName].title} - Browzer`;
       } else {
         console.log('InternalRouter: No matching route');
@@ -47,7 +42,7 @@ export function InternalRouter() {
     return () => window.removeEventListener('hashchange', checkRoute);
   }, []);
 
-  if (!currentRoute) {
+  if (!currentRoute || !ROUTES[currentRoute]) {
     return (
       <main className='w-full h-full flex items-center justify-center'>
         <h1>InternalRouter: No matching route</h1>

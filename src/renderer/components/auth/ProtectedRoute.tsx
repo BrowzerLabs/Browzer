@@ -3,17 +3,6 @@ import { Navigate } from 'react-router-dom';
 import { useAuth } from '@/renderer/hooks/useAuth';
 import { Loader2, Shield, ShieldCheckIcon } from 'lucide-react';
 
-/**
- * ProtectedRoute - Protects routes requiring authentication
- * 
- * Flow:
- * 1. Check if user is authenticated
- * 2. If loading, show spinner
- * 3. If not authenticated, redirect to /auth/signin
- * 4. If authenticated but browser not ready, initialize browser
- * 5. If ready, render children
- */
-
 interface ProtectedRouteProps {
   children: ReactNode;
 }
@@ -23,7 +12,6 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
   const [browserReady, setBrowserReady] = useState(false);
   const browserInitRef = useRef(false);
 
-  // Initialize browser when authenticated
   useEffect(() => {
     const shouldInitialize = isAuthenticated && !browserReady && !browserInitRef.current;
     
@@ -38,13 +26,12 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
         console.log('[ProtectedRoute] Browser ready');
         setBrowserReady(true);
       })
-      .catch((error) => {
+      .catch((error: any) => {
         console.error('[ProtectedRoute] Browser initialization failed:', error);
         browserInitRef.current = false;
       });
   }, [isAuthenticated, browserReady]);
 
-  // Reset browser state on sign out
   useEffect(() => {
     if (!isAuthenticated && browserReady) {
       console.log('[ProtectedRoute] User signed out, resetting browser');
@@ -53,22 +40,19 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
     }
   }, [isAuthenticated, browserReady]);
 
-  // Loading state
   if (loading) {
     return (
-      <div className="h-screen flex flex-col gap-2 items-center justify-center animate-pulse">
+      <div className="h-screen flex flex-col gap-2 items-center justify-center animate-pulse text-blue-600 dark:text-blue-400">
         <ShieldCheckIcon className="size-10" />
         <p className='text-xs'>Verifying wheather its really you</p>
       </div>
     );
   }
 
-  // Not authenticated - redirect to sign in
   if (!isAuthenticated) {
     return <Navigate to="/auth/signin" replace />;
   }
 
-  // Authenticated but browser not ready
   if (!browserReady) {
     return (
       <div className="h-screen flex flex-col items-center justify-center gap-2 text-teal-500">
@@ -78,6 +62,5 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
     );
   }
 
-  // Fully ready - render protected content
   return <>{children}</>;
 }

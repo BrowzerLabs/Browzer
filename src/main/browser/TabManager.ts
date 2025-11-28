@@ -66,7 +66,7 @@ export class TabManager extends EventEmitter {
     if (internalPageInfo) {
       displayUrl = internalPageInfo.url;
       displayTitle = internalPageInfo.title;
-      displayIcon = internalPageInfo.icon;
+      displayIcon = internalPageInfo.favicon;
     }
 
     const tabInfo: TabInfo = {
@@ -356,7 +356,7 @@ export class TabManager extends EventEmitter {
       if (internalPageInfo) {
         info.url = internalPageInfo.url;
         info.title = internalPageInfo.title;
-        info.favicon = internalPageInfo.icon;
+        info.favicon = internalPageInfo.favicon;
       } else {
         info.url = url;
       }
@@ -370,7 +370,7 @@ export class TabManager extends EventEmitter {
       if (internalPageInfo) {
         info.url = internalPageInfo.url;
         info.title = internalPageInfo.title;
-        info.favicon = internalPageInfo.icon;
+        info.favicon = internalPageInfo.favicon;
       } else {
         info.url = url;
       }

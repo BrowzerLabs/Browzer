@@ -3,74 +3,71 @@ import { Clock, type LucideIcon, Settings, Video, Bot, User, CreditCard, MailChe
 export interface RouteConfig {
   path: string;
   title: string;
-  icon?: string;
+  favicon?: string;
   params?: string;
   fragment?: string;
 }
 
-/**
- * Internal routes - Load in tabs with browzer:// protocol
- */
 export const ROUTES: Record<string, RouteConfig> = {
   'auth/confirm-signup': {
     path: '/auth/confirm-signup',
     title: 'Confirm Email',
-    icon: 'mail-check',
+    favicon: 'mail-check',
   },
   'auth/reset-password': {
     path: '/auth/reset-password',
     title: 'Reset Password',
-    icon: 'key-round',
+    favicon: 'key-round',
   },
   'auth/callback': {
     path: '/auth/callback',
     title: 'OAuth Callback',
-    icon: 'loader',
+    favicon: 'loader',
   },
   'subscription/success': {
     path: '/subscription/success',
     title: 'Subscription Success',
-    icon: 'check-circle',
+    favicon: 'check-circle',
   },
   'subscription/cancel': {
     path: '/subscription/cancel',
     title: 'Checkout Cancelled',
-    icon: 'x-circle',
+    favicon: 'x-circle',
   },
   pricing: {
     path: '/pricing',
     title: 'Pricing',
-    icon: 'credit-card',
+    favicon: 'credit-card',
   },
   settings: {
     path: '/settings',
     title: 'Settings',
-    icon: 'settings',
+    favicon: 'settings',
   },
   history: {
     path: '/history',
     title: 'History',
-    icon: 'clock',
+    favicon: 'clock',
   },
   recordings: {
     path: '/recordings',
     title: 'Recordings',
-    icon: 'video',
+    favicon: 'video',
   },
   automation: {
     path: '/automation',
     title: 'Automation',
-    icon: 'bot',
+    favicon: 'bot',
   },
   profile: {
     path: '/profile',
     title: 'Profile',
-    icon: 'user',
+    favicon: 'user',
   },
   subscription: {
     path: '/subscription',
     title: 'Subscription',
-    icon: 'credit-card',
+    favicon: 'credit-card',
   },
 };
 
