@@ -73,7 +73,6 @@ export class TabManager extends EventEmitter {
       id: tabId,
       title: displayTitle,
       url: displayUrl,
-      icon: displayIcon,
       isLoading: false,
       canGoBack: false,
       canGoForward: false,
@@ -357,11 +356,9 @@ export class TabManager extends EventEmitter {
       if (internalPageInfo) {
         info.url = internalPageInfo.url;
         info.title = internalPageInfo.title;
-        info.icon = internalPageInfo.icon;
-        info.favicon = undefined; // Clear external favicon for internal pages
+        info.favicon = internalPageInfo.icon;
       } else {
         info.url = url;
-        info.icon = undefined; // Clear internal icon for external pages
       }
       info.canGoBack = webContents.navigationHistory.canGoBack();
       info.canGoForward = webContents.navigationHistory.canGoForward();
@@ -373,11 +370,9 @@ export class TabManager extends EventEmitter {
       if (internalPageInfo) {
         info.url = internalPageInfo.url;
         info.title = internalPageInfo.title;
-        info.icon = internalPageInfo.icon;
-        info.favicon = undefined; // Clear external favicon for internal pages
+        info.favicon = internalPageInfo.icon;
       } else {
         info.url = url;
-        info.icon = undefined; // Clear internal icon for external pages
       }
       info.canGoBack = webContents.navigationHistory.canGoBack();
       info.canGoForward = webContents.navigationHistory.canGoForward();

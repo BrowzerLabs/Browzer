@@ -99,23 +99,18 @@ function Tab({ tab, isActive, onClick, onClose, width }: TabProps) {
 
   // Determine which icon to show
   const renderIcon = () => {
-    // If loading, show spinner
     if (tab.isLoading) {
       return <Loader2 className="w-4 h-4 flex-shrink-0 animate-spin text-muted-foreground" />;
     }
     
-    // If has favicon (external page), show it
     if (tab.favicon) {
+      if(ICON_MAP[tab.favicon]){
+        const IconComponent = ICON_MAP[tab.favicon];
+        return <IconComponent className="w-4 h-4 flex-shrink-0" />;
+      }
       return <img src={tab.favicon} alt="" className="w-4 h-4 flex-shrink-0 rounded-sm" />;
     }
     
-    // If has icon (internal browzer:// page), show the Lucide icon
-    if (tab.icon && ICON_MAP[tab.icon]) {
-      const IconComponent = ICON_MAP[tab.icon];
-      return <IconComponent className="w-4 h-4 flex-shrink-0 text-primary" />;
-    }
-    
-    // Fallback: show Globe icon
     return <Globe className="w-4 h-4 flex-shrink-0 text-muted-foreground" />;
   };
 
