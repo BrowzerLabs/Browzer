@@ -1,5 +1,4 @@
 import { BrowserManager } from '@/main/BrowserManager';
-import { LayoutManager } from '@/main/window/LayoutManager';
 import { IPCHandlers } from '@/main/ipc/IPCHandlers';
 import { DeepLinkService } from '@/main/deeplink/DeepLinkService';
 import { ConnectionService } from './api';
@@ -10,7 +9,6 @@ import { BaseWindow, WebContentsView } from 'electron';
 import path from 'node:path';
 
 export class MainWindow {
-  private layoutManager: LayoutManager;
   private browserManager: BrowserManager;
   private connectionService: ConnectionService;
   private authService: AuthService;
@@ -20,6 +18,8 @@ export class MainWindow {
   private updaterManager: UpdaterManager;
   private baseWindow: BaseWindow | null = null;
   private browserView: WebContentsView | null = null;
+  private sidebarVisible = true;
+  private sidebarWidthPercent = 30;
   
 
   constructor() {
@@ -48,8 +48,6 @@ export class MainWindow {
     });
 
     this.baseWindow.contentView.addChildView(this.browserView);
-    
-    this.layoutManager = new LayoutManager(this.baseWindow);
 
     this.browserManager = new BrowserManager(this.baseWindow, this.browserView);
 
@@ -65,9 +63,7 @@ export class MainWindow {
     
     this.ipcHandlers = new IPCHandlers(
       this.baseWindow,
-      this.browserView,
       this.browserManager,
-      this.layoutManager,
       this.authService
     );
 
@@ -92,24 +88,34 @@ export class MainWindow {
   }
 
   private setUpWindowEvents(): void {
-    if (!this.baseWindow) return;
+    if (!this.baseWindow){
+      console.error('❌ Base window is not initialized');
+      return;
+    }
 
     this.baseWindow.on('resize', () => {
       this.updateLayout();
     });
+
+    this.ipcHandlers.on('sidebar-state-changed', (visible: boolean) => {
+      this.sidebarVisible = visible;
+      this.updateLayout();
+    });
+    
   }
 
   private updateLayout(): void {
     const bounds = this.baseWindow.getBounds();
-    const sidebarState = this.layoutManager.getSidebarState();
-    const sidebarWidth = sidebarState.visible 
-      ? Math.floor(bounds.width * (sidebarState.widthPercent / 100))
+    const sidebarWidth = this.sidebarVisible 
+      ? Math.floor(bounds.width * (this.sidebarWidthPercent / 100))
       : 0;
 
-    if (this.browserView) {
-      const browserUIBounds = this.layoutManager.calculateBrowserUIBounds();
-      this.browserView.setBounds(browserUIBounds);
-    }
+    this.browserView.setBounds({
+      x: 0,
+      y: 0,
+      width: bounds.width,
+      height: bounds.height,
+    });
 
     this.browserManager.updateLayout(bounds.width, bounds.height, sidebarWidth);
   }

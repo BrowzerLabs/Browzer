@@ -25,7 +25,7 @@ export interface BrowserAPI {
   canGoForward: (tabId: string) => Promise<boolean>;
 
   // Sidebar Management
-  setSidebarState: (visible: boolean, widthPercent: number) => Promise<boolean>;
+  setSidebarState: (visible: boolean) => Promise<boolean>;
   
   // Window Management
   toggleMaximize: () => Promise<void>;

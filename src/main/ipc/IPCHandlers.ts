@@ -1,6 +1,5 @@
 import { BaseWindow, WebContentsView, ipcMain, shell } from 'electron';
 import { BrowserManager } from '@/main/BrowserManager';
-import { LayoutManager } from '@/main/window/LayoutManager';
 import { SettingsStore } from '@/main/settings/SettingsStore';
 import { PasswordManager } from '@/main/password/PasswordManager';
 import { AuthService } from '@/main/auth';
@@ -8,25 +7,23 @@ import { SubscriptionService } from '@/main/subscription/SubscriptionService';
 import { RecordedAction, HistoryQuery, AppSettings, SignUpCredentials, SignInCredentials, UpdateProfileRequest } from '@/shared/types';
 import { CheckoutSessionRequest, PortalSessionRequest } from '@/shared/types/subscription';
 import { TabManager } from '@/main/browser';
+import { EventEmitter } from 'events';
 
-export class IPCHandlers {
+export class IPCHandlers extends EventEmitter {
   private settingsStore: SettingsStore;
   private passwordManager: PasswordManager;
   private tabManager: TabManager;
   private authService: AuthService;
   private subscriptionService: SubscriptionService;
   private baseWindow: BaseWindow;
-  private browserView: WebContentsView;
 
   constructor(
     baseWindow: BaseWindow,
-    browserView: WebContentsView,
     private browserManager: BrowserManager,
-    private layoutManager: LayoutManager,
     authService: AuthService,
   ) {
+    super();
     this.baseWindow = baseWindow;
-    this.browserView = browserView;
     this.tabManager = this.browserManager.getTabManager();
     this.settingsStore = new SettingsStore();
     this.passwordManager = this.browserManager.getPasswordManager();
@@ -106,9 +103,8 @@ export class IPCHandlers {
   }
 
   private setupSidebarHandlers(): void {
-    ipcMain.handle('browser:set-sidebar-state', async (_, visible: boolean, widthPercent: number) => {
-      this.layoutManager.setSidebarState(visible, widthPercent);
-      this.updateLayout();
+    ipcMain.handle('browser:set-sidebar-state', async (_, visible: boolean) => {
+      this.emit('sidebar-state-changed', visible);
       return true;
     });
   }
@@ -241,21 +237,6 @@ export class IPCHandlers {
     ipcMain.handle('history:get-recently-visited', async (_, limit?: number) => {
       return historyService.getRecentlyVisited(limit);
     });
-  }
-
-  private updateLayout(): void {
-    const bounds = this.baseWindow.getBounds();
-    const sidebarState = this.layoutManager.getSidebarState();
-    const sidebarWidth = sidebarState.visible 
-      ? Math.floor(bounds.width * (sidebarState.widthPercent / 100))
-      : 0;
-
-    if (this.browserView) {
-      const browserUIBounds = this.layoutManager.calculateBrowserUIBounds();
-      this.browserView.setBounds(browserUIBounds);
-    }
-    
-    this.browserManager.updateLayout(bounds.width, bounds.height, sidebarWidth);
   }
 
   private setupWindowHandlers(): void {

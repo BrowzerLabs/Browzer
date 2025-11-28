@@ -29,8 +29,8 @@ export const createBrowserAPI = (): BrowserAPI => ({
   canGoForward: (tabId: string) => invoke('browser:can-go-forward', tabId),
 
   // Sidebar Management
-  setSidebarState: (visible: boolean, widthPercent: number) => 
-    invoke('browser:set-sidebar-state', visible, widthPercent),
+  setSidebarState: (visible: boolean) => 
+    invoke('browser:set-sidebar-state', visible),
 
   // Window Management
   toggleMaximize: () => invoke('window:toggle-maximize'),
