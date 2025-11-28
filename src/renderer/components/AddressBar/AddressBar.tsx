@@ -143,7 +143,7 @@ export function AddressBar({
         onBlur={handleBlur}
         onKeyDown={handleKeyDown}
         placeholder="Search or enter address"
-        className="h-9 pl-9 pr-9 rounded-full bg-muted/50 dark:bg-muted/30 text-sm placeholder:text-muted-foreground border-transparent focus:border-primary/30 focus:bg-background transition-all"
+        className="h-8 pl-9 pr-9 rounded-full bg-muted/50 dark:bg-muted/30 text-sm placeholder:text-muted-foreground border-transparent focus:border-primary/30 focus:bg-background transition-all"
         autoComplete="off"
         autoCorrect="off"
         autoCapitalize="off"

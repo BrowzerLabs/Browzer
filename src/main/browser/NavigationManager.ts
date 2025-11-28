@@ -42,7 +42,7 @@ export class NavigationManager {
     return `file://${path.join(__dirname, `../renderer/${MAIN_WINDOW_VITE_NAME}/index.html`)}#/${pageName}`;
   }
 
-  public getInternalPageInfo(url: string): { url: string; title: string } | null {
+  public getInternalPageInfo(url: string): { url: string; title: string; icon?: string } | null {
     const hashMatch = url.match(/#\/([^?]+)/);
     if (!hashMatch) return null;
     
@@ -54,6 +54,7 @@ export class NavigationManager {
       return {
         url: browzerUrl,
         title: route.title,
+        icon: route.icon,
       };
     }
     

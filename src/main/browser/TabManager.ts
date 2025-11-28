@@ -60,17 +60,20 @@ export class TabManager extends EventEmitter {
 
     let displayUrl = url ?? 'https://www.google.com';
     let displayTitle = 'New Tab';
+    let displayIcon: string | undefined;
     
     const internalPageInfo = this.navigationManager.getInternalPageInfo(url || '');
     if (internalPageInfo) {
       displayUrl = internalPageInfo.url;
       displayTitle = internalPageInfo.title;
+      displayIcon = internalPageInfo.icon;
     }
 
     const tabInfo: TabInfo = {
       id: tabId,
       title: displayTitle,
       url: displayUrl,
+      icon: displayIcon,
       isLoading: false,
       canGoBack: false,
       canGoForward: false,
@@ -354,8 +357,11 @@ export class TabManager extends EventEmitter {
       if (internalPageInfo) {
         info.url = internalPageInfo.url;
         info.title = internalPageInfo.title;
+        info.icon = internalPageInfo.icon;
+        info.favicon = undefined; // Clear external favicon for internal pages
       } else {
         info.url = url;
+        info.icon = undefined; // Clear internal icon for external pages
       }
       info.canGoBack = webContents.navigationHistory.canGoBack();
       info.canGoForward = webContents.navigationHistory.canGoForward();
@@ -367,8 +373,11 @@ export class TabManager extends EventEmitter {
       if (internalPageInfo) {
         info.url = internalPageInfo.url;
         info.title = internalPageInfo.title;
+        info.icon = internalPageInfo.icon;
+        info.favicon = undefined; // Clear external favicon for internal pages
       } else {
         info.url = url;
+        info.icon = undefined; // Clear internal icon for external pages
       }
       info.canGoBack = webContents.navigationHistory.canGoBack();
       info.canGoForward = webContents.navigationHistory.canGoForward();
@@ -376,7 +385,8 @@ export class TabManager extends EventEmitter {
     });
 
     webContents.on('page-favicon-updated', (_, favicons) => {
-      if (!info.url.includes('browzer://settings') && favicons.length > 0) {
+      // Don't update favicon for internal browzer:// pages
+      if (!this.navigationManager.isInternalPage(info.url) && favicons.length > 0) {
         info.favicon = favicons[0];
         this.emit('tabs:changed');
       }

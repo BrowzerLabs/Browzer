@@ -1,6 +1,9 @@
+import { Clock, type LucideIcon, Settings, Video, Bot, User, CreditCard, MailCheck, KeyRound, CheckCircle, XCircle, Loader2 } from "lucide-react";
+
 export interface RouteConfig {
   path: string;
   title: string;
+  icon?: string;
   params?: string;
   fragment?: string;
 }
@@ -12,51 +15,77 @@ export const ROUTES: Record<string, RouteConfig> = {
   'auth/confirm-signup': {
     path: '/auth/confirm-signup',
     title: 'Confirm Email',
+    icon: 'mail-check',
   },
   'auth/reset-password': {
     path: '/auth/reset-password',
     title: 'Reset Password',
+    icon: 'key-round',
   },
   'auth/callback': {
     path: '/auth/callback',
     title: 'OAuth Callback',
+    icon: 'loader',
   },
   'subscription/success': {
     path: '/subscription/success',
     title: 'Subscription Success',
+    icon: 'check-circle',
   },
   'subscription/cancel': {
     path: '/subscription/cancel',
     title: 'Checkout Cancelled',
+    icon: 'x-circle',
   },
   pricing: {
     path: '/pricing',
     title: 'Pricing',
+    icon: 'credit-card',
   },
   settings: {
     path: '/settings',
     title: 'Settings',
+    icon: 'settings',
   },
   history: {
     path: '/history',
     title: 'History',
+    icon: 'clock',
   },
   recordings: {
     path: '/recordings',
     title: 'Recordings',
+    icon: 'video',
   },
   automation: {
     path: '/automation',
     title: 'Automation',
+    icon: 'bot',
   },
   profile: {
     path: '/profile',
     title: 'Profile',
+    icon: 'user',
   },
   subscription: {
     path: '/subscription',
     title: 'Subscription',
+    icon: 'credit-card',
   },
+};
+
+export const ICON_MAP: Record<string, LucideIcon> = {
+  'settings': Settings,
+  'clock': Clock,
+  'video': Video,
+  'bot': Bot,
+  'user': User,
+  'credit-card': CreditCard,
+  'mail-check': MailCheck,
+  'key-round': KeyRound,
+  'check-circle': CheckCircle,
+  'x-circle': XCircle,
+  'loader': Loader2,
 };
 
 export function getRouteFromURL(url: string): RouteConfig | null {
