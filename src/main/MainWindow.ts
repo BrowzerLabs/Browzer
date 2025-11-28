@@ -5,7 +5,7 @@ import { ConnectionService } from './api';
 import { AuthService } from '@/main/auth/AuthService';
 import { AppMenu } from '@/main/menu/AppMenu';
 import { UpdaterManager } from './updater';
-import { BaseWindow, WebContentsView } from 'electron';
+import { BaseWindow, WebContentsView, dialog } from 'electron';
 import path from 'node:path';
 
 export class MainWindow {
@@ -90,8 +90,18 @@ export class MainWindow {
   private setUpWindowEvents(): void {
     if (!this.baseWindow){
       console.error('❌ Base window is not initialized');
+      dialog.showMessageBox({
+        type: 'error',
+        title: 'Application is not initialized',
+        message: 'The application is not initialized properly. Please restart the application.'
+      });
+      this.destroy();
       return;
     }
+
+    this.baseWindow.on('close', () => {
+      this.destroy();
+    });
 
     this.baseWindow.on('resize', () => {
       this.updateLayout();
@@ -120,7 +130,7 @@ export class MainWindow {
     this.browserManager.updateLayout(bounds.width, bounds.height, sidebarWidth);
   }
 
-  public getWindow() {
+  public getBaseWindow() {
     return this.baseWindow;
   }
 

@@ -1,4 +1,4 @@
-import { app, protocol, net } from 'electron';
+import { app, protocol, net, dialog } from 'electron';
 import started from 'electron-squirrel-startup';
 import { MainWindow } from './main/MainWindow';
 import path from 'path';
@@ -16,9 +16,13 @@ if (process.defaultApp) {
   app.setAsDefaultProtocolClient('browzer');
 }
 
-// Ensure single instance (required for deep links on Windows/Linux)
 const gotTheLock = app.requestSingleInstanceLock();
 if (!gotTheLock) {
+  dialog.showMessageBox({
+    type: 'error',
+    title: 'Application is already running',
+    message: 'Another instance of the application is already running. Only one instance is allowed at a time.'
+  });
   app.quit();
 }
 
@@ -49,20 +53,10 @@ let mainWindow: MainWindow | null = null;
 const createWindow = () => {
   mainWindow = new MainWindow();
   
-  const window = mainWindow.getWindow();
-  if (window) {
-    // Use 'close' event to cleanup before window is destroyed
-    window.on('close', () => {
-      console.log('[Main] Window closing, cleaning up...');
-      if (mainWindow) {
-        mainWindow.destroy();
-      }
-    });
-    
-    // Use 'closed' event to nullify reference after window is destroyed
-    window.on('closed', () => {
+  const baseWindow = mainWindow.getBaseWindow();
+  if (baseWindow) {
+    baseWindow.on('closed', () => {
       mainWindow = null;
-      console.log('[Main] Window closed, ready for dock icon click');
     });
   }
 };
@@ -72,9 +66,7 @@ app.whenReady().then(() => {
   protocol.handle('video-file', (request) => {
     const url = request.url.replace('video-file://', '');
     const decodedPath = decodeURIComponent(url);
-    
     const normalizedPath = path.normalize(decodedPath);
-    
     return net.fetch(`file://${normalizedPath}`);
   });
   
@@ -87,10 +79,16 @@ app.on('window-all-closed', () => {
   }
 });
 
+app.on('before-quit', () => {
+  if (mainWindow) {
+    mainWindow.destroy();
+    mainWindow = null;
+  }
+});
+
 app.on('activate', () => {
-  if (mainWindow === null || mainWindow.getWindow() === null) {
+  if (mainWindow === null || mainWindow.getBaseWindow() === null) {
     mainWindow = null;
     createWindow();
-    console.log('Main Window recreated');
   }
 });
