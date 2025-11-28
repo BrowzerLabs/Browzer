@@ -18,6 +18,7 @@ export class AppMenu {
     forceReload: this.isMac ? 'Cmd+Shift+R' : 'Ctrl+Shift+R',
     nextTab: this.isMac ? 'Cmd+Option+Right' : 'Ctrl+Tab',
     prevTab: this.isMac ? 'Cmd+Option+Left' : 'Ctrl+Shift+Tab',
+    settings: this.isMac ? 'Cmd+,': 'Ctrl+,',
   };
 
   constructor(
@@ -53,6 +54,15 @@ export class AppMenu {
                 {
                   label: 'Check for Updates...',
                   click: () => this.handleCheckForUpdates(),
+                },
+                {
+                  label: 'Settings',
+                  accelerator: this.keys.settings,
+                  click: () => {
+                    if (this.ensureWindow()) {
+                      this.tabManager.createTab('browzer://settings');
+                    }
+                  },
                 },
                 { type: 'separator' as const },
                 { role: 'services' as const },
