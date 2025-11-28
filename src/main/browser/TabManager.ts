@@ -130,7 +130,6 @@ export class TabManager extends EventEmitter {
 
     this.debuggerManager.cleanupDebugger(tab.view, tabId);
 
-    // Clean up
     tab.view.webContents.close();
     this.tabs.delete(tabId);
 
@@ -282,9 +281,6 @@ export class TabManager extends EventEmitter {
     }
   }
 
-  /**
-   * Update layout when window resizes or sidebar changes
-   */
   public updateLayout(sidebarWidth = 0): void {
     this.currentSidebarWidth = sidebarWidth;
     
@@ -295,27 +291,14 @@ export class TabManager extends EventEmitter {
 
   public destroy(): void {
     this.tabs.forEach(tab => {
-      try {
-        this.debuggerManager.cleanupDebugger(tab.view, tab.id);
-        
-        // Only try to remove/close if not already destroyed
-        if (tab.view && !tab.view.webContents.isDestroyed()) {
-          if (this.baseWindow && !this.baseWindow.isDestroyed()) {
-            this.baseWindow.contentView.removeChildView(tab.view);
-          }
-          tab.view.webContents.close();
-        }
-      } catch (error) {
-        // Ignore errors during cleanup - objects may already be destroyed
-        console.log('[TabManager] Cleanup error (safe to ignore):', error);
-      }
+      this.debuggerManager.cleanupDebugger(tab.view, tab.id);
+      this.baseWindow.contentView.removeChildView(tab.view);
+      tab.view.webContents.close();
     });
     this.tabs.clear();
+    this.activeTabId = null;
   }
 
-  /**
-   * Update bounds for a tab view
-   */
   private updateTabViewBounds(view: WebContentsView, sidebarWidth = 0): void {
     const bounds = this.baseWindow.getBounds();
     view.setBounds({
@@ -330,7 +313,6 @@ export class TabManager extends EventEmitter {
     const { view, info } = tab;
     const webContents = view.webContents;
 
-    // Page title updated
     webContents.on('page-title-updated', (_, title) => {
       const internalPageTitle = this.navigationManager.getInternalPageTitle(info.url);
       if (internalPageTitle) {
@@ -341,7 +323,6 @@ export class TabManager extends EventEmitter {
       this.emit('tabs:changed');
     });
 
-    // Navigation events
     webContents.on('did-start-loading', () => {
       info.isLoading = true;
       this.emit('tabs:changed');
@@ -405,13 +386,11 @@ export class TabManager extends EventEmitter {
       }
     });
 
-    // Handle new window requests (open in new tab)
     webContents.setWindowOpenHandler(({ url }) => {
       this.createTab(url);
       return { action: 'deny' };
     });
 
-    // Add context menu for right-click
     webContents.on('context-menu', (_event: any, params: any) => {
       const menu = Menu.buildFromTemplate([
         {
@@ -431,9 +410,7 @@ export class TabManager extends EventEmitter {
       menu.popup();
     });
 
-    // Handle keyboard shortcuts
     webContents.on('before-input-event', (event: any, input: any) => {
-      // Cmd/Ctrl + Shift + I to open DevTools
       if ((input.control || input.meta) && input.shift && input.key.toLowerCase() === 'i') {
         event.preventDefault();
         if (webContents.isDevToolsOpened()) {
@@ -442,16 +419,14 @@ export class TabManager extends EventEmitter {
           webContents.openDevTools({ mode: 'right', activate: true });
         }
       }
-      // Cmd/Ctrl + Shift + C to open DevTools in inspect mode
       else if ((input.control || input.meta) && input.shift && input.key.toLowerCase() === 'c') {
         event.preventDefault();
         webContents.openDevTools({ mode: 'right', activate: true });
       }
     });
 
-    // Error handling
     webContents.on('did-fail-load', (_, errorCode, errorDescription, validatedURL) => {
-      if (errorCode !== -3) { // Ignore aborted loads
+      if (errorCode !== -3) {
         console.error(`Failed to load ${validatedURL}: ${errorDescription}`);
       }
       info.isLoading = false;
@@ -459,9 +434,6 @@ export class TabManager extends EventEmitter {
     });
   }
 
-  /**
-   * Handle credential selection for multi-step flows
-   */
   public handleCredentialSelected(tabId: string, credentialId: string, username: string): void {
     const tab = this.tabs.get(tabId);
     if (tab) {
@@ -470,18 +442,12 @@ export class TabManager extends EventEmitter {
     }
   }
 
-  /**
-   * Hide all tabs (for fullscreen routes)
-   */
   public hideAllTabs(): void {
     this.tabs.forEach(tab => {
       tab.view.setBounds({ x: 0, y: 0, width: 0, height: 0 });
     });
   }
 
-  /**
-   * Show all tabs (restore normal browsing)
-   */
   public showAllTabs(): void {
     this.tabs.forEach(tab => {
       if (tab.id === this.activeTabId) {

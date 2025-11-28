@@ -33,7 +33,7 @@ export class MainService {
       show: false,
       transparent: true,
       darkTheme: true,
-      titleBarOverlay: false
+      fullscreenable: false,
     });
 
     this.browserView = new WebContentsView({

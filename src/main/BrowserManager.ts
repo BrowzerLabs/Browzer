@@ -213,14 +213,10 @@ export class BrowserManager {
   }
 
   public destroy(): void {
-    try {
-      this.tabManager.destroy();
-      this.recordingManager.destroy();
-      this.automationManager.destroy();
-      this.sessionManager.close();
-    } catch (error) {
-      console.log('[BrowserManager] Cleanup error (safe to ignore):', error);
-    }
+    this.tabManager.destroy();
+    this.recordingManager.destroy();
+    this.automationManager.destroy();
+    this.sessionManager.close();
   }
 
   private setupTabEventListeners(): void {
