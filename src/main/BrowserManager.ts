@@ -1,5 +1,5 @@
 import { BaseWindow, WebContentsView, dialog } from 'electron';
-import { RecordedAction, TabInfo } from '@/shared/types';
+import { AutocompleteSuggestion, RecordedAction } from '@/shared/types';
 import { RecordingStore } from '@/main/recording';
 import { HistoryService } from '@/main/history/HistoryService';
 import { PasswordManager } from '@/main/password/PasswordManager';
@@ -38,7 +38,7 @@ export class BrowserManager {
     this.sessionManager = new SessionManager();
 
     // Initialize managers
-    this.navigationManager = new NavigationManager();
+    this.navigationManager = new NavigationManager(this.historyService);
     this.debuggerManager = new DebuggerManager();
     
     this.tabManager = new TabManager(
@@ -72,6 +72,14 @@ export class BrowserManager {
 
   public getTabManager(): TabManager {
     return this.tabManager;
+  }
+
+  public async getSearchSuggestions(query: string): Promise<string[]> {
+    return this.navigationManager.getSearchSuggestions(query);
+  }
+
+  public async getAutocompleteSuggestions(query: string): Promise<AutocompleteSuggestion[]> {
+    return this.navigationManager.getAutocompleteSuggestions(query);
   }
 
   public async startRecording(): Promise<boolean> {
