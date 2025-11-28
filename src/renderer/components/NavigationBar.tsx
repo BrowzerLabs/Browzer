@@ -200,8 +200,6 @@ export function NavigationBar({
       </Button>
 
       {/* Menu Dropdown */}
-      {
-        isSidebarVisible && (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline" size="icon" title="More options">
@@ -258,8 +256,6 @@ export function NavigationBar({
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
-        )
-      }
     </div>
   );
 }
