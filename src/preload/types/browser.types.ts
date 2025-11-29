@@ -1,8 +1,5 @@
 import type { TabInfo, HistoryEntry, HistoryQuery, HistoryStats, AppSettings } from '@/shared/types';
 
-/**
- * Browser API - Handles tab management, navigation, and browser operations
- */
 export interface BrowserAPI {
   // Initialization
   initializeBrowser: () => Promise<boolean>;
@@ -25,7 +22,7 @@ export interface BrowserAPI {
   canGoForward: (tabId: string) => Promise<boolean>;
 
   // Sidebar Management
-  setSidebarState: (visible: boolean, widthPercent: number) => Promise<boolean>;
+  setSidebarState: (visible: boolean) => Promise<boolean>;
   
   // Window Management
   toggleMaximize: () => Promise<void>;

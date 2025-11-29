@@ -19,7 +19,7 @@ export interface Tab {
   selectedCredentialUsername?: string;
 }
 
-export interface TabManagerEvents {
+export interface TabServiceEvents {
   'tab:created': (tab: Tab, previousActiveTabId: string | null) => void;
   'tab:closed': (closedTabId: string, newActiveTabId: string | null, wasActiveTab: boolean) => void;
   'tab:switched': (previousTabId: string, newTab: Tab) => void;

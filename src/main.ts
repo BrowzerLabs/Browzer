@@ -1,6 +1,6 @@
-import { app, protocol, net } from 'electron';
+import { app, protocol, net, dialog } from 'electron';
 import started from 'electron-squirrel-startup';
-import { MainWindow } from './main/MainWindow';
+import { MainService } from './main/MainService';
 import path from 'path';
 
 if (started) {
@@ -16,9 +16,13 @@ if (process.defaultApp) {
   app.setAsDefaultProtocolClient('browzer');
 }
 
-// Ensure single instance (required for deep links on Windows/Linux)
 const gotTheLock = app.requestSingleInstanceLock();
 if (!gotTheLock) {
+  dialog.showMessageBox({
+    type: 'error',
+    title: 'Application is already running',
+    message: 'Another instance of the application is already running. Only one instance is allowed at a time.'
+  });
   app.quit();
 }
 
@@ -44,10 +48,17 @@ protocol.registerSchemesAsPrivileged([
   }
 ]);
 
-let mainWindow: MainWindow | null = null;
+let mainService: MainService | null = null;
 
 const createWindow = () => {
-  mainWindow = new MainWindow();
+  mainService = new MainService();
+  
+  const baseWindow = mainService.getBaseWindow();
+  if (baseWindow) {
+    baseWindow.on('closed', () => {
+      mainService = null;
+    });
+  }
 };
 
 
@@ -55,9 +66,7 @@ app.whenReady().then(() => {
   protocol.handle('video-file', (request) => {
     const url = request.url.replace('video-file://', '');
     const decodedPath = decodeURIComponent(url);
-    
     const normalizedPath = path.normalize(decodedPath);
-    
     return net.fetch(`file://${normalizedPath}`);
   });
   
@@ -70,8 +79,16 @@ app.on('window-all-closed', () => {
   }
 });
 
+app.on('before-quit', () => {
+  if (mainService) {
+    mainService.destroy();
+    mainService = null;
+  }
+});
+
 app.on('activate', () => {
-  if (mainWindow === null) {
+  if (mainService === null || mainService.getBaseWindow() === null) {
+    mainService = null;
     createWindow();
   }
 });
