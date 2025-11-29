@@ -2,7 +2,7 @@ import path from 'node:path';
 import { getRouteFromURL } from '@/shared/routes';
 import { AutocompleteSuggestion, AutocompleteSuggestionType } from '@/shared/types';
 import { HistoryService } from '@/main/history/HistoryService';
-export class NavigationManager {
+export class NavigationService {
   constructor(
     private historyService: HistoryService,
   ) {}

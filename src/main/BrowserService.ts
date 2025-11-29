@@ -9,8 +9,8 @@ import {
   TabService,
   RecordingManager,
   AutomationManager,
-  NavigationManager,
-  DebuggerManager,
+  NavigationService,
+  DebuggerService,
 } from './browser';
 
 export class BrowserService {
@@ -18,8 +18,8 @@ export class BrowserService {
   private tabService: TabService;
   private recordingManager: RecordingManager;
   private automationManager: AutomationManager;
-  private navigationManager: NavigationManager;
-  private debuggerManager: DebuggerManager;
+  private navigationService: NavigationService;
+  private debuggerService: DebuggerService;
 
   // Services (shared across managers)
   private historyService: HistoryService;
@@ -38,15 +38,15 @@ export class BrowserService {
     this.sessionManager = new SessionManager();
 
     // Initialize managers
-    this.navigationManager = new NavigationManager(this.historyService);
-    this.debuggerManager = new DebuggerManager();
+    this.navigationService = new NavigationService(this.historyService);
+    this.debuggerService = new DebuggerService();
     
     this.tabService = new TabService(
       baseWindow,
       this.passwordManager,
       this.historyService,
-      this.navigationManager,
-      this.debuggerManager,
+      this.navigationService,
+      this.debuggerService,
     );
     
     this.setupTabEventListeners();
@@ -75,11 +75,11 @@ export class BrowserService {
   }
 
   public async getSearchSuggestions(query: string): Promise<string[]> {
-    return this.navigationManager.getSearchSuggestions(query);
+    return this.navigationService.getSearchSuggestions(query);
   }
 
   public async getAutocompleteSuggestions(query: string): Promise<AutocompleteSuggestion[]> {
-    return this.navigationManager.getAutocompleteSuggestions(query);
+    return this.navigationService.getAutocompleteSuggestions(query);
   }
 
   public async startRecording(): Promise<boolean> {

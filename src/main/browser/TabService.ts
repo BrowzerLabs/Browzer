@@ -7,8 +7,8 @@ import { PasswordManager } from '@/main/password/PasswordManager';
 import { BrowserAutomationExecutor } from '@/main/automation';
 import { HistoryService } from '@/main/history/HistoryService';
 import { Tab, TabServiceEvents } from './types';
-import { NavigationManager } from './NavigationManager';
-import { DebuggerManager } from './DebuggerManager';
+import { NavigationService } from './NavigationService';
+import { DebuggerService } from './DebuggerService';
 import { PasswordAutomation } from '@/main/password';
 
 export class TabService extends EventEmitter {
@@ -37,8 +37,8 @@ export class TabService extends EventEmitter {
     private baseWindow: BaseWindow,
     private passwordManager: PasswordManager,
     private historyService: HistoryService,
-    private navigationManager: NavigationManager,
-    private debuggerManager: DebuggerManager,
+    private navigationService: NavigationService,
+    private debuggerService: DebuggerService,
   ) {
     super();
   }
@@ -62,7 +62,7 @@ export class TabService extends EventEmitter {
     let displayTitle = 'New Tab';
     let displayIcon: string | undefined;
     
-    const internalPageInfo = this.navigationManager.getInternalPageInfo(url || '');
+    const internalPageInfo = this.navigationService.getInternalPageInfo(url || '');
     if (internalPageInfo) {
       displayUrl = internalPageInfo.url;
       displayTitle = internalPageInfo.title;
@@ -96,7 +96,7 @@ export class TabService extends EventEmitter {
     this.setupTabEvents(tab);
 
     // Initialize debugger asynchronously
-    this.debuggerManager.initializeDebugger(view, tabId).catch(err => 
+    this.debuggerService.initializeDebugger(view, tabId).catch(err => 
       console.error('[TabService] Failed to initialize debugger for tab:', tabId, err)
     );
 
@@ -104,7 +104,7 @@ export class TabService extends EventEmitter {
     this.updateTabViewBounds(view, this.currentSidebarWidth);
 
     const urlToLoad = url || 'https://www.google.com';
-    view.webContents.loadURL(this.navigationManager.normalizeURL(urlToLoad));
+    view.webContents.loadURL(this.navigationService.normalizeURL(urlToLoad));
 
     this.switchToTab(tabId);
     
@@ -130,7 +130,7 @@ export class TabService extends EventEmitter {
       );
     }
 
-    this.debuggerManager.cleanupDebugger(tab.view, tabId);
+    this.debuggerService.cleanupDebugger(tab.view, tabId);
 
     tab.view.webContents.close();
     this.tabs.delete(tabId);
@@ -190,7 +190,7 @@ export class TabService extends EventEmitter {
       tab = this.createTab(url);
     }
 
-    const normalizedURL = this.navigationManager.normalizeURL(url);
+    const normalizedURL = this.navigationService.normalizeURL(url);
     tab.view.webContents.loadURL(normalizedURL);
     return true;
   }
@@ -289,7 +289,7 @@ export class TabService extends EventEmitter {
 
   public destroy(): void {
     this.tabs.forEach(tab => {
-      this.debuggerManager.cleanupDebugger(tab.view, tab.id);
+      this.debuggerService.cleanupDebugger(tab.view, tab.id);
       this.baseWindow.contentView.removeChildView(tab.view);
       tab.view.webContents.close();
     });
@@ -312,7 +312,7 @@ export class TabService extends EventEmitter {
     const webContents = view.webContents;
 
     webContents.on('page-title-updated', (_, title) => {
-      const internalPageTitle = this.navigationManager.getInternalPageTitle(info.url);
+      const internalPageTitle = this.navigationService.getInternalPageTitle(info.url);
       if (internalPageTitle) {
         info.title = internalPageTitle;
       } else {
@@ -340,7 +340,7 @@ export class TabService extends EventEmitter {
         ).catch(err => console.error('Failed to add history entry:', err));
       }
       
-      if (tab.passwordAutomation && !this.navigationManager.isInternalPage(info.url)) {
+      if (tab.passwordAutomation && !this.navigationService.isInternalPage(info.url)) {
         try {
           await tab.passwordAutomation.start();
         } catch (error) {
@@ -352,7 +352,7 @@ export class TabService extends EventEmitter {
     });
 
     webContents.on('did-navigate', (_, url) => {
-      const internalPageInfo = this.navigationManager.getInternalPageInfo(url);
+      const internalPageInfo = this.navigationService.getInternalPageInfo(url);
       if (internalPageInfo) {
         info.url = internalPageInfo.url;
         info.title = internalPageInfo.title;
@@ -366,7 +366,7 @@ export class TabService extends EventEmitter {
     });
 
     webContents.on('did-navigate-in-page', (_, url) => {
-      const internalPageInfo = this.navigationManager.getInternalPageInfo(url);
+      const internalPageInfo = this.navigationService.getInternalPageInfo(url);
       if (internalPageInfo) {
         info.url = internalPageInfo.url;
         info.title = internalPageInfo.title;
@@ -381,7 +381,7 @@ export class TabService extends EventEmitter {
 
     webContents.on('page-favicon-updated', (_, favicons) => {
       // Don't update favicon for internal browzer:// pages
-      if (!this.navigationManager.isInternalPage(info.url) && favicons.length > 0) {
+      if (!this.navigationService.isInternalPage(info.url) && favicons.length > 0) {
         info.favicon = favicons[0];
         this.emit('tabs:changed');
       }
