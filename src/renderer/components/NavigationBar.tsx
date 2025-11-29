@@ -46,7 +46,7 @@ export function NavigationBar({
   const isSecure = activeTab?.url.startsWith('https://') ?? false;
 
   return (
-    <div className="flex items-center h-12 px-3 gap-2">
+    <div className="flex items-center h-12 px-3 gap-2 bg-slate-100 dark:bg-slate-900">
       {/* Navigation Buttons */}
       <div className="flex items-center gap-1">
         <NavButton
@@ -160,7 +160,13 @@ export function NavigationBar({
       </Button>
 
       {/* Menu Dropdown */}
-          <DropdownMenu>
+          <DropdownMenu onOpenChange={(open) => {
+            if (open) {
+              window.browserAPI.bringBrowserViewToFront();
+            } else {
+              window.browserAPI.bringBrowserViewToBottom();
+            }
+          }}>
             <DropdownMenuTrigger asChild>
               <Button variant="outline" size="icon" title="More options">
                 <MoreVertical className="w-4 h-4" />

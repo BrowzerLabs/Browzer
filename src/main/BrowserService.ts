@@ -29,7 +29,7 @@ export class BrowserService {
 
   constructor(
     private baseWindow: BaseWindow,
-    browserUIView?: WebContentsView
+    private browserView: WebContentsView
   ) {
     // Initialize services
     this.recordingStore = new RecordingStore();
@@ -53,13 +53,13 @@ export class BrowserService {
 
     this.recordingManager = new RecordingManager(
       this.recordingStore,
-      browserUIView
+      this.browserView
     );
 
     this.automationManager = new AutomationManager(
       this.recordingStore,
       this.sessionManager,
-      browserUIView
+      this.browserView
     );
   }
 
@@ -194,23 +194,22 @@ export class BrowserService {
     this.tabService.updateLayout(sidebarWidth);
   }
 
-  /**
-   * Hide all tabs (for fullscreen routes like auth pages)
-   */
   public hideAllTabs(): void {
     this.tabService.hideAllTabs();
   }
 
-  /**
-   * Show all tabs (restore normal browsing mode)
-   */
   public showAllTabs(): void {
     this.tabService.showAllTabs();
   }
 
-  /**
-   * Navigate active tab or create new tab with browzer:// URL
-   */
+  public bringBrowserViewToFront(): void {
+    this.baseWindow.contentView.addChildView(this.browserView)
+  }
+
+  public bringBrowserViewToBottom(): void {
+    this.baseWindow.contentView.addChildView(this.browserView, 0)
+  }
+
   public navigateToBrowzerURL(url: string): void {
     const activeTab = this.tabService.getActiveTab();
     if (activeTab) {

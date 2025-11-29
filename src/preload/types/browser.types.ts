@@ -126,6 +126,8 @@ export interface BrowserAPI {
   hideAllTabs: () => Promise<boolean>;
   showAllTabs: () => Promise<boolean>;
   navigateToTab: (url: string) => Promise<boolean>;
+  bringBrowserViewToFront: () => Promise<boolean>;
+  bringBrowserViewToBottom: () => Promise<boolean>;
 
   getTheme: () => Promise<'light' | 'dark' | 'system'>;
   setTheme: (theme: 'light' | 'dark' | 'system') => Promise<boolean>;

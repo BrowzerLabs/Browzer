@@ -433,6 +433,14 @@ export class IPCHandlers extends EventEmitter {
       this.browserService.navigateToBrowzerURL(url);
       return true;
     });
+    ipcMain.handle('deeplink:bring-browser-view-to-front', async () => {
+      this.browserService.bringBrowserViewToFront();
+      return true;
+    });
+    ipcMain.handle('deeplink:bring-browser-view-to-bottom', async () => {
+      this.browserService.bringBrowserViewToBottom();
+      return true;
+    });
   }
 
   private setupAutocompleteHandlers(): void {
@@ -565,6 +573,8 @@ export class IPCHandlers extends EventEmitter {
       'deeplink:hide-tabs',
       'deeplink:show-tabs',
       'deeplink:navigate-tab',
+      'deeplink:bring-browser-view-to-front',
+      'deeplink:bring-browser-view-to-bottom',
 
       'autocomplete:get-suggestions',
       'autocomplete:get-search-suggestions',

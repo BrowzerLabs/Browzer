@@ -52,9 +52,9 @@ export function useAddressBar(options: UseAddressBarOptions = {}): UseAddressBar
     lastTabVisibilityRef.current = showDropdown;
 
     if (showDropdown) {
-      window.browserAPI.hideAllTabs();
+      window.browserAPI.bringBrowserViewToFront();
     } else {
-      window.browserAPI.showAllTabs();
+      window.browserAPI.bringBrowserViewToBottom();
     }
   }, [showDropdown]);
 
