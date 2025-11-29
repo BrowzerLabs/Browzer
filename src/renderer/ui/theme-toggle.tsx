@@ -6,15 +6,17 @@ import { useTheme } from './theme-provider'
 function ThemeToggle(
   props: React.ButtonHTMLAttributes<HTMLButtonElement>
 ) {
-    const { setTheme, theme } = useTheme()
+    const { setTheme, isDark } = useTheme()
+    
     const toggleTheme = () => {
-        setTheme(theme === 'dark' ? 'light' : 'dark')
+        // Toggle between light and dark (not system)
+        setTheme(isDark ? 'light' : 'dark')
     }
+    
   return (
     <Button variant="outline" size="icon" onClick={toggleTheme} {...props}>
-        {theme === 'dark' ? <Sun className="h-4 w-4" /> : <MoonIcon className="h-4 w-4" />}
+        {isDark ? <Sun className="h-4 w-4" /> : <MoonIcon className="h-4 w-4" />}
     </Button>
-      
   )
 }
 

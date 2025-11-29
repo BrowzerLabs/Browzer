@@ -4,6 +4,7 @@ import { SettingsStore } from '@/main/settings/SettingsStore';
 import { PasswordManager } from '@/main/password/PasswordManager';
 import { AuthService } from '@/main/auth';
 import { SubscriptionService } from '@/main/subscription/SubscriptionService';
+import { ThemeService } from '@/main/theme';
 import { RecordedAction, HistoryQuery, AppSettings, SignUpCredentials, SignInCredentials, UpdateProfileRequest, AutocompleteSuggestion, AutocompleteSuggestionType } from '@/shared/types';
 import { CheckoutSessionRequest, PortalSessionRequest } from '@/shared/types/subscription';
 import { TabManager } from '@/main/browser';
@@ -15,6 +16,7 @@ export class IPCHandlers extends EventEmitter {
   private tabManager: TabManager;
   private authService: AuthService;
   private subscriptionService: SubscriptionService;
+  private themeService: ThemeService;
   private baseWindow: BaseWindow;
 
   constructor(
@@ -29,6 +31,7 @@ export class IPCHandlers extends EventEmitter {
     this.passwordManager = this.browserManager.getPasswordManager();
     this.authService = authService;
     this.subscriptionService = new SubscriptionService();
+    this.themeService = ThemeService.getInstance();
     this.setupHandlers();
   }
 
@@ -47,6 +50,7 @@ export class IPCHandlers extends EventEmitter {
     this.setupShellHandlers();
     this.setupDeepLinkHandlers();
     this.setupAutocompleteHandlers();
+    this.setupThemeHandlers();
   }
 
   private setupTabHandlers(): void {
@@ -441,6 +445,21 @@ export class IPCHandlers extends EventEmitter {
     });
   }
 
+  private setupThemeHandlers(): void {
+    ipcMain.handle('theme:get', async () => {
+      return this.themeService.getTheme();
+    });
+
+    ipcMain.handle('theme:set', async (_, theme: 'light' | 'dark' | 'system') => {
+      this.themeService.setTheme(theme);
+      return true;
+    });
+
+    ipcMain.handle('theme:is-dark', async () => {
+      return this.themeService.isDarkMode();
+    });
+  }
+
   public cleanup(): void {
     const handlers = [
       // Tab handlers
@@ -549,6 +568,10 @@ export class IPCHandlers extends EventEmitter {
 
       'autocomplete:get-suggestions',
       'autocomplete:get-search-suggestions',
+      // Theme handlers
+      'theme:get',
+      'theme:set',
+      'theme:is-dark',
     ];
 
     handlers.forEach(channel => {
