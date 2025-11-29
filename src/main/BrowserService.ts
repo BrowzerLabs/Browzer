@@ -1,5 +1,5 @@
 import { BaseWindow, WebContentsView, dialog } from 'electron';
-import { AutocompleteSuggestion, RecordedAction } from '@/shared/types';
+import { RecordedAction } from '@/shared/types';
 import { RecordingStore } from '@/main/recording';
 import { HistoryService } from '@/main/history/HistoryService';
 import { PasswordManager } from '@/main/password/PasswordManager';
@@ -38,7 +38,7 @@ export class BrowserService {
     this.sessionManager = new SessionManager();
 
     // Initialize managers
-    this.navigationService = new NavigationService(this.historyService);
+    this.navigationService = new NavigationService();
     this.debuggerService = new DebuggerService();
     
     this.tabService = new TabService(
@@ -72,14 +72,6 @@ export class BrowserService {
 
   public getTabService(): TabService {
     return this.tabService;
-  }
-
-  public async getSearchSuggestions(query: string): Promise<string[]> {
-    return this.navigationService.getSearchSuggestions(query);
-  }
-
-  public async getAutocompleteSuggestions(query: string): Promise<AutocompleteSuggestion[]> {
-    return this.navigationService.getAutocompleteSuggestions(query);
   }
 
   public async startRecording(): Promise<boolean> {

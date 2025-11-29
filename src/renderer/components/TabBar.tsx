@@ -1,8 +1,9 @@
-import { X, Plus, Loader2 } from 'lucide-react';
+import { X, Plus, Loader2, Globe } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 import type { TabInfo } from '@/shared/types';
 import { cn } from '@/renderer/lib/utils';
 import { Button } from '@/renderer/ui/button';
+import { ICON_MAP } from '@/shared/routes';
 
 interface TabBarProps {
   tabs: TabInfo[];
@@ -53,7 +54,7 @@ export function TabBar({ tabs, activeTabId, onTabClick, onTabClose, onNewTab }: 
   return (
     <div 
       ref={containerRef}
-      className="flex items-center h-10 pl-20 pr-2 gap-1 tab-bar-draggable overflow-hidden"
+      className="flex items-center h-9 pl-20 pr-2 gap-1 tab-bar-draggable overflow-hidden bg-slate-100 dark:bg-slate-900"
       onDoubleClick={handleDoubleClick}
     >
       {/* Tabs */}
@@ -96,24 +97,35 @@ function Tab({ tab, isActive, onClick, onClose, width }: TabProps) {
     onClose();
   };
 
+  const renderIcon = () => {
+    if (tab.isLoading) {
+      return <Loader2 className="w-4 h-4 flex-shrink-0 animate-spin text-muted-foreground" />;
+    }
+    
+    if (tab.favicon) {
+      if(ICON_MAP[tab.favicon]){
+        const IconComponent = ICON_MAP[tab.favicon];
+        return <IconComponent className="w-4 h-4 flex-shrink-0" />;
+      }
+      return <img src={tab.favicon} alt="" className="w-4 h-4 flex-shrink-0 rounded-sm" />;
+    }
+    
+    return <Globe className="w-4 h-4 flex-shrink-0 text-muted-foreground" />;
+  };
+
   return (
     <div
       onClick={onClick}
       style={{ width: `${width}px` }}
       className={cn(
-        'flex items-center gap-1.5 h-8 px-2.5 rounded-xl cursor-pointer group tab-item flex-shrink-0',
+        'flex items-center gap-1.5 h-7 px-2.5 rounded-xl cursor-pointer group tab-item flex-shrink-0',
         'transition-all duration-150',
         isActive
           ? 'dark:bg-slate-900 bg-slate-50'
           : 'bg-slate-300 dark:bg-slate-600 dark:hover:bg-[#2a2a2a]'
       )}
     >
-      {/* Favicon */}
-      {tab.favicon ? (
-        <img src={tab.favicon} alt="" className="w-4 h-4 flex-shrink-0" />
-      ) : (
-        <Loader2 className="w-4 h-4 flex-shrink-0 animate-spin" />
-      )}
+      {renderIcon()}
 
       {width > 100 && (
         <span className="flex-1 truncate text-sm min-w-0">
