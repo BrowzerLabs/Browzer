@@ -67,7 +67,7 @@ export class MainService {
       this.authService
     );
 
-    this.appMenu = new AppMenu(this.browserService.getTabManager(), this.updateService);
+    this.appMenu = new AppMenu(this.browserService.getTabService(), this.updateService);
     this.appMenu.setupMenu();
 
     if (MAIN_WINDOW_VITE_DEV_SERVER_URL) {

@@ -1,9 +1,9 @@
 import { app, BaseWindow, BrowserWindow, Menu } from 'electron';
-import { TabManager } from '@/main/browser/TabManager';
+import { TabService } from '@/main/browser/TabService';
 import { UpdateService } from '@/main/UpdateService';
 
 export class AppMenu {
-  private tabManager: TabManager;
+  private tabService: TabService;
   private updateService: UpdateService;
 
   private isMac = process.platform === 'darwin';
@@ -22,10 +22,10 @@ export class AppMenu {
   };
 
   constructor(
-    tabManager: TabManager,
+    tabService: TabService,
     updateService: UpdateService
   ) {
-    this.tabManager = tabManager;
+    this.tabService = tabService;
     this.updateService = updateService;
   }
 
@@ -60,7 +60,7 @@ export class AppMenu {
                   accelerator: this.keys.settings,
                   click: () => {
                     if (this.ensureWindow()) {
-                      this.tabManager.createTab('browzer://settings');
+                      this.tabService.createTab('browzer://settings');
                     }
                   },
                 },
@@ -85,7 +85,7 @@ export class AppMenu {
             accelerator: this.keys.newTab,
             click: () => {
               if (this.ensureWindow()) {
-                this.tabManager.createTab();
+                this.tabService.createTab();
               }
             },
           },
@@ -94,7 +94,7 @@ export class AppMenu {
             accelerator: this.keys.newWindow,
             click: () => {
               if (this.ensureWindow()) {
-                this.tabManager.createTab();
+                this.tabService.createTab();
               }
             },
           },
@@ -104,9 +104,9 @@ export class AppMenu {
             accelerator: this.keys.closeTab,
             click: () => {
               if (!this.hasActiveWindow()) return;
-              const { activeTabId } = this.tabManager.getAllTabs();
+              const { activeTabId } = this.tabService.getAllTabs();
               if (activeTabId) {
-                this.tabManager.closeTab(activeTabId);
+                this.tabService.closeTab(activeTabId);
               }
             },
           },
@@ -154,9 +154,9 @@ export class AppMenu {
             accelerator: this.keys.back,
             click: () => {
               if (!this.hasActiveWindow()) return;
-              const activeTabId = this.tabManager.getActiveTabId();
+              const activeTabId = this.tabService.getActiveTabId();
               if (activeTabId) {
-                this.tabManager.goBack(activeTabId);
+                this.tabService.goBack(activeTabId);
               }
             },
           },
@@ -165,9 +165,9 @@ export class AppMenu {
             accelerator: this.keys.forward,
             click: () => {
               if (!this.hasActiveWindow()) return;
-              const activeTabId = this.tabManager.getActiveTabId();
+              const activeTabId = this.tabService.getActiveTabId();
               if (activeTabId) {
-                this.tabManager.goForward(activeTabId);
+                this.tabService.goForward(activeTabId);
               }
             },
           },
@@ -177,9 +177,9 @@ export class AppMenu {
             accelerator: this.keys.reload,
             click: () => {
               if (!this.hasActiveWindow()) return;
-              const activeTabId = this.tabManager.getActiveTabId();
+              const activeTabId = this.tabService.getActiveTabId();
               if (activeTabId) {
-                this.tabManager.reload(activeTabId);
+                this.tabService.reload(activeTabId);
               }
             },
           },
@@ -188,9 +188,9 @@ export class AppMenu {
             accelerator: this.keys.forceReload,
             click: () => {
               if (!this.hasActiveWindow()) return;
-              const activeTabId = this.tabManager.getActiveTabId();
+              const activeTabId = this.tabService.getActiveTabId();
               if (activeTabId) {
-                this.tabManager.reload(activeTabId);
+                this.tabService.reload(activeTabId);
               }
             },
           },
@@ -214,7 +214,7 @@ export class AppMenu {
             accelerator: this.keys.nextTab,
             click: () => {
               if (!this.hasActiveWindow()) return;
-              this.tabManager.selectNextTab();
+              this.tabService.selectNextTab();
             },
           },
           {
@@ -222,7 +222,7 @@ export class AppMenu {
             accelerator: this.keys.prevTab,
             click: () => {
               if (!this.hasActiveWindow()) return;
-              this.tabManager.selectPreviousTab();
+              this.tabService.selectPreviousTab();
             },
           },
           { type: 'separator' as const },
@@ -232,7 +232,7 @@ export class AppMenu {
             accelerator: this.isMac ? `Cmd+${i + 1}` : `Ctrl+${i + 1}`,
             click: () => {
               if (!this.hasActiveWindow()) return;
-              this.tabManager.selectTabByIndex(i);
+              this.tabService.selectTabByIndex(i);
             },
           })),
           ...(this.isMac
@@ -257,7 +257,7 @@ export class AppMenu {
             label: 'Learn More',
             click: () => {
               if (this.ensureWindow()) {
-                this.tabManager.createTab('https://trybrowzer.com');
+                this.tabService.createTab('https://trybrowzer.com');
               }
             },
           },
@@ -265,7 +265,7 @@ export class AppMenu {
             label: 'Documentation',
             click: () => {
               if (this.ensureWindow()) {
-                this.tabManager.createTab('https://docs.trybrowzer.com');
+                this.tabService.createTab('https://docs.trybrowzer.com');
               }
             },
           },

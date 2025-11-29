@@ -6,22 +6,22 @@ import { VideoRecorder } from '@/main/recording';
 import { PasswordManager } from '@/main/password/PasswordManager';
 import { BrowserAutomationExecutor } from '@/main/automation';
 import { HistoryService } from '@/main/history/HistoryService';
-import { Tab, TabManagerEvents } from './types';
+import { Tab, TabServiceEvents } from './types';
 import { NavigationManager } from './NavigationManager';
 import { DebuggerManager } from './DebuggerManager';
 import { PasswordAutomation } from '@/main/password';
 
-export class TabManager extends EventEmitter {
-  public on<K extends keyof TabManagerEvents>(
+export class TabService extends EventEmitter {
+  public on<K extends keyof TabServiceEvents>(
     event: K,
-    listener: TabManagerEvents[K]
+    listener: TabServiceEvents[K]
   ): this {
     return super.on(event, listener);
   }
 
-  public emit<K extends keyof TabManagerEvents>(
+  public emit<K extends keyof TabServiceEvents>(
     event: K,
-    ...args: Parameters<TabManagerEvents[K]>
+    ...args: Parameters<TabServiceEvents[K]>
   ): boolean {
     return super.emit(event, ...args);
   }
@@ -97,7 +97,7 @@ export class TabManager extends EventEmitter {
 
     // Initialize debugger asynchronously
     this.debuggerManager.initializeDebugger(view, tabId).catch(err => 
-      console.error('[TabManager] Failed to initialize debugger for tab:', tabId, err)
+      console.error('[TabService] Failed to initialize debugger for tab:', tabId, err)
     );
 
     this.baseWindow.contentView.addChildView(view);
@@ -126,7 +126,7 @@ export class TabManager extends EventEmitter {
     // Clean up password automation
     if (tab.passwordAutomation) {
       tab.passwordAutomation.stop().catch(err => 
-        console.error('[TabManager] Error stopping password automation:', err)
+        console.error('[TabService] Error stopping password automation:', err)
       );
     }
 
@@ -344,7 +344,7 @@ export class TabManager extends EventEmitter {
         try {
           await tab.passwordAutomation.start();
         } catch (error) {
-          console.error('[TabManager] Failed to start password automation:', error);
+          console.error('[TabService] Failed to start password automation:', error);
         }
       }
       

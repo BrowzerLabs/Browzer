@@ -6,7 +6,7 @@ import { PasswordManager } from '@/main/password/PasswordManager';
 import { BrowserAutomationExecutor } from './automation';
 import { SessionManager } from '@/main/llm/session/SessionManager';
 import {
-  TabManager,
+  TabService,
   RecordingManager,
   AutomationManager,
   NavigationManager,
@@ -15,7 +15,7 @@ import {
 
 export class BrowserService {
   // Modular components
-  private tabManager: TabManager;
+  private tabService: TabService;
   private recordingManager: RecordingManager;
   private automationManager: AutomationManager;
   private navigationManager: NavigationManager;
@@ -41,7 +41,7 @@ export class BrowserService {
     this.navigationManager = new NavigationManager(this.historyService);
     this.debuggerManager = new DebuggerManager();
     
-    this.tabManager = new TabManager(
+    this.tabService = new TabService(
       baseWindow,
       this.passwordManager,
       this.historyService,
@@ -64,14 +64,14 @@ export class BrowserService {
   }
 
   public initializeAfterAuth(): void {
-    const { tabs } = this.tabManager.getAllTabs();
+    const { tabs } = this.tabService.getAllTabs();
     if (tabs.length === 0) {
-      this.tabManager.createTab('https://www.google.com');
+      this.tabService.createTab('https://www.google.com');
     }
   }
 
-  public getTabManager(): TabManager {
-    return this.tabManager;
+  public getTabService(): TabService {
+    return this.tabService;
   }
 
   public async getSearchSuggestions(query: string): Promise<string[]> {
@@ -83,7 +83,7 @@ export class BrowserService {
   }
 
   public async startRecording(): Promise<boolean> {
-    const activeTab = this.tabManager.getActiveTab();
+    const activeTab = this.tabService.getActiveTab();
     if (!activeTab) {
       dialog.showMessageBox({
         type: 'error',
@@ -97,7 +97,7 @@ export class BrowserService {
   }
 
   public async stopRecording(): Promise<RecordedAction[]> {
-    return this.recordingManager.stopRecording(this.tabManager.getTabs());
+    return this.recordingManager.stopRecording(this.tabService.getTabs());
   }
 
   public async saveRecording(
@@ -109,7 +109,7 @@ export class BrowserService {
       name,
       description,
       actions,
-      this.tabManager.getTabs()
+      this.tabService.getTabs()
     );
   }
 
@@ -137,7 +137,7 @@ export class BrowserService {
     sessionId: string;
     message: string;
   }> {
-    const newTab = this.tabManager.createTab();
+    const newTab = this.tabService.createTab();
     return this.automationManager.executeAutomation(
       newTab,
       userGoal,
@@ -184,55 +184,55 @@ export class BrowserService {
   }
 
   public getActiveAutomationExecutor(): BrowserAutomationExecutor | null {
-    const activeTab = this.tabManager.getActiveTab();
+    const activeTab = this.tabService.getActiveTab();
     return activeTab.automationExecutor;
   }
 
   // Layout Management
 
   public updateLayout(_windowWidth: number, _windowHeight: number, sidebarWidth = 0): void {
-    this.tabManager.updateLayout(sidebarWidth);
+    this.tabService.updateLayout(sidebarWidth);
   }
 
   /**
    * Hide all tabs (for fullscreen routes like auth pages)
    */
   public hideAllTabs(): void {
-    this.tabManager.hideAllTabs();
+    this.tabService.hideAllTabs();
   }
 
   /**
    * Show all tabs (restore normal browsing mode)
    */
   public showAllTabs(): void {
-    this.tabManager.showAllTabs();
+    this.tabService.showAllTabs();
   }
 
   /**
    * Navigate active tab or create new tab with browzer:// URL
    */
   public navigateToBrowzerURL(url: string): void {
-    const activeTab = this.tabManager.getActiveTab();
+    const activeTab = this.tabService.getActiveTab();
     if (activeTab) {
-      this.tabManager.navigate(activeTab.id, url);
+      this.tabService.navigate(activeTab.id, url);
     } else {
-      this.tabManager.createTab(url);
+      this.tabService.createTab(url);
     }
   }
 
   public destroy(): void {
-    this.tabManager.destroy();
+    this.tabService.destroy();
     this.recordingManager.destroy();
     this.automationManager.destroy();
     this.sessionManager.close();
   }
 
   private setupTabEventListeners(): void {
-    this.tabManager.on('tabs:changed', () => {
+    this.tabService.on('tabs:changed', () => {
       this.notifyTabsChanged();
     });
 
-    this.tabManager.on('tab:switched', (previousTabId, newTab) => {
+    this.tabService.on('tab:switched', (previousTabId, newTab) => {
       if (this.recordingManager.isRecordingActive()) {
         this.recordingManager.handleTabSwitch(previousTabId, newTab);
       }
@@ -246,7 +246,7 @@ export class BrowserService {
     const allViews = this.baseWindow.contentView.children;
     allViews.forEach(view => {
       if (view instanceof WebContentsView) {
-        view.webContents.send('browser:tabs-updated', this.tabManager.getAllTabs());
+        view.webContents.send('browser:tabs-updated', this.tabService.getAllTabs());
       }
     });
   }
