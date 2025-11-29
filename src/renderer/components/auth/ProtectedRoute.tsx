@@ -42,7 +42,7 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
 
   if (loading) {
     return (
-      <div className="h-screen flex flex-col gap-2 items-center justify-center animate-pulse text-blue-600 dark:text-blue-400">
+      <div className="h-screen flex flex-col gap-2 items-center justify-center animate-pulse text-blue-600 dark:text-blue-400 bg-background">
         <ShieldCheckIcon className="size-10" />
         <p className='text-xs'>Verifying wheather its really you</p>
       </div>
@@ -55,7 +55,7 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
 
   if (!browserReady) {
     return (
-      <div className="h-screen flex flex-col items-center justify-center gap-2 text-teal-500">
+      <div className="h-screen flex flex-col items-center justify-center gap-2 text-teal-500 bg-background">
         <Loader2 className="size-7 animate-spin" />
         <p className='animate-pulse text-xs'>Setting up your Browzer</p>
       </div>
