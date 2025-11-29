@@ -4,6 +4,7 @@ import { Button } from '@/renderer/ui/button';
 import { Badge } from '@/renderer/ui/badge';
 import { Eye, Play, Trash2, Clock, CheckCircle2, XCircle, Pause, MessageSquare, ListChecks } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
+import { AutomationStatus } from '@/shared/types';
 
 interface AutomationSessionCardProps {
   session: SessionListItem;
@@ -19,9 +20,9 @@ export function AutomationSessionCard({ session, onView, onResume, onDelete }: A
         return <Clock className="w-4 h-4 animate-pulse" />;
       case 'completed':
         return <CheckCircle2 className="w-4 h-4" />;
-      case 'error':
+      case 'failed':
         return <XCircle className="w-4 h-4" />;
-      case 'paused':
+      case 'stopped':
         return <Pause className="w-4 h-4" />;
       default:
         return null;
@@ -34,9 +35,9 @@ export function AutomationSessionCard({ session, onView, onResume, onDelete }: A
         return 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200';
       case 'completed':
         return 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200';
-      case 'error':
+      case 'failed':
         return 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200';
-      case 'paused':
+      case 'stopped':
         return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200';
       default:
         return 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200';
@@ -107,7 +108,7 @@ export function AutomationSessionCard({ session, onView, onResume, onDelete }: A
           View
         </Button>
 
-        {(session.status === 'paused' || session.status === 'error') && (
+        {/* {(session.status === AutomationStatus.FAILED || session.status === AutomationStatus.STOPPED) && (
           <Button
             variant="default"
             size="sm"
@@ -117,7 +118,7 @@ export function AutomationSessionCard({ session, onView, onResume, onDelete }: A
             <Play className="w-3 h-3 mr-1" />
             Resume
           </Button>
-        )}
+        )} */}
 
         <Button
           variant="destructive"

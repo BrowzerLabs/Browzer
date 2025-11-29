@@ -95,19 +95,6 @@ export function StepEvent({ event, isLatest }: EventItemProps) {
             </div>
           )}
 
-          {event.data && event.data?.reasoning && (
-            <p className="text-sm text-muted-foreground mb-2">
-              {event.data.reasoning}
-            </p>
-          )}
-
-          {/* Success Summary (for step_complete) */}
-          {isSuccess && event.data?.result?.summary && (
-            <p className="text-sm text-green-700 dark:text-green-300 mt-2">
-              ✓ {event.data.result.summary}
-            </p>
-          )}
-
           {/* Error Display (for step_error) */}
           {event.data && event.data?.error && (
             <div className="mt-2 p-3 bg-red-100 dark:bg-red-900/30 rounded text-sm text-red-700 dark:text-red-300">

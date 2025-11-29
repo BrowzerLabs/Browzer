@@ -101,6 +101,7 @@ export interface BrowserAPI {
   getAutomationSessionDetails: (sessionId: string) => Promise<any>;
   resumeAutomationSession: (sessionId: string) => Promise<any>;
   deleteAutomationSession: (sessionId: string) => Promise<boolean>;
+  stopAutomation: (sessionId: string) => Promise<{ success: boolean }>;
 
   // Event listeners
   onTabsUpdated: (callback: (data: { tabs: TabInfo[]; activeTabId: string | null }) => void) => () => void;

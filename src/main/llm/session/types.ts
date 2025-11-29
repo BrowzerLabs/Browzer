@@ -1,31 +1,17 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import Anthropic from '@anthropic-ai/sdk';
+import { AutomationStatus } from '@/shared/types';
 
-/**
- * Session Storage Types
- * 
- * These types define the structure for persisting automation sessions
- * with full conversation history, context management, and caching support.
- */
-
-/**
- * Stored Automation Session
- * Represents a complete automation session with all metadata
- */
 export interface StoredSession {
   id: string;
   userGoal: string;
   recordingId: string;
-  status: 'running' | 'completed' | 'error' | 'paused';
+  status: AutomationStatus
   createdAt: number;
   updatedAt: number;
   completedAt?: number;
   metadata: SessionMetadata;
 }
 
-/**
- * Session metadata for tracking usage and state
- */
 export interface SessionMetadata {
   totalInputTokens: number;
   totalOutputTokens: number;
@@ -40,9 +26,6 @@ export interface SessionMetadata {
   finalError?: string;
 }
 
-/**
- * Stored message in conversation history
- */
 export interface StoredMessage {
   id: number;
   sessionId: string;
@@ -53,9 +36,6 @@ export interface StoredMessage {
   createdAt: number;
 }
 
-/**
- * Stored executed step
- */
 export interface StoredStep {
   id: number;
   sessionId: string;
@@ -151,6 +131,7 @@ export interface SessionListItem {
  * Session creation options
  */
 export interface CreateSessionOptions {
+  id?: string;
   userGoal: string;
   recordingId: string;
   cachedContext?: string;

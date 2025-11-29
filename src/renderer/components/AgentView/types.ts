@@ -1,20 +1,9 @@
-/**
- * AgentView Component Types
- * 
- * Local types specific to the AgentView component tree
- */
-
-import { RecordingSession } from '@/shared/types';
+import { AutomationProgressEvent, RecordingSession } from '@/shared/types';
 import { AutomationSession, SessionListItem } from '@/renderer/stores/automationStore';
 
-/**
- * View mode for AgentView
- */
 export type AgentViewMode = 'new_session' | 'existing_session';
+export type AgentMode = 'ask' | 'automate';
 
-/**
- * Props for AgentHeader
- */
 export interface AgentHeaderProps {
   viewMode: AgentViewMode;
   selectedRecordingId: string | null;
@@ -25,10 +14,8 @@ export interface AgentHeaderProps {
   isDisabled: boolean;
 }
 
-/**
- * Props for AgentChatArea
- */
 export interface AgentChatAreaProps {
+  agentMode: AgentMode;
   viewMode: AgentViewMode;
   currentSession: AutomationSession | null;
   sessionHistory: SessionListItem[];
@@ -37,31 +24,25 @@ export interface AgentChatAreaProps {
   onSessionSelect: (sessionId: string) => void;
 }
 
-/**
- * Props for AgentFooter
- */
 export interface AgentFooterProps {
   userPrompt: string;
   selectedRecordingId: string | null;
   isSubmitting: boolean;
   isDisabled: boolean;
+  agentMode: AgentMode;
   onPromptChange: (prompt: string) => void;
   onSubmit: () => void;
+  onStop: () => void;
+  onModeChange: (mode: AgentMode) => void;
 }
 
-/**
- * Props for SessionHistory
- */
 export interface SessionHistoryProps {
   sessions: SessionListItem[];
   isLoading: boolean;
   onSessionSelect: (sessionId: string) => void;
 }
 
-/**
- * Props for Event Items
- */
 export interface EventItemProps {
-  event: any;
+  event: AutomationProgressEvent;
   isLatest?: boolean;
 }
