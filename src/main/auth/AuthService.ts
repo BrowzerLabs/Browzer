@@ -8,7 +8,7 @@ import {
   UpdateProfileRequest,
   SimpleResponse,
 } from '@/shared/types';
-import { BrowserManager } from '@/main/BrowserManager';
+import { BrowserService } from '@/main/BrowserService';
 import { api } from '@/main/api';
 import { tokenManager } from './TokenManager';
 import { ConnectionService } from '@/main/api';
@@ -16,14 +16,14 @@ import { ConnectionService } from '@/main/api';
 export class AuthService {
   private currentUser: User | null = null;
   private authWindow: BrowserWindow | null = null;
-  private readonly browserManager: BrowserManager;
+  private readonly browserService: BrowserService;
   private readonly connectionService: ConnectionService;
 
   constructor(
-    browserManager: BrowserManager,
+    browserService: BrowserService,
     connectionService: ConnectionService,
   ) {
-    this.browserManager = browserManager;
+    this.browserService = browserService;
     this.connectionService = connectionService;
     
     tokenManager.on('token-refresh-needed', () => {
@@ -276,7 +276,7 @@ export class AuthService {
       }
 
       this.clearSession();
-      this.browserManager.destroy();
+      this.browserService.destroy();
 
       return { success: true };
     } catch (error: any) {

@@ -1,5 +1,5 @@
 import { BaseWindow, WebContentsView, ipcMain, shell } from 'electron';
-import { BrowserManager } from '@/main/BrowserManager';
+import { BrowserService } from '@/main/BrowserService';
 import { SettingsStore } from '@/main/settings/SettingsStore';
 import { PasswordManager } from '@/main/password/PasswordManager';
 import { AuthService } from '@/main/auth';
@@ -21,14 +21,14 @@ export class IPCHandlers extends EventEmitter {
 
   constructor(
     baseWindow: BaseWindow,
-    private browserManager: BrowserManager,
+    private browserService: BrowserService,
     authService: AuthService,
   ) {
     super();
     this.baseWindow = baseWindow;
-    this.tabManager = this.browserManager.getTabManager();
+    this.tabManager = this.browserService.getTabManager();
     this.settingsStore = new SettingsStore();
-    this.passwordManager = this.browserManager.getPasswordManager();
+    this.passwordManager = this.browserService.getPasswordManager();
     this.authService = authService;
     this.subscriptionService = new SubscriptionService();
     this.themeService = ThemeService.getInstance();
@@ -55,7 +55,7 @@ export class IPCHandlers extends EventEmitter {
 
   private setupTabHandlers(): void {
     ipcMain.handle('browser:initialize', async () => {
-      this.browserManager.initializeAfterAuth();
+      this.browserService.initializeAfterAuth();
       return true;
     });
 
@@ -116,28 +116,28 @@ export class IPCHandlers extends EventEmitter {
 
   private setupRecordingHandlers(): void {
     ipcMain.handle('browser:start-recording', async () => {
-      return this.browserManager.startRecording();
+      return this.browserService.startRecording();
     });
     ipcMain.handle('browser:stop-recording', async () => {
-      return this.browserManager.stopRecording();
+      return this.browserService.stopRecording();
     });
     ipcMain.handle('browser:save-recording', async (_, name: string, description: string, actions: RecordedAction[]) => {
-      return this.browserManager.saveRecording(name, description, actions);
+      return this.browserService.saveRecording(name, description, actions);
     });
     ipcMain.handle('browser:get-all-recordings', async () => {
-      return this.browserManager.getRecordingStore().getAllRecordings();
+      return this.browserService.getRecordingStore().getAllRecordings();
     });
     ipcMain.handle('browser:delete-recording', async (_, id: string) => {
-      return this.browserManager.deleteRecording(id);
+      return this.browserService.deleteRecording(id);
     });
     ipcMain.handle('browser:is-recording', async () => {
-      return this.browserManager.isRecordingActive();
+      return this.browserService.isRecordingActive();
     });
     ipcMain.handle('browser:get-recorded-actions', async () => {
-      return this.browserManager.getRecordedActions();
+      return this.browserService.getRecordedActions();
     });
     ipcMain.handle('browser:export-recording', async (_, id: string) => {
-      return await this.browserManager.getRecordingStore().exportRecording(id);
+      return await this.browserService.getRecordingStore().exportRecording(id);
     });
     ipcMain.handle('video:open-file', async (_, videoPath: string) => {
       try {
@@ -197,7 +197,7 @@ export class IPCHandlers extends EventEmitter {
   }
 
   private setupHistoryHandlers(): void {
-    const historyService = this.browserManager.getHistoryService();
+    const historyService = this.browserService.getHistoryService();
 
     ipcMain.handle('history:get-all', async (_, limit?: number) => {
       return historyService.getAll(limit);
@@ -311,34 +311,34 @@ export class IPCHandlers extends EventEmitter {
    */
   private setupAutomationHandlers(): void {
     ipcMain.handle('automation:execute-llm', async (_, userGoal: string, recordedSessionId: string) => {
-     return await this.browserManager.executeIterativeAutomation(userGoal, recordedSessionId);
+     return await this.browserService.executeIterativeAutomation(userGoal, recordedSessionId);
     });
     ipcMain.handle('automation:stop', async (_, sessionId: string) => {
-      this.browserManager.stopAutomation(sessionId);
+      this.browserService.stopAutomation(sessionId);
       return { success: true };
     });
     ipcMain.handle('automation:load-session', async (_, sessionId: string) => {
-      return await this.browserManager.loadAutomationSession(sessionId);
+      return await this.browserService.loadAutomationSession(sessionId);
     });
     
     ipcMain.handle('automation:get-session-history', async (_, limit?: number) => {
-      return await this.browserManager.getAutomationSessionHistory(limit);
+      return await this.browserService.getAutomationSessionHistory(limit);
     });
     
     ipcMain.handle('automation:get-sessions', async () => {
-      return await this.browserManager.getAutomationSessions();
+      return await this.browserService.getAutomationSessions();
     });
     
     ipcMain.handle('automation:get-session-details', async (_, sessionId: string) => {
-      return await this.browserManager.getAutomationSessionDetails(sessionId);
+      return await this.browserService.getAutomationSessionDetails(sessionId);
     });
     
     ipcMain.handle('automation:resume-session', async (_, sessionId: string) => {
-      return await this.browserManager.resumeAutomationSession(sessionId);
+      return await this.browserService.resumeAutomationSession(sessionId);
     });
     
     ipcMain.handle('automation:delete-session', async (_, sessionId: string) => {
-      return await this.browserManager.deleteAutomationSession(sessionId);
+      return await this.browserService.deleteAutomationSession(sessionId);
     });
   }
 
@@ -422,26 +422,26 @@ export class IPCHandlers extends EventEmitter {
 
   private setupDeepLinkHandlers(): void {
     ipcMain.handle('deeplink:hide-tabs', async () => {
-      this.browserManager.hideAllTabs();
+      this.browserService.hideAllTabs();
       return true;
     });
     ipcMain.handle('deeplink:show-tabs', async () => {
-      this.browserManager.showAllTabs();
+      this.browserService.showAllTabs();
       return true;
     });
     ipcMain.handle('deeplink:navigate-tab', async (_, url: string) => {
-      this.browserManager.navigateToBrowzerURL(url);
+      this.browserService.navigateToBrowzerURL(url);
       return true;
     });
   }
 
   private setupAutocompleteHandlers(): void {
     ipcMain.handle('autocomplete:get-suggestions', async (_, query: string): Promise<AutocompleteSuggestion[]> => {
-      return this.browserManager.getAutocompleteSuggestions(query);
+      return this.browserService.getAutocompleteSuggestions(query);
     });
 
     ipcMain.handle('autocomplete:get-search-suggestions', async (_, query: string): Promise<string[]> => {
-      return this.browserManager.getSearchSuggestions(query);
+      return this.browserService.getSearchSuggestions(query);
     });
   }
 

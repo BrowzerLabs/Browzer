@@ -180,7 +180,7 @@ pnpm make
 ┌────────────────────┴────────────────────────────────────┐
 │                  Backend (Main Process)                  │
 │  Electron 38 + TypeScript + Node.js                     │
-│  - BrowserManager (Tab management)                       │
+│  - BrowserService (Tab management)                       │
 │  - ActionRecorder (Workflow capture)                     │
 │  - HistoryService (Browsing history)                     │
 │  - UserService (Authentication)                          │
@@ -194,7 +194,7 @@ pnpm make
 browzer/
 ├── src/
 │   ├── main/                    # Main process (Electron)
-│   │   ├── BrowserManager.ts    # Tab & navigation management
+│   │   ├── BrowserService.ts    # Tab & navigation management
 │   │   ├── ActionRecorder.ts    # Workflow recording engine
 │   │   ├── HistoryService.ts    # Browsing history
 │   │   ├── UserService.ts       # Authentication & users
@@ -237,11 +237,11 @@ browzer/
 
 ### Key Components
 
-#### 1. BrowserManager
+#### 1. BrowserService
 Manages browser tabs, navigation, and WebContentsView lifecycle.
 
 ```typescript
-class BrowserManager {
+class BrowserService {
   createTab(url?: string): TabInfo
   closeTab(tabId: string): boolean
   switchTab(tabId: string): boolean

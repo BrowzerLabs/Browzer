@@ -13,7 +13,7 @@ import {
   DebuggerManager,
 } from './browser';
 
-export class BrowserManager {
+export class BrowserService {
   // Modular components
   private tabManager: TabManager;
   private recordingManager: RecordingManager;

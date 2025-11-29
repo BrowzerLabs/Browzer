@@ -1,4 +1,4 @@
-import { BrowserManager } from '@/main/BrowserManager';
+import { BrowserService } from '@/main/BrowserService';
 import { IPCHandlers } from '@/main/ipc/IPCHandlers';
 import { DeepLinkService } from '@/main/deeplink/DeepLinkService';
 import { ConnectionService } from './api';
@@ -9,7 +9,7 @@ import { BaseWindow, WebContentsView, dialog } from 'electron';
 import path from 'node:path';
 
 export class MainService {
-  private browserManager: BrowserManager;
+  private browserService: BrowserService;
   private connectionService: ConnectionService;
   private authService: AuthService;
   private ipcHandlers: IPCHandlers;
@@ -49,7 +49,7 @@ export class MainService {
 
     this.baseWindow.contentView.addChildView(this.browserView);
 
-    this.browserManager = new BrowserManager(this.baseWindow, this.browserView);
+    this.browserService = new BrowserService(this.baseWindow, this.browserView);
 
     this.updateService = new UpdateService(this.browserView.webContents);
 
@@ -57,17 +57,17 @@ export class MainService {
 
     this.connectionService = new ConnectionService(this.browserView.webContents);
 
-    this.authService = new AuthService(this.browserManager, this.connectionService);
+    this.authService = new AuthService(this.browserService, this.connectionService);
     
     this.connectionService.setRefreshCallback(() => this.authService.refreshSession());
     
     this.ipcHandlers = new IPCHandlers(
       this.baseWindow,
-      this.browserManager,
+      this.browserService,
       this.authService
     );
 
-    this.appMenu = new AppMenu(this.browserManager.getTabManager(), this.updateService);
+    this.appMenu = new AppMenu(this.browserService.getTabManager(), this.updateService);
     this.appMenu.setupMenu();
 
     if (MAIN_WINDOW_VITE_DEV_SERVER_URL) {
@@ -127,7 +127,7 @@ export class MainService {
       height: bounds.height,
     });
 
-    this.browserManager.updateLayout(bounds.width, bounds.height, sidebarWidth);
+    this.browserService.updateLayout(bounds.width, bounds.height, sidebarWidth);
   }
 
   public getBaseWindow() {
@@ -140,7 +140,7 @@ export class MainService {
 
   public destroy(): void {
     this.ipcHandlers.cleanup();
-    this.browserManager.destroy();
+    this.browserService.destroy();
     this.baseWindow = null;
     this.browserView = null;
   }
