@@ -247,6 +247,16 @@ export class IPCHandlers extends EventEmitter {
           this.baseWindow.maximize();
       }
     });
+
+    ipcMain.handle('browser:bring-view-front', async () => {
+      this.browserService.bringBrowserViewToFront();
+      return true;
+    });
+
+    ipcMain.handle('browser:bring-view-bottom', async () => {
+      this.browserService.bringBrowserViewToBottom();
+      return true;
+    });
   }
 
    private setupPasswordHandlers(): void {
@@ -482,6 +492,8 @@ export class IPCHandlers extends EventEmitter {
       'history:get-recently-visited',
       // Window handlers
       'window:toggle-maximize',
+      'browser:bring-view-front',
+      'browser:bring-view-bottom',
       // Password handlers
       'password:get-all',
       'password:save',

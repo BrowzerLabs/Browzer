@@ -26,6 +26,8 @@ export interface BrowserAPI {
   
   // Window Management
   toggleMaximize: () => Promise<void>;
+  bringBrowserViewToFront: () => Promise<boolean>;
+  bringBrowserViewToBottom: () => Promise<boolean>;
   
   // Desktop Capturer (for video recording)
   getDesktopSources: () => Promise<Array<{ id: string; name: string; thumbnail: any }>>;
