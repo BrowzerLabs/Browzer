@@ -1,36 +1,32 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
-import { ipcMain, shell } from 'electron';
-import { BrowserManager } from '@/main/BrowserManager';
-import { LayoutManager } from '@/main/window/LayoutManager';
-import { WindowManager } from '@/main/window/WindowManager';
+import { BaseWindow, ipcMain, shell } from 'electron';
+import { BrowserService } from '@/main/BrowserService';
 import { SettingsStore } from '@/main/settings/SettingsStore';
 import { PasswordManager } from '@/main/password/PasswordManager';
 import { AuthService } from '@/main/auth';
 import { SubscriptionService } from '@/main/subscription/SubscriptionService';
 import { RecordedAction, HistoryQuery, AppSettings, SignUpCredentials, SignInCredentials, UpdateProfileRequest } from '@/shared/types';
 import { CheckoutSessionRequest, PortalSessionRequest } from '@/shared/types/subscription';
-import { TabManager } from '@/main/browser';
+import { TabService } from '@/main/browser';
+import { EventEmitter } from 'events';
 
-/**
- * IPCHandlers - Centralized IPC communication setup
- * Registers all IPC handlers for main <-> renderer communication
- */
-export class IPCHandlers {
+export class IPCHandlers extends EventEmitter {
   private settingsStore: SettingsStore;
   private passwordManager: PasswordManager;
-  private tabManager: TabManager;
+  private tabService: TabService;
   private authService: AuthService;
   private subscriptionService: SubscriptionService;
+  private baseWindow: BaseWindow;
 
   constructor(
-    private browserManager: BrowserManager,
-    private layoutManager: LayoutManager,
-    private windowManager: WindowManager,
+    baseWindow: BaseWindow,
+    private browserService: BrowserService,
     authService: AuthService,
   ) {
-    this.tabManager = this.browserManager.getTabManager();
+    super();
+    this.baseWindow = baseWindow;
+    this.tabService = this.browserService.getTabService();
     this.settingsStore = new SettingsStore();
-    this.passwordManager = this.browserManager.getPasswordManager();
+    this.passwordManager = this.browserService.getPasswordManager();
     this.authService = authService;
     this.subscriptionService = new SubscriptionService();
     this.setupHandlers();
@@ -54,90 +50,89 @@ export class IPCHandlers {
 
   private setupTabHandlers(): void {
     ipcMain.handle('browser:initialize', async () => {
-      this.browserManager.initializeAfterAuth();
+      this.browserService.initializeAfterAuth();
       return true;
     });
 
     ipcMain.handle('browser:create-tab', async (_, url?: string) => {
-      const tab = this.tabManager.createTab(url);
+      const tab = this.tabService.createTab(url);
       return tab.info;
     });
 
     ipcMain.handle('browser:close-tab', async (_, tabId: string) => {
-      return this.tabManager.closeTab(tabId);
+      return this.tabService.closeTab(tabId);
     });
 
     ipcMain.handle('browser:switch-tab', async (_, tabId: string) => {
-      return this.tabManager.switchToTab(tabId);
+      return this.tabService.switchToTab(tabId);
     });
 
     ipcMain.handle('browser:get-tabs', async () => {
-      return this.tabManager.getAllTabs();
+      return this.tabService.getAllTabs();
     });
   }
 
   private setupNavigationHandlers(): void {
     ipcMain.handle('browser:navigate', async (_, tabId: string, url: string) => {
-      return this.tabManager.navigate(tabId, url);
+      return this.tabService.navigate(tabId, url);
     });
 
     ipcMain.handle('browser:go-back', async (_, tabId: string) => {
-      return this.tabManager.goBack(tabId);
+      return this.tabService.goBack(tabId);
     });
 
     ipcMain.handle('browser:go-forward', async (_, tabId: string) => {
-      return this.tabManager.goForward(tabId);
+      return this.tabService.goForward(tabId);
     });
 
     ipcMain.handle('browser:reload', async (_, tabId: string) => {
-      return this.tabManager.reload(tabId);
+      return this.tabService.reload(tabId);
     });
 
     ipcMain.handle('browser:stop', async (_, tabId: string) => {
-      return this.tabManager.stop(tabId);
+      return this.tabService.stop(tabId);
     });
 
     ipcMain.handle('browser:can-go-back', async (_, tabId: string) => {
-      return this.tabManager.canGoBack(tabId);
+      return this.tabService.canGoBack(tabId);
     });
 
     ipcMain.handle('browser:can-go-forward', async (_, tabId: string) => {
-      return this.tabManager.canGoForward(tabId);
+      return this.tabService.canGoForward(tabId);
     });
   }
 
   private setupSidebarHandlers(): void {
-    ipcMain.handle('browser:set-sidebar-state', async (_, visible: boolean, widthPercent: number) => {
-      this.layoutManager.setSidebarState(visible, widthPercent);
-      this.updateLayout();
+    ipcMain.handle('browser:set-sidebar-state', async (_, visible: boolean) => {
+      this.emit('sidebar-state-changed', visible);
       return true;
     });
   }
 
   private setupRecordingHandlers(): void {
     ipcMain.handle('browser:start-recording', async () => {
-      return this.browserManager.startRecording();
+      return this.browserService.startRecording();
     });
     ipcMain.handle('browser:stop-recording', async () => {
-      return this.browserManager.stopRecording();
+      return this.browserService.stopRecording();
     });
     ipcMain.handle('browser:save-recording', async (_, name: string, description: string, actions: RecordedAction[]) => {
-      return this.browserManager.saveRecording(name, description, actions);
+      return this.browserService.saveRecording(name, description, actions);
     });
     ipcMain.handle('browser:get-all-recordings', async () => {
-      return this.browserManager.getRecordingStore().getAllRecordings();
+      return this.browserService.getRecordingStore().getAllRecordings();
     });
     ipcMain.handle('browser:delete-recording', async (_, id: string) => {
-      return this.browserManager.deleteRecording(id);
+      return this.browserService.deleteRecording(id);
     });
     ipcMain.handle('browser:is-recording', async () => {
-      return this.browserManager.isRecordingActive();
+      return this.browserService.isRecordingActive();
     });
     ipcMain.handle('browser:get-recorded-actions', async () => {
-      return this.browserManager.getRecordedActions();
+      return this.browserService.getRecordedActions();
     });
     ipcMain.handle('browser:export-recording', async (_, id: string) => {
-      return await this.browserManager.getRecordingStore().exportRecording(id);
+      return await this.browserService.getRecordingStore().exportRecording(id);
     });
     ipcMain.handle('video:open-file', async (_, videoPath: string) => {
       try {
@@ -197,7 +192,7 @@ export class IPCHandlers {
   }
 
   private setupHistoryHandlers(): void {
-    const historyService = this.browserManager.getHistoryService();
+    const historyService = this.browserService.getHistoryService();
 
     ipcMain.handle('history:get-all', async (_, limit?: number) => {
       return historyService.getAll(limit);
@@ -244,35 +239,12 @@ export class IPCHandlers {
     });
   }
 
-  private updateLayout(): void {
-    const browserUIView = this.windowManager.getBrowserUIView();
-    const baseWindow = this.windowManager.getWindow();
-    
-    if (!baseWindow) return;
-
-    const bounds = baseWindow.getBounds();
-    const sidebarState = this.layoutManager.getSidebarState();
-    const sidebarWidth = sidebarState.visible 
-      ? Math.floor(bounds.width * (sidebarState.widthPercent / 100))
-      : 0;
-
-    if (browserUIView) {
-      const browserUIBounds = this.layoutManager.calculateBrowserUIBounds();
-      browserUIView.setBounds(browserUIBounds);
-    }
-    
-    this.browserManager.updateLayout(bounds.width, bounds.height, sidebarWidth);
-  }
-
   private setupWindowHandlers(): void {
     ipcMain.handle('window:toggle-maximize', async () => {
-      const window = this.windowManager.getWindow();
-      if (window) {
-        if (window.isMaximized()) {
-          window.unmaximize();
+      if (this.baseWindow.isMaximized()) {
+          this.baseWindow.unmaximize();
         } else {
-          window.maximize();
-        }
+          this.baseWindow.maximize();
       }
     });
   }
@@ -334,34 +306,34 @@ export class IPCHandlers {
    */
   private setupAutomationHandlers(): void {
     ipcMain.handle('automation:execute-llm', async (_, userGoal: string, recordedSessionId: string) => {
-     return await this.browserManager.executeIterativeAutomation(userGoal, recordedSessionId);
+     return await this.browserService.executeIterativeAutomation(userGoal, recordedSessionId);
     });
     ipcMain.handle('automation:stop', async (_, sessionId: string) => {
-      this.browserManager.stopAutomation(sessionId);
+      this.browserService.stopAutomation(sessionId);
       return { success: true };
     });
     ipcMain.handle('automation:load-session', async (_, sessionId: string) => {
-      return await this.browserManager.loadAutomationSession(sessionId);
+      return await this.browserService.loadAutomationSession(sessionId);
     });
     
     ipcMain.handle('automation:get-session-history', async (_, limit?: number) => {
-      return await this.browserManager.getAutomationSessionHistory(limit);
+      return await this.browserService.getAutomationSessionHistory(limit);
     });
     
     ipcMain.handle('automation:get-sessions', async () => {
-      return await this.browserManager.getAutomationSessions();
+      return await this.browserService.getAutomationSessions();
     });
     
     ipcMain.handle('automation:get-session-details', async (_, sessionId: string) => {
-      return await this.browserManager.getAutomationSessionDetails(sessionId);
+      return await this.browserService.getAutomationSessionDetails(sessionId);
     });
     
     ipcMain.handle('automation:resume-session', async (_, sessionId: string) => {
-      return await this.browserManager.resumeAutomationSession(sessionId);
+      return await this.browserService.resumeAutomationSession(sessionId);
     });
     
     ipcMain.handle('automation:delete-session', async (_, sessionId: string) => {
-      return await this.browserManager.deleteAutomationSession(sessionId);
+      return await this.browserService.deleteAutomationSession(sessionId);
     });
   }
 
@@ -445,20 +417,130 @@ export class IPCHandlers {
 
   private setupDeepLinkHandlers(): void {
     ipcMain.handle('deeplink:hide-tabs', async () => {
-      this.browserManager.hideAllTabs();
+      this.browserService.hideAllTabs();
       return true;
     });
     ipcMain.handle('deeplink:show-tabs', async () => {
-      this.browserManager.showAllTabs();
+      this.browserService.showAllTabs();
       return true;
     });
     ipcMain.handle('deeplink:navigate-tab', async (_, url: string) => {
-      this.browserManager.navigateToBrowzerURL(url);
+      this.browserService.navigateToBrowzerURL(url);
       return true;
     });
   }
 
   public cleanup(): void {
+    const handlers = [
+      // Tab handlers
+      'browser:initialize',
+      'browser:create-tab',
+      'browser:close-tab',
+      'browser:switch-tab',
+      'browser:get-tabs',
+      // Navigation handlers
+      'browser:navigate',
+      'browser:go-back',
+      'browser:go-forward',
+      'browser:reload',
+      'browser:stop',
+      'browser:can-go-back',
+      'browser:can-go-forward',
+      // Sidebar handlers
+      'browser:set-sidebar-state',
+      // Recording handlers
+      'browser:start-recording',
+      'browser:stop-recording',
+      'browser:save-recording',
+      'browser:get-all-recordings',
+      'browser:delete-recording',
+      'browser:is-recording',
+      'browser:get-recorded-actions',
+      'browser:export-recording',
+      'video:open-file',
+      'video:get-file-url',
+      // Settings handlers
+      'settings:get-all',
+      'settings:get-category',
+      'settings:update',
+      'settings:update-category',
+      'settings:reset-all',
+      'settings:reset-category',
+      'settings:export',
+      'settings:import',
+      // History handlers
+      'history:get-all',
+      'history:search',
+      'history:get-today',
+      'history:get-last-n-days',
+      'history:delete-entry',
+      'history:delete-entries',
+      'history:delete-by-date-range',
+      'history:clear-all',
+      'history:get-stats',
+      'history:get-most-visited',
+      'history:get-recently-visited',
+      // Window handlers
+      'window:toggle-maximize',
+      // Password handlers
+      'password:get-all',
+      'password:save',
+      'password:get-for-origin',
+      'password:get-password',
+      'password:update',
+      'password:delete',
+      'password:delete-multiple',
+      'password:search',
+      'password:get-blacklist',
+      'password:add-to-blacklist',
+      'password:remove-from-blacklist',
+      'password:is-blacklisted',
+      'password:export',
+      'password:import',
+      'password:get-stats',
+      // Automation handlers
+      'automation:execute-llm',
+      'automation:stop',
+      'automation:load-session',
+      'automation:get-session-history',
+      'automation:get-sessions',
+      'automation:get-session-details',
+      'automation:resume-session',
+      'automation:delete-session',
+      // Auth handlers
+      'auth:sign-up',
+      'auth:sign-in',
+      'auth:sign-in-google',
+      'auth:sign-out',
+      'auth:get-session',
+      'auth:get-user',
+      'auth:refresh-session',
+      'auth:update-profile',
+      'auth:verify-token',
+      'auth:resend-confirmation',
+      'auth:send-password-reset',
+      'auth:update-password',
+      // Subscription handlers
+      'subscription:get-plans',
+      'subscription:get-current',
+      'subscription:create-checkout',
+      'subscription:create-portal',
+      'subscription:use-credits',
+      'subscription:sync',
+      'subscription:has-credits',
+      'subscription:get-credits-remaining',
+      // Shell handlers
+      'shell:open-external',
+      // Deep link handlers
+      'deeplink:hide-tabs',
+      'deeplink:show-tabs',
+      'deeplink:navigate-tab',
+    ];
+
+    handlers.forEach(channel => {
+      ipcMain.removeHandler(channel);
+    });
+
     ipcMain.removeAllListeners();
   }
 }

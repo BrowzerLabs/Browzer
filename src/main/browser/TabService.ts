@@ -6,22 +6,22 @@ import { VideoRecorder } from '@/main/recording';
 import { PasswordManager } from '@/main/password/PasswordManager';
 import { BrowserAutomationExecutor } from '@/main/automation';
 import { HistoryService } from '@/main/history/HistoryService';
-import { Tab, TabManagerEvents } from './types';
-import { NavigationManager } from './NavigationManager';
-import { DebuggerManager } from './DebuggerManager';
+import { Tab, TabServiceEvents } from './types';
+import { NavigationService } from './NavigationService';
+import { DebuggerService } from './DebuggerService';
 import { PasswordAutomation } from '@/main/password';
 
-export class TabManager extends EventEmitter {
-  public on<K extends keyof TabManagerEvents>(
+export class TabService extends EventEmitter {
+  public on<K extends keyof TabServiceEvents>(
     event: K,
-    listener: TabManagerEvents[K]
+    listener: TabServiceEvents[K]
   ): this {
     return super.on(event, listener);
   }
 
-  public emit<K extends keyof TabManagerEvents>(
+  public emit<K extends keyof TabServiceEvents>(
     event: K,
-    ...args: Parameters<TabManagerEvents[K]>
+    ...args: Parameters<TabServiceEvents[K]>
   ): boolean {
     return super.emit(event, ...args);
   }
@@ -31,14 +31,14 @@ export class TabManager extends EventEmitter {
   private tabCounter = 0;
   private currentSidebarWidth = 0;
 
-  private readonly webContentsViewHeight = 88;
+  private readonly webContentsViewHeight = 84;
 
   constructor(
     private baseWindow: BaseWindow,
     private passwordManager: PasswordManager,
     private historyService: HistoryService,
-    private navigationManager: NavigationManager,
-    private debuggerManager: DebuggerManager,
+    private navigationService: NavigationService,
+    private debuggerService: DebuggerService,
   ) {
     super();
   }
@@ -60,11 +60,13 @@ export class TabManager extends EventEmitter {
 
     let displayUrl = url ?? 'https://www.google.com';
     let displayTitle = 'New Tab';
+    let displayIcon: string | undefined;
     
-    const internalPageInfo = this.navigationManager.getInternalPageInfo(url || '');
+    const internalPageInfo = this.navigationService.getInternalPageInfo(url || '');
     if (internalPageInfo) {
       displayUrl = internalPageInfo.url;
       displayTitle = internalPageInfo.title;
+      displayIcon = internalPageInfo.favicon;
     }
 
     const tabInfo: TabInfo = {
@@ -94,15 +96,15 @@ export class TabManager extends EventEmitter {
     this.setupTabEvents(tab);
 
     // Initialize debugger asynchronously
-    this.debuggerManager.initializeDebugger(view, tabId).catch(err => 
-      console.error('[TabManager] Failed to initialize debugger for tab:', tabId, err)
+    this.debuggerService.initializeDebugger(view, tabId).catch(err => 
+      console.error('[TabService] Failed to initialize debugger for tab:', tabId, err)
     );
 
     this.baseWindow.contentView.addChildView(view);
     this.updateTabViewBounds(view, this.currentSidebarWidth);
 
     const urlToLoad = url || 'https://www.google.com';
-    view.webContents.loadURL(this.navigationManager.normalizeURL(urlToLoad));
+    view.webContents.loadURL(this.navigationService.normalizeURL(urlToLoad));
 
     this.switchToTab(tabId);
     
@@ -124,13 +126,12 @@ export class TabManager extends EventEmitter {
     // Clean up password automation
     if (tab.passwordAutomation) {
       tab.passwordAutomation.stop().catch(err => 
-        console.error('[TabManager] Error stopping password automation:', err)
+        console.error('[TabService] Error stopping password automation:', err)
       );
     }
 
-    this.debuggerManager.cleanupDebugger(tab.view, tabId);
+    this.debuggerService.cleanupDebugger(tab.view, tabId);
 
-    // Clean up
     tab.view.webContents.close();
     this.tabs.delete(tabId);
 
@@ -148,6 +149,10 @@ export class TabManager extends EventEmitter {
     this.emit('tabs:changed');
     
     this.emit('tab:closed', tabId, newActiveTabId, wasActiveTab);
+    
+    if (this.tabs.size === 0) {
+      this.baseWindow.close();
+    }
     
     return true;
   }
@@ -170,10 +175,6 @@ export class TabManager extends EventEmitter {
     tab.view.setVisible(true);
     this.activeTabId = tabId;
 
-    // Bring to front (re-add to ensure it's on top)
-    this.baseWindow.contentView.removeChildView(tab.view);
-    this.baseWindow.contentView.addChildView(tab.view);
-
     this.emit('tabs:changed');
     
     if (previousTabId && previousTabId !== tabId) {
@@ -189,7 +190,7 @@ export class TabManager extends EventEmitter {
       tab = this.createTab(url);
     }
 
-    const normalizedURL = this.navigationManager.normalizeURL(url);
+    const normalizedURL = this.navigationService.normalizeURL(url);
     tab.view.webContents.loadURL(normalizedURL);
     return true;
   }
@@ -278,9 +279,6 @@ export class TabManager extends EventEmitter {
     }
   }
 
-  /**
-   * Update layout when window resizes or sidebar changes
-   */
   public updateLayout(sidebarWidth = 0): void {
     this.currentSidebarWidth = sidebarWidth;
     
@@ -291,16 +289,14 @@ export class TabManager extends EventEmitter {
 
   public destroy(): void {
     this.tabs.forEach(tab => {
-      this.debuggerManager.cleanupDebugger(tab.view, tab.id);
+      this.debuggerService.cleanupDebugger(tab.view, tab.id);
       this.baseWindow.contentView.removeChildView(tab.view);
       tab.view.webContents.close();
     });
     this.tabs.clear();
+    this.activeTabId = null;
   }
 
-  /**
-   * Update bounds for a tab view
-   */
   private updateTabViewBounds(view: WebContentsView, sidebarWidth = 0): void {
     const bounds = this.baseWindow.getBounds();
     view.setBounds({
@@ -315,9 +311,8 @@ export class TabManager extends EventEmitter {
     const { view, info } = tab;
     const webContents = view.webContents;
 
-    // Page title updated
     webContents.on('page-title-updated', (_, title) => {
-      const internalPageTitle = this.navigationManager.getInternalPageTitle(info.url);
+      const internalPageTitle = this.navigationService.getInternalPageTitle(info.url);
       if (internalPageTitle) {
         info.title = internalPageTitle;
       } else {
@@ -326,7 +321,6 @@ export class TabManager extends EventEmitter {
       this.emit('tabs:changed');
     });
 
-    // Navigation events
     webContents.on('did-start-loading', () => {
       info.isLoading = true;
       this.emit('tabs:changed');
@@ -346,11 +340,11 @@ export class TabManager extends EventEmitter {
         ).catch(err => console.error('Failed to add history entry:', err));
       }
       
-      if (tab.passwordAutomation && !this.navigationManager.isInternalPage(info.url)) {
+      if (tab.passwordAutomation && !this.navigationService.isInternalPage(info.url)) {
         try {
           await tab.passwordAutomation.start();
         } catch (error) {
-          console.error('[TabManager] Failed to start password automation:', error);
+          console.error('[TabService] Failed to start password automation:', error);
         }
       }
       
@@ -358,10 +352,11 @@ export class TabManager extends EventEmitter {
     });
 
     webContents.on('did-navigate', (_, url) => {
-      const internalPageInfo = this.navigationManager.getInternalPageInfo(url);
+      const internalPageInfo = this.navigationService.getInternalPageInfo(url);
       if (internalPageInfo) {
         info.url = internalPageInfo.url;
         info.title = internalPageInfo.title;
+        info.favicon = internalPageInfo.favicon;
       } else {
         info.url = url;
       }
@@ -371,10 +366,11 @@ export class TabManager extends EventEmitter {
     });
 
     webContents.on('did-navigate-in-page', (_, url) => {
-      const internalPageInfo = this.navigationManager.getInternalPageInfo(url);
+      const internalPageInfo = this.navigationService.getInternalPageInfo(url);
       if (internalPageInfo) {
         info.url = internalPageInfo.url;
         info.title = internalPageInfo.title;
+        info.favicon = internalPageInfo.favicon;
       } else {
         info.url = url;
       }
@@ -384,19 +380,18 @@ export class TabManager extends EventEmitter {
     });
 
     webContents.on('page-favicon-updated', (_, favicons) => {
-      if (!info.url.includes('browzer://settings') && favicons.length > 0) {
+      // Don't update favicon for internal browzer:// pages
+      if (!this.navigationService.isInternalPage(info.url) && favicons.length > 0) {
         info.favicon = favicons[0];
         this.emit('tabs:changed');
       }
     });
 
-    // Handle new window requests (open in new tab)
     webContents.setWindowOpenHandler(({ url }) => {
       this.createTab(url);
       return { action: 'deny' };
     });
 
-    // Add context menu for right-click
     webContents.on('context-menu', (_event: any, params: any) => {
       const menu = Menu.buildFromTemplate([
         {
@@ -416,9 +411,7 @@ export class TabManager extends EventEmitter {
       menu.popup();
     });
 
-    // Handle keyboard shortcuts
     webContents.on('before-input-event', (event: any, input: any) => {
-      // Cmd/Ctrl + Shift + I to open DevTools
       if ((input.control || input.meta) && input.shift && input.key.toLowerCase() === 'i') {
         event.preventDefault();
         if (webContents.isDevToolsOpened()) {
@@ -427,16 +420,14 @@ export class TabManager extends EventEmitter {
           webContents.openDevTools({ mode: 'right', activate: true });
         }
       }
-      // Cmd/Ctrl + Shift + C to open DevTools in inspect mode
       else if ((input.control || input.meta) && input.shift && input.key.toLowerCase() === 'c') {
         event.preventDefault();
         webContents.openDevTools({ mode: 'right', activate: true });
       }
     });
 
-    // Error handling
     webContents.on('did-fail-load', (_, errorCode, errorDescription, validatedURL) => {
-      if (errorCode !== -3) { // Ignore aborted loads
+      if (errorCode !== -3) {
         console.error(`Failed to load ${validatedURL}: ${errorDescription}`);
       }
       info.isLoading = false;
@@ -444,9 +435,6 @@ export class TabManager extends EventEmitter {
     });
   }
 
-  /**
-   * Handle credential selection for multi-step flows
-   */
   public handleCredentialSelected(tabId: string, credentialId: string, username: string): void {
     const tab = this.tabs.get(tabId);
     if (tab) {
@@ -455,22 +443,16 @@ export class TabManager extends EventEmitter {
     }
   }
 
-  /**
-   * Hide all tabs (for fullscreen routes)
-   */
   public hideAllTabs(): void {
     this.tabs.forEach(tab => {
-      tab.view.setBounds({ x: 0, y: 0, width: 0, height: 0 });
+      tab.view.setVisible(false);
     });
   }
 
-  /**
-   * Show all tabs (restore normal browsing)
-   */
   public showAllTabs(): void {
     this.tabs.forEach(tab => {
       if (tab.id === this.activeTabId) {
-        this.updateTabViewBounds(tab.view, this.currentSidebarWidth);
+        tab.view.setVisible(true);
       }
     });
   }

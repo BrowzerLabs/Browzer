@@ -1,11 +1,10 @@
-import { app, Menu, dialog } from 'electron';
-import log from 'electron-log';
-import { TabManager } from '@/main/browser/TabManager';
-import { UpdaterManager } from '@/main/updater';
+import { app, BaseWindow, BrowserWindow, Menu } from 'electron';
+import { TabService } from '@/main/browser/TabService';
+import { UpdateService } from '@/main/UpdateService';
 
 export class AppMenu {
-  private tabManager: TabManager;
-  private updaterManager: UpdaterManager;
+  private tabService: TabService;
+  private updateService: UpdateService;
 
   private isMac = process.platform === 'darwin';
 
@@ -19,14 +18,27 @@ export class AppMenu {
     forceReload: this.isMac ? 'Cmd+Shift+R' : 'Ctrl+Shift+R',
     nextTab: this.isMac ? 'Cmd+Option+Right' : 'Ctrl+Tab',
     prevTab: this.isMac ? 'Cmd+Option+Left' : 'Ctrl+Shift+Tab',
+    settings: this.isMac ? 'Cmd+,': 'Ctrl+,',
   };
 
   constructor(
-    tabManager: TabManager,
-    updaterManager: UpdaterManager
+    tabService: TabService,
+    updateService: UpdateService
   ) {
-    this.tabManager = tabManager;
-    this.updaterManager = updaterManager;
+    this.tabService = tabService;
+    this.updateService = updateService;
+  }
+
+  private hasActiveWindow(): boolean {
+    return BaseWindow.getAllWindows().length > 0;
+  }
+
+  private ensureWindow(): boolean {
+    if (!this.hasActiveWindow()) {
+      app.emit('activate');
+      return false;
+    }
+    return true;
   }
 
   public setupMenu(): void {
@@ -42,6 +54,15 @@ export class AppMenu {
                 {
                   label: 'Check for Updates...',
                   click: () => this.handleCheckForUpdates(),
+                },
+                {
+                  label: 'Settings',
+                  accelerator: this.keys.settings,
+                  click: () => {
+                    if (this.ensureWindow()) {
+                      this.tabService.createTab('browzer://settings');
+                    }
+                  },
                 },
                 { type: 'separator' as const },
                 { role: 'services' as const },
@@ -63,15 +84,18 @@ export class AppMenu {
             label: 'New Tab',
             accelerator: this.keys.newTab,
             click: () => {
-              this.tabManager.createTab();
+              if (this.ensureWindow()) {
+                this.tabService.createTab();
+              }
             },
           },
           {
             label: 'New Window',
             accelerator: this.keys.newWindow,
             click: () => {
-              // For now, create a new tab. In future, this could open a new window
-              this.tabManager.createTab();
+              if (this.ensureWindow()) {
+                this.tabService.createTab();
+              }
             },
           },
           { type: 'separator' as const },
@@ -79,9 +103,10 @@ export class AppMenu {
             label: 'Close Tab',
             accelerator: this.keys.closeTab,
             click: () => {
-              const { activeTabId } = this.tabManager.getAllTabs();
+              if (!this.hasActiveWindow()) return;
+              const { activeTabId } = this.tabService.getAllTabs();
               if (activeTabId) {
-                this.tabManager.closeTab(activeTabId);
+                this.tabService.closeTab(activeTabId);
               }
             },
           },
@@ -128,9 +153,10 @@ export class AppMenu {
             label: 'Back',
             accelerator: this.keys.back,
             click: () => {
-              const activeTabId = this.tabManager.getActiveTabId();
+              if (!this.hasActiveWindow()) return;
+              const activeTabId = this.tabService.getActiveTabId();
               if (activeTabId) {
-                this.tabManager.goBack(activeTabId);
+                this.tabService.goBack(activeTabId);
               }
             },
           },
@@ -138,9 +164,10 @@ export class AppMenu {
             label: 'Forward',
             accelerator: this.keys.forward,
             click: () => {
-              const activeTabId = this.tabManager.getActiveTabId();
+              if (!this.hasActiveWindow()) return;
+              const activeTabId = this.tabService.getActiveTabId();
               if (activeTabId) {
-                this.tabManager.goForward(activeTabId);
+                this.tabService.goForward(activeTabId);
               }
             },
           },
@@ -149,9 +176,10 @@ export class AppMenu {
             label: 'Reload',
             accelerator: this.keys.reload,
             click: () => {
-              const activeTabId = this.tabManager.getActiveTabId();
+              if (!this.hasActiveWindow()) return;
+              const activeTabId = this.tabService.getActiveTabId();
               if (activeTabId) {
-                this.tabManager.reload(activeTabId);
+                this.tabService.reload(activeTabId);
               }
             },
           },
@@ -159,9 +187,10 @@ export class AppMenu {
             label: 'Force Reload',
             accelerator: this.keys.forceReload,
             click: () => {
-              const activeTabId = this.tabManager.getActiveTabId();
+              if (!this.hasActiveWindow()) return;
+              const activeTabId = this.tabService.getActiveTabId();
               if (activeTabId) {
-                this.tabManager.reload(activeTabId);
+                this.tabService.reload(activeTabId);
               }
             },
           },
@@ -184,14 +213,16 @@ export class AppMenu {
             label: 'Select Next Tab',
             accelerator: this.keys.nextTab,
             click: () => {
-              this.tabManager.selectNextTab();
+              if (!this.hasActiveWindow()) return;
+              this.tabService.selectNextTab();
             },
           },
           {
             label: 'Select Previous Tab',
             accelerator: this.keys.prevTab,
             click: () => {
-              this.tabManager.selectPreviousTab();
+              if (!this.hasActiveWindow()) return;
+              this.tabService.selectPreviousTab();
             },
           },
           { type: 'separator' as const },
@@ -200,7 +231,8 @@ export class AppMenu {
             label: `Select Tab ${i + 1}`,
             accelerator: this.isMac ? `Cmd+${i + 1}` : `Ctrl+${i + 1}`,
             click: () => {
-              this.tabManager.selectTabByIndex(i);
+              if (!this.hasActiveWindow()) return;
+              this.tabService.selectTabByIndex(i);
             },
           })),
           ...(this.isMac
@@ -224,13 +256,17 @@ export class AppMenu {
           {
             label: 'Learn More',
             click: () => {
-              this.tabManager.createTab('https://trybrowzer.com');
+              if (this.ensureWindow()) {
+                this.tabService.createTab('https://trybrowzer.com');
+              }
             },
           },
           {
             label: 'Documentation',
             click: () => {
-              this.tabManager.createTab('https://docs.trybrowzer.com');
+              if (this.ensureWindow()) {
+                this.tabService.createTab('https://docs.trybrowzer.com');
+              }
             },
           },
           { type: 'separator' as const },
@@ -257,6 +293,6 @@ export class AppMenu {
   }
 
   private async handleCheckForUpdates(): Promise<void> {
-    await this.updaterManager.checkForUpdates(true);
+    await this.updateService.checkForUpdates(true);
   }
 }
