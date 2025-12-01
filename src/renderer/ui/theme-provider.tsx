@@ -1,21 +1,23 @@
 import { createContext, useContext, useEffect, useState } from "react"
+import { toast } from "sonner"
 
 type Theme = "dark" | "light" | "system"
 
 type ThemeProviderProps = {
   children: React.ReactNode
   defaultTheme?: Theme
-  storageKey?: string
 }
 
 type ThemeProviderState = {
   theme: Theme
   setTheme: (theme: Theme) => void
+  isDark: boolean
 }
 
 const initialState: ThemeProviderState = {
   theme: "system",
   setTheme: () => null,
+  isDark: false,
 }
 
 const ThemeProviderContext = createContext<ThemeProviderState>(initialState)
@@ -23,37 +25,62 @@ const ThemeProviderContext = createContext<ThemeProviderState>(initialState)
 export function ThemeProvider({
   children,
   defaultTheme = "system",
-  storageKey = "vite-ui-theme",
   ...props
 }: ThemeProviderProps) {
-  const [theme, setTheme] = useState<Theme>(
-    () => (localStorage.getItem(storageKey) as Theme) || defaultTheme
-  )
+  const [theme, setThemeState] = useState<Theme>(defaultTheme)
+  const [isDark, setIsDark] = useState(false)
+
+  useEffect(() => {
+    const initTheme = async () => {
+      try {
+        const storedTheme = await window.browserAPI.getTheme()
+        setThemeState(storedTheme)
+        
+        const darkMode = await window.browserAPI.isDarkMode()
+        setIsDark(darkMode)
+      } catch (error) {
+        console.error('Failed to initialize theme:', error)
+      }
+    }
+    
+    initTheme()
+  }, [])
 
   useEffect(() => {
     const root = window.document.documentElement
-
-    root.classList.remove("light", "dark")
-
-    if (theme === "system") {
-      const systemTheme = window.matchMedia("(prefers-color-scheme: dark)")
-        .matches
-        ? "dark"
-        : "light"
-
-      root.classList.add(systemTheme)
-      return
+    const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)")
+    
+    const applyTheme = () => {
+      root.classList.remove("light", "dark")
+      const isDarkMode = mediaQuery.matches
+      root.classList.add(isDarkMode ? "dark" : "light")
+      setIsDark(isDarkMode)
     }
+    
+    applyTheme()
+    
+    mediaQuery.addEventListener("change", applyTheme)
+    
+    return () => mediaQuery.removeEventListener("change", applyTheme)
+  }, [])
 
-    root.classList.add(theme)
-  }, [theme])
+  const setTheme = async (newTheme: Theme) => {
+    try {
+      await window.browserAPI.setTheme(newTheme)
+      setThemeState(newTheme)
+      
+      const darkMode = await window.browserAPI.isDarkMode()
+      setIsDark(darkMode)
+    } catch (error) {
+      console.error('Failed to set theme:', error)
+      toast.error('Failed to apply theme settings')
+    }
+  }
 
   const value = {
     theme,
-    setTheme: (theme: Theme) => {
-      localStorage.setItem(storageKey, theme)
-      setTheme(theme)
-    },
+    setTheme,
+    isDark,
   }
 
   return (

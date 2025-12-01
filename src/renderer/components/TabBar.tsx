@@ -54,7 +54,7 @@ export function TabBar({ tabs, activeTabId, onTabClick, onTabClose, onNewTab }: 
   return (
     <div 
       ref={containerRef}
-      className="flex items-center h-9 pl-20 pr-2 gap-1 tab-bar-draggable overflow-hidden bg-slate-100 dark:bg-slate-900"
+      className="flex items-center h-9 pl-20 pr-2 gap-1 tab-bar-draggable overflow-hidden bg-background"
       onDoubleClick={handleDoubleClick}
     >
       {/* Tabs */}
