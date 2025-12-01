@@ -24,6 +24,7 @@ export interface PlanDetails {
   tier: SubscriptionTier;
   name: string;
   price_monthly: number;
+  actual_price_monthly?: number | null; // Actual price after discounts, null/undefined = no discount
   credits_per_month: number | null; // null = unlimited
   stripe_price_id: string;
   features: string[];
@@ -41,6 +42,7 @@ export interface UserSubscription {
   credits_remaining: number;
   credits_used: number;
   credits_limit: number | null; // null = unlimited
+  actual_price_monthly?: number | null; // Actual price after discounts, null/undefined = no discount
   created_at: string;
   updated_at: string;
 }

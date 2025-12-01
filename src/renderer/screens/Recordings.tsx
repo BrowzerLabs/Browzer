@@ -173,12 +173,12 @@ export function Recordings() {
                 loadRecordings(); 
                 toast.success('Recordings refreshed'); 
               }} 
+              size='icon-lg'
+              variant='outline'
               disabled={loading}
             >
-              <RefreshCcw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-              Refresh
+              <RefreshCcw />
             </Button>
-            <ThemeToggle />
           </section>
         </div>
 

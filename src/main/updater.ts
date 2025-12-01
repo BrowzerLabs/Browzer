@@ -7,6 +7,7 @@ export class UpdaterManager {
   private updateCheckInterval: NodeJS.Timeout | null = null;
   private isDownloading = false;
   private downloadedUpdateInfo: UpdateInfo | null = null;
+  private shouldShowNoUpdateDialog = false;
 
   constructor(
     webContents: WebContents
@@ -73,19 +74,24 @@ export class UpdaterManager {
         detail: `Current version: ${currentVersion}\n\nThe update will be downloaded in the background. You'll be notified when it's ready to install.`,
         buttons: ['OK'],
         defaultId: 0,
-      }).catch(err => log.error('[Updater] Error showing dialog:', err));
+      })
     });
 
     autoUpdater.on('update-not-available', (info: UpdateInfo) => {
+      if(this.shouldShowNoUpdateDialog){
+        dialog.showMessageBox({
+          type: 'info',
+          title: 'Update Not Available',
+          message: `No updates available.`,
+          detail: `Current version: ${info.version}\n\n`,
+          buttons: ['OK'],
+          defaultId: 0,
+        }).then(() => {
+          this.shouldShowNoUpdateDialog = false;
+        });
+      }
+
       log.info(`[Updater] No updates available. Current version: ${info.version}`);
-      dialog.showMessageBox({
-        type: 'info',
-        title: 'Update Not Available',
-        message: `No updates available.`,
-        detail: `Current version: ${info.version}\n\n`,
-        buttons: ['OK'],
-        defaultId: 0,
-      }).catch(err => log.error('[Updater] Error showing dialog:', err));
     });
 
     autoUpdater.on('download-progress', (progress: ProgressInfo) => {
@@ -136,7 +142,7 @@ export class UpdaterManager {
         } else {
           log.info('[Updater] User chose to install update later');
         }
-      }).catch(err => log.error('[Updater] Error showing dialog:', err));
+      })
     });
 
     autoUpdater.on('error', (error: Error) => {
@@ -156,7 +162,7 @@ export class UpdaterManager {
           message: 'Failed to check for updates',
           detail: error.message,
           buttons: ['OK'],
-        }).catch(err => log.error('[Updater] Error showing dialog:', err));
+        })
     });
   }
 
@@ -166,6 +172,8 @@ export class UpdaterManager {
   public async checkForUpdates(isManual = false): Promise<void> {
     try {
       log.info(`[Updater] ${isManual ? 'Manual' : 'Automatic'} update check initiated`);
+
+      this.shouldShowNoUpdateDialog = isManual;
       
       const result = await autoUpdater.checkForUpdates();
       
@@ -174,16 +182,15 @@ export class UpdaterManager {
       }
     } catch (error) {
       log.error('[Updater] Error checking for updates:', error);
+      this.shouldShowNoUpdateDialog = false;
       
-      if (isManual) {
-        dialog.showMessageBox({
+      dialog.showMessageBox({
           type: 'error',
           title: 'Update Error',
           message: 'Failed to check for updates',
           detail: error.message,
           buttons: ['OK'],
-        }).catch(err => log.error('[Updater] Error showing dialog:', err));
-      }
+        })
     }
   }
 
@@ -213,7 +220,7 @@ export class UpdaterManager {
         message: 'Failed to download update',
         detail: error.message,
         buttons: ['OK'],
-      }).catch(err => log.error('[Updater] Error showing dialog:', err));
+      })
       
       throw error;
     }
@@ -232,7 +239,7 @@ export class UpdaterManager {
         detail: `Current version: ${this.getCurrentVersion()}`,
         buttons: ['OK'],
         defaultId: 0,
-      }).catch(err => log.error('[Updater] Error showing dialog:', err));
+      })
       return;
     }
 

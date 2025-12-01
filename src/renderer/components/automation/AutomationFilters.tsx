@@ -4,9 +4,9 @@ import { Search } from 'lucide-react';
 
 interface AutomationFiltersProps {
   searchQuery: string;
-  filterStatus: 'all' | 'running' | 'completed' | 'error' | 'paused';
+  filterStatus: 'all' | 'running' | 'completed' | 'failed' | 'stopped';
   onSearchChange: (query: string) => void;
-  onFilterChange: (status: 'all' | 'running' | 'completed' | 'error' | 'paused') => void;
+  onFilterChange: (status: 'all' | 'running' | 'completed' | 'failed' | 'stopped') => void;
 }
 
 export function AutomationFilters({
@@ -38,8 +38,8 @@ export function AutomationFilters({
           <SelectItem value="all">All Sessions</SelectItem>
           <SelectItem value="running">Running</SelectItem>
           <SelectItem value="completed">Completed</SelectItem>
-          <SelectItem value="error">Failed</SelectItem>
-          <SelectItem value="paused">Paused</SelectItem>
+          <SelectItem value="failed">Failed</SelectItem>
+          <SelectItem value="stopped">Stopped</SelectItem>
         </SelectContent>
       </Select>
     </div>

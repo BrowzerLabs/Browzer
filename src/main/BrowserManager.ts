@@ -1,4 +1,4 @@
-import { BaseWindow, WebContentsView } from 'electron';
+import { BaseWindow, WebContentsView, dialog } from 'electron';
 import { RecordedAction, TabInfo } from '@/shared/types';
 import { RecordingStore } from '@/main/recording';
 import { HistoryService } from '@/main/history/HistoryService';
@@ -11,17 +11,8 @@ import {
   AutomationManager,
   NavigationManager,
   DebuggerManager,
-  TabEventHandlers
 } from './browser';
 
-/**
- * BrowserManager - Orchestrates browser functionality using modular components
- * - TabManager: Tab lifecycle and state
- * - RecordingManager: Recording orchestration
- * - AutomationManager: LLM automation sessions
- * - NavigationManager: URL handling
- * - DebuggerManager: CDP debugger lifecycle
- */
 export class BrowserManager {
   // Modular components
   private tabManager: TabManager;
@@ -50,21 +41,15 @@ export class BrowserManager {
     this.navigationManager = new NavigationManager();
     this.debuggerManager = new DebuggerManager();
     
-    // Setup event handlers for TabManager
-    const tabEventHandlers: TabEventHandlers = {
-      onTabsChanged: () => this.notifyTabsChanged(),
-      onCredentialSelected: (tabId, credentialId, username) => 
-        this.tabManager.handleCredentialSelected(tabId, credentialId, username)
-    };
-
     this.tabManager = new TabManager(
       baseWindow,
       this.passwordManager,
       this.historyService,
       this.navigationManager,
       this.debuggerManager,
-      tabEventHandlers
     );
+    
+    this.setupTabEventListeners();
 
     this.recordingManager = new RecordingManager(
       this.recordingStore,
@@ -79,7 +64,7 @@ export class BrowserManager {
   }
 
   public initializeAfterAuth(): void {
-    const { tabs } = this.getAllTabs();
+    const { tabs } = this.tabManager.getAllTabs();
     if (tabs.length === 0) {
       this.tabManager.createTab('https://www.google.com');
     }
@@ -89,73 +74,14 @@ export class BrowserManager {
     return this.tabManager;
   }
 
-  // ============================================================================
-  // Tab Management (delegated to TabManager)
-  // ============================================================================
-
-  public createTab(url?: string): TabInfo {
-    return this.tabManager.createTab(url);
-  }
-
-  public closeTab(tabId: string): boolean {
-    return this.tabManager.closeTab(tabId);
-  }
-
-  public switchToTab(tabId: string): boolean {
-    const previousTabId = this.tabManager.getActiveTabId();
-    const success = this.tabManager.switchToTab(tabId);
-    
-    // Handle recording tab switch if recording is active
-    if (success && this.recordingManager.isRecordingActive() && previousTabId && previousTabId !== tabId) {
-      const newTab = this.tabManager.getTab(tabId);
-      if (newTab) {
-        this.recordingManager.handleTabSwitch(previousTabId, newTab);
-      }
-    }
-    
-    return success;
-  }
-
-  public navigate(tabId: string, url: string): boolean {
-    return this.tabManager.navigate(tabId, url);
-  }
-
-  public goBack(tabId: string): boolean {
-    return this.tabManager.goBack(tabId);
-  }
-
-  public goForward(tabId: string): boolean {
-    return this.tabManager.goForward(tabId);
-  }
-
-  public reload(tabId: string): boolean {
-    return this.tabManager.reload(tabId);
-  }
-
-  public stop(tabId: string): boolean {
-    return this.tabManager.stop(tabId);
-  }
-
-  public canGoBack(tabId: string): boolean {
-    return this.tabManager.canGoBack(tabId);
-  }
-
-  public canGoForward(tabId: string): boolean {
-    return this.tabManager.canGoForward(tabId);
-  }
-
-  public getAllTabs(): { tabs: TabInfo[]; activeTabId: string | null } {
-    return this.tabManager.getAllTabs();
-  }
-
-  // ============================================================================
-  // Recording Management (delegated to RecordingManager)
-  // ============================================================================
-
   public async startRecording(): Promise<boolean> {
     const activeTab = this.tabManager.getActiveTab();
     if (!activeTab) {
-      console.error('No active tab to record');
+      dialog.showMessageBox({
+        type: 'error',
+        title: 'No tab active to record.',
+        message: 'Please ensure at least one tab is active for recording'
+      });
       return false;
     }
 
@@ -195,10 +121,6 @@ export class BrowserManager {
     return this.recordingManager.deleteRecording(id);
   }
 
-  // ============================================================================
-  // Automation Management (delegated to AutomationManager)
-  // ============================================================================
-
   public async executeIterativeAutomation(
     userGoal: string,
     recordedSessionId: string
@@ -207,16 +129,16 @@ export class BrowserManager {
     sessionId: string;
     message: string;
   }> {
-    const activeTab = this.tabManager.getActiveTab();
-    if (!activeTab) {
-      throw new Error('No active tab for automation');
-    }
-
+    const newTab = this.tabManager.createTab();
     return this.automationManager.executeAutomation(
-      activeTab,
+      newTab,
       userGoal,
-      recordedSessionId
+      recordedSessionId,
     );
+  }
+  
+  public stopAutomation(sessionId: string): void {
+    this.automationManager.stopAutomation(sessionId);
   }
 
   public async loadAutomationSession(sessionId: string): Promise<any> {
@@ -243,9 +165,7 @@ export class BrowserManager {
     return this.automationManager.deleteAutomationSession(sessionId);
   }
 
-  // ============================================================================
   // Service Accessors (for IPCHandlers)
-  // ============================================================================
 
   public getHistoryService(): HistoryService {
     return this.historyService;
@@ -257,12 +177,10 @@ export class BrowserManager {
 
   public getActiveAutomationExecutor(): BrowserAutomationExecutor | null {
     const activeTab = this.tabManager.getActiveTab();
-    return activeTab?.automationExecutor || null;
+    return activeTab.automationExecutor;
   }
 
-  // ============================================================================
   // Layout Management
-  // ============================================================================
 
   public updateLayout(_windowWidth: number, _windowHeight: number, sidebarWidth = 0): void {
     this.tabManager.updateLayout(sidebarWidth);
@@ -288,15 +206,11 @@ export class BrowserManager {
   public navigateToBrowzerURL(url: string): void {
     const activeTab = this.tabManager.getActiveTab();
     if (activeTab) {
-      this.navigate(activeTab.id, url);
+      this.tabManager.navigate(activeTab.id, url);
     } else {
-      this.createTab(url);
+      this.tabManager.createTab(url);
     }
   }
-
-  // ============================================================================
-  // Cleanup
-  // ============================================================================
 
   public destroy(): void {
     this.tabManager.destroy();
@@ -305,9 +219,17 @@ export class BrowserManager {
     this.sessionManager.close();
   }
 
-  // ============================================================================
-  // Private Methods
-  // ============================================================================
+  private setupTabEventListeners(): void {
+    this.tabManager.on('tabs:changed', () => {
+      this.notifyTabsChanged();
+    });
+
+    this.tabManager.on('tab:switched', (previousTabId, newTab) => {
+      if (this.recordingManager.isRecordingActive()) {
+        this.recordingManager.handleTabSwitch(previousTabId, newTab);
+      }
+    });
+  }
 
   /**
    * Notify renderer about tab changes
@@ -316,7 +238,7 @@ export class BrowserManager {
     const allViews = this.baseWindow.contentView.children;
     allViews.forEach(view => {
       if (view instanceof WebContentsView) {
-        view.webContents.send('browser:tabs-updated', this.getAllTabs());
+        view.webContents.send('browser:tabs-updated', this.tabManager.getAllTabs());
       }
     });
   }

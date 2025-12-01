@@ -7,13 +7,13 @@ export function useBrowserAPI() {
 
   // Subscribe to tab updates
   useEffect(() => {
-    const unsubscribe = window.browserAPI.onTabsUpdated((data) => {
+    const unsubscribe = window.browserAPI.onTabsUpdated((data: { tabs: TabInfo[]; activeTabId: string | null }) => {
       setTabs(data.tabs);
       setActiveTabId(data.activeTabId);
     });
 
     // Initial load
-    window.browserAPI.getTabs().then((data) => {
+    window.browserAPI.getTabs().then((data: { tabs: TabInfo[]; activeTabId: string | null }) => {
       setTabs(data.tabs);
       setActiveTabId(data.activeTabId);
     });

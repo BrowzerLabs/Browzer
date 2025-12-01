@@ -13,7 +13,7 @@ export function Automation() {
   const [filteredSessions, setFilteredSessions] = useState<SessionListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
-  const [filterStatus, setFilterStatus] = useState<'all' | 'running' | 'completed' | 'error' | 'paused'>('all');
+  const [filterStatus, setFilterStatus] = useState<'all' | 'running' | 'completed' | 'failed' | 'stopped'>('all');
   const [selectedSession, setSelectedSession] = useState<SessionListItem | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
 
@@ -103,8 +103,8 @@ export function Automation() {
     const total = sessions.length;
     const running = sessions.filter((s) => s.status === 'running').length;
     const completed = sessions.filter((s) => s.status === 'completed').length;
-    const failed = sessions.filter((s) => s.status === 'error').length;
-    const paused = sessions.filter((s) => s.status === 'paused').length;
+    const failed = sessions.filter((s) => s.status === 'failed').length;
+    const stopped = sessions.filter((s) => s.status === 'stopped').length;
     const totalSteps = sessions.reduce((sum, s) => sum + s.stepCount, 0);
     const totalMessages = sessions.reduce((sum, s) => sum + s.messageCount, 0);
 
@@ -113,7 +113,7 @@ export function Automation() {
       running,
       completed,
       failed,
-      paused,
+      stopped,
       totalSteps,
       totalMessages,
     };
@@ -151,9 +151,10 @@ export function Automation() {
                 toast.success('Sessions refreshed');
               }}
               disabled={loading}
+              size='icon-lg'
+              variant='outline'
             >
-              <RefreshCcw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-              Refresh
+              <RefreshCcw />
             </Button>
           </section>
         </div>

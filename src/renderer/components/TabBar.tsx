@@ -1,4 +1,5 @@
 import { X, Plus, Loader2 } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
 import type { TabInfo } from '@/shared/types';
 import { cn } from '@/renderer/lib/utils';
 import { Button } from '@/renderer/ui/button';
@@ -12,13 +13,47 @@ interface TabBarProps {
 }
 
 export function TabBar({ tabs, activeTabId, onTabClick, onTabClose, onNewTab }: TabBarProps) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [tabWidth, setTabWidth] = useState(200);
+  
   const handleDoubleClick = () => {
     window.browserAPI.toggleMaximize();
   };
 
+  useEffect(() => {
+    const calculateTabWidth = () => {
+      if (!containerRef.current) return;
+
+      const tabCount = tabs.length;
+      if (tabCount === 0) return;
+
+      const maxWidth = 180; 
+      const minWidth = 60; 
+      
+      const containerWidth = containerRef.current.offsetWidth;
+      const paddingLeft = 80; 
+      const paddingRight = 8;
+      const newTabButtonSpace = 40;
+      const gap = tabCount > 10 ? 2 : 4;
+      const gapSpace = (tabCount - 1) * gap;
+      
+      const availableSpace = containerWidth - paddingLeft - paddingRight - newTabButtonSpace - gapSpace;
+      const calculatedWidth = Math.floor(availableSpace / tabCount);
+      
+      const finalWidth = Math.max(minWidth, Math.min(maxWidth, calculatedWidth));
+      setTabWidth(finalWidth);
+    };
+
+    calculateTabWidth();
+
+    window.addEventListener('resize', calculateTabWidth);
+    return () => window.removeEventListener('resize', calculateTabWidth);
+  }, [tabs.length]);
+
   return (
     <div 
-      className="flex items-center h-10 pl-20 pr-2 gap-1 tab-bar-draggable"
+      ref={containerRef}
+      className="flex items-center h-10 pl-20 pr-2 gap-1 tab-bar-draggable overflow-hidden"
       onDoubleClick={handleDoubleClick}
     >
       {/* Tabs */}
@@ -29,6 +64,7 @@ export function TabBar({ tabs, activeTabId, onTabClick, onTabClose, onNewTab }: 
           isActive={tab.id === activeTabId}
           onClick={() => onTabClick(tab.id)}
           onClose={() => onTabClose(tab.id)}
+          width={tabWidth}
         />
       ))}
 
@@ -51,9 +87,10 @@ interface TabProps {
   isActive: boolean;
   onClick: () => void;
   onClose: () => void;
+  width: number;
 }
 
-function Tab({ tab, isActive, onClick, onClose }: TabProps) {
+function Tab({ tab, isActive, onClick, onClose, width }: TabProps) {
   const handleClose = (e: React.MouseEvent) => {
     e.stopPropagation();
     onClose();
@@ -62,12 +99,13 @@ function Tab({ tab, isActive, onClick, onClose }: TabProps) {
   return (
     <div
       onClick={onClick}
+      style={{ width: `${width}px` }}
       className={cn(
-        'flex items-center gap-2 h-8 px-3 rounded-xl min-w-[160px] max-w-[200px] cursor-pointer group tab-item',
-        'transition-colors',
+        'flex items-center gap-1.5 h-8 px-2.5 rounded-xl cursor-pointer group tab-item flex-shrink-0',
+        'transition-all duration-150',
         isActive
-          ? 'bg-slate-800 text-white'
-          : 'bg-slate-600 text-gray-400 hover:bg-[#2a2a2a]'
+          ? 'dark:bg-slate-900 bg-slate-50'
+          : 'bg-slate-300 dark:bg-slate-600 dark:hover:bg-[#2a2a2a]'
       )}
     >
       {/* Favicon */}
@@ -77,18 +115,16 @@ function Tab({ tab, isActive, onClick, onClose }: TabProps) {
         <Loader2 className="w-4 h-4 flex-shrink-0 animate-spin" />
       )}
 
-      {/* Title */}
-      <span className="flex-1 truncate text-sm">
-        {tab.isLoading ? 'Loading...' : tab.title || 'New Tab'}
-      </span>
+      {width > 100 && (
+        <span className="flex-1 truncate text-sm min-w-0">
+          {tab.isLoading ? <span className="text-gray-500">Loading...</span> : tab.title || 'New Tab'}
+        </span>
+      )}
 
-      {/* Close Button */}
       <button
         onClick={handleClose}
         className={cn(
-          'flex items-center justify-center w-5 h-5 rounded-full hover:bg-[#3a3a3a] transition-colors interactive',
-          'opacity-0 group-hover:opacity-100',
-          isActive && 'opacity-100'
+          'flex items-center justify-center size-5 rounded-full hover:bg-slate-200 dark:hover:bg-slate-600',
         )}
         title="Close Tab"
       >

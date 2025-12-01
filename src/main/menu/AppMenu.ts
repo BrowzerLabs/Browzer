@@ -257,18 +257,6 @@ export class AppMenu {
   }
 
   private async handleCheckForUpdates(): Promise<void> {
-    try {
-      await this.updaterManager.checkForUpdates(true);
-    } catch (error) {
-      log.error('[AppMenu] Error checking for updates:', error);
-      
-      dialog.showMessageBox({
-        type: 'error',
-        title: 'Update Check Failed',
-        message: 'Failed to check for updates',
-        detail: error instanceof Error ? error.message : 'An unknown error occurred',
-        buttons: ['OK'],
-      });
-    }
+    await this.updaterManager.checkForUpdates(true);
   }
 }

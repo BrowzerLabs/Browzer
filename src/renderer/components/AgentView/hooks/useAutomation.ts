@@ -1,15 +1,10 @@
-/**
- * useAgentView Hook
- * 
- * Main state management and orchestration logic for AgentView
- * Handles view state, form submission, and coordination between sub-components
- */
-
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useAutomationStore } from '@/renderer/stores/automationStore';
 import { RecordingSession } from '@/shared/types';
+import { AgentMode } from '../types';
+import { toast } from 'sonner';
 
-export function useAgentView() {
+export function useAutomation() {
   const {
     viewState,
     currentSession,
@@ -23,26 +18,53 @@ export function useAgentView() {
     startAutomation,
     startNewSession,
     loadStoredSession,
+    loadSessionHistory,
+    addEvent,
+    completeAutomation,
+    errorAutomation,
+    stopAutomation,
   } = useAutomationStore();
 
   const [recordings, setRecordings] = useState<RecordingSession[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [agentMode, setAgentMode] = useState<AgentMode>('automate');
 
-  /**
-   * Load recordings from main process
-   */
+  useEffect(() => {
+
+    const unsubProgress = window.browserAPI.onAutomationProgress((data: any) => {
+      addEvent(data.sessionId, data.event);
+    });
+
+    const unsubComplete = window.browserAPI.onAutomationComplete((data: any) => {
+      completeAutomation(data.sessionId, data.result);
+      setIsSubmitting(false);
+    });
+
+    const unsubError = window.browserAPI.onAutomationError((data: any) => {
+      errorAutomation(data.sessionId, data.error);
+      setIsSubmitting(false);
+    });
+
+    return () => {
+      unsubProgress();
+      unsubComplete();
+      unsubError();
+    };
+  }, [addEvent, completeAutomation, errorAutomation]);
+
+  useEffect(() => {
+    loadSessionHistory();
+  }, [loadSessionHistory]);
+
   const loadRecordings = useCallback(async () => {
     try {
       const allRecordings = await window.browserAPI.getAllRecordings();
       setRecordings(allRecordings);
     } catch (error) {
-      console.error('[useAgentView] Failed to load recordings:', error);
+      console.error('[useAutomation] Failed to load recordings:', error);
     }
   }, []);
 
-  /**
-   * Handle form submission
-   */
   const handleSubmit = useCallback(async () => {
     if (!userPrompt.trim() || !selectedRecordingId || isSubmitting) {
       return;
@@ -57,48 +79,53 @@ export function useAgentView() {
       );
 
       if (result.success) {
-        // Start automation with persistent session ID
         startAutomation(userPrompt, selectedRecordingId, result.sessionId);
       } else {
-        console.error('[useAgentView] Automation failed to start');
         setIsSubmitting(false);
       }
     } catch (error) {
-      console.error('[useAgentView] Error starting automation:', error);
       setIsSubmitting(false);
     }
   }, [userPrompt, selectedRecordingId, isSubmitting, startAutomation]);
 
-  /**
-   * Handle session selection from history
-   */
   const handleSessionSelect = useCallback(async (sessionId: string) => {
     await loadStoredSession(sessionId);
   }, [loadStoredSession]);
 
-  /**
-   * Handle new session creation
-   */
   const handleNewSession = useCallback(() => {
     startNewSession();
   }, [startNewSession]);
 
-  /**
-   * Handle recording selection
-   */
   const handleRecordingSelect = useCallback((recordingId: string | null) => {
     setSelectedRecording(recordingId);
   }, [setSelectedRecording]);
 
-  /**
-   * Handle prompt change
-   */
   const handlePromptChange = useCallback((prompt: string) => {
     setUserPrompt(prompt);
   }, [setUserPrompt]);
 
+  const handleStopAutomation = useCallback(async () => {
+    if (currentSession && isSubmitting) {
+      await stopAutomation(currentSession.sessionId);
+      setIsSubmitting(false);
+    }
+  }, [currentSession, isSubmitting, stopAutomation]);
+
+  const handleModeChange = useCallback((mode: AgentMode) => {
+    setAgentMode(mode);
+  }, []);
+
+  const handleAskSubmit = useCallback(() => {
+    if (!userPrompt.trim()) {
+      toast.error('Please enter a prompt');
+      return;
+    }
+    console.log('[Ask Mode] User submitted:', userPrompt);
+    toast.info(userPrompt);
+    setUserPrompt('');
+  }, [userPrompt, setUserPrompt]);
+
   return {
-    // State
     viewState,
     currentSession,
     sessionHistory,
@@ -108,14 +135,16 @@ export function useAgentView() {
     isSubmitting,
     isLoadingSession,
     isLoadingHistory,
-
-    // Actions
+    agentMode,
     loadRecordings,
     handleSubmit,
     handleSessionSelect,
     handleNewSession,
     handleRecordingSelect,
     handlePromptChange,
+    handleStopAutomation,
+    handleModeChange,
+    handleAskSubmit,
     setIsSubmitting,
   };
 }

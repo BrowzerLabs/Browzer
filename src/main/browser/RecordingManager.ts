@@ -1,19 +1,9 @@
-import { WebContentsView } from 'electron';
+import { WebContentsView, dialog } from 'electron';
 import { ActionRecorder, VideoRecorder, RecordingStore } from '@/main/recording';
 import { RecordedAction, RecordingSession, RecordingTabInfo } from '@/shared/types';
 import { stat } from 'fs/promises';
 import { Tab, RecordingState } from './types';
 
-/**
- * RecordingManager - Orchestrates recording sessions across tabs
- * 
- * Responsibilities:
- * - Start/stop recording sessions
- * - Manage centralized action recorder
- * - Handle multi-tab recording
- * - Coordinate video recording
- * - Save recording sessions with metadata
- */
 export class RecordingManager {
   private recordingState: RecordingState = {
     isRecording: false,
@@ -59,7 +49,6 @@ export class RecordingManager {
       // Add initial tab to recording tabs
       this.recordingTabs.set(activeTab.id, {
         tabId: activeTab.id,
-        webContentsId: activeTab.view.webContents.id,
         title: activeTab.info.title,
         url: activeTab.info.url,
         firstActiveAt: Date.now(),
@@ -82,19 +71,23 @@ export class RecordingManager {
       });
       
       this.centralRecorder.setMaxActionsCallback(() => {
-        console.log('🛑 Max actions limit reached, triggering auto-stop');
-        // Notify renderer to show save form immediately
-        if (this.browserUIView && !this.browserUIView.webContents.isDestroyed()) {
-          this.browserUIView.webContents.send('recording:max-actions-reached');
-        }
-      });
+        dialog.showMessageBox({
+          type: 'warning',
+          title: 'Recording Limit Reached',
+          message: 'Maximum actions limit reached. Recording will stop automatically.',
+          buttons: ['OK']
+        }).then(() => {
+          if (this.browserUIView && !this.browserUIView.webContents.isDestroyed()) {
+            this.browserUIView.webContents.send('recording:max-actions-reached');
+          }
+        });
+      }); 
 
       // Start action recording with tab context and recordingId for snapshots
       await this.centralRecorder.startRecording(
         activeTab.id,
         activeTab.info.url,
         activeTab.info.title,
-        activeTab.view.webContents.id,
         this.recordingState.recordingId
       );
       
@@ -103,8 +96,14 @@ export class RecordingManager {
       const videoStarted = await this.activeVideoRecorder.startRecording(this.recordingState.recordingId);
       
       if (!videoStarted) {
-        console.warn('⚠️ Video recording failed to start, continuing with action recording only');
-        this.activeVideoRecorder = null;
+        dialog.showMessageBox({
+          type: 'warning',
+          title: 'Video Recording Failed',
+          message: 'Video recording failed to start. Please ensure to provide Screen Recording permissions in System Preferences > Security & Privacy > Privacy > Screen Recording for Browzer.',
+          buttons: ['OK']
+        }).then(() => {
+          this.activeVideoRecorder = null;
+        });
       }
       
       this.recordingState.isRecording = true;
@@ -289,10 +288,8 @@ export class RecordingManager {
         tabId: newTab.id,
         tabUrl: newTab.info.url,
         tabTitle: newTab.info.title,
-        webContentsId: newTab.view.webContents.id,
         metadata: {
-          fromTabId: previousTabId,
-          toTabId: newTab.id,
+          previousTabId: previousTabId,
         }
       };
       
@@ -310,7 +307,6 @@ export class RecordingManager {
       if (!this.recordingTabs.has(newTab.id)) {
         this.recordingTabs.set(newTab.id, {
           tabId: newTab.id,
-          webContentsId: newTab.view.webContents.id,
           title: newTab.info.title,
           url: newTab.info.url,
           firstActiveAt: now,

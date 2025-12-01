@@ -22,7 +22,6 @@ export interface ElementTarget {
   };
   
   // Context and state
-  parentSelector?: string;
   isDisabled?: boolean;
   
   // All element attributes (for reliable element identification)
@@ -46,20 +45,10 @@ export interface RecordedAction {
   tabId?: string;
   tabUrl?: string;
   tabTitle?: string;
-  webContentsId?: number;
 
   // Visual context snapshot
   snapshotPath?: string; // Path to screenshot captured at action moment
   snapshotSize?: number; // Snapshot file size in bytes
-
-  // Verification metadata (added by ActionRecorder)
-  // verified?: boolean;
-  // verificationTime?: number;
-  // effects?: ClickEffects;
-  
-  // LLM-friendly context (optional, can be added during analysis)
-  intent?: string; // What the user was trying to do (e.g., "Enter username", "Submit form")
-  expectedOutcome?: string; // What should happen (e.g., "Navigate to dashboard", "Show success message")
 }
 
 /**
@@ -161,7 +150,6 @@ export interface ClickEffects {
  */
 export interface RecordingTabInfo {
   tabId: string;
-  webContentsId: number;
   title: string;
   url: string;
   firstActiveAt: number; // When this tab first became active during recording

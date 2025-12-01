@@ -1,424 +1,565 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
-import { AutomationState, ExecutedStep, CompletedPlan } from './types';
-import { ParsedAutomationPlan } from '../parsers/AutomationPlanParser';
-import { RecordingSession } from '@/shared/types/recording';
+import { ExecutedStep, CompletedPlan, ParsedAutomationPlan, PlanExecutionResult, AutomationStep } from './types';
+import { RecordingSession, AutomationStatus } from '@/shared/types';
 import { SystemPromptBuilder } from '../builders/SystemPromptBuilder';
 import { SessionManager } from '../session/SessionManager';
-import { MessageBuilder } from '../builders/MessageBuilder';
 import { ContextWindowManager } from '../utils/ContextWindowManager';
 import Anthropic from '@anthropic-ai/sdk';
 import { MessageCompressionManager } from '../utils/MessageCompressionManager';
+import { AutomationClient, AutomationPlanParser, MessageBuilder } from '..';
+import { MAX_AUTOMATION_STEPS } from '@/shared/constants/limits';
+import { EventEmitter } from 'events';
+import { BrowserAutomationExecutor } from '@/main/automation';
+import { AutomationEventType, AutomationProgressEvent, SystemPromptType, ToolExecutionResult } from '@/shared/types';
 
-/**
- * AutomationStateManager - State manager with persistent storage
- * 
- * Extends the original AutomationStateManager with:
- * - Persistent session storage via SessionManager
- * - Automatic conversation history saving
- * - Context optimization and caching
- * - Session resume capability
- * - Manage conversation history
- * - Handle phase transitions
- * - Provide state queries and updates
- * 
- * This manager can work in two modes:
- * 1. New session: Creates a new session and tracks all state
- * 2. Resume session: Loads existing session and continues from where it left off
- */
-export class AutomationStateManager {
-  private state: AutomationState;
-  private sessionManager: SessionManager;
-  private sessionId: string;
+export class AutomationStateManager extends EventEmitter {
+  private session_id: string;
+  private user_goal: string;
+  private cached_context: string;
+  private session_manager: SessionManager;
+  
+  private messages: Anthropic.MessageParam[] = [];
+  private current_plan: ParsedAutomationPlan | null = null;
+  private executed_steps: ExecutedStep[] = [];
+  private phase_number: number = 1;
+  private completed_plans: CompletedPlan[] = [];
+  private is_in_recovery: boolean = false;
+  private status: AutomationStatus = AutomationStatus.RUNNING;
+  private final_error?: string;
+
+  private executor: BrowserAutomationExecutor;
+  private automationClient: AutomationClient;
+  private current_url: string;
 
   constructor(
     userGoal: string,
     recordedSession: RecordingSession,
-    maxRecoveryAttempts: number,
     sessionManager: SessionManager,
-    existingSessionId?: string
+    automationClient: AutomationClient,
+    executor: BrowserAutomationExecutor
   ) {
-    this.sessionManager = sessionManager;
+    super();
+    this.user_goal = userGoal;
+    this.cached_context = SystemPromptBuilder.formatRecordedSession(recordedSession);
+    this.session_manager = sessionManager;
 
-    if (existingSessionId) {
-      // Resume existing session
-      this.sessionId = existingSessionId;
-      this.state = this.loadExistingSession(existingSessionId);
-    } else {
-      // Create new session
-      this.state = this.initializeState(userGoal, recordedSession, maxRecoveryAttempts);
-      
-      const session = this.sessionManager.createSession({
-        userGoal,
-        recordingId: recordedSession?.id || 'unknown',
-        cachedContext: this.state.cachedContext
-      });
-      this.sessionId = session.id;
-    }
-  }
-
-  /**
-   * Initialize automation state for new session
-   */
-  private initializeState(
-    userGoal: string,
-    recordedSession: RecordingSession | undefined,
-    maxRecoveryAttempts: number
-  ): AutomationState {
-    return {
+    const session = this.session_manager.createSession({
       userGoal,
-      recordedSession,
-      cachedContext: SystemPromptBuilder.formatRecordedSession(recordedSession),
-      messages: [],
-      executedSteps: [],
-      phaseNumber: 1,
-      completedPlans: [],
-      isInRecovery: false,
-      recoveryAttempts: 0,
-      maxRecoveryAttempts,
-      isComplete: false,
-      finalSuccess: false
-    };
+      recordingId: recordedSession?.id || 'unknown',
+      cachedContext: this.cached_context
+    });
+    this.session_id = session.id;
+
+    this.automationClient = automationClient;
+    this.executor = executor;
+    this.current_url = recordedSession.url;
   }
 
-  /**
-   * Load existing session from storage
-   */
-  private loadExistingSession(sessionId: string): AutomationState {
-    const sessionData = this.sessionManager.loadSession(sessionId);
-    if (!sessionData) {
-      throw new Error(`Session ${sessionId} not found`);
+  public emitProgress(type: AutomationEventType, data: any): void {
+    const event: AutomationProgressEvent = {
+      type,
+      data
+    };
+    this.emit('progress', event);
+  }
+
+  public async generateInitialPlan(): Promise<void> {
+    setTimeout(() => {
+      this.emitProgress('thinking', {
+        message: 'Analyzing recorded session & goal to generate initial plan...'
+      });
+    }, 400);
+    this.addMessage({
+      role: 'user',
+      content: this.user_goal
+    });
+    const response = await this.automationClient.createAutomationPlan(this.cached_context, this.user_goal);
+    const plan = AutomationPlanParser.parsePlan(response);
+    this.current_plan = plan;
+    this.addMessage({
+      role: 'assistant',
+      content: response.content
+    });
+    const thinkingText = response.content
+        .filter((block: Anthropic.ContentBlock) => block.type === 'text')
+        .map((block: Anthropic.TextBlock) => block.text)
+        .join('\n');
+      
+    if (thinkingText) {
+      this.emitProgress('text_response', {
+        message: thinkingText,
+      });
+    }
+  }
+
+  public async executePlanWithRecovery(): Promise<PlanExecutionResult> {
+    if (!this.current_plan) {
+      return { status: AutomationStatus.FAILED, isComplete: true, error: 'No plan to execute. Please Try Again' };
     }
 
-    const { session, messages, steps } = sessionData;
+    const totalSteps = this.current_plan.steps.length;
+    for (let i = 0; i < this.current_plan.steps.length; i++) {
+      if (this.status === AutomationStatus.STOPPED) {
+        return { status: AutomationStatus.STOPPED, isComplete: true, error: 'Automation stopped' };
+      }else if (this.status === AutomationStatus.FAILED) {
+        return { status: AutomationStatus.FAILED, isComplete: true, error: 'Automation failed' };
+      }
+      
+      const step = this.current_plan.steps[i];
+      const stepNumber = this.executed_steps.length + 1;
+      const isLastStep = i === this.current_plan.steps.length - 1;
 
-    // Reconstruct state from stored data
-    const state: AutomationState = {
-      userGoal: session.userGoal,
-      recordedSession: undefined, // Would need to load from RecordingStore
-      cachedContext: sessionData.cache.cachedContext,
-      messages: messages.map(msg => ({
-        role: msg.role,
-        content: msg.content
-      })),
-      executedSteps: steps.map(step => ({
-        stepNumber: step.stepNumber,
+      const stepResult = await this.executeStep(step, stepNumber, totalSteps);
+
+      if (this.executed_steps.length >= MAX_AUTOMATION_STEPS) {
+        return { 
+          status: AutomationStatus.STOPPED, 
+          isComplete: true, 
+          error: 'Maximum execution steps limit reached. Please restart another automation.'
+        };
+      }
+
+      if (!stepResult.success || stepResult.error) {
+        return await this.handleError(step, stepResult.result);
+      }
+
+      if (this.isAnalysisTool(step.toolName) && isLastStep) {
+        const toolResultBlocks = MessageBuilder.buildToolResultsForPlan(
+          this.current_plan,
+          this.executed_steps
+        );
+        this.addMessage(
+          MessageBuilder.buildUserMessageWithToolResults(toolResultBlocks)
+        );
+
+        const response = await this.automationClient.continueConversation(
+          SystemPromptType.AUTOMATION_CONTINUATION,
+          this.optimizedMessages(),
+          this.cached_context
+        );
+
+        this.addMessage({
+          role: 'assistant',
+          content: response.content
+        });
+
+        const thinkingText = response.content
+          .filter((block: Anthropic.ContentBlock) => block.type === 'text')
+          .map((block: Anthropic.TextBlock) => block.text)
+          .join('\n');
+        
+        if (thinkingText) {
+          this.emitProgress('text_response', {
+            message: thinkingText,
+          });
+        }
+
+        this.compressMessages();
+
+        const newPlan = AutomationPlanParser.parsePlan(response);
+        this.setCurrentPlan(newPlan);
+
+        return {
+          status: AutomationStatus.RUNNING,
+          isComplete: false,
+        };
+      }
+    }
+
+    const toolResultBlocks = MessageBuilder.buildToolResultsForPlan(
+      this.current_plan,
+      this.executed_steps
+    );
+
+    this.addMessage(
+      MessageBuilder.buildUserMessageWithToolResults(toolResultBlocks)
+    );
+    
+    if (this.is_in_recovery) {
+      if (this.current_plan.planType === 'final') {
+        this.exitRecoveryMode();
+        return { status: AutomationStatus.COMPLETED, isComplete: true };
+      }
+      
+      const response = await this.automationClient.continueConversation(
+        SystemPromptType.AUTOMATION_ERROR_RECOVERY,
+        this.optimizedMessages(),
+        this.cached_context
+      );
+
+      this.addMessage({
+        role: 'assistant',
+        content: response.content
+      });
+
+      const thinkingText = response.content
+        .filter((block: Anthropic.ContentBlock) => block.type === 'text')
+        .map((block: Anthropic.TextBlock) => block.text)
+        .join('\n');
+      
+      if (thinkingText) {
+        this.emitProgress('text_response', {
+          message: thinkingText,
+        });
+      }
+
+      this.compressMessages();
+
+      const newPlan = AutomationPlanParser.parsePlan(response);
+
+      this.setCurrentPlan(newPlan);
+      this.exitRecoveryMode();
+
+      return {
+        status: AutomationStatus.RUNNING,
+        isComplete: false,
+      };
+    }
+
+    if (this.current_plan.planType === 'intermediate') {
+      this.completePhase();
+      const continuationPrompt = SystemPromptBuilder.buildIntermediatePlanContinuationPrompt({
+        userGoal: this.user_goal,
+        currentUrl: this.current_url
+      });
+
+      this.addMessage({
+        role: 'user',
+        content: continuationPrompt
+      });
+
+      const response = await this.automationClient.continueConversation(
+        SystemPromptType.AUTOMATION_CONTINUATION,
+        this.optimizedMessages(),
+        this.cached_context
+      );
+
+      this.addMessage({
+        role: 'assistant',
+        content: response.content
+      });
+
+      const thinkingText = response.content
+        .filter((block: Anthropic.ContentBlock) => block.type === 'text')
+        .map((block: Anthropic.TextBlock) => block.text)
+        .join('\n');
+      
+      if (thinkingText) {
+        this.emitProgress('text_response', {
+          message: thinkingText,
+        });
+      }
+
+      this.compressMessages();
+
+      const newPlan = AutomationPlanParser.parsePlan(response);
+      this.setCurrentPlan(newPlan);
+
+      return {
+        status: AutomationStatus.RUNNING,
+        isComplete: false,
+      };
+    }
+
+    return { status: AutomationStatus.COMPLETED, isComplete: true };
+  }
+
+  private async executeStep(
+    step: AutomationStep,
+    stepNumber: number,
+    totalSteps: number
+  ): Promise<{
+    success: boolean;
+    result?: any;
+    error?: string;
+  }> {
+    if (this.executed_steps.length >= MAX_AUTOMATION_STEPS) {
+      this.emitProgress('automation_complete', {
+        success: false,
+        error: `Maximum execution steps limit (${MAX_AUTOMATION_STEPS}) reached`
+      });
+      
+      return {
+        success: false,
+        error: `Maximum execution steps limit (${MAX_AUTOMATION_STEPS}) reached`
+      };
+    }
+
+    this.emitProgress('step_start', {
+      stepNumber,
+      totalSteps,
+      toolName: step.toolName,
+      toolUseId: step.toolUseId,
+      params: step.input,
+      status: 'running'
+    });
+
+    try {
+      const startTime = Date.now();
+      const result = await this.executor.executeTool(step.toolName, step.input);
+      const duration = Date.now() - startTime;
+
+      const executedStep: ExecutedStep = {
+        stepNumber,
         toolName: step.toolName,
-        success: step.success,
-        result: step.result,
-        error: step.error
-      })),
-      phaseNumber: session.metadata.phaseNumber,
-      completedPlans: [],
-      isInRecovery: session.metadata.isInRecovery,
-      recoveryAttempts: session.metadata.recoveryAttempts,
-      maxRecoveryAttempts: 10, // Default
-      isComplete: session.status === 'completed' || session.status === 'error',
-      finalSuccess: session.metadata.finalSuccess || false,
-      finalError: session.metadata.finalError
+        success: result.success,
+        result,
+        error: result.success ? undefined : (result.error?.message || 'Unknown error')
+      };
+
+      this.addExecutedStep(executedStep);
+
+      if (!result.success || result.error) {
+        console.error(`❌ Step ${stepNumber} failed: ${result.error?.message || 'Unknown error'}`);
+
+        this.emitProgress('step_error', {
+          stepNumber,
+          totalSteps,
+          toolName: step.toolName,
+          toolUseId: step.toolUseId,
+          error: result.error,
+          duration,
+          status: 'error'
+        });
+        
+        return {
+          success: false,
+          result,
+          error: result.error?.message || 'Automation failed'
+        };
+      }
+
+      this.emitProgress('step_complete', {
+        stepNumber,
+        totalSteps,
+        toolName: step.toolName,
+          toolUseId: step.toolUseId,
+          result: result,
+          duration,
+          status: 'success'
+        }
+      );
+      
+      return {
+        success: true,
+        result
+      };
+    } catch (error) {
+      console.error(`❌ Step ${stepNumber} failed:`, error.message, error.stack);
+
+      const executedStep: ExecutedStep = {
+        stepNumber,
+        toolName: step.toolName,
+        success: false,
+        error: error.message
+      };
+      this.addExecutedStep(executedStep);
+
+      return {
+        success: false,
+        error: error.message
+      };
+    }
+  }
+
+  public async handleError(
+    failedStep: any,
+    result: ToolExecutionResult
+  ): Promise<PlanExecutionResult> {
+    const toolResults = MessageBuilder.buildToolResultsForErrorRecovery(
+      this.current_plan,
+      this.executed_steps
+    );
+
+    const errorPrompt = SystemPromptBuilder.buildErrorRecoveryPrompt({
+      errorInfo: {
+        message: result.error?.message || 'Unknown error',
+        code: result.error?.code,
+        details: result.error?.details,
+        suggestions: result.error?.details?.suggestions
+      },
+      userGoal: this.user_goal,
+      failedStep: {
+        stepNumber: this.executed_steps.length,
+        toolName: failedStep.toolName,
+        params: failedStep.input
+      },
+      successfullyExecutedSteps: this.executed_steps.filter(s => s.success).length,
+      currentUrl: result.url
+    });
+
+    this.addMessage(
+      MessageBuilder.buildUserMessageWithToolResultsAndText(toolResults, errorPrompt)
+    );
+
+    const response = await this.automationClient.continueConversation(
+      SystemPromptType.AUTOMATION_ERROR_RECOVERY,
+      this.optimizedMessages(),
+      this.cached_context
+    );
+
+    this.addMessage({
+      role: 'assistant',
+      content: response.content
+    });
+    this.compressMessages()
+
+    const newPlan = AutomationPlanParser.parsePlan(response);
+    this.setCurrentPlan(newPlan);
+    this.enterRecoveryMode();
+
+    return {
+      status: AutomationStatus.RUNNING,
+      isComplete: false,
+      error: 'Recovery mode initiated - continuing with updated plan'
     };
-
-    return state;
   }
 
-  /**
-   * Get session ID
-   */
   public getSessionId(): string {
-    return this.sessionId;
+    return this.session_id;
   }
 
-  /**
-   * Get current state (read-only)
-   */
-  public getState(): Readonly<AutomationState> {
-    return this.state;
-  }
-
-  /**
-   * Set current plan
-   */
   public setCurrentPlan(plan: ParsedAutomationPlan): void {
-    this.state.currentPlan = plan;
+    this.current_plan = plan;
   }
 
-  /**
-   * Add message to conversation history
-   * Automatically persists to database if enabled
-   */
   public addMessage(message: Anthropic.MessageParam): void {
-    this.state.messages.push(message);
+    this.messages.push(message);
 
-    this.sessionManager.addMessage({
-        sessionId: this.sessionId,
+    this.session_manager.addMessage({
+        sessionId: this.session_id,
         role: message.role,
         content: message.content
       });
   }
 
-  /**
-   * Add executed step
-   * Automatically persists to database if enabled
-   */
   public addExecutedStep(step: ExecutedStep): void {
-    this.state.executedSteps.push(step);
+    this.executed_steps.push(step);
 
-    this.sessionManager.addStep({
-      sessionId: this.sessionId,
+    this.session_manager.addStep({
+      sessionId: this.session_id,
       stepNumber: step.stepNumber,
       toolName: step.toolName,
-      effects: step.result?.effects, // Store effects as input context
       result: this.isAnalysisTool(step.toolName) ? `${step.toolName} executed successfully` : step.result,
       success: step.success,
       error: step.error
     });
 
-    // Update step count in metadata
-    this.sessionManager.updateSession(this.sessionId, {
+    this.session_manager.updateSession(this.session_id, {
       metadata: {
-        totalStepsExecuted: this.state.executedSteps.length
+        totalStepsExecuted: this.executed_steps.length
       }
     });
   }
 
-  /**
-   * Mark as in recovery mode
-   */
   public enterRecoveryMode(): void {
-    this.state.isInRecovery = true;
-    this.state.recoveryAttempts++;
+    this.is_in_recovery = true;
 
-    this.sessionManager.updateSession(this.sessionId, {
+    this.session_manager.updateSession(this.session_id, {
       metadata: {
         isInRecovery: true,
-        recoveryAttempts: this.state.recoveryAttempts
       }
     });
   }
 
-  /**
-   * Exit recovery mode
-   */
   public exitRecoveryMode(): void {
-    this.state.isInRecovery = false;
+    this.is_in_recovery = false;
 
-    this.sessionManager.updateSession(this.sessionId, {
+    this.session_manager.updateSession(this.session_id, {
       metadata: {
         isInRecovery: false
       }
     });
   }
 
-  /**
-   * Complete current phase and move to next
-   */
   public completePhase(): void {
-    if (this.state.currentPlan) {
-      this.state.completedPlans.push({
-        phaseNumber: this.state.phaseNumber,
-        plan: this.state.currentPlan,
-        stepsExecuted: this.state.currentPlan.totalSteps
+    if (this.current_plan) {
+      this.completed_plans.push({
+        phaseNumber: this.phase_number,
+        plan: this.current_plan,
+        stepsExecuted: this.current_plan.totalSteps
       });
-      this.state.phaseNumber++;
+      this.phase_number++;
 
-      this.sessionManager.updateSession(this.sessionId, {
+      this.session_manager.updateSession(this.session_id, {
         metadata: {
-          phaseNumber: this.state.phaseNumber
+          phaseNumber: this.phase_number
         }
       });
     }
   }
 
-  /**
-   * Mark automation as complete
-   */
-  public markComplete(success: boolean, error?: string): void {
-    this.state.isComplete = true;
-    this.state.finalSuccess = success;
-    this.state.finalError = error;
+  public markComplete(status: AutomationStatus, error?: string): void {
+    this.status = status
+    this.final_error = error;
 
-    this.sessionManager.completeSession(this.sessionId, success, error);
+    this.session_manager.completeSession(this.session_id, status, error);
   }
 
-  /**
-   * Pause session for later resume
-   */
-  public pauseSession(): void {
-    this.sessionManager.pauseSession(this.sessionId);
-  }
-
-  /**
-   * Check if max recovery attempts reached
-   */
-  public isMaxRecoveryAttemptsReached(): boolean {
-    return this.state.recoveryAttempts > this.state.maxRecoveryAttempts;
-  }
-
-  /**
-   * Get conversation messages
-   */
   public getMessages(): Anthropic.MessageParam[] {
-    return this.state.messages;
+    return this.messages;
   }
 
-  /**
-   * Get optimized messages for API call
-   * 
-   * This applies context window optimization if messages exceed limits.
-   * Uses hybrid sliding window + summarization strategy.
-   * 
-   * Call this instead of getMessages() when sending to Claude API.
-   */
-  public getOptimizedMessages(): Anthropic.MessageParam[] {
+  public optimizedMessages(): Anthropic.MessageParam[] {
     const result = ContextWindowManager.optimizeMessages(
-      this.state.messages,
-      this.state.userGoal
+      this.messages,
+      this.user_goal
     );
 
-    // Update in-memory state with optimized messages if compression was applied
     if (result.compressionApplied) {
-      this.state.messages = result.optimizedMessages;
+      this.messages = result.optimizedMessages;
     }
 
     return result.optimizedMessages;
   }
 
-  /**
-   * Get context window statistics
-   */
-  public getContextWindowStats() {
-    return ContextWindowManager.getStats(this.state.messages);
-  }
-
-  /**
-   * Get cached context (recorded session)
-   */
-  public getCachedContext(): string | undefined {
-    return this.state.cachedContext;
-  }
-
-  /**
-   * Get current plan
-   */
   public getCurrentPlan(): ParsedAutomationPlan | undefined {
-    return this.state.currentPlan;
+    return this.current_plan;
   }
 
-  /**
-   * Get executed steps
-   */
   public getExecutedSteps(): ExecutedStep[] {
-    return this.state.executedSteps;
+    return this.executed_steps;
   }
 
-  /**
-   * Get user goal
-   */
   public getUserGoal(): string {
-    return this.state.userGoal;
+    return this.user_goal;
   }
 
-  /**
-   * Check if in recovery mode
-   */
   public isInRecovery(): boolean {
-    return this.state.isInRecovery;
+    return this.is_in_recovery;
   }
 
-  /**
-   * Check if complete
-   */
-  public isComplete(): boolean {
-    return this.state.isComplete;
+  public isRunning(): boolean {
+    return this.status === AutomationStatus.RUNNING;
   }
 
-  /**
-   * Get recovery attempts count
-   */
-  public getRecoveryAttempts(): number {
-    return this.state.recoveryAttempts;
-  }
-
-  /**
-   * Get total steps executed
-   */
   public getTotalStepsExecuted(): number {
-    return this.state.executedSteps.length;
+    return this.executed_steps.length;
   }
 
-  /**
-   * Get final result
-   */
   public getFinalResult(): { success: boolean; error?: string } {
     return {
-      success: this.state.finalSuccess,
-      error: this.state.finalError
+      success: this.status === AutomationStatus.COMPLETED,
+      error: this.final_error
     };
   }
 
-  /**
-   * Get completed plans
-   */
   public getCompletedPlans(): CompletedPlan[] {
-    return this.state.completedPlans;
+    return this.completed_plans;
   }
 
-  /**
-   * Get last completed plan
-   */
   public getLastCompletedPlan(): CompletedPlan | undefined {
-    return this.state.completedPlans[this.state.completedPlans.length - 1];
-  }
-
-  /**
-   * Update usage statistics
-   */
-  public updateUsageStats(usage: {
-    inputTokens: number;
-    outputTokens: number;
-    cacheCreationTokens?: number;
-    cacheReadTokens?: number;
-    cost: number;
-  }): void {
-    this.sessionManager.updateUsageStats(this.sessionId, usage);
-  }
-
-  /**
-   * Get context statistics
-   */
-  public getContextStats() {
-    return this.sessionManager.getContextStats(this.sessionId);
-  }
-
-  /**
-   * Get session manager instance
-   */
-  public getSessionManager(): SessionManager | undefined {
-    return this.sessionManager;
+    return this.completed_plans[this.completed_plans.length - 1];
   }
 
   private isAnalysisTool(toolName: string): boolean {
     return toolName === 'extract_context' || toolName === 'take_snapshot';
   }
 
-  /**
-   * Compress messages to optimize context window
-   * 
-   * Problem:
-   * - Large payloads accumulate in message history (analysis results, errors, etc.)
-   * - Context window explodes exponentially, hitting 200K limit quickly
-   * 
-   * Solution:
-   * - Analysis results: Compress ALL extract_context/take_snapshot results
-   * - Error messages: Keep only the LATEST error, compress all older ones
-   * - Call this AFTER the model receives new content
-   * 
-   * This can save 50K-200K+ tokens in long-running automations!
-   */
   public compressMessages(): void {
-    const result = MessageCompressionManager.compressMessages(this.state.messages);
+    const result = MessageCompressionManager.compressMessages(this.messages);
     
     if (result.compressedCount > 0) {
-      this.state.messages = result.compressedMessages;
+      this.messages = result.compressedMessages;
     }
   }
 }
