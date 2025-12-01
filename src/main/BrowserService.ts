@@ -199,7 +199,6 @@ export class BrowserService {
       return;
     }
 
-    this.baseWindow.contentView.removeChildView(this.browserView);
     this.baseWindow.contentView.addChildView(this.browserView);
   }
 
@@ -208,7 +207,6 @@ export class BrowserService {
       return;
     }
 
-    this.baseWindow.contentView.removeChildView(this.browserView);
     this.baseWindow.contentView.addChildView(this.browserView, 0);
   }
 
