@@ -56,9 +56,9 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
   // Loading state
   if (loading) {
     return (
-      <div className="h-screen flex flex-col gap-2 items-center justify-center animate-pulse">
-        <ShieldCheckIcon className="size-10" />
-        <p className='text-xs'>Verifying wheather its really you</p>
+      <div className="h-screen flex flex-col gap-2 items-center justify-center bg-background">
+        <ShieldCheckIcon className="size-10 animate-pulse" />
+        <p className='text-xs animate-pulse'>Verifying wheather its really you</p>
       </div>
     );
   }
@@ -71,7 +71,7 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
   // Authenticated but browser not ready
   if (!browserReady) {
     return (
-      <div className="h-screen flex flex-col items-center justify-center gap-2 text-teal-500">
+      <div className="h-screen flex flex-col items-center justify-center gap-2 text-teal-500 bg-background">
         <Loader2 className="size-7 animate-spin" />
         <p className='animate-pulse text-xs'>Setting up your Browzer</p>
       </div>
