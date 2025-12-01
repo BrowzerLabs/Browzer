@@ -30,6 +30,8 @@ export const createBrowserAPI = (): BrowserAPI => ({
 
   // Window Management
   toggleMaximize: () => invoke('window:toggle-maximize'),
+  bringBrowserViewToFront: () => invoke('browser:bring-view-front'),
+  bringBrowserViewToBottom: () => invoke('browser:bring-view-bottom'),
 
   // Recording Management
   startRecording: () => invoke('browser:start-recording'),
