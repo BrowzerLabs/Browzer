@@ -121,4 +121,9 @@ export interface BrowserAPI {
   hideAllTabs: () => Promise<boolean>;
   showAllTabs: () => Promise<boolean>;
   navigateToTab: (url: string) => Promise<boolean>;
+
+  // Theme actions
+  getTheme: () => Promise<'light' | 'dark' | 'system'>;
+  setTheme: (theme: 'light' | 'dark' | 'system') => Promise<boolean>;
+  isDarkMode: () => Promise<boolean>;
 }

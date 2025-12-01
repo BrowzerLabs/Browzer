@@ -68,8 +68,7 @@ export function NavigationBar({
   const isSecure = activeTab?.url.startsWith('https://');
 
   return (
-    <div className="flex items-center h-12 px-3 gap-2">
-      {/* Navigation Buttons */}
+    <div className="flex items-center h-12 px-3 gap-2 bg-background">
       <div className="flex items-center gap-1">
         <NavButton
           onClick={onBack}
@@ -100,9 +99,7 @@ export function NavigationBar({
         </NavButton>
       </div>
 
-      {/* Address Bar */}
       <div className="flex-1 flex items-center rounded-lg pl-3 h-9 gap-2">
-        {/* Security Icon */}
         <div className="flex-shrink-0">
           {isSecure ? (
             <Lock className="w-4 h-4 text-green-500" />
@@ -111,7 +108,6 @@ export function NavigationBar({
           )}
         </div>
 
-        {/* URL Input */}
         <Input
           type="text"
           value={urlInput}
@@ -124,7 +120,6 @@ export function NavigationBar({
         />
       </div>
 
-      {/* Update Progress Indicator */}
       {isDownloading && (
         <div className="relative">
           <Button 
