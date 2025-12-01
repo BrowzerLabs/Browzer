@@ -195,11 +195,21 @@ export class BrowserService {
   }
 
   public bringBrowserViewToFront(): void {
-    this.baseWindow.contentView.addChildView(this.browserView)
+    if (this.browserView.webContents.isDestroyed()) {
+      return;
+    }
+
+    this.baseWindow.contentView.removeChildView(this.browserView);
+    this.baseWindow.contentView.addChildView(this.browserView);
   }
 
   public bringBrowserViewToBottom(): void {
-    this.baseWindow.contentView.addChildView(this.browserView, 0)
+    if (this.browserView.webContents.isDestroyed()) {
+      return;
+    }
+
+    this.baseWindow.contentView.removeChildView(this.browserView);
+    this.baseWindow.contentView.addChildView(this.browserView, 0);
   }
 
   public navigateToBrowzerURL(url: string): void {
