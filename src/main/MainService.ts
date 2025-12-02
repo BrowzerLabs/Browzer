@@ -55,7 +55,7 @@ export class MainService {
 
     this.deepLinkService = new DeepLinkService(this.baseWindow, this.browserView.webContents);
 
-    this.connectionService = new ConnectionService(this.browserView.webContents);
+    this.connectionService = new ConnectionService(this.baseWindow, this.browserView);
 
     this.authService = new AuthService(this.browserService, this.connectionService);
     
