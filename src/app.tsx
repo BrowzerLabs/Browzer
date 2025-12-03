@@ -4,7 +4,7 @@ import { AppRouter } from "@/renderer/router/AppRouter"
 
 function App() {
   return (
-    <ThemeProvider defaultTheme="dark" storageKey="browzer-ui-theme">
+    <ThemeProvider defaultTheme="dark">
       <AppRouter />
       <Toaster position="top-center" richColors />
     </ThemeProvider>

@@ -68,8 +68,7 @@ export function NavigationBar({
   const isSecure = activeTab?.url.startsWith('https://');
 
   return (
-    <div className="flex items-center h-12 px-3 gap-2">
-      {/* Navigation Buttons */}
+    <div className="flex items-center h-12 px-3 gap-2 bg-background">
       <div className="flex items-center gap-1">
         <NavButton
           onClick={onBack}
@@ -100,9 +99,7 @@ export function NavigationBar({
         </NavButton>
       </div>
 
-      {/* Address Bar */}
       <div className="flex-1 flex items-center rounded-lg pl-3 h-9 gap-2">
-        {/* Security Icon */}
         <div className="flex-shrink-0">
           {isSecure ? (
             <Lock className="w-4 h-4 text-green-500" />
@@ -111,7 +108,6 @@ export function NavigationBar({
           )}
         </div>
 
-        {/* URL Input */}
         <Input
           type="text"
           value={urlInput}
@@ -124,7 +120,6 @@ export function NavigationBar({
         />
       </div>
 
-      {/* Update Progress Indicator */}
       {isDownloading && (
         <div className="relative">
           <Button 
@@ -200,66 +195,70 @@ export function NavigationBar({
       </Button>
 
       {/* Menu Dropdown */}
-      {
-        isSidebarVisible && (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="icon" title="More options">
-                <MoreVertical className="w-4 h-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-56">
-              <DropdownMenuItem onClick={() => onNavigate('browzer://profile')}>
-                <Avatar className="size-7">
-                  <AvatarImage src={user?.photo_url || undefined} />
-                  <AvatarFallback className="bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-400 text-sm">
-                    {user?.display_name 
-                      ? user.display_name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
-                      : user?.email?.slice(0, 2).toUpperCase() || 'U'}
-                  </AvatarFallback>
-                </Avatar>
-                {user?.display_name || 'Profile'}
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => onNavigate('browzer://subscription')}>
-                <DiamondIcon className="w-4 h-4 mr-2" />
-                Subscription
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => onNavigate('browzer://settings')}>
-                <Settings className="w-4 h-4 mr-2" />
-                Settings
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => onNavigate('browzer://history')}>
-                <Clock className="w-4 h-4 mr-2" />
-                History
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => onNavigate('browzer://recordings')}>
-                <Video className="w-4 h-4 mr-2" />
-                Recordings
-              </DropdownMenuItem>
-              
-              <DropdownMenuItem onClick={() => onNavigate('browzer://automation')}>
-                <Clock className="w-4 h-4 mr-2" />
-                Automation
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem 
-                onClick={handleSignOut}
-                disabled={loading}
-                variant='destructive'
-              >
-                {loading ? (
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                ) : (
-                  <LogOut className="w-4 h-4 mr-2" />
-                )}
-                Sign Out
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        )
-      }
+      <DropdownMenu
+        onOpenChange={(open) => {
+          if (open) {
+            void window.browserAPI.bringBrowserViewToFront();
+          } else {
+            void window.browserAPI.bringBrowserViewToBottom();
+          }
+        }}
+      >
+        <DropdownMenuTrigger asChild>
+          <Button variant="outline" size="icon" title="More options">
+            <MoreVertical className="w-4 h-4" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-56">
+          <DropdownMenuItem onClick={() => onNavigate('browzer://profile')}>
+            <Avatar className="size-7">
+              <AvatarImage src={user?.photo_url || undefined} />
+              <AvatarFallback className="bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-400 text-sm">
+                {user?.display_name 
+                  ? user.display_name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
+                  : user?.email?.slice(0, 2).toUpperCase() || 'U'}
+              </AvatarFallback>
+            </Avatar>
+            {user?.display_name || 'Profile'}
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => onNavigate('browzer://subscription')}>
+            <DiamondIcon className="w-4 h-4 mr-2" />
+            Subscription
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onClick={() => onNavigate('browzer://settings')}>
+            <Settings className="w-4 h-4 mr-2" />
+            Settings
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => onNavigate('browzer://history')}>
+            <Clock className="w-4 h-4 mr-2" />
+            History
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onClick={() => onNavigate('browzer://recordings')}>
+            <Video className="w-4 h-4 mr-2" />
+            Recordings
+          </DropdownMenuItem>
+          
+          <DropdownMenuItem onClick={() => onNavigate('browzer://automation')}>
+            <Clock className="w-4 h-4 mr-2" />
+            Automation
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem 
+            onClick={handleSignOut}
+            disabled={loading}
+            variant='destructive'
+          >
+            {loading ? (
+              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+            ) : (
+              <LogOut className="w-4 h-4 mr-2" />
+            )}
+            Sign Out
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
     </div>
   );
 }

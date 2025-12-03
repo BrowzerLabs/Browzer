@@ -26,6 +26,8 @@ export interface BrowserAPI {
   
   // Window Management
   toggleMaximize: () => Promise<void>;
+  bringBrowserViewToFront: () => Promise<boolean>;
+  bringBrowserViewToBottom: () => Promise<boolean>;
   
   // Desktop Capturer (for video recording)
   getDesktopSources: () => Promise<Array<{ id: string; name: string; thumbnail: any }>>;
@@ -121,4 +123,9 @@ export interface BrowserAPI {
   hideAllTabs: () => Promise<boolean>;
   showAllTabs: () => Promise<boolean>;
   navigateToTab: (url: string) => Promise<boolean>;
+
+  // Theme actions
+  getTheme: () => Promise<'light' | 'dark' | 'system'>;
+  setTheme: (theme: 'light' | 'dark' | 'system') => Promise<boolean>;
+  isDarkMode: () => Promise<boolean>;
 }

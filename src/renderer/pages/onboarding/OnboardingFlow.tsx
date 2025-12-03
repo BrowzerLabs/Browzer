@@ -131,7 +131,7 @@ export function OnboardingFlow() {
   };
 
   return (
-    <div className="min-h-screen relative flex items-center justify-center overflow-hidden">
+    <div className="min-h-screen relative flex items-center justify-center overflow-hidden bg-background">
       <div className="flex flex-col items-center w-full max-w-4xl px-4">
         {/* Progress Indicators */}
         <div className="flex gap-2 mb-8">
