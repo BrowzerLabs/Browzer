@@ -197,10 +197,6 @@ export function NavigationBar({
       {/* Menu Dropdown */}
       <DropdownMenu
         onOpenChange={(open) => {
-          if (!window.browserAPI) {
-            return;
-          }
-
           if (open) {
             void window.browserAPI.bringBrowserViewToFront();
           } else {

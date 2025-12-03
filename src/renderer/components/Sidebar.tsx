@@ -89,7 +89,7 @@ export function Sidebar() {
   const showRecordingView = isRecording || showSaveForm;
 
   return (
-    <section className="h-full w-full flex flex-col overflow-hidden bg-background">
+    <section className="h-full w-full flex flex-col overflow-hidden bg-background border-l border-l-primary">
         {showRecordingView ? (
           <LiveRecordingView 
             actions={actions} 
