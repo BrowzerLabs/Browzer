@@ -3,6 +3,7 @@ import { AutocompleteSuggestion, RecordedAction } from '@/shared/types';
 import { RecordingStore } from '@/main/recording';
 import { HistoryService } from '@/main/history/HistoryService';
 import { PasswordManager } from '@/main/password/PasswordManager';
+import { BookmarkService } from '@/main/bookmark';
 import { BrowserAutomationExecutor } from './automation';
 import { SessionManager } from '@/main/llm/session/SessionManager';
 import {
@@ -24,6 +25,7 @@ export class BrowserService {
   // Services (shared across managers)
   private historyService: HistoryService;
   private passwordManager: PasswordManager;
+  private bookmarkService: BookmarkService;
   private recordingStore: RecordingStore;
   private sessionManager: SessionManager;
 
@@ -35,6 +37,7 @@ export class BrowserService {
     this.recordingStore = new RecordingStore();
     this.historyService = new HistoryService();
     this.passwordManager = new PasswordManager();
+    this.bookmarkService = new BookmarkService();
     this.sessionManager = new SessionManager();
 
     // Initialize managers
@@ -181,6 +184,10 @@ export class BrowserService {
 
   public getPasswordManager(): PasswordManager {
     return this.passwordManager;
+  }
+
+  public getBookmarkService(): BookmarkService {
+    return this.bookmarkService;
   }
 
   public getActiveAutomationExecutor(): BrowserAutomationExecutor | null {

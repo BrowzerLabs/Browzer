@@ -2,10 +2,11 @@ import { BaseWindow, ipcMain, shell } from 'electron';
 import { BrowserService } from '@/main/BrowserService';
 import { SettingsStore } from '@/main/settings/SettingsStore';
 import { PasswordManager } from '@/main/password/PasswordManager';
+import { BookmarkService } from '@/main/bookmark';
 import { AuthService } from '@/main/auth';
 import { SubscriptionService } from '@/main/subscription/SubscriptionService';
 import { ThemeService } from '@/main/theme';
-import { RecordedAction, HistoryQuery, AppSettings, SignUpCredentials, SignInCredentials, UpdateProfileRequest, AutocompleteSuggestion } from '@/shared/types';
+import { RecordedAction, HistoryQuery, AppSettings, SignUpCredentials, SignInCredentials, UpdateProfileRequest, AutocompleteSuggestion, CreateBookmarkParams, CreateFolderParams, UpdateBookmarkParams, MoveBookmarkParams } from '@/shared/types';
 import { CheckoutSessionRequest, PortalSessionRequest } from '@/shared/types/subscription';
 import { TabService } from '@/main/browser';
 import { EventEmitter } from 'events';
@@ -13,6 +14,7 @@ import { EventEmitter } from 'events';
 export class IPCHandlers extends EventEmitter {
   private settingsStore: SettingsStore;
   private passwordManager: PasswordManager;
+  private bookmarkService: BookmarkService;
   private tabService: TabService;
   private authService: AuthService;
   private subscriptionService: SubscriptionService;
@@ -29,6 +31,7 @@ export class IPCHandlers extends EventEmitter {
     this.tabService = this.browserService.getTabService();
     this.settingsStore = new SettingsStore();
     this.passwordManager = this.browserService.getPasswordManager();
+    this.bookmarkService = this.browserService.getBookmarkService();
     this.authService = authService;
     this.subscriptionService = new SubscriptionService();
     this.themeService = ThemeService.getInstance();
@@ -42,6 +45,7 @@ export class IPCHandlers extends EventEmitter {
     this.setupRecordingHandlers();
     this.setupSettingsHandlers();
     this.setupHistoryHandlers();
+    this.setupBookmarkHandlers();
     this.setupPasswordHandlers();
     this.setupWindowHandlers();
     this.setupAutomationHandlers();
@@ -470,6 +474,78 @@ export class IPCHandlers extends EventEmitter {
     });
   }
 
+  private setupBookmarkHandlers(): void {
+    // Create bookmark
+    ipcMain.handle('bookmark:create', async (_, params: CreateBookmarkParams) => {
+      return this.bookmarkService.createBookmark(params);
+    });
+
+    // Create folder
+    ipcMain.handle('bookmark:create-folder', async (_, params: CreateFolderParams) => {
+      return this.bookmarkService.createFolder(params);
+    });
+
+    // Get bookmark by ID
+    ipcMain.handle('bookmark:get', async (_, id: string) => {
+      return this.bookmarkService.getById(id);
+    });
+
+    // Get bookmark by URL
+    ipcMain.handle('bookmark:get-by-url', async (_, url: string) => {
+      return this.bookmarkService.getByUrl(url);
+    });
+
+    // Check if URL is bookmarked
+    ipcMain.handle('bookmark:is-bookmarked', async (_, url: string) => {
+      return this.bookmarkService.isBookmarked(url);
+    });
+
+    // Get children of a folder
+    ipcMain.handle('bookmark:get-children', async (_, parentId: string) => {
+      return this.bookmarkService.getChildren(parentId);
+    });
+
+    // Get full bookmark tree
+    ipcMain.handle('bookmark:get-tree', async () => {
+      return this.bookmarkService.getTree();
+    });
+
+    // Get bookmark bar contents
+    ipcMain.handle('bookmark:get-bar', async () => {
+      return this.bookmarkService.getBookmarkBar();
+    });
+
+    // Update bookmark
+    ipcMain.handle('bookmark:update', async (_, params: UpdateBookmarkParams) => {
+      return this.bookmarkService.update(params);
+    });
+
+    // Move bookmark
+    ipcMain.handle('bookmark:move', async (_, params: MoveBookmarkParams) => {
+      return this.bookmarkService.move(params);
+    });
+
+    // Delete bookmark
+    ipcMain.handle('bookmark:delete', async (_, id: string) => {
+      return this.bookmarkService.delete(id);
+    });
+
+    // Search bookmarks
+    ipcMain.handle('bookmark:search', async (_, query: string, limit?: number) => {
+      return this.bookmarkService.search(query, limit);
+    });
+
+    // Get all bookmarks
+    ipcMain.handle('bookmark:get-all', async () => {
+      return this.bookmarkService.getAllBookmarks();
+    });
+
+    // Get recent bookmarks
+    ipcMain.handle('bookmark:get-recent', async (_, limit?: number) => {
+      return this.bookmarkService.getRecentBookmarks(limit);
+    });
+  }
+
   public cleanup(): void {
     const handlers = [
       // Tab handlers
@@ -584,6 +660,21 @@ export class IPCHandlers extends EventEmitter {
       'theme:get',
       'theme:set',
       'theme:is-dark',
+      // Bookmark handlers
+      'bookmark:create',
+      'bookmark:create-folder',
+      'bookmark:get',
+      'bookmark:get-by-url',
+      'bookmark:is-bookmarked',
+      'bookmark:get-children',
+      'bookmark:get-tree',
+      'bookmark:get-bar',
+      'bookmark:update',
+      'bookmark:move',
+      'bookmark:delete',
+      'bookmark:search',
+      'bookmark:get-all',
+      'bookmark:get-recent',
     ];
 
     handlers.forEach(channel => {
