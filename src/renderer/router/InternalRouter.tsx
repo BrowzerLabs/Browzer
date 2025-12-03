@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { History, Recordings, Automation, Settings, Downloads } from '@/renderer/screens';
+import { History, Recordings, Automation, Settings, Downloads, Bookmarks } from '@/renderer/screens';
 import Profile from '@/renderer/pages/Profile';
 import { ROUTES } from '@/shared/routes';
 import { SubscriptionPage } from '@/renderer/pages/SubscriptionPage';
@@ -15,6 +15,7 @@ const ROUTE_COMPONENTS: Record<string, React.ComponentType> = {
   downloads: Downloads,
   automation: Automation,
   subscription: SubscriptionPage,
+  bookmarks: Bookmarks,
 };
 
 export type InternalRouteName = keyof typeof ROUTES;

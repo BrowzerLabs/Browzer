@@ -1,4 +1,4 @@
-import { Clock, type LucideIcon, Settings, Video, Bot, User, CreditCard, MailCheck, KeyRound, CheckCircle, XCircle, Loader2, Download } from "lucide-react";
+import { Clock, type LucideIcon, Settings, Video, Bot, User, CreditCard, MailCheck, KeyRound, CheckCircle, XCircle, Loader2, Download, BookmarkIcon } from "lucide-react";
 
 export interface RouteConfig {
   path: string;
@@ -74,6 +74,11 @@ export const ROUTES: Record<string, RouteConfig> = {
     title: 'Subscription',
     favicon: 'credit-card',
   },
+  bookmarks: {
+    path: '/bookmarks',
+    title: 'Bookmarks',
+    favicon: 'star',
+  },
 };
 
 export const ICON_MAP: Record<string, LucideIcon> = {
@@ -89,6 +94,7 @@ export const ICON_MAP: Record<string, LucideIcon> = {
   'x-circle': XCircle,
   'loader': Loader2,
   'download': Download,
+  'star': BookmarkIcon,
 };
 
 export function getRouteFromURL(url: string): RouteConfig | null {

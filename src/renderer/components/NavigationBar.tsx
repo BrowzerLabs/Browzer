@@ -1,4 +1,4 @@
-import { ArrowLeft, ArrowRight, RotateCw, X, Circle, Square, Settings, Clock, MoreVertical, Video, ChevronRight, ChevronLeft, Loader2, LogOut, DiamondIcon, Download } from 'lucide-react';
+import { ArrowLeft, ArrowRight, RotateCw, X, Circle, Square, Settings, Clock, MoreVertical, Video, ChevronRight, ChevronLeft, Loader2, LogOut, DiamondIcon, Download, Bookmark } from 'lucide-react';
 import type { TabInfo } from '@/shared/types';
 import { cn } from '@/renderer/lib/utils';
 import { useSidebarStore } from '@/renderer/store/useSidebarStore';
@@ -17,6 +17,7 @@ import {
 } from '@/renderer/ui/dropdown-menu';
 import { AddressBar } from '@/renderer/components/AddressBar';
 import { DownloadsDropdown } from '@/renderer/components/DownloadsDropdown';
+import { BookmarkButton } from '@/renderer/components/BookmarkButton';
 
 interface NavigationBarProps {
   activeTab: TabInfo | null;
@@ -82,6 +83,13 @@ export function NavigationBar({
         currentUrl={activeTab?.url || ''}
         isSecure={isSecure}
         onNavigate={onNavigate}
+      />
+
+      {/* Bookmark Button */}
+      <BookmarkButton
+        url={activeTab?.url || ''}
+        title={activeTab?.title || ''}
+        favicon={activeTab?.favicon}
       />
 
       {isDownloading && (
@@ -157,7 +165,6 @@ export function NavigationBar({
         )}
       </Button>
 
-      {/* Menu Dropdown */}
       <DropdownMenu
         onOpenChange={(open) => {
           if (open) {
@@ -200,6 +207,10 @@ export function NavigationBar({
           <DropdownMenuItem onClick={() => onNavigate('browzer://downloads')}>
             <Download className="w-4 h-4 mr-2" />
             Downloads
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => onNavigate('browzer://bookmarks')}>
+            <Bookmark className="w-4 h-4 mr-2" />
+            Bookmarks
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem onClick={() => onNavigate('browzer://recordings')}>
