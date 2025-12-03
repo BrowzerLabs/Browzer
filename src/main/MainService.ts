@@ -34,6 +34,8 @@ export class MainService {
       transparent: true,
       darkTheme: true,
       fullscreenable: false,
+      vibrancy: 'under-window',
+      backgroundMaterial: 'mica',
     });
 
     this.browserView = new WebContentsView({
