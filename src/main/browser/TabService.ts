@@ -38,7 +38,6 @@ export class TabService extends EventEmitter {
   private webContentsViewHeight = TabService.TAB_HEIGHT_WITHOUT_BOOKMARKS;
 
   private newTabUrl: string;
-  private defaultSearchEngine: string;
 
   constructor(
     private baseWindow: BaseWindow,
@@ -54,20 +53,17 @@ export class TabService extends EventEmitter {
   }
 
   private initializeFromSettings(): void {
-    const generalSettings = this.settingsService.getSetting('general');
-    const appearanceSettings = this.settingsService.getSetting('appearance');
+    this.newTabUrl = this.settingsService.getSetting('general', 'newTabUrl') || 'https://www.google.com';
     
-    this.newTabUrl = generalSettings.newTabUrl ?? 'https://www.google.com';
-    this.defaultSearchEngine = generalSettings.defaultSearchEngine ?? 'https://www.google.com/search?q=';
-    
-    this.webContentsViewHeight = appearanceSettings.showBookmarksBar 
+    this.webContentsViewHeight = this.settingsService.getSetting('appearance', 'showBookmarksBar')
       ? TabService.TAB_HEIGHT_WITH_BOOKMARKS 
       : TabService.TAB_HEIGHT_WITHOUT_BOOKMARKS;
   }
 
   private setupSettingsListeners(): void {
     this.settingsService.on('settings:general', (event: SettingsChangeEvent<'general'>) => {
-      this.handleGeneralSettingsChange(event);
+      const { newValue } = event;
+      this.newTabUrl = newValue.newTabUrl || 'https://www.google.com';
     });
     
     this.settingsService.on('settings:appearance', (event: SettingsChangeEvent<'appearance'>) => {
@@ -75,22 +71,10 @@ export class TabService extends EventEmitter {
     });
   }
 
-  private handleGeneralSettingsChange(event: SettingsChangeEvent<'general'>): void {
-    const { newValue } = event;
-    
-    this.newTabUrl = newValue.newTabUrl || 'https://www.google.com';
-    this.defaultSearchEngine = newValue.defaultSearchEngine || 'https://www.google.com/search?q=';
-    
-    console.log('[TabService] General settings updated:', {
-      newTabUrl: this.newTabUrl,
-      defaultSearchEngine: this.defaultSearchEngine,
-    });
-  }
-
   private handleAppearanceSettingsChange(event: SettingsChangeEvent<'appearance'>): void {
-    const { newValue, previousValue } = event;
+    const { newValue, key } = event;
     
-    if (newValue.showBookmarksBar !== previousValue.showBookmarksBar) {
+    if (key === 'showBookmarksBar') {
       this.webContentsViewHeight = newValue.showBookmarksBar 
         ? TabService.TAB_HEIGHT_WITH_BOOKMARKS 
         : TabService.TAB_HEIGHT_WITHOUT_BOOKMARKS;

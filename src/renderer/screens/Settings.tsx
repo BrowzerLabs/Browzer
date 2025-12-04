@@ -8,6 +8,7 @@ import { PasswordSettings } from '@/renderer/components/settings/PasswordSetting
 import { AppSettings } from '@/shared/types';
 import { Settings as SettingsIcon, Shield, Palette, Loader2Icon, Key } from 'lucide-react';
 import { toast } from 'sonner';
+import { Separator } from '@/renderer/ui/separator';
 
 export function Settings() {
   const [settings, setSettings] = useState<AppSettings | null>(null);
@@ -43,12 +44,9 @@ export function Settings() {
           },
         };
       });
-      toast.success('Setting updated successfully');
     } catch (error) {
       console.error('Failed to update setting:', error);
-      toast.error('Failed to update setting', {
-        description: 'Please try again or check your connection.',
-      });
+      toast.error('Failed to update setting');
     }
   };
 
@@ -59,9 +57,7 @@ export function Settings() {
       toast.success('Settings reset successfully');
     } catch (error) {
       console.error('Failed to reset category:', error);
-      toast.error('Failed to reset settings', {
-        description: 'Please try again.',
-      });
+      toast.error('Failed to reset settings');
     }
   };
 
@@ -74,57 +70,56 @@ export function Settings() {
   }
 
   return (
-    <section className='flex h-full flex-col bg-slate-100 dark:bg-slate-800 px-8 py-4'>
-      {/* Header */}  
+    <section className='flex h-full flex-col px-8 py-4 bg-slate-100 dark:bg-slate-900'>
       <div className='border-b px-8 py-2'>
         <h1 className='text-xl font-semibold'>Settings</h1>
-        <p className='text-muted-foreground mt-1 text-sm'>
+        <p className='text-muted-foreground mt-1 text-xs'>
           Manage your browser preferences and configuration
         </p>
       </div>
 
-      {/* Settings Content */}
-      <div className='flex flex-1 overflow-hidden'>
+      <div className='flex flex-1'>
         <Tabs
           value={activeTab}
           onValueChange={setActiveTab}
           orientation='vertical'
-          className='flex h-full w-full flex-row gap-0'
+          className='flex w-full flex-row gap-0'
         >
-           <ScrollArea className='h-full w-64'>
-              <TabsList className='flex h-auto w-full flex-col items-stretch justify-start gap-1 rounded-none bg-transparent p-4'>
+           <ScrollArea className='w-64'>
+              <TabsList className='flex h-auto w-full flex-col items-stretch justify-start gap-1 rounded-none p-4 bg-transparent'>
                 <TabsTrigger
                   value='general'
-                  className='justify-start gap-3 rounded-md px-4 py-2.5'
+                  className='justify-start gap-3 rounded-full px-4 py-2.5'
                 >
                   <SettingsIcon className='h-4 w-4' />
                   <span>General</span>
                 </TabsTrigger>
                 <TabsTrigger
                   value='passwords'
-                  className='justify-start gap-3 rounded-md px-4 py-2.5'
+                  className='justify-start gap-3 rounded-full px-4 py-2.5'
                 >
                   <Key className='h-4 w-4' />
                   <span>Passwords</span>
                 </TabsTrigger>
                 <TabsTrigger
                   value='privacy'
-                  className='justify-start gap-3 rounded-md px-4 py-2.5'
+                  className='justify-start gap-3 rounded-full px-4 py-2.5'
                 >
                   <Shield className='h-4 w-4' />
                   <span>Privacy & Security</span>
                 </TabsTrigger>
                 <TabsTrigger
                   value='appearance'
-                  className='justify-start gap-3 rounded-md px-4 py-2.5'
+                  className='justify-start gap-3 rounded-full px-4 py-2.5'
                 >
                   <Palette className='h-4 w-4' />
                   <span>Appearance</span>
                 </TabsTrigger>
               </TabsList>
             </ScrollArea>
+          
+          <Separator orientation='vertical' />
 
-          {/* Content Area */}
           <div className='flex-1 overflow-hidden'>
             <ScrollArea className='h-full'>
               <div className='mx-auto max-w-5xl p-8'>
