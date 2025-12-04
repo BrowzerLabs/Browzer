@@ -164,7 +164,6 @@ export const createBrowserAPI = (): BrowserAPI => ({
   showAllTabs: () => invoke('deeplink:show-tabs'),
   navigateToTab: (url: string) => invoke('deeplink:navigate-tab', url),
 
-  // Theme actions
   getTheme: () => invoke('theme:get'),
   setTheme: (theme: 'light' | 'dark' | 'system') => invoke('theme:set', theme),
   isDarkMode: () => invoke('theme:is-dark'),
