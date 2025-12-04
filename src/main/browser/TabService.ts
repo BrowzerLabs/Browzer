@@ -31,7 +31,7 @@ export class TabService extends EventEmitter {
   private tabCounter = 0;
   private currentSidebarWidth = 0;
 
-  private readonly webContentsViewHeight = 84;
+  private readonly webContentsViewHeight = 104;
 
   constructor(
     private baseWindow: BaseWindow,
