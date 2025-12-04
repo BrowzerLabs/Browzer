@@ -5,7 +5,7 @@ import { EventEmitter } from 'events';
 const defaultSettings: AppSettings = {
   general: {
     defaultSearchEngine: 'https://www.google.com/search?q=',
-    newTabPage: 'https://www.google.com',
+    newTabUrl: 'https://www.google.com',
   },
   privacy: {
     clearCacheOnExit: false,

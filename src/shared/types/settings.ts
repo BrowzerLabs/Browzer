@@ -1,7 +1,7 @@
 export interface AppSettings {
   general: {
     defaultSearchEngine: string;
-    newTabPage: string;
+    newTabUrl: string;
   };
   
   privacy: {

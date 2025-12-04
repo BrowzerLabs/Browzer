@@ -13,7 +13,6 @@ interface GeneralSettingsProps {
 export function GeneralSettings({ settings, onUpdate, onReset }: GeneralSettingsProps) {
   return (
     <div className='space-y-6'>
-      {/* Header */}
       <div className='flex items-center justify-between'>
         <div>
           <h2 className='text-xl font-semibold'>General</h2>
@@ -28,7 +27,6 @@ export function GeneralSettings({ settings, onUpdate, onReset }: GeneralSettings
       </div>
 
       <FieldGroup>
-        {/* Default Search Engine */}
         <Field>
           <FieldLabel htmlFor='searchEngine'>
             <Globe className='h-4 w-4' />
@@ -46,35 +44,16 @@ export function GeneralSettings({ settings, onUpdate, onReset }: GeneralSettings
           </FieldDescription>
         </Field>
 
-        {/* Homepage */}
         <Field>
-          <FieldLabel htmlFor='homepage'>
-            <Home className='h-4 w-4' />
-            Homepage
-          </FieldLabel>
-          <BufferedInput
-            id='homepage'
-            type='url'
-            value={settings.homepage}
-            onSave={(value) => onUpdate('homepage', value)}
-            placeholder='https://www.google.com'
-          />
-          <FieldDescription>
-            The page that opens when you start the browser
-          </FieldDescription>
-        </Field>
-
-        {/* New Tab Page */}
-        <Field>
-          <FieldLabel htmlFor='newTabPage'>
+          <FieldLabel htmlFor='newTabUrl'>
             <Plus className='h-4 w-4' />
             New Tab Page
           </FieldLabel>
           <BufferedInput
-            id='newTabPage'
+            id='newTabUrl'
             type='url'
-            value={settings.newTabPage}
-            onSave={(value) => onUpdate('newTabPage', value)}
+            value={settings.newTabUrl}
+            onSave={(value) => onUpdate('newTabUrl', value)}
             placeholder='https://www.google.com'
           />
           <FieldDescription>
