@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
-import { Search, Trash2, Star, Folder, ExternalLink, Edit2, MoreVertical, Loader2, FolderPlus, ChevronRight, ChevronDown } from 'lucide-react';
+import { Search, Trash2, Star, Folder, ExternalLink, Edit2, MoreVertical, Loader2, FolderPlus, ChevronRight, ChevronDown, FolderInput } from 'lucide-react';
 import type { Bookmark, BookmarkTreeNode } from '../../shared/types';
 import { BOOKMARK_BAR_ID, OTHER_BOOKMARKS_ID } from '../../shared/types';
 import { Button } from '@/renderer/ui/button';
@@ -20,6 +20,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/renderer/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/renderer/ui/alert-dialog';
 import { Label } from '@/renderer/ui/label';
 import {
   Select,
@@ -46,6 +56,17 @@ export function Bookmarks() {
   const [createFolderDialogOpen, setCreateFolderDialogOpen] = useState(false);
   const [newFolderName, setNewFolderName] = useState('');
   const [newFolderParent, setNewFolderParent] = useState<string>(BOOKMARK_BAR_ID);
+
+  const [editFolderDialogOpen, setEditFolderDialogOpen] = useState(false);
+  const [editingFolder, setEditingFolder] = useState<BookmarkTreeNode | null>(null);
+  const [editFolderName, setEditFolderName] = useState('');
+
+  const [moveDialogOpen, setMoveDialogOpen] = useState(false);
+  const [movingItem, setMovingItem] = useState<{ id: string; title: string; isFolder: boolean } | null>(null);
+  const [moveTargetFolder, setMoveTargetFolder] = useState<string>(BOOKMARK_BAR_ID);
+
+  const [deleteFolderDialogOpen, setDeleteFolderDialogOpen] = useState(false);
+  const [deletingFolder, setDeletingFolder] = useState<BookmarkTreeNode | null>(null);
 
   const loadBookmarks = useCallback(async () => {
     try {
@@ -160,6 +181,92 @@ export function Bookmarks() {
     }
   };
 
+  // Edit folder handlers
+  const handleEditFolder = (folder: BookmarkTreeNode) => {
+    setEditingFolder(folder);
+    setEditFolderName(folder.title);
+    setEditFolderDialogOpen(true);
+  };
+
+  const handleSaveFolderEdit = async () => {
+    if (!editingFolder || !editFolderName.trim()) return;
+
+    try {
+      await window.browserAPI.updateBookmark({
+        id: editingFolder.id,
+        title: editFolderName.trim(),
+      });
+      toast.success('Folder renamed');
+      setEditFolderDialogOpen(false);
+      setEditingFolder(null);
+      loadBookmarks();
+    } catch (error) {
+      console.error('Failed to rename folder:', error);
+      toast.error('Failed to rename folder');
+    }
+  };
+
+  // Delete folder handlers
+  const handleDeleteFolderClick = (folder: BookmarkTreeNode) => {
+    setDeletingFolder(folder);
+    setDeleteFolderDialogOpen(true);
+  };
+
+  const handleConfirmDeleteFolder = async () => {
+    if (!deletingFolder) return;
+
+    try {
+      await window.browserAPI.deleteBookmark(deletingFolder.id);
+      toast.success('Folder deleted');
+      setDeleteFolderDialogOpen(false);
+      setDeletingFolder(null);
+      loadBookmarks();
+    } catch (error) {
+      console.error('Failed to delete folder:', error);
+      toast.error('Failed to delete folder');
+    }
+  };
+
+  // Move item handlers (works for both bookmarks and folders)
+  const handleMoveClick = (item: { id: string; title: string; isFolder: boolean; parentId?: string | null }) => {
+    setMovingItem({ id: item.id, title: item.title, isFolder: item.isFolder });
+    setMoveTargetFolder(item.parentId || BOOKMARK_BAR_ID);
+    setMoveDialogOpen(true);
+  };
+
+  const handleConfirmMove = async () => {
+    if (!movingItem) return;
+
+    try {
+      await window.browserAPI.moveBookmark({
+        id: movingItem.id,
+        parentId: moveTargetFolder,
+      });
+      toast.success(`${movingItem.isFolder ? 'Folder' : 'Bookmark'} moved`);
+      setMoveDialogOpen(false);
+      setMovingItem(null);
+      loadBookmarks();
+    } catch (error) {
+      console.error('Failed to move item:', error);
+      toast.error('Failed to move item');
+    }
+  };
+
+  // Get folders excluding the item being moved (to prevent moving into itself)
+  const getAvailableFolders = (excludeId?: string) => {
+    const folders: { id: string; title: string; depth: number }[] = [];
+    
+    const traverse = (node: BookmarkTreeNode, depth: number) => {
+      if (node.isFolder && node.id !== excludeId) {
+        folders.push({ id: node.id, title: node.title, depth });
+        node.children?.forEach(child => traverse(child, depth + 1));
+      }
+    };
+    
+    bookmarkTree.forEach(node => traverse(node, 0));
+    return folders;
+  };
+
   const toggleFolder = (folderId: string) => {
     setExpandedFolders(prev => {
       const next = new Set(prev);
@@ -186,14 +293,17 @@ export function Bookmarks() {
     return folders;
   };
 
+  const isRootFolder = (id: string) => id === BOOKMARK_BAR_ID || id === OTHER_BOOKMARKS_ID;
+
   const renderTreeNode = (node: BookmarkTreeNode, depth = 0) => {
     const isExpanded = expandedFolders.has(node.id);
+    const isRoot = isRootFolder(node.id);
     
     if (node.isFolder) {
       return (
         <div key={node.id}>
           <div
-            className="flex items-center gap-2 py-2 px-3 rounded-lg hover:bg-muted/50 cursor-pointer select-none"
+            className="flex items-center gap-2 py-2 px-3 rounded-lg hover:bg-muted/50 cursor-pointer select-none group"
             style={{ paddingLeft: `${depth * 20 + 8}px` }}
             onClick={() => toggleFolder(node.id)}
           >
@@ -205,10 +315,51 @@ export function Bookmarks() {
               )}
             </button>
             <Folder className="w-4 h-4 text-yellow-500 flex-shrink-0" />
-            <span className="font-medium truncate">{node.title}</span>
-            <span className="text-xs text-muted-foreground ml-auto flex-shrink-0">
+            <span className="font-medium truncate flex-1">{node.title}</span>
+            <span className="text-xs text-muted-foreground flex-shrink-0 mr-2">
               {node.children?.filter(c => !c.isFolder).length || 0} bookmarks
             </span>
+            {/* Folder actions menu */}
+            <div className="opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild onClick={(e: React.MouseEvent) => e.stopPropagation()}>
+                  <Button variant="ghost" size="icon" className="h-7 w-7">
+                    <MoreVertical className="w-4 h-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={(e: React.MouseEvent) => {
+                    e.stopPropagation();
+                    handleEditFolder(node);
+                  }}>
+                    <Edit2 className="w-4 h-4 mr-2" />
+                    Rename
+                  </DropdownMenuItem>
+                  {!isRoot && (
+                    <>
+                      <DropdownMenuItem onClick={(e: React.MouseEvent) => {
+                        e.stopPropagation();
+                        handleMoveClick({ id: node.id, title: node.title, isFolder: true, parentId: node.parentId });
+                      }}>
+                        <FolderInput className="w-4 h-4 mr-2" />
+                        Move to...
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem
+                        onClick={(e: React.MouseEvent) => {
+                          e.stopPropagation();
+                          handleDeleteFolderClick(node);
+                        }}
+                        className="text-destructive"
+                      >
+                        <Trash2 className="w-4 h-4 mr-2" />
+                        Delete
+                      </DropdownMenuItem>
+                    </>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
           </div>
           {isExpanded && node.children?.map((child) => renderTreeNode(child, depth + 1))}
         </div>
@@ -252,6 +403,13 @@ export function Bookmarks() {
               }}>
                 <Edit2 className="w-4 h-4 mr-2" />
                 Edit
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={(e: React.MouseEvent) => {
+                e.stopPropagation();
+                handleMoveClick({ id: node.id, title: node.title, isFolder: false, parentId: node.parentId });
+              }}>
+                <FolderInput className="w-4 h-4 mr-2" />
+                Move to...
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem
@@ -386,6 +544,13 @@ export function Bookmarks() {
                               <Edit2 className="w-4 h-4 mr-2" />
                               Edit
                             </DropdownMenuItem>
+                            <DropdownMenuItem onClick={(e: React.MouseEvent) => {
+                              e.stopPropagation();
+                              handleMoveClick({ id: bookmark.id, title: bookmark.title, isFolder: false, parentId: bookmark.parentId });
+                            }}>
+                              <FolderInput className="w-4 h-4 mr-2" />
+                              Move to...
+                            </DropdownMenuItem>
                             <DropdownMenuSeparator />
                             <DropdownMenuItem
                               onClick={(e: React.MouseEvent) => {
@@ -511,6 +676,112 @@ export function Bookmarks() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Edit Folder Dialog */}
+      <Dialog open={editFolderDialogOpen} onOpenChange={setEditFolderDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Rename Folder</DialogTitle>
+            <DialogDescription>
+              Enter a new name for this folder.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="edit-folder-name">Folder Name</Label>
+              <Input
+                id="edit-folder-name"
+                value={editFolderName}
+                onChange={(e) => setEditFolderName(e.target.value)}
+                placeholder="Folder name"
+                autoFocus
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => {
+              setEditFolderDialogOpen(false);
+              setEditingFolder(null);
+            }}>
+              Cancel
+            </Button>
+            <Button onClick={handleSaveFolderEdit}>Save</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={moveDialogOpen} onOpenChange={setMoveDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Move {movingItem?.isFolder ? 'Folder' : 'Bookmark'}</DialogTitle>
+            <DialogDescription>
+              Choose a new location for "{movingItem?.title}".
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>Destination Folder</Label>
+              <Select value={moveTargetFolder} onValueChange={setMoveTargetFolder}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a folder" />
+                </SelectTrigger>
+                <SelectContent>
+                  {getAvailableFolders(movingItem?.isFolder ? movingItem.id : undefined).map((folder) => (
+                    <SelectItem key={folder.id} value={folder.id}>
+                      <div className="flex items-center gap-2">
+                        <Folder className="w-4 h-4 text-yellow-500" />
+                        <span style={{ paddingLeft: `${folder.depth * 12}px` }}>
+                          {folder.title}
+                        </span>
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => {
+              setMoveDialogOpen(false);
+              setMovingItem(null);
+            }}>
+              Cancel
+            </Button>
+            <Button onClick={handleConfirmMove}>Move</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Folder Confirmation */}
+      <AlertDialog open={deleteFolderDialogOpen} onOpenChange={setDeleteFolderDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Folder</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete "{deletingFolder?.title}"? 
+              {deletingFolder?.children && deletingFolder.children.length > 0 && (
+                <span className="block mt-2 font-medium text-destructive">
+                  This folder contains {deletingFolder.children.length} item(s) that will also be deleted.
+                </span>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => {
+              setDeleteFolderDialogOpen(false);
+              setDeletingFolder(null);
+            }}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleConfirmDeleteFolder}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
