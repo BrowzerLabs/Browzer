@@ -1,6 +1,5 @@
 import { BaseWindow, ipcMain, shell } from 'electron';
 import { BrowserService } from '@/main/BrowserService';
-import { SettingsStore } from '@/main/settings/SettingsStore';
 import { PasswordManager } from '@/main/password/PasswordManager';
 import { AuthService } from '@/main/auth';
 import { SubscriptionService } from '@/main/subscription/SubscriptionService';
@@ -9,9 +8,10 @@ import { RecordedAction, HistoryQuery, AppSettings, SignUpCredentials, SignInCre
 import { CheckoutSessionRequest, PortalSessionRequest } from '@/shared/types/subscription';
 import { TabService } from '@/main/browser';
 import { EventEmitter } from 'events';
+import { SettingsService } from '@/main/settings/SettingsService';
 
 export class IPCHandlers extends EventEmitter {
-  private settingsStore: SettingsStore;
+  private settingsStore: SettingsService;
   private passwordManager: PasswordManager;
   private tabService: TabService;
   private authService: AuthService;
@@ -27,7 +27,7 @@ export class IPCHandlers extends EventEmitter {
     super();
     this.baseWindow = baseWindow;
     this.tabService = this.browserService.getTabService();
-    this.settingsStore = new SettingsStore();
+    this.settingsStore = this.browserService.getSettingsService();
     this.passwordManager = this.browserService.getPasswordManager();
     this.authService = authService;
     this.subscriptionService = new SubscriptionService();

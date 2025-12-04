@@ -177,11 +177,16 @@ export const createBrowserAPI = (): BrowserAPI => ({
   onDeepLink: (callback) => 
     createEventListener<string>('deeplink:navigate', callback),
 
+  // Event listeners - Settings events
+  onSettingsChanged: (callback) =>
+    createEventListener<{ category: string; value: any }>('settings:changed', callback),
+
   // Deep Link actions
   hideAllTabs: () => invoke('deeplink:hide-tabs'),
   showAllTabs: () => invoke('deeplink:show-tabs'),
   navigateToTab: (url: string) => invoke('deeplink:navigate-tab', url),
 
+  // Theme actions
   getTheme: () => invoke('theme:get'),
   setTheme: (theme: 'light' | 'dark' | 'system') => invoke('theme:set', theme),
   isDarkMode: () => invoke('theme:is-dark'),
