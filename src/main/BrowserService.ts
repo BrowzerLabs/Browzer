@@ -40,7 +40,7 @@ export class BrowserService {
     this.recordingStore = new RecordingStore();
     this.historyService = new HistoryService();
     this.passwordManager = new PasswordManager();
-    this.bookmarkService = new BookmarkService();
+    this.bookmarkService = new BookmarkService(this.browserView);
     this.sessionManager = new SessionManager();
 
     // Initialize managers
@@ -195,6 +195,10 @@ export class BrowserService {
 
   public getBookmarkService(): BookmarkService {
     return this.bookmarkService;
+  }
+
+  public getBrowserView(): WebContentsView {
+    return this.browserView;
   }
 
   public getActiveAutomationExecutor(): BrowserAutomationExecutor | null {

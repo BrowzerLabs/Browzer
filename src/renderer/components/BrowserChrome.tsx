@@ -19,7 +19,7 @@ export function BrowserChrome() {
   }, [showSidebar]);
 
   return (
-    <div className="h-full w-full flex flex-col select-none bg-black/30">
+    <div className="h-full w-full flex flex-col select-none">
       <TabBar
         tabs={browserAPI.tabs}
         activeTabId={browserAPI.activeTabId}

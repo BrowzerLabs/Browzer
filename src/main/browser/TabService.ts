@@ -32,7 +32,7 @@ export class TabService extends EventEmitter {
   private tabCounter = 0;
   private currentSidebarWidth = 0;
 
-  private static readonly TAB_HEIGHT_WITHOUT_BOOKMARKS = 84;
+  private static readonly TAB_HEIGHT_WITHOUT_BOOKMARKS = 78;
   private static readonly TAB_HEIGHT_WITH_BOOKMARKS = 104;
   
   private webContentsViewHeight = TabService.TAB_HEIGHT_WITHOUT_BOOKMARKS;

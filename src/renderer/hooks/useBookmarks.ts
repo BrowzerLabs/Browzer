@@ -50,9 +50,16 @@ export function useBookmarks(): UseBookmarksReturn {
     }
   }, []);
 
-  // Load bookmarks on mount
   useEffect(() => {
     refreshBookmarks();
+
+    const unsubscribe = window.browserAPI.onBookmarkChanged(() => {
+      refreshBookmarks();
+    });
+
+    return () => {
+      unsubscribe();
+    };
   }, [refreshBookmarks]);
 
   /**

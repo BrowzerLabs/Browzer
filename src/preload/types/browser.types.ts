@@ -123,6 +123,8 @@ export interface BrowserAPI {
   // Deep Link event listeners
   onDeepLink: (callback: (path: string) => void) => () => void;
   
+  onBookmarkChanged: (callback: () => void) => () => void;
+  
   // Deep Link actions
   hideAllTabs: () => Promise<boolean>;
   showAllTabs: () => Promise<boolean>;

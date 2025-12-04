@@ -1,5 +1,5 @@
 import Database from 'better-sqlite3';
-import { app } from 'electron';
+import { WebContentsView, app } from 'electron';
 import path from 'path';
 import { randomUUID } from 'crypto';
 import {
@@ -31,7 +31,9 @@ export class BookmarkService {
     getRecentBookmarks: Database.Statement;
   };
 
-  constructor() {
+  constructor(
+    private browserView: WebContentsView
+  ) {
     const userDataPath = app.getPath('userData');
     const dbPath = path.join(userDataPath, 'bookmarks.db');
 
@@ -169,6 +171,8 @@ export class BookmarkService {
 
     this.stmts.insert.run(id, title, url, favicon || null, parentId, idx, 0, now, now);
 
+    this.browserView.webContents.send('bookmark:changed');
+
     return {
       id,
       url,
@@ -194,6 +198,7 @@ export class BookmarkService {
     }
 
     this.stmts.insert.run(id, title, null, null, parentId, idx, 1, now, now);
+    this.browserView.webContents.send('bookmark:changed');
 
     return {
       id,
@@ -252,6 +257,7 @@ export class BookmarkService {
     const now = Date.now();
 
     const result = this.stmts.update.run(title || null, url || null, now, id);
+    this.browserView.webContents.send('bookmark:changed');
     return result.changes > 0;
   }
 
@@ -271,6 +277,7 @@ export class BookmarkService {
     }
 
     const result = this.stmts.updateIndex.run(newParentId, newIndex, now, id);
+    this.browserView.webContents.send('bookmark:changed');
     return result.changes > 0;
   }
 
@@ -291,6 +298,7 @@ export class BookmarkService {
     }
 
     const result = this.stmts.deleteById.run(id);
+    this.browserView.webContents.send('bookmark:changed');
     return result.changes > 0;
   }
 
