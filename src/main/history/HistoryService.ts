@@ -4,32 +4,17 @@ import path from 'path';
 import { randomUUID } from 'crypto';
 import { HistoryEntry, HistoryTransition, HistoryQuery, HistoryStats } from '@/shared/types';
 
-/**
- * HistoryService
- * 
- * Manages browsing history using SQLite for scalable, reliable storage.
- * Features:
- * - Track all page visits with efficient indexing
- * - Full-text search capabilities
- * - Delete individual entries or all history
- * - Visit count tracking
- * - Domain-based grouping
- * - Time-based filtering
- * - Optimized for millions of records
- * - Automatic database migrations
- */
 export class HistoryService {
   private db: Database.Database;
 
-  // Prepared statements for better performance
   private stmts: {
     getByUrl: Database.Statement;
     insert: Database.Statement;
     update: Database.Statement;
     getById: Database.Statement;
     deleteById: Database.Statement;
-    deleteByUrl: Database.Statement;
     clearAll: Database.Statement;
+    getAutocompleteSuggestions: Database.Statement;
   };
 
   constructor() {
@@ -38,12 +23,11 @@ export class HistoryService {
     
     this.db = new Database(dbPath);
     
-    // Performance optimizations
-    this.db.pragma('journal_mode = WAL'); // Write-Ahead Logging for better concurrency
-    this.db.pragma('synchronous = NORMAL'); // Balance between safety and speed
+    this.db.pragma('journal_mode = WAL');
+    this.db.pragma('synchronous = NORMAL');
     this.db.pragma('foreign_keys = ON');
-    this.db.pragma('temp_store = MEMORY'); // Use memory for temp tables
-    this.db.pragma('mmap_size = 30000000000'); // Memory-mapped I/O
+    this.db.pragma('temp_store = MEMORY');
+    this.db.pragma('mmap_size = 30000000000');
     this.db.pragma('page_size = 4096'); // Optimal page size
     this.db.pragma('cache_size = -64000'); // 64MB cache
     
@@ -68,19 +52,26 @@ export class HistoryService {
       `),
       getById: this.db.prepare('SELECT * FROM history_entries WHERE id = ?'),
       deleteById: this.db.prepare('DELETE FROM history_entries WHERE id = ?'),
-      deleteByUrl: this.db.prepare('DELETE FROM history_entries WHERE url = ?'),
       clearAll: this.db.prepare('DELETE FROM history_entries'),
+      getAutocompleteSuggestions: this.db.prepare(`
+        SELECT *
+        FROM history_entries
+        WHERE 
+          LOWER(url) LIKE ? OR 
+          LOWER(title) LIKE ?
+        ORDER BY 
+          typed_count DESC,
+          visit_count DESC,
+          last_visit_time DESC
+        LIMIT ?
+      `),
     };
     
     console.log('HistoryService initialized with SQLite at:', dbPath);
   }
 
-  /**
-   * Initialize database schema with proper indexes
-   */
   private initializeDatabase(): void {
     try {
-      // Create version table
       this.db.exec(`
         CREATE TABLE IF NOT EXISTS schema_version (
           version INTEGER PRIMARY KEY,
@@ -88,7 +79,6 @@ export class HistoryService {
         );
       `);
 
-      // Create main history entries table
       this.db.exec(`
         CREATE TABLE IF NOT EXISTS history_entries (
           id TEXT PRIMARY KEY,
@@ -142,9 +132,6 @@ export class HistoryService {
     }
   }
 
-  /**
-   * Convert database row to HistoryEntry
-   */
   private rowToEntry(row: any): HistoryEntry {
     return {
       id: row.id,
@@ -159,16 +146,12 @@ export class HistoryService {
     };
   }
 
-  /**
-   * Add or update a history entry
-   */
   public async addEntry(
     url: string,
     title: string,
     transition: HistoryTransition = HistoryTransition.LINK,
     favicon?: string
   ): Promise<HistoryEntry | null> {
-    // Skip internal pages
     if (url.startsWith('browzer://') || url.startsWith('chrome://') || url.startsWith('about:')) {
       return null;
     }
@@ -176,11 +159,9 @@ export class HistoryService {
     const now = Date.now();
 
     try {
-      // Check if URL already exists
       const existing = this.stmts.getByUrl.get(url) as any;
 
       if (existing) {
-        // Update existing entry
         const typedIncrement = transition === HistoryTransition.TYPED ? 1 : 0;
         
         this.stmts.update.run(
@@ -192,11 +173,9 @@ export class HistoryService {
           url
         );
 
-        // Return updated entry
         const updated = this.stmts.getByUrl.get(url) as any;
         return this.rowToEntry(updated);
       } else {
-        // Create new entry
         const id = randomUUID();
         const typedCount = transition === HistoryTransition.TYPED ? 1 : 0;
 
@@ -230,9 +209,6 @@ export class HistoryService {
     }
   }
 
-  /**
-   * Get all history entries
-   */
   public async getAll(limit?: number): Promise<HistoryEntry[]> {
     try {
       let query = 'SELECT * FROM history_entries ORDER BY last_visit_time DESC';
@@ -249,9 +225,6 @@ export class HistoryService {
     }
   }
 
-  /**
-   * Search history with full-text search support
-   */
   public async search(query: HistoryQuery): Promise<HistoryEntry[]> {
     try {
       let sql = 'SELECT * FROM history_entries WHERE 1=1';
@@ -294,16 +267,10 @@ export class HistoryService {
     }
   }
 
-  /**
-   * Get history for a specific date range
-   */
   public async getByDateRange(startTime: number, endTime: number): Promise<HistoryEntry[]> {
     return this.search({ startTime, endTime });
   }
 
-  /**
-   * Get today's history
-   */
   public async getToday(): Promise<HistoryEntry[]> {
     const now = new Date();
     const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
@@ -312,9 +279,6 @@ export class HistoryService {
     return this.getByDateRange(startOfDay, endOfDay);
   }
 
-  /**
-   * Get history for the last N days
-   */
   public async getLastNDays(days: number): Promise<HistoryEntry[]> {
     const now = Date.now();
     const startTime = now - days * 24 * 60 * 60 * 1000;
@@ -322,9 +286,6 @@ export class HistoryService {
     return this.getByDateRange(startTime, now);
   }
 
-  /**
-   * Delete a specific history entry
-   */
   public async deleteEntry(id: string): Promise<boolean> {
     try {
       const result = this.stmts.deleteById.run(id);
@@ -341,9 +302,6 @@ export class HistoryService {
     }
   }
 
-  /**
-   * Delete multiple entries by IDs (optimized with transaction)
-   */
   public async deleteEntries(ids: string[]): Promise<number> {
     if (ids.length === 0) return 0;
 
@@ -364,28 +322,6 @@ export class HistoryService {
     }
   }
 
-  /**
-   * Delete history by URL
-   */
-  public async deleteByUrl(url: string): Promise<boolean> {
-    try {
-      const result = this.stmts.deleteByUrl.run(url);
-      const deleted = result.changes > 0;
-      
-      if (deleted) {
-        console.log(`Deleted history entry: ${url}`);
-      }
-      
-      return deleted;
-    } catch (error) {
-      console.error('Error deleting history by URL:', error);
-      return false;
-    }
-  }
-
-  /**
-   * Delete history by date range (optimized with single query)
-   */
   public async deleteByDateRange(startTime: number, endTime: number): Promise<number> {
     try {
       const result = this.db.prepare(`
@@ -401,9 +337,6 @@ export class HistoryService {
     }
   }
 
-  /**
-   * Clear all history
-   */
   public async clearAll(): Promise<boolean> {
     try {
       this.stmts.clearAll.run();
@@ -415,12 +348,8 @@ export class HistoryService {
     }
   }
 
-  /**
-   * Get history statistics (optimized with aggregation queries)
-   */
   public async getStats(): Promise<HistoryStats> {
     try {
-      // Get total entries and visits
       const totals = this.db.prepare(`
         SELECT 
           COUNT(*) as totalEntries,
@@ -428,7 +357,6 @@ export class HistoryService {
         FROM history_entries
       `).get() as { totalEntries: number; totalVisits: number };
 
-      // Get today's visits
       const now = new Date();
       const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
       const todayStats = this.db.prepare(`
@@ -437,7 +365,6 @@ export class HistoryService {
         WHERE last_visit_time >= ?
       `).get(startOfDay) as { todayVisits: number | null };
 
-      // Get week's visits
       const startOfWeek = now.getTime() - 7 * 24 * 60 * 60 * 1000;
       const weekStats = this.db.prepare(`
         SELECT SUM(visit_count) as weekVisits
@@ -445,7 +372,6 @@ export class HistoryService {
         WHERE last_visit_time >= ?
       `).get(startOfWeek) as { weekVisits: number | null };
 
-      // Get top domains (optimized with SQL)
       const topDomainsRaw = this.db.prepare(`
         SELECT 
           SUBSTR(url, INSTR(url, '://') + 3, 
@@ -482,9 +408,6 @@ export class HistoryService {
     }
   }
 
-  /**
-   * Get most visited sites
-   */
   public async getMostVisited(limit = 10): Promise<HistoryEntry[]> {
     try {
       const rows = this.db.prepare(`
@@ -500,9 +423,6 @@ export class HistoryService {
     }
   }
 
-  /**
-   * Get recently visited sites (last 24 hours)
-   */
   public async getRecentlyVisited(limit = 20): Promise<HistoryEntry[]> {
     const oneDayAgo = Date.now() - 24 * 60 * 60 * 1000;
     
@@ -521,9 +441,6 @@ export class HistoryService {
     }
   }
 
-  /**
-   * Check if URL exists in history
-   */
   public async hasUrl(url: string): Promise<boolean> {
     try {
       const result = this.stmts.getByUrl.get(url);
@@ -534,9 +451,6 @@ export class HistoryService {
     }
   }
 
-  /**
-   * Get entry by URL
-   */
   public async getByUrl(url: string): Promise<HistoryEntry | null> {
     try {
       const row = this.stmts.getByUrl.get(url);
@@ -547,24 +461,6 @@ export class HistoryService {
     }
   }
 
-  /**
-   * Optimize database (run periodically for maintenance)
-   */
-  public async optimize(): Promise<void> {
-    try {
-      console.log('Optimizing history database...');
-      this.db.pragma('optimize');
-      this.db.pragma('wal_checkpoint(TRUNCATE)');
-      this.db.exec('VACUUM');
-      console.log('Database optimization completed');
-    } catch (error) {
-      console.error('Error optimizing database:', error);
-    }
-  }
-
-  /**
-   * Close database connection
-   */
   public close(): void {
     try {
       this.db.close();
@@ -574,29 +470,49 @@ export class HistoryService {
     }
   }
 
-  /**
-   * Get database statistics for monitoring
-   */
-  public async getDatabaseInfo(): Promise<{
-    size: number;
-    pageCount: number;
-    pageSize: number;
-    walSize: number;
-  }> {
-    try {
-      const pageCount = this.db.pragma('page_count', { simple: true }) as number;
-      const pageSize = this.db.pragma('page_size', { simple: true }) as number;
-      const walSize = this.db.pragma('wal_checkpoint', { simple: true }) as number;
+  public async getAutocompleteSuggestions(query: string, limit = 8): Promise<HistoryEntry[]> {
+    if (!query || query.trim().length === 0) {
+      return this.getMostVisited(limit);
+    }
 
-      return {
-        size: pageCount * pageSize,
-        pageCount,
-        pageSize,
-        walSize,
-      };
+    const searchQuery = query.trim().toLowerCase();
+
+    try {
+      const rows = this.db.prepare(`
+        SELECT *,
+          CASE
+            WHEN LOWER(url) LIKE ? THEN 100
+            WHEN LOWER(url) LIKE ? THEN 80
+            WHEN LOWER(title) LIKE ? THEN 60
+            WHEN LOWER(url) LIKE ? THEN 40
+            WHEN LOWER(title) LIKE ? THEN 20
+            ELSE 0
+          END as match_score
+        FROM history_entries
+        WHERE 
+          LOWER(url) LIKE ? OR 
+          LOWER(title) LIKE ?
+        ORDER BY 
+          match_score DESC,
+          typed_count DESC,
+          visit_count DESC,
+          last_visit_time DESC
+        LIMIT ?
+      `).all(
+        `%://${searchQuery}%`,      // URL starts with query after protocol
+        `%://%${searchQuery}%`,     // URL contains query
+        `${searchQuery}%`,          // Title starts with query
+        `%${searchQuery}%`,         // URL contains query anywhere
+        `%${searchQuery}%`,         // Title contains query anywhere
+        `%${searchQuery}%`,         // WHERE: URL contains
+        `%${searchQuery}%`,         // WHERE: Title contains
+        limit
+      );
+
+      return rows.map(row => this.rowToEntry(row));
     } catch (error) {
-      console.error('Error getting database info:', error);
-      return { size: 0, pageCount: 0, pageSize: 0, walSize: 0 };
+      console.error('Error getting autocomplete suggestions:', error);
+      return [];
     }
   }
 }

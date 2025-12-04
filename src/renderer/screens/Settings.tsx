@@ -95,6 +95,13 @@ export function Settings() {
                   <span>General</span>
                 </TabsTrigger>
                 <TabsTrigger
+                  value='appearance'
+                  className='justify-start gap-3 rounded-full px-4 py-2.5'
+                >
+                  <Palette className='h-4 w-4' />
+                  <span>Appearance</span>
+                </TabsTrigger>
+                <TabsTrigger
                   value='passwords'
                   className='justify-start gap-3 rounded-full px-4 py-2.5'
                 >
@@ -107,13 +114,6 @@ export function Settings() {
                 >
                   <Shield className='h-4 w-4' />
                   <span>Privacy & Security</span>
-                </TabsTrigger>
-                <TabsTrigger
-                  value='appearance'
-                  className='justify-start gap-3 rounded-full px-4 py-2.5'
-                >
-                  <Palette className='h-4 w-4' />
-                  <span>Appearance</span>
                 </TabsTrigger>
               </TabsList>
             </ScrollArea>

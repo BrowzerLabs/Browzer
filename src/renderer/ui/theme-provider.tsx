@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useState } from "react"
+import { toast } from "sonner"
 
 type Theme = "dark" | "light" | "system"
 
@@ -72,6 +73,7 @@ export function ThemeProvider({
       setIsDark(darkMode)
     } catch (error) {
       console.error('Failed to set theme:', error)
+      toast.error('Failed to apply theme settings')
     }
   }
 

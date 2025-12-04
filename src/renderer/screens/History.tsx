@@ -277,7 +277,7 @@ export function History() {
       {stats && (
         <div className="max-w-6xl mx-auto px-8 py-6">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="bg-white dark:bg-slate-800 rounded-xl border border-gray-200 dark:border-slate-700 p-4 shadow-sm">
+            <div className="bg-background rounded-xl border border-gray-200 dark:border-slate-700 p-4 shadow-sm">
               <div className="flex items-center gap-3">
                 <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
                   <Calendar className="w-5 h-5 text-blue-600" />
@@ -289,7 +289,7 @@ export function History() {
               </div>
             </div>
 
-            <div className="bg-white dark:bg-slate-800 rounded-xl border border-gray-200 dark:border-slate-700 p-4 shadow-sm">
+            <div className="bg-background rounded-xl border border-gray-200 dark:border-slate-700 p-4 shadow-sm">
               <div className="flex items-center gap-3">
                 <div className="p-2 bg-green-100 dark:bg-green-900/30 rounded-lg">
                   <TrendingUp className="w-5 h-5 text-green-600" />
@@ -301,7 +301,7 @@ export function History() {
               </div>
             </div>
 
-            <div className="bg-white dark:bg-slate-800 rounded-xl border border-gray-200 dark:border-slate-700 p-4 shadow-sm">
+            <div className="bg-background rounded-xl border border-gray-200 dark:border-slate-700 p-4 shadow-sm">
               <div className="flex items-center gap-3">
                 <div className="p-2 bg-purple-100 dark:bg-purple-900/30 rounded-lg">
                   <Clock className="w-5 h-5 text-purple-600" />
@@ -352,7 +352,7 @@ export function History() {
                   {date}
                 </h2>
 
-                <div className="bg-white dark:bg-slate-800 rounded-xl border border-gray-200 dark:border-slate-700 divide-y divide-gray-200 dark:divide-slate-700 shadow-sm">
+                <div className="bg-background rounded-xl border border-gray-200 dark:border-slate-700 divide-y divide-gray-200 dark:divide-slate-700 shadow-sm">
                   {entries.map((entry) => (
                     <div
                       key={entry.id}

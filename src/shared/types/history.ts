@@ -1,7 +1,3 @@
-/**
- * History Entry
- * Represents a single browsing history entry
- */
 export interface HistoryEntry {
   id: string;
   url: string;
@@ -14,10 +10,6 @@ export interface HistoryEntry {
   transition: HistoryTransition;
 }
 
-/**
- * History Transition Types
- * Similar to Chrome's transition types
- */
 export enum HistoryTransition {
   LINK = 'link',           // User clicked a link
   TYPED = 'typed',         // User typed URL in address bar
@@ -30,9 +22,6 @@ export enum HistoryTransition {
   FORM_SUBMIT = 'form_submit', // Form submission
 }
 
-/**
- * History Query Options
- */
 export interface HistoryQuery {
   text?: string;           // Search text
   startTime?: number;      // Start timestamp
@@ -40,13 +29,27 @@ export interface HistoryQuery {
   maxResults?: number;     // Maximum results to return
 }
 
-/**
- * History Stats
- */
 export interface HistoryStats {
   totalEntries: number;
   totalVisits: number;
   topDomains: Array<{ domain: string; count: number }>;
   todayVisits: number;
   weekVisits: number;
+}
+
+export enum AutocompleteSuggestionType {
+  HISTORY = 'history',           // From browsing history
+  SEARCH = 'search',             // Search suggestion from Google
+  URL = 'url',                   // Direct URL navigation
+}
+
+export interface AutocompleteSuggestion {
+  id: string;
+  type: AutocompleteSuggestionType;
+  title: string;
+  url: string;
+  subtitle?: string;             // Additional context (e.g., domain for history)
+  favicon?: string;
+  visitCount?: number;           // For history items
+  relevanceScore?: number;       // For sorting
 }

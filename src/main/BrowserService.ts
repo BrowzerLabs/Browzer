@@ -1,8 +1,10 @@
 import { BaseWindow, WebContentsView, dialog } from 'electron';
-import { RecordedAction } from '@/shared/types';
+import { AutocompleteSuggestion, RecordedAction } from '@/shared/types';
 import { RecordingStore } from '@/main/recording';
 import { HistoryService } from '@/main/history/HistoryService';
 import { PasswordManager } from '@/main/password/PasswordManager';
+import { BookmarkService } from '@/main/bookmark';
+import { BrowserAutomationExecutor } from './automation';
 import { SessionManager } from '@/main/llm/session/SessionManager';
 import {
   TabService,
@@ -25,6 +27,7 @@ export class BrowserService {
   private settingsService: SettingsService;
   private historyService: HistoryService;
   private passwordManager: PasswordManager;
+  private bookmarkService: BookmarkService;
   private recordingStore: RecordingStore;
   private sessionManager: SessionManager;
 
@@ -37,10 +40,11 @@ export class BrowserService {
     this.recordingStore = new RecordingStore();
     this.historyService = new HistoryService();
     this.passwordManager = new PasswordManager();
+    this.bookmarkService = new BookmarkService(this.browserView);
     this.sessionManager = new SessionManager();
 
     // Initialize managers
-    this.navigationService = new NavigationService();
+    this.navigationService = new NavigationService(this.historyService);
     this.debuggerService = new DebuggerService();
     
     this.tabService = new TabService(
@@ -75,6 +79,14 @@ export class BrowserService {
 
   public getTabService(): TabService {
     return this.tabService;
+  }
+
+  public async getSearchSuggestions(query: string): Promise<string[]> {
+    return this.navigationService.getSearchSuggestions(query);
+  }
+
+  public async getAutocompleteSuggestions(query: string): Promise<AutocompleteSuggestion[]> {
+    return this.navigationService.getAutocompleteSuggestions(query);
   }
 
   public async startRecording(): Promise<boolean> {
@@ -179,6 +191,19 @@ export class BrowserService {
 
   public getPasswordManager(): PasswordManager {
     return this.passwordManager;
+  }
+
+  public getBookmarkService(): BookmarkService {
+    return this.bookmarkService;
+  }
+
+  public getBrowserView(): WebContentsView {
+    return this.browserView;
+  }
+
+  public getActiveAutomationExecutor(): BrowserAutomationExecutor | null {
+    const activeTab = this.tabService.getActiveTab();
+    return activeTab.automationExecutor;
   }
 
   public updateLayout(_windowWidth: number, _windowHeight: number, sidebarWidth = 0): void {

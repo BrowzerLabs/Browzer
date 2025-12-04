@@ -30,7 +30,6 @@ export function AppearanceSettings({ settings, onUpdate, onReset }: AppearanceSe
       </div>
 
       <FieldGroup>
-        {/* Font Size */}
         <Field>
           <div className='flex items-center justify-between'>
             <FieldLabel>
