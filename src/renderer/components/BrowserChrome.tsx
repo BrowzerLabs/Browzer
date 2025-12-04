@@ -56,9 +56,9 @@ export function BrowserChrome() {
         }}
       />
 
-      <div className='h-7 bg-background' />
-
       <div className="flex-1 overflow-hidden relative flex">
+        <div className="flex-1 pointer-events-none" />
+        
         {isSidebarVisible && (
           <div className="absolute top-0 right-0 bottom-0 w-[30%] min-w-[300px] max-w-[600px] pointer-events-auto">
             <Sidebar />
