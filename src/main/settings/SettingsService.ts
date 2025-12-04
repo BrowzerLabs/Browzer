@@ -5,7 +5,6 @@ import { EventEmitter } from 'events';
 const defaultSettings: AppSettings = {
   general: {
     defaultSearchEngine: 'https://www.google.com/search?q=',
-    homepage: 'https://www.google.com',
     newTabPage: 'https://www.google.com',
   },
   privacy: {
@@ -16,12 +15,6 @@ const defaultSettings: AppSettings = {
   appearance: {
     fontSize: 16,
     showBookmarksBar: false,
-  },
-  automation: {
-    defaultProvider: 'claude',
-    geminiApiKey: '',
-    claudeApiKey: '',
-    openaiApiKey: '',
   },
 };
 
@@ -38,7 +31,6 @@ export interface SettingsServiceEvents {
   'settings:general': (event: SettingsChangeEvent<'general'>) => void;
   'settings:privacy': (event: SettingsChangeEvent<'privacy'>) => void;
   'settings:appearance': (event: SettingsChangeEvent<'appearance'>) => void;
-  'settings:automation': (event: SettingsChangeEvent<'automation'>) => void;
 }
 
 export class SettingsService extends EventEmitter {
@@ -56,13 +48,6 @@ export class SettingsService extends EventEmitter {
     ...args: Parameters<SettingsServiceEvents[K]>
   ): boolean {
     return super.emit(event, ...args);
-  }
-
-  public off<K extends keyof SettingsServiceEvents>(
-    event: K,
-    listener: SettingsServiceEvents[K]
-  ): this {
-    return super.off(event, listener);
   }
 
   constructor() {
