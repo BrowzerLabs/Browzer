@@ -126,9 +126,6 @@ export interface BrowserAPI {
   // Deep Link event listeners
   onDeepLink: (callback: (path: string) => void) => () => void;
   
-  // Settings event listeners
-  onSettingsChanged: (callback: (data: { category: string; value: any }) => void) => () => void;
-  
   // Deep Link actions
   hideAllTabs: () => Promise<boolean>;
   showAllTabs: () => Promise<boolean>;
