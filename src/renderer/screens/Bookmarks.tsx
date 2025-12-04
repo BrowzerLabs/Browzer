@@ -319,9 +319,9 @@ export function Bookmarks() {
             <span className="text-xs text-muted-foreground flex-shrink-0 mr-2">
               {node.children?.filter(c => !c.isFolder).length || 0} bookmarks
             </span>
-            {/* Folder actions menu */}
-            <div className="opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
-              <DropdownMenu>
+            {
+              !isRoot && (
+                <DropdownMenu>
                 <DropdownMenuTrigger asChild onClick={(e: React.MouseEvent) => e.stopPropagation()}>
                   <Button variant="ghost" size="icon" className="h-7 w-7">
                     <MoreVertical className="w-4 h-4" />
@@ -335,31 +335,28 @@ export function Bookmarks() {
                     <Edit2 className="w-4 h-4 mr-2" />
                     Rename
                   </DropdownMenuItem>
-                  {!isRoot && (
-                    <>
-                      <DropdownMenuItem onClick={(e: React.MouseEvent) => {
-                        e.stopPropagation();
-                        handleMoveClick({ id: node.id, title: node.title, isFolder: true, parentId: node.parentId });
-                      }}>
-                        <FolderInput className="w-4 h-4 mr-2" />
-                        Move to...
-                      </DropdownMenuItem>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem
-                        onClick={(e: React.MouseEvent) => {
-                          e.stopPropagation();
-                          handleDeleteFolderClick(node);
-                        }}
-                        className="text-destructive"
-                      >
-                        <Trash2 className="w-4 h-4 mr-2" />
-                        Delete
-                      </DropdownMenuItem>
-                    </>
-                  )}
+                  <DropdownMenuItem onClick={(e: React.MouseEvent) => {
+                    e.stopPropagation();
+                    handleMoveClick({ id: node.id, title: node.title, isFolder: true, parentId: node.parentId });
+                  }}>
+                    <FolderInput className="w-4 h-4 mr-2" />
+                    Move to...
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    onClick={(e: React.MouseEvent) => {
+                      e.stopPropagation();
+                      handleDeleteFolderClick(node);
+                    }}
+                    variant='destructive'
+                  >
+                    <Trash2 className="w-4 h-4 mr-2" />
+                    Delete
+                  </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
-            </div>
+              )
+            }
           </div>
           {isExpanded && node.children?.map((child) => renderTreeNode(child, depth + 1))}
         </div>
@@ -432,10 +429,10 @@ export function Bookmarks() {
   const folders = getAllFolders(bookmarkTree);
 
   return (
-    <div className="flex flex-col h-full bg-background">
+    <div className="flex flex-col h-full bg-slate-100 dark:bg-slate-900">
       {/* Centered Container */}
       <div className="flex-1 overflow-auto">
-        <div className="max-w-3xl mx-auto px-6 py-8">
+        <div className="max-w-4xl mx-auto px-6 py-8">
           {/* Header */}
           <div className="flex items-center justify-between mb-6">
             <div>
@@ -475,7 +472,9 @@ export function Bookmarks() {
             </div>
           </div>
 
-          <div className="mb-6">
+         {
+          viewMode === 'list' && (
+            <div className="mb-6">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <Input
@@ -486,6 +485,8 @@ export function Bookmarks() {
               />
             </div>
           </div>
+          )
+         }
 
           <div className="rounded-lg border bg-card">
             {loading ? (
@@ -557,7 +558,7 @@ export function Bookmarks() {
                                 e.stopPropagation();
                                 handleDelete(bookmark.id);
                               }}
-                              className="text-destructive"
+                              variant='destructive'
                             >
                               <Trash2 className="w-4 h-4 mr-2" />
                               Delete
@@ -775,7 +776,7 @@ export function Bookmarks() {
             </AlertDialogCancel>
             <AlertDialogAction
               onClick={handleConfirmDeleteFolder}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              className='bg-red-600 hover:bg-red-700'
             >
               Delete
             </AlertDialogAction>
