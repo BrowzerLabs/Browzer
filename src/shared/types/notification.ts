@@ -1,131 +1,144 @@
-/**
- * Notification types for real-time push notifications
- * 
- * These types MUST be kept in sync with backend schemas:
- * service/app/schemas/notification.py
- */
-
-import { FaExpandArrowsAlt } from "react-icons/fa";
-
-/**
- * All supported notification types
- * Must match backend NotificationType enum
- */
 export enum NotificationType {
-  // Toast notifications
   TOAST = 'toast',
-  
-  // Dialog notifications
   DIALOG = 'dialog',
-  
-  // Navigation notifications
   NAVIGATE = 'navigate',
-  
-  // Custom callback notifications
   CALLBACK = 'callback',
-  
-  // System notifications
   SYSTEM_UPDATE = 'system_update',
   MAINTENANCE = 'maintenance',
 }
 
-/**
- * Action button for toast notifications
- */
+export type DialogType = 'info' | 'warning' | 'error' | 'question';
+
+export interface DialogButton {
+  label: string;
+  action?: string;
+}
+
+export interface DialogConfig {
+  dialog_type: DialogType;
+  buttons?: DialogButton[];
+  default_button_index?: number;
+  cancel_button_index?: number;
+  checkbox_label?: string;
+  checkbox_checked?: boolean;
+}
+
+export interface DialogResult {
+  response: number;
+  action?: string;
+  checkboxChecked?: boolean;
+}
+
 export interface ToastAction {
   label: string;
   action: string;
   data?: Record<string, any>;
 }
 
-/**
- * Base notification payload
- * All notifications must include these fields
- */
 export interface NotificationPayload {
   type: NotificationType;
-  title: string;
   message: string;
-  
+  detail?: string;
+
   action?: ToastAction;
-  
-  // For navigation
+
   navigate_to?: string;
-  
-  // For callback
+
   callback_name?: string;
   callback_data?: Record<string, any>;
-  
-  // Additional metadata
+
+  dialog_config?: DialogConfig;
+
   metadata?: Record<string, any>;
   timestamp?: string;
 }
 
-/**
- * SSE notification event wrapper
- */
 export interface NotificationEvent {
   event: string;
   data: NotificationPayload;
 }
 
-/**
- * Notification handler callback type
- */
 export type NotificationHandler = (notification: NotificationPayload) => void;
 
-/**
- * Notification action handler type
- */
 export type NotificationActionHandler = (action: string, data?: Record<string, any>) => void;
-/**
- * Helper functions to create notifications (for testing/examples)
- */
 export const createToastNotification = (
   type: NotificationType,
-  title: string,
   message: string,
+  detail?: string,
   action?: ToastAction,
   metadata?: Record<string, any>,
 ): NotificationPayload => ({
   type,
-  title,
   message,
+  detail,
   action,
   metadata
 });
 
 export const createDialogNotification = (
-  type: NotificationType,
-  title: string,
   message: string,
+  detail?: string,
+  dialogType: DialogType = 'info',
+  buttons?: DialogButton[],
 ): NotificationPayload => ({
-  type,
-  title,
+  type: NotificationType.DIALOG,
   message,
-  
+  detail,
+  dialog_config: {
+    dialog_type: dialogType,
+    buttons,
+  },
 });
 
+export const createInfoDialog = (
+  message: string,
+  detail?: string,
+): NotificationPayload =>
+  createDialogNotification(message, detail, 'info');
+
+export const createErrorDialog = (
+  message: string,
+  detail?: string,
+): NotificationPayload =>
+  createDialogNotification(message, detail, 'error');
+
+export const createWarningDialog = (
+  message: string,
+  detail?: string,
+): NotificationPayload =>
+  createDialogNotification(message, detail, 'warning');
+
+export const createConfirmDialog = (
+  message: string,
+  detail?: string,
+  confirmLabel = 'Confirm',
+  cancelLabel = 'Cancel',
+): NotificationPayload =>
+  createDialogNotification(message, detail, 'question', [
+    { label: confirmLabel, action: 'confirm' },
+    { label: cancelLabel, action: 'cancel' },
+  ]);
+
 export const createNavigateNotification = (
-  title: string,
   message: string,
   navigate_to: string,
+  detail?: string,
 ): NotificationPayload => ({
   type: NotificationType.NAVIGATE,
-  title,
   message,
+  detail,
   navigate_to,
 });
 
 export const createCallbackNotification = (
-  title: string,
   message: string,
   callback_name: string,
   callback_data?: Record<string, any>,
+  detail?: string,
 ): NotificationPayload => ({
   type: NotificationType.CALLBACK,
-  title,
   message,
+  detail,
   callback_name,
   callback_data,
 });

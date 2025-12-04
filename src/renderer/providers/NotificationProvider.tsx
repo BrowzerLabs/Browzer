@@ -32,10 +32,10 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
   const unsubscribeRef = useRef<(() => void) | null>(null);
 
   const handleToastNotification = useCallback((notification: NotificationPayload) => {
-    const { title, message, action, metadata } = notification;
+    const {message, detail, action, metadata } = notification;
 
     const toastOptions = {
-      description: message,
+      description: detail,
     };
 
     if (action) {
@@ -56,31 +56,25 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
 
     switch (metadata?.variant) {
       case 'success':
-        toast.success(title, toastOptions);
+        toast.success(message, toastOptions);
         break;
       case 'warning':
-        toast.warning(title, toastOptions);
+        toast.warning(message, toastOptions);
         break;
       case 'error':
-        toast.error(title, toastOptions);
+        toast.error(message, toastOptions);
         break;
       default:
-        toast.info(title, toastOptions);
+        toast.info(message, toastOptions);
     }
   }, []);
 
-  const handleDialogNotification = useCallback(async (notification: NotificationPayload) => {
-    const { title, message } = notification;
-    toast.info(title)
-    alert(message);
-  }, []);
-
   const handleNavigationNotification = useCallback((notification: NotificationPayload) => {
-    const { navigate_to, title, message } = notification;
+    const { navigate_to, message, detail } = notification;
 
     if (navigate_to) {
-      toast.info(title, {
-        description: message,
+      toast.info(message, {
+        description: detail,
       });
 
       setTimeout(() => {
@@ -91,15 +85,15 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
   }, [navigate]);
 
   const handleCallbackNotification = useCallback((notification: NotificationPayload) => {
-    const { callback_name, callback_data, title, message } = notification;
+    const { callback_name, callback_data, message, detail } = notification;
 
     if (callback_name) {
       const handler = callbackRegistry.get(callback_name);
       if (handler) {
         handler(callback_data);
         
-        toast.success(title, {
-          description: message,
+        toast.success(message, {
+          description: detail,
         });
       } else {
         console.warn(`[NotificationProvider] No handler registered for callback: ${callback_name}`);
@@ -120,9 +114,6 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
         case NotificationType.TOAST:
           handleToastNotification(notification);
           break;
-        case NotificationType.DIALOG:
-          handleDialogNotification(notification);
-          break;
         case NotificationType.NAVIGATE:
           handleNavigationNotification(notification);
           break;
@@ -131,8 +122,8 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
           break;
         default:
           console.warn('[NotificationProvider] Unknown notification type:', type);
-          toast.info(notification.title, {
-            description: notification.message,
+          toast.info(notification.message, {
+            description: notification.detail,
           });
       }
     } catch (error) {
@@ -141,17 +132,12 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
         description: 'Failed to process notification',
       });
     }
-  }, [handleToastNotification, handleDialogNotification, handleNavigationNotification, handleCallbackNotification]);
+  }, [handleToastNotification, handleNavigationNotification, handleCallbackNotification]);
 
-  /**
-   * Subscribe to notification events on mount
-   */
   useEffect(() => {
-    // Subscribe to notification events
     unsubscribeRef.current = window.notificationAPI.onNotification(handleNotification);
     registerAppNotificationCallbacks();
 
-    // Cleanup on unmount
     return () => {
       if (unsubscribeRef.current) {
         unsubscribeRef.current();

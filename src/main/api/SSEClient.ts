@@ -1,14 +1,16 @@
-import { WebContents } from 'electron';
+import { BaseWindow, MessageBoxOptions, WebContentsView, dialog } from 'electron';
 import { EventEmitter } from 'events';
 import { EventSource } from 'eventsource';
 import { tokenManager } from '@/main/auth/TokenManager';
+import { DialogButton, DialogConfig, DialogResult, DialogType, NotificationPayload, NotificationType } from '@/shared/types/notification';
 
 export interface SSEConfig {
+  baseWindow: BaseWindow;
+  browserView: WebContentsView
   url: string;
   electronId: string;
   reconnectInterval?: number;
   heartbeatTimeout?: number;
-  browserUIWebContents: WebContents;
 }
 
 export enum SSEConnectionState {
@@ -23,7 +25,8 @@ export class SSEClient extends EventEmitter {
   private eventSource: EventSource | null = null;
   private url: string;
   private electronId: string;
-  private browserUIWebContents: WebContents;
+  private baseWindow: BaseWindow;
+  private browserView: WebContentsView;
 
   private reconnectInterval: number;
   private heartbeatTimeout: number;
@@ -39,11 +42,12 @@ export class SSEClient extends EventEmitter {
     super();
     this.url = config.url;
     this.electronId = config.electronId;
-    this.browserUIWebContents = config.browserUIWebContents;
-    
+    this.baseWindow = config.baseWindow;
+    this.browserView = config.browserView;
+
     this.reconnectInterval = config.reconnectInterval || 3000;
     this.heartbeatTimeout = config.heartbeatTimeout || 29000;
-    this.maxReconnectAttempts = 20 
+    this.maxReconnectAttempts = 20;
   }
 
   /**
@@ -156,8 +160,8 @@ export class SSEClient extends EventEmitter {
 
     // Notification event
     this.eventSource.addEventListener('notification', (event: MessageEvent) => {
-      const data = JSON.parse(event.data);
-      this.browserUIWebContents.send('notification', data);
+      const data = JSON.parse(event.data) as NotificationPayload;
+      this.handleNotification(data);
     });
   }
 
@@ -172,12 +176,9 @@ export class SSEClient extends EventEmitter {
     }
 
     this.emit('message', message);
-    this.browserUIWebContents.send('sse:message', message);
+    this.browserView.webContents.send('sse:message', message);
   }
 
-  /**
-   * Disconnect from SSE endpoint
-   */
   disconnect(): void {
     console.log('[SSEClient] Manual disconnect requested');
     this.shouldReconnect = false;
@@ -186,9 +187,6 @@ export class SSEClient extends EventEmitter {
     this.emit('disconnected');
   }
 
-  /**
-   * Cleanup resources
-   */
   private cleanup(): void {
     this.stopHeartbeatMonitor();
 
@@ -204,10 +202,6 @@ export class SSEClient extends EventEmitter {
     this.setState(SSEConnectionState.DISCONNECTED);
   }
 
-  /**
-   * Schedule reconnection attempt with exponential backoff
-   * Will keep trying until connection succeeds
-   */
   private scheduleReconnect(): void {
     if (!this.shouldReconnect) {
       return;
@@ -226,7 +220,6 @@ export class SSEClient extends EventEmitter {
     this.reconnectAttempts++;
     this.setState(SSEConnectionState.RECONNECTING);
 
-    // Exponential backoff with max delay cap
     const delay = Math.min(
       this.reconnectInterval * Math.pow(2, Math.min(this.reconnectAttempts - 1, 6)),
       60000
@@ -238,14 +231,10 @@ export class SSEClient extends EventEmitter {
       this.reconnectTimer = null;
       this.connect().catch(err => {
         console.error('[SSEClient] Reconnection attempt failed:', err);
-        // Will be handled by onerror and schedule another attempt
       });
     }, delay);
   }
 
-  /**
-   * Start heartbeat monitoring
-   */
   private startHeartbeatMonitor(): void {
     this.heartbeatTimer = setInterval(() => {
       const timeSinceLastHeartbeat = Date.now() - this.lastHeartbeat;
@@ -256,12 +245,9 @@ export class SSEClient extends EventEmitter {
         this.emit('heartbeat_timeout');
         this.scheduleReconnect();
       }
-    }, 18000); // Check every 18 seconds
+    }, 18000);
   }
 
-  /**
-   * Stop heartbeat monitoring
-   */
   private stopHeartbeatMonitor(): void {
     if (this.heartbeatTimer) {
       clearInterval(this.heartbeatTimer);
@@ -269,9 +255,6 @@ export class SSEClient extends EventEmitter {
     }
   }
 
-  /**
-   * Set connection state
-   */
   private setState(state: SSEConnectionState): void {
     if (this.state !== state) {
       this.state = state;
@@ -279,33 +262,6 @@ export class SSEClient extends EventEmitter {
     }
   }
 
-  /**
-   * Get current connection state
-   */
-  getState(): SSEConnectionState {
-    return this.state;
-  }
-
-  /**
-   * Check if connected
-   */
-  isConnected(): boolean {
-    return this.state === SSEConnectionState.CONNECTED;
-  }
-
-  /**
-   * Get reconnection attempts
-   */
-  getReconnectAttempts(): number {
-    return this.reconnectAttempts;
-  }
-
-  /**
-   * Reset reconnection attempts (useful after successful reconnection)
-   */
-  resetReconnectAttempts(): void {
-    this.reconnectAttempts = 0;
-  }
 
   async reconnectWithAuth(): Promise<void> {
     console.log('[SSEClient] Reconnecting with updated authentication...');
@@ -313,5 +269,45 @@ export class SSEClient extends EventEmitter {
     this.shouldReconnect = true;
     this.reconnectAttempts = 0;
     await this.connect();
+  }
+
+  private async handleNotification(notification: NotificationPayload): Promise<DialogResult> {
+    if (notification.type === NotificationType.DIALOG) {
+      const { message, detail, dialog_config } = notification;
+      const config = dialog_config || ({} as DialogConfig);
+      const buttons =
+      config.buttons?.map((btn: DialogButton) => btn.label) || ['OK'];
+
+      const options: MessageBoxOptions = {
+        type: config.dialog_type ?? 'info',
+        message,
+        detail,
+        buttons,
+        defaultId: config.default_button_index ?? 0,
+      };
+
+      if (config.cancel_button_index !== undefined) {
+        options.cancelId = config.cancel_button_index;
+      }
+
+      if (config.checkbox_label) {
+        options.checkboxLabel = config.checkbox_label;
+        options.checkboxChecked = config.checkbox_checked ?? false;
+      }
+
+      const result = await dialog.showMessageBox(this.baseWindow, options);
+      const clickedButton = config?.buttons?.[result.response];
+      const action = clickedButton?.action;
+
+      const dialogResult: DialogResult = {
+        response: result.response,
+        action,
+        checkboxChecked: result.checkboxChecked,
+      };
+
+      return dialogResult;
+    } else {
+      this.browserView.webContents.send('notification', notification);
+    }
   }
 }
