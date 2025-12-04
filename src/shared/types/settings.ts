@@ -15,7 +15,6 @@ export interface AppSettings {
   
   // Appearance
   appearance: {
-    theme: 'light' | 'dark' | 'system';
     fontSize: number;
     showBookmarksBar: boolean;
   };

@@ -3,7 +3,6 @@ import { RecordedAction } from '@/shared/types';
 import { RecordingStore } from '@/main/recording';
 import { HistoryService } from '@/main/history/HistoryService';
 import { PasswordManager } from '@/main/password/PasswordManager';
-import { BrowserAutomationExecutor } from './automation';
 import { SessionManager } from '@/main/llm/session/SessionManager';
 import {
   TabService,
@@ -12,6 +11,7 @@ import {
   NavigationService,
   DebuggerService,
 } from './browser';
+import { SettingsService } from './settings/SettingsService';
 
 export class BrowserService {
   // Modular components
@@ -22,6 +22,7 @@ export class BrowserService {
   private debuggerService: DebuggerService;
 
   // Services (shared across managers)
+  private settingsService: SettingsService;
   private historyService: HistoryService;
   private passwordManager: PasswordManager;
   private recordingStore: RecordingStore;
@@ -32,6 +33,7 @@ export class BrowserService {
     private browserView: WebContentsView
   ) {
     // Initialize services
+    this.settingsService = new SettingsService();
     this.recordingStore = new RecordingStore();
     this.historyService = new HistoryService();
     this.passwordManager = new PasswordManager();
@@ -44,6 +46,7 @@ export class BrowserService {
     this.tabService = new TabService(
       baseWindow,
       this.passwordManager,
+      this.settingsService,
       this.historyService,
       this.navigationService,
       this.debuggerService,
@@ -166,6 +169,9 @@ export class BrowserService {
   }
 
   // Service Accessors (for IPCHandlers)
+  public getSettingsService(): SettingsService {
+    return this.settingsService;
+  }
 
   public getHistoryService(): HistoryService {
     return this.historyService;
@@ -174,13 +180,6 @@ export class BrowserService {
   public getPasswordManager(): PasswordManager {
     return this.passwordManager;
   }
-
-  public getActiveAutomationExecutor(): BrowserAutomationExecutor | null {
-    const activeTab = this.tabService.getActiveTab();
-    return activeTab.automationExecutor;
-  }
-
-  // Layout Management
 
   public updateLayout(_windowWidth: number, _windowHeight: number, sidebarWidth = 0): void {
     this.tabService.updateLayout(sidebarWidth);
