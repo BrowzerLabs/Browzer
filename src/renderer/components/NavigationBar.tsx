@@ -17,6 +17,7 @@ import {
 } from '@/renderer/ui/dropdown-menu';
 import { AddressBar } from '@/renderer/components/AddressBar';
 import { BookmarkButton } from '@/renderer/components/BookmarkButton';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/renderer/ui/tooltip';
 
 interface NavigationBarProps {
   activeTab: TabInfo | null;
@@ -84,49 +85,24 @@ export function NavigationBar({
         onNavigate={onNavigate}
       />
 
-      {/* Bookmark Button */}
       <BookmarkButton
         url={activeTab?.url || ''}
         title={activeTab?.title || ''}
         favicon={activeTab?.favicon}
       />
 
-      {isDownloading && (
-        <div className="relative">
-          <Button 
-            variant="outline" 
-            size="icon"
-            disabled
-            title={`Downloading update v${version} - ${Math.round(progress)}%`}
-            className="relative overflow-hidden"
-          >
-            <Download className="w-4 h-4 text-blue-500 z-10" />
-            {/* Circular progress indicator */}
-            <svg className="absolute inset-0 w-full h-full -rotate-90" viewBox="0 0 36 36">
-              <circle
-                cx="18"
-                cy="18"
-                r="16"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                className="text-gray-200 dark:text-gray-700"
-              />
-              <circle
-                cx="18"
-                cy="18"
-                r="16"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeDasharray={`${progress} 100`}
-                className="text-blue-500 transition-all duration-300"
-              />
-            </svg>
-          </Button>
-        </div>
-      )}
-
+      {
+        isDownloading && (
+          <Tooltip>
+            <TooltipTrigger>
+              <p className="text-xs font-bold">{progress}%</p>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Downloading update v{version} - {progress}%</p>
+            </TooltipContent>
+          </Tooltip>
+        )
+      }
       <Button 
         variant="outline" 
         size="icon" 
