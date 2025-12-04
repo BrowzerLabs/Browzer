@@ -1,14 +1,11 @@
 import { AppSettings } from '@/shared/types';
 import Store from 'electron-store';
+import { EventEmitter } from 'events';
 
-/**
- * Default settings configuration
- */
 const defaultSettings: AppSettings = {
   general: {
     defaultSearchEngine: 'https://www.google.com/search?q=',
-    homepage: 'https://www.google.com',
-    newTabPage: 'https://www.google.com',
+    newTabUrl: 'https://www.google.com',
   },
   privacy: {
     clearCacheOnExit: false,
@@ -16,42 +13,55 @@ const defaultSettings: AppSettings = {
     blockThirdPartyCookies: false,
   },
   appearance: {
-    theme: 'system',
     fontSize: 16,
     showBookmarksBar: false,
   },
-  automation: {
-    defaultProvider: 'claude',
-    geminiApiKey: '',
-    claudeApiKey: '',
-    openaiApiKey: '',
-  },
 };
 
-/**
- * SettingsStore - Manages application settings persistence
- * Uses electron-store for cross-platform settings storage
- */
-export class SettingsStore {
+export interface SettingsChangeEvent<K extends keyof AppSettings = keyof AppSettings> {
+  category: K;
+  key?: keyof AppSettings[K];
+  value: Partial<AppSettings[K]> | AppSettings[K][keyof AppSettings[K]];
+  previousValue: AppSettings[K];
+  newValue: AppSettings[K];
+}
+
+export interface SettingsServiceEvents {
+  'settings:changed': (event: SettingsChangeEvent) => void;
+  'settings:general': (event: SettingsChangeEvent<'general'>) => void;
+  'settings:privacy': (event: SettingsChangeEvent<'privacy'>) => void;
+  'settings:appearance': (event: SettingsChangeEvent<'appearance'>) => void;
+}
+
+export class SettingsService extends EventEmitter {
   private store: Store<AppSettings>;
 
+  public on<K extends keyof SettingsServiceEvents>(
+    event: K,
+    listener: SettingsServiceEvents[K]
+  ): this {
+    return super.on(event, listener);
+  }
+
+  public emit<K extends keyof SettingsServiceEvents>(
+    event: K,
+    ...args: Parameters<SettingsServiceEvents[K]>
+  ): boolean {
+    return super.emit(event, ...args);
+  }
+
   constructor() {
+    super();
     this.store = new Store<AppSettings>({
       name: 'settings',
       defaults: defaultSettings,
     });
   }
 
-  /**
-   * Get all settings
-   */
   public getAllSettings(): AppSettings {
     return this.store.store;
   }
 
-  /**
-   * Get a specific setting by path
-   */
   public getSetting<K extends keyof AppSettings>(category: K): AppSettings[K];
   public getSetting<K extends keyof AppSettings, T extends keyof AppSettings[K]>(
     category: K,
@@ -68,58 +78,69 @@ export class SettingsStore {
     return this.store.get(category) as AppSettings[K];
   }
 
-  /**
-   * Update a specific setting
-   */
   public updateSetting<K extends keyof AppSettings, T extends keyof AppSettings[K]>(
     category: K,
     key: T,
     value: AppSettings[K][T]
   ): void {
-    const categoryData = this.store.get(category) as AppSettings[K];
-    this.store.set(category, { ...categoryData, [key]: value });
+    const previousValue = this.store.get(category) as AppSettings[K];
+    const newValue = { ...previousValue, [key]: value };
+    this.store.set(category, newValue);
+    
+    const event: SettingsChangeEvent<K> = {
+      category,
+      key,
+      value,
+      previousValue,
+      newValue,
+    };
+    
+    this.emitSettingsEvent(category, event);
   }
 
-  /**
-   * Update an entire category
-   */
   public updateCategory<K extends keyof AppSettings>(
     category: K,
     values: Partial<AppSettings[K]>
   ): void {
-    const current = this.store.get(category);
-    this.store.set(category, { ...current, ...values });
+    const previousValue = this.store.get(category) as AppSettings[K];
+    const newValue = { ...previousValue, ...values };
+    this.store.set(category, newValue);
+
+    const event: SettingsChangeEvent<K> = {
+      category,
+      value: values,
+      previousValue,
+      newValue,
+    };
+    
+    this.emitSettingsEvent(category, event);
   }
 
-  /**
-   * Reset all settings to defaults
-   */
+  private emitSettingsEvent<K extends keyof AppSettings>(
+    category: K,
+    event: SettingsChangeEvent<K>
+  ): void {
+    const categoryEvent = `settings:${category}` as keyof SettingsServiceEvents;
+    super.emit(categoryEvent, event);
+    super.emit('settings:changed', event as unknown as SettingsChangeEvent);
+  }
+
   public resetToDefaults(): void {
     this.store.clear();
     this.store.store = defaultSettings;
   }
 
-  /**
-   * Reset a specific category to defaults
-   */
   public resetCategory<K extends keyof AppSettings>(category: K): void {
     this.store.set(category, defaultSettings[category]);
   }
 
-  /**
-   * Export settings as JSON
-   */
   public exportSettings(): string {
     return JSON.stringify(this.store.store, null, 2);
   }
 
-  /**
-   * Import settings from JSON
-   */
   public importSettings(jsonString: string): boolean {
     try {
       const settings = JSON.parse(jsonString) as AppSettings;
-      // Validate structure (basic check)
       if (settings.general && settings.privacy && settings.appearance) {
         this.store.store = { ...defaultSettings, ...settings };
         return true;
@@ -129,12 +150,5 @@ export class SettingsStore {
       console.error('Failed to import settings:', error);
       return false;
     }
-  }
-
-  /**
-   * Get the file path where settings are stored
-   */
-  public getStorePath(): string {
-    return this.store.path;
   }
 }

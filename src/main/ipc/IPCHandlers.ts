@@ -1,6 +1,5 @@
 import { BaseWindow, ipcMain, shell } from 'electron';
 import { BrowserService } from '@/main/BrowserService';
-import { SettingsStore } from '@/main/settings/SettingsStore';
 import { PasswordManager } from '@/main/password/PasswordManager';
 import { BookmarkService } from '@/main/bookmark';
 import { AuthService } from '@/main/auth';
@@ -10,9 +9,10 @@ import { RecordedAction, HistoryQuery, AppSettings, SignUpCredentials, SignInCre
 import { CheckoutSessionRequest, PortalSessionRequest } from '@/shared/types/subscription';
 import { TabService } from '@/main/browser';
 import { EventEmitter } from 'events';
+import { SettingsService } from '@/main/settings/SettingsService';
 
 export class IPCHandlers extends EventEmitter {
-  private settingsStore: SettingsStore;
+  private settingsService: SettingsService;
   private passwordManager: PasswordManager;
   private bookmarkService: BookmarkService;
   private tabService: TabService;
@@ -29,7 +29,7 @@ export class IPCHandlers extends EventEmitter {
     super();
     this.baseWindow = baseWindow;
     this.tabService = this.browserService.getTabService();
-    this.settingsStore = new SettingsStore();
+    this.settingsService = this.browserService.getSettingsService();
     this.passwordManager = this.browserService.getPasswordManager();
     this.bookmarkService = this.browserService.getBookmarkService();
     this.authService = authService;
@@ -164,39 +164,39 @@ export class IPCHandlers extends EventEmitter {
 
   private setupSettingsHandlers(): void {
     ipcMain.handle('settings:get-all', async () => {
-      return this.settingsStore.getAllSettings();
+      return this.settingsService.getAllSettings();
     });
 
     ipcMain.handle('settings:get-category', async (_, category: keyof AppSettings) => {
-      return this.settingsStore.getSetting(category);
+      return this.settingsService.getSetting(category);
     });
 
     ipcMain.handle('settings:update', async (_, category: keyof AppSettings, key: string, value: unknown) => {
-      this.settingsStore.updateSetting(category, key as never, value as never);
+      this.settingsService.updateSetting(category, key as never, value as never);
       return true;
     });
 
     ipcMain.handle('settings:update-category', async (_, category: keyof AppSettings, values: unknown) => {
-      this.settingsStore.updateCategory(category, values as never);
+      this.settingsService.updateCategory(category, values as never);
       return true;
     });
 
     ipcMain.handle('settings:reset-all', async () => {
-      this.settingsStore.resetToDefaults();
+      this.settingsService.resetToDefaults();
       return true;
     });
 
     ipcMain.handle('settings:reset-category', async (_, category: keyof AppSettings) => {
-      this.settingsStore.resetCategory(category);
+      this.settingsService.resetCategory(category);
       return true;
     });
 
     ipcMain.handle('settings:export', async () => {
-      return this.settingsStore.exportSettings();
+      return this.settingsService.exportSettings();
     });
 
     ipcMain.handle('settings:import', async (_, jsonString: string) => {
-      return this.settingsStore.importSettings(jsonString);
+      return this.settingsService.importSettings(jsonString);
     });
   }
 
