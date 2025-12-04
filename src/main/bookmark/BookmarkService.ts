@@ -41,9 +41,8 @@ export class BookmarkService {
     this.db.pragma('synchronous = NORMAL');
     this.db.pragma('foreign_keys = ON');
 
-    this.initializeDatabase();
+    this.createTables();
 
-    // Prepare statements
     this.stmts = {
       getById: this.db.prepare('SELECT * FROM bookmarks WHERE id = ?'),
       getByUrl: this.db.prepare('SELECT * FROM bookmarks WHERE url = ? AND is_folder = 0'),
@@ -82,12 +81,11 @@ export class BookmarkService {
       ),
     };
 
-    console.log('[BookmarkService] Initialized with SQLite at:', dbPath);
+    this.ensureDefaultFolders();
   }
 
-  private initializeDatabase(): void {
+  private createTables(): void {
     try {
-      // Create bookmarks table
       this.db.exec(`
         CREATE TABLE IF NOT EXISTS bookmarks (
           id TEXT PRIMARY KEY,
@@ -106,12 +104,8 @@ export class BookmarkService {
         CREATE INDEX IF NOT EXISTS idx_date_added ON bookmarks(date_added DESC);
       `);
 
-      // Create default folders if they don't exist
-      this.ensureDefaultFolders();
-
-      console.log('[BookmarkService] Database initialized successfully');
     } catch (error) {
-      console.error('[BookmarkService] Failed to initialize database:', error);
+      console.error('[BookmarkService] Failed to create tables:', error);
       throw error;
     }
   }
@@ -119,7 +113,6 @@ export class BookmarkService {
   private ensureDefaultFolders(): void {
     const now = Date.now();
 
-    // Check if Bookmark Bar exists
     const bookmarkBar = this.stmts.getById.get(BOOKMARK_BAR_ID);
     if (!bookmarkBar) {
       this.stmts.insert.run(
@@ -188,9 +181,6 @@ export class BookmarkService {
     };
   }
 
-  /**
-   * Create a new folder
-   */
   public createFolder(params: CreateFolderParams): BookmarkFolder {
     const { title, parentId = BOOKMARK_BAR_ID, index } = params;
 
@@ -215,42 +205,27 @@ export class BookmarkService {
     };
   }
 
-  /**
-   * Get a bookmark or folder by ID
-   */
   public getById(id: string): BookmarkTreeNode | null {
     const row = this.stmts.getById.get(id) as any;
     if (!row) return null;
     return this.rowToNode(row);
   }
 
-  /**
-   * Get bookmark by URL (to check if already bookmarked)
-   */
   public getByUrl(url: string): Bookmark | null {
     const row = this.stmts.getByUrl.get(url) as any;
     if (!row) return null;
     return this.rowToBookmark(row);
   }
 
-  /**
-   * Check if a URL is bookmarked
-   */
   public isBookmarked(url: string): boolean {
     return this.getByUrl(url) !== null;
   }
 
-  /**
-   * Get children of a folder
-   */
   public getChildren(parentId: string): BookmarkTreeNode[] {
     const rows = this.stmts.getChildren.all(parentId) as any[];
     return rows.map((row) => this.rowToNode(row));
   }
 
-  /**
-   * Get full bookmark tree
-   */
   public getTree(): BookmarkTreeNode[] {
     const buildTree = (parentId: string | null): BookmarkTreeNode[] => {
       const children = parentId
@@ -268,16 +243,10 @@ export class BookmarkService {
     return buildTree(null);
   }
 
-  /**
-   * Get bookmark bar contents
-   */
   public getBookmarkBar(): BookmarkTreeNode[] {
     return this.getChildren(BOOKMARK_BAR_ID);
   }
 
-  /**
-   * Update a bookmark or folder
-   */
   public update(params: UpdateBookmarkParams): boolean {
     const { id, title, url } = params;
     const now = Date.now();
@@ -286,9 +255,6 @@ export class BookmarkService {
     return result.changes > 0;
   }
 
-  /**
-   * Move a bookmark or folder
-   */
   public move(params: MoveBookmarkParams): boolean {
     const { id, parentId, index } = params;
     const now = Date.now();
@@ -308,11 +274,7 @@ export class BookmarkService {
     return result.changes > 0;
   }
 
-  /**
-   * Delete a bookmark or folder (and all children if folder)
-   */
   public delete(id: string): boolean {
-    // Don't allow deleting root folders
     if (id === BOOKMARK_BAR_ID || id === OTHER_BOOKMARKS_ID) {
       return false;
     }
@@ -332,34 +294,22 @@ export class BookmarkService {
     return result.changes > 0;
   }
 
-  /**
-   * Search bookmarks
-   */
   public search(query: string, limit = 20): Bookmark[] {
     const searchPattern = `%${query.toLowerCase()}%`;
     const rows = this.stmts.searchBookmarks.all(searchPattern, searchPattern, limit) as any[];
     return rows.map((row) => this.rowToBookmark(row));
   }
 
-  /**
-   * Get all bookmarks (flat list)
-   */
   public getAllBookmarks(): Bookmark[] {
     const rows = this.stmts.getAllBookmarks.all() as any[];
     return rows.map((row) => this.rowToBookmark(row));
   }
 
-  /**
-   * Get recent bookmarks
-   */
   public getRecentBookmarks(limit = 10): Bookmark[] {
     const rows = this.stmts.getRecentBookmarks.all(limit) as any[];
     return rows.map((row) => this.rowToBookmark(row));
   }
 
-  /**
-   * Convert database row to BookmarkTreeNode
-   */
   private rowToNode(row: any): BookmarkTreeNode {
     return {
       id: row.id,
@@ -374,9 +324,6 @@ export class BookmarkService {
     };
   }
 
-  /**
-   * Convert database row to Bookmark
-   */
   private rowToBookmark(row: any): Bookmark {
     return {
       id: row.id,
@@ -390,9 +337,6 @@ export class BookmarkService {
     };
   }
 
-  /**
-   * Close database connection
-   */
   public close(): void {
     this.db.close();
   }
