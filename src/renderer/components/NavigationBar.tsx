@@ -49,7 +49,7 @@ export function NavigationBar({
   const isSecure = activeTab?.url.startsWith('https://') ?? false;
 
   return (
-    <div className="flex items-center h-12 px-3 gap-2 bg-background">
+    <div className="flex items-center h-10 px-3 gap-2 bg-background">
       <div className="flex items-center gap-1">
         <NavButton
           onClick={onBack}

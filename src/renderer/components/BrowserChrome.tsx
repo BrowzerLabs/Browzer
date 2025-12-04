@@ -3,6 +3,7 @@ import { useBrowserAPI } from '@/renderer/hooks/useBrowserAPI';
 import { useSidebarStore } from '@/renderer/store/useSidebarStore';
 import { TabBar } from './TabBar';
 import { NavigationBar } from './NavigationBar';
+import { BookmarkBar } from './BookmarkBar';
 import { Sidebar } from './Sidebar';
 
 export function BrowserChrome() {
@@ -55,6 +56,8 @@ export function BrowserChrome() {
           }
         }}
       />
+
+      <BookmarkBar onNavigate={(url) => {browserAPI.createTab(url)}} />
 
       <div className="flex-1 overflow-hidden relative flex">
         {isSidebarVisible && (
