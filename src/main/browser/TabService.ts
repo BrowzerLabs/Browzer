@@ -57,7 +57,7 @@ export class TabService extends EventEmitter {
     const generalSettings = this.settingsService.getSetting('general');
     const appearanceSettings = this.settingsService.getSetting('appearance');
     
-    this.newTabUrl = generalSettings.newTabPage ?? 'https://www.google.com';
+    this.newTabUrl = generalSettings.newTabUrl ?? 'https://www.google.com';
     this.defaultSearchEngine = generalSettings.defaultSearchEngine ?? 'https://www.google.com/search?q=';
     
     this.webContentsViewHeight = appearanceSettings.showBookmarksBar 
@@ -78,7 +78,7 @@ export class TabService extends EventEmitter {
   private handleGeneralSettingsChange(event: SettingsChangeEvent<'general'>): void {
     const { newValue } = event;
     
-    this.newTabUrl = newValue.newTabPage || 'https://www.google.com';
+    this.newTabUrl = newValue.newTabUrl || 'https://www.google.com';
     this.defaultSearchEngine = newValue.defaultSearchEngine || 'https://www.google.com/search?q=';
     
     console.log('[TabService] General settings updated:', {
