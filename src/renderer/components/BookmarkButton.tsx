@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Star, Loader2, Folder } from 'lucide-react';
 import { Button } from '@/renderer/ui/button';
 import {
@@ -33,6 +33,8 @@ export function BookmarkButton({
   const [editTitle, setEditTitle] = useState(title);
   const [selectedFolder, setSelectedFolder] = useState<string>(BOOKMARK_BAR_ID);
   const [folders, setFolders] = useState<{ id: string; title: string; depth: number }[]>([]);
+  
+  const lastBrowserViewStateRef = useRef<boolean | null>(null);
 
   const extractFolders = useCallback((nodes: BookmarkTreeNode[]): { id: string; title: string; depth: number }[] => {
     const result: { id: string; title: string; depth: number }[] = [];
@@ -64,6 +66,19 @@ export function BookmarkButton({
   }, [isOpen, extractFolders]);
 
   useEffect(() => {
+    if (lastBrowserViewStateRef.current === isOpen) {
+      return;
+    }
+    lastBrowserViewStateRef.current = isOpen;
+
+    if (isOpen) {
+      window.browserAPI.bringBrowserViewToFront();
+    } else {
+      window.browserAPI.bringBrowserViewToBottom();
+    }
+  }, [isOpen]);
+
+  useEffect(() => {
     const checkBookmarkStatus = async () => {
       if (!url) {
         setIsBookmarked(false);
@@ -90,20 +105,26 @@ export function BookmarkButton({
     checkBookmarkStatus();
   }, [url, title]);
 
+  const closePopover = useCallback(() => {
+    setIsOpen(false);
+  }, []);
+
   const handleStarClick = useCallback(async (e: React.MouseEvent) => {
     e.stopPropagation();
+    e.preventDefault();
     
-    if (!url) return;
+    if (!url || isLoading) return;
 
-    setIsLoading(true);
-    try {
-      if (isBookmarked && currentBookmark) {
-        await window.browserAPI.deleteBookmark(currentBookmark.id);
-        setIsBookmarked(false);
-        setCurrentBookmark(null);
-        onBookmarkChange?.(false);
-      } else {
-        // Add bookmark and open popover for editing
+    if (isBookmarked && currentBookmark) {
+      // Already bookmarked - open popover for editing (like Chrome)
+      // Reset edit fields to current bookmark values
+      setEditTitle(currentBookmark.title);
+      setSelectedFolder(currentBookmark.parentId || BOOKMARK_BAR_ID);
+      setIsOpen(true);
+    } else {
+      // Not bookmarked - create new bookmark and open popover
+      setIsLoading(true);
+      try {
         const bookmark = await window.browserAPI.createBookmark({
           url,
           title,
@@ -113,26 +134,34 @@ export function BookmarkButton({
         setIsBookmarked(true);
         setCurrentBookmark(bookmark);
         setEditTitle(bookmark.title);
+        setSelectedFolder(bookmark.parentId || BOOKMARK_BAR_ID);
         setIsOpen(true);
         onBookmarkChange?.(true);
+      } catch (err) {
+        console.error('[BookmarkButton] Failed to create bookmark:', err);
+      } finally {
+        setIsLoading(false);
       }
-    } catch (err) {
-      console.error('[BookmarkButton] Failed to toggle bookmark:', err);
-    } finally {
-      setIsLoading(false);
     }
-  }, [url, title, favicon, isBookmarked, currentBookmark, onBookmarkChange]);
+  }, [url, title, favicon, isLoading, isBookmarked, currentBookmark, selectedFolder, onBookmarkChange]);
 
-  // Handle save edit
   const handleSave = useCallback(async () => {
-    if (!currentBookmark) return;
+    if (!currentBookmark) {
+      closePopover();
+      return;
+    }
 
+    setIsLoading(true);
     try {
-      await window.browserAPI.updateBookmark({
-        id: currentBookmark.id,
-        title: editTitle,
-      });
+      // Update title if changed
+      if (editTitle !== currentBookmark.title) {
+        await window.browserAPI.updateBookmark({
+          id: currentBookmark.id,
+          title: editTitle,
+        });
+      }
 
+      // Move to different folder if changed
       if (selectedFolder !== currentBookmark.parentId) {
         await window.browserAPI.moveBookmark({
           id: currentBookmark.id,
@@ -140,39 +169,42 @@ export function BookmarkButton({
         });
       }
 
+      // Update local state
       setCurrentBookmark({ ...currentBookmark, title: editTitle, parentId: selectedFolder });
-      setIsOpen(false);
+      closePopover();
     } catch (err) {
       console.error('[BookmarkButton] Failed to update bookmark:', err);
+    } finally {
+      setIsLoading(false);
     }
-  }, [currentBookmark, editTitle, selectedFolder]);
+  }, [currentBookmark, editTitle, selectedFolder, closePopover]);
 
-  // Handle remove from popover
   const handleRemove = useCallback(async () => {
-    if (!currentBookmark) return;
+    if (!currentBookmark) {
+      closePopover();
+      return;
+    }
 
+    setIsLoading(true);
     try {
       await window.browserAPI.deleteBookmark(currentBookmark.id);
       setIsBookmarked(false);
       setCurrentBookmark(null);
-      setIsOpen(false);
+      setEditTitle(title);
+      setSelectedFolder(BOOKMARK_BAR_ID);
       onBookmarkChange?.(false);
+      closePopover();
     } catch (err) {
       console.error('[BookmarkButton] Failed to remove bookmark:', err);
+    } finally {
+      setIsLoading(false);
     }
-  }, [currentBookmark, onBookmarkChange]);
+  }, [currentBookmark, title, onBookmarkChange, closePopover]);
 
-  // Handle popover open change
   const handleOpenChange = useCallback((open: boolean) => {
     setIsOpen(open);
-    if (open) {
-      window.browserAPI.bringBrowserViewToFront();
-    } else {
-      window.browserAPI.bringBrowserViewToBottom();
-    }
   }, []);
 
-  // Don't show for internal pages
   if (!url || url.startsWith('browzer://')) {
     return null;
   }
@@ -205,9 +237,11 @@ export function BookmarkButton({
       <PopoverContent className="w-72" align="end">
         <div className="space-y-3">
           <div>
-            <h4 className="font-medium text-sm">Bookmark added</h4>
+            <h4 className="font-medium text-sm">
+              {isBookmarked ? 'Edit bookmark' : 'Bookmark added'}
+            </h4>
             <p className="text-xs text-muted-foreground mt-0.5">
-              Edit your bookmark details
+              {isBookmarked ? 'Update your bookmark details' : 'Edit your bookmark details'}
             </p>
           </div>
           <div className="space-y-1.5">
@@ -244,10 +278,21 @@ export function BookmarkButton({
             <p className="text-xs text-muted-foreground truncate">{url}</p>
           </div>
           <div className="flex justify-between pt-1">
-            <Button variant="outline" size="sm" onClick={handleRemove} className="h-7 text-xs">
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={handleRemove} 
+              disabled={isLoading}
+              className="h-7 text-xs"
+            >
               Remove
             </Button>
-            <Button size="sm" onClick={handleSave} className="h-7 text-xs">
+            <Button 
+              size="sm" 
+              onClick={handleSave} 
+              disabled={isLoading}
+              className="h-7 text-xs"
+            >
               Done
             </Button>
           </div>

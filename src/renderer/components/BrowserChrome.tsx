@@ -18,7 +18,7 @@ export function BrowserChrome() {
   }, [showSidebar]);
 
   return (
-    <div className="h-full w-full flex flex-col select-none backdrop-blur-xs">
+    <div className="h-full w-full flex flex-col select-none bg-black/30">
       <TabBar
         tabs={browserAPI.tabs}
         activeTabId={browserAPI.activeTabId}
@@ -57,8 +57,6 @@ export function BrowserChrome() {
       />
 
       <div className="flex-1 overflow-hidden relative flex">
-        <div className="flex-1 pointer-events-none" />
-        
         {isSidebarVisible && (
           <div className="absolute top-0 right-0 bottom-0 w-[30%] min-w-[300px] max-w-[600px] pointer-events-auto">
             <Sidebar />
