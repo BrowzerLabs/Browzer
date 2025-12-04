@@ -1,8 +1,8 @@
-import { Input } from '@/renderer/ui/input';
 import { Button } from '@/renderer/ui/button';
 import { RotateCcw, Globe, Home, Plus } from 'lucide-react';
 import type { AppSettings } from '@/shared/types';
 import { Field, FieldGroup, FieldLabel, FieldDescription } from '@/renderer/ui/field';
+import { BufferedInput } from '@/renderer/ui/BufferedInput';
 
 interface GeneralSettingsProps {
   settings: AppSettings['general'];
@@ -34,11 +34,11 @@ export function GeneralSettings({ settings, onUpdate, onReset }: GeneralSettings
             <Globe className='h-4 w-4' />
             Default Search Engine
           </FieldLabel>
-          <Input
+          <BufferedInput
             id='searchEngine'
             type='url'
             value={settings.defaultSearchEngine}
-            onChange={(e) => onUpdate('defaultSearchEngine', e.target.value)}
+            onSave={(value) => onUpdate('defaultSearchEngine', value)}
             placeholder='https://www.google.com/search?q='
           />
           <FieldDescription>
@@ -52,11 +52,11 @@ export function GeneralSettings({ settings, onUpdate, onReset }: GeneralSettings
             <Home className='h-4 w-4' />
             Homepage
           </FieldLabel>
-          <Input
+          <BufferedInput
             id='homepage'
             type='url'
             value={settings.homepage}
-            onChange={(e) => onUpdate('homepage', e.target.value)}
+            onSave={(value) => onUpdate('homepage', value)}
             placeholder='https://www.google.com'
           />
           <FieldDescription>
@@ -70,11 +70,11 @@ export function GeneralSettings({ settings, onUpdate, onReset }: GeneralSettings
             <Plus className='h-4 w-4' />
             New Tab Page
           </FieldLabel>
-          <Input
+          <BufferedInput
             id='newTabPage'
             type='url'
             value={settings.newTabPage}
-            onChange={(e) => onUpdate('newTabPage', e.target.value)}
+            onSave={(value) => onUpdate('newTabPage', value)}
             placeholder='https://www.google.com'
           />
           <FieldDescription>

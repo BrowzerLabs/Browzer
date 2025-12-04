@@ -6,7 +6,7 @@ import { PrivacySettings } from '@/renderer/components/settings/PrivacySettings'
 import { AppearanceSettings } from '@/renderer/components/settings/AppearanceSettings';
 import { PasswordSettings } from '@/renderer/components/settings/PasswordSettings';
 import { AppSettings } from '@/shared/types';
-import { Settings as SettingsIcon, Shield, Palette, Sparkles, Loader2Icon, Key } from 'lucide-react';
+import { Settings as SettingsIcon, Shield, Palette, Loader2Icon, Key } from 'lucide-react';
 import { toast } from 'sonner';
 
 export function Settings() {
@@ -33,7 +33,6 @@ export function Settings() {
   ) => {
     try {
       await window.browserAPI.updateSetting(category, key, value);
-      // Update local state
       setSettings((prev) => {
         if (!prev) return prev;
         return {
@@ -44,7 +43,6 @@ export function Settings() {
           },
         };
       });
-      // Show success toast
       toast.success('Setting updated successfully');
     } catch (error) {
       console.error('Failed to update setting:', error);
