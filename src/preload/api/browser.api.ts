@@ -177,6 +177,10 @@ export const createBrowserAPI = (): BrowserAPI => ({
   onDeepLink: (callback) => 
     createEventListener<string>('deeplink:navigate', callback),
 
+  // Event listeners - Bookmark events
+  onBookmarkChanged: (callback) =>
+    createSimpleListener('bookmark:changed', callback),
+
   // Deep Link actions
   hideAllTabs: () => invoke('deeplink:hide-tabs'),
   showAllTabs: () => invoke('deeplink:show-tabs'),

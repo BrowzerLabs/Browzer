@@ -42,7 +42,7 @@ export class BrowserService {
     this.recordingStore = new RecordingStore();
     this.historyService = new HistoryService();
     this.passwordManager = new PasswordManager();
-    this.bookmarkService = new BookmarkService();
+    this.bookmarkService = new BookmarkService(this.browserView);
     this.sessionManager = new SessionManager();
 
     // Initialize managers
@@ -202,6 +202,11 @@ export class BrowserService {
 
   public getDownloadService(): DownloadService {
     return this.downloadService;
+  }
+
+  public getActiveAutomationExecutor(): BrowserAutomationExecutor | null {
+    const activeTab = this.tabService.getActiveTab();
+    return activeTab.automationExecutor;
   }
 
   public updateLayout(_windowWidth: number, _windowHeight: number, sidebarWidth = 0): void {
