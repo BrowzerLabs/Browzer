@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
-import { Search, Trash2, Star, Folder, ExternalLink, Edit2, MoreVertical, Plus, Loader2 } from 'lucide-react';
-import type { Bookmark, BookmarkTreeNode } from '@/shared/types';
+import { Search, Trash2, Star, Folder, ExternalLink, Edit2, MoreVertical, Loader2, FolderPlus, ChevronRight, ChevronDown } from 'lucide-react';
+import type { Bookmark, BookmarkTreeNode } from '../../shared/types';
+import { BOOKMARK_BAR_ID, OTHER_BOOKMARKS_ID } from '../../shared/types';
 import { Button } from '@/renderer/ui/button';
 import { Input } from '@/renderer/ui/input';
 import { toast } from 'sonner';
@@ -8,6 +9,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/renderer/ui/dropdown-menu';
 import {
@@ -19,6 +21,13 @@ import {
   DialogTitle,
 } from '@/renderer/ui/dialog';
 import { Label } from '@/renderer/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/renderer/ui/select';
 
 export function Bookmarks() {
   const [bookmarks, setBookmarks] = useState<Bookmark[]>([]);
@@ -27,14 +36,17 @@ export function Bookmarks() {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [viewMode, setViewMode] = useState<'list' | 'tree'>('list');
+  const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set([BOOKMARK_BAR_ID, OTHER_BOOKMARKS_ID]));
   
-  // Edit dialog state
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [editingBookmark, setEditingBookmark] = useState<Bookmark | null>(null);
   const [editTitle, setEditTitle] = useState('');
   const [editUrl, setEditUrl] = useState('');
 
-  // Load bookmarks
+  const [createFolderDialogOpen, setCreateFolderDialogOpen] = useState(false);
+  const [newFolderName, setNewFolderName] = useState('');
+  const [newFolderParent, setNewFolderParent] = useState<string>(BOOKMARK_BAR_ID);
+
   const loadBookmarks = useCallback(async () => {
     try {
       setLoading(true);
@@ -57,7 +69,6 @@ export function Bookmarks() {
     loadBookmarks();
   }, [loadBookmarks]);
 
-  // Filter bookmarks based on search
   useEffect(() => {
     if (!searchQuery.trim()) {
       setFilteredBookmarks(bookmarks);
@@ -73,7 +84,6 @@ export function Bookmarks() {
     setFilteredBookmarks(filtered);
   }, [searchQuery, bookmarks]);
 
-  // Handle delete bookmark
   const handleDelete = async (id: string) => {
     try {
       await window.browserAPI.deleteBookmark(id);
@@ -85,7 +95,6 @@ export function Bookmarks() {
     }
   };
 
-  // Handle edit bookmark
   const handleEdit = (bookmark: Bookmark) => {
     setEditingBookmark(bookmark);
     setEditTitle(bookmark.title);
@@ -93,7 +102,6 @@ export function Bookmarks() {
     setEditDialogOpen(true);
   };
 
-  // Save edited bookmark
   const handleSaveEdit = async () => {
     if (!editingBookmark) return;
 
@@ -113,7 +121,6 @@ export function Bookmarks() {
     }
   };
 
-  // Open bookmark in new tab
   const handleOpen = async (url: string) => {
     try {
       await window.browserAPI.createTab(url);
@@ -123,7 +130,6 @@ export function Bookmarks() {
     }
   };
 
-  // Format date
   const formatDate = (timestamp: number) => {
     return new Date(timestamp).toLocaleDateString('en-US', {
       year: 'numeric',
@@ -132,22 +138,79 @@ export function Bookmarks() {
     });
   };
 
-  // Render tree node recursively
+  const handleCreateFolder = async () => {
+    if (!newFolderName.trim()) {
+      toast.error('Please enter a folder name');
+      return;
+    }
+
+    try {
+      await window.browserAPI.createBookmarkFolder({
+        title: newFolderName.trim(),
+        parentId: newFolderParent,
+      });
+      toast.success('Folder created');
+      setCreateFolderDialogOpen(false);
+      setNewFolderName('');
+      setNewFolderParent(BOOKMARK_BAR_ID);
+      loadBookmarks();
+    } catch (error) {
+      console.error('Failed to create folder:', error);
+      toast.error('Failed to create folder');
+    }
+  };
+
+  const toggleFolder = (folderId: string) => {
+    setExpandedFolders(prev => {
+      const next = new Set(prev);
+      if (next.has(folderId)) {
+        next.delete(folderId);
+      } else {
+        next.add(folderId);
+      }
+      return next;
+    });
+  };
+
+  const getAllFolders = (nodes: BookmarkTreeNode[]): { id: string; title: string; depth: number }[] => {
+    const folders: { id: string; title: string; depth: number }[] = [];
+    
+    const traverse = (node: BookmarkTreeNode, depth: number) => {
+      if (node.isFolder) {
+        folders.push({ id: node.id, title: node.title, depth });
+        node.children?.forEach(child => traverse(child, depth + 1));
+      }
+    };
+    
+    nodes.forEach(node => traverse(node, 0));
+    return folders;
+  };
+
   const renderTreeNode = (node: BookmarkTreeNode, depth = 0) => {
+    const isExpanded = expandedFolders.has(node.id);
+    
     if (node.isFolder) {
       return (
-        <div key={node.id} className="mb-2">
+        <div key={node.id}>
           <div
-            className="flex items-center gap-2 py-2 px-3 rounded-lg hover:bg-muted/50"
-            style={{ paddingLeft: `${depth * 16 + 12}px` }}
+            className="flex items-center gap-2 py-2 px-3 rounded-lg hover:bg-muted/50 cursor-pointer select-none"
+            style={{ paddingLeft: `${depth * 20 + 8}px` }}
+            onClick={() => toggleFolder(node.id)}
           >
-            <Folder className="w-4 h-4 text-yellow-500" />
-            <span className="font-medium">{node.title}</span>
-            <span className="text-xs text-muted-foreground ml-auto">
-              {node.children?.length || 0} items
+            <button className="p-0.5 hover:bg-muted rounded">
+              {isExpanded ? (
+                <ChevronDown className="w-4 h-4 text-muted-foreground" />
+              ) : (
+                <ChevronRight className="w-4 h-4 text-muted-foreground" />
+              )}
+            </button>
+            <Folder className="w-4 h-4 text-yellow-500 flex-shrink-0" />
+            <span className="font-medium truncate">{node.title}</span>
+            <span className="text-xs text-muted-foreground ml-auto flex-shrink-0">
+              {node.children?.filter(c => !c.isFolder).length || 0} bookmarks
             </span>
           </div>
-          {node.children?.map((child) => renderTreeNode(child, depth + 1))}
+          {isExpanded && node.children?.map((child) => renderTreeNode(child, depth + 1))}
         </div>
       );
     }
@@ -156,42 +219,43 @@ export function Bookmarks() {
       <div
         key={node.id}
         className="flex items-center gap-3 py-2 px-3 rounded-lg hover:bg-muted/50 group cursor-pointer"
-        style={{ paddingLeft: `${depth * 16 + 12}px` }}
+        style={{ paddingLeft: `${depth * 20 + 36}px` }}
         onClick={() => node.url && handleOpen(node.url)}
       >
         {node.favicon ? (
-          <img src={node.favicon} alt="" className="w-4 h-4 rounded" />
+          <img src={node.favicon} alt="" className="w-4 h-4 rounded flex-shrink-0" />
         ) : (
-          <Star className="w-4 h-4 text-muted-foreground" />
+          <Star className="w-4 h-4 text-yellow-500 flex-shrink-0" />
         )}
         <div className="flex-1 min-w-0">
           <p className="text-sm font-medium truncate">{node.title}</p>
           <p className="text-xs text-muted-foreground truncate">{node.url}</p>
         </div>
-        <div className="opacity-0 group-hover:opacity-100 transition-opacity">
+        <div className="opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
           <DropdownMenu>
-            <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+            <DropdownMenuTrigger asChild onClick={(e: React.MouseEvent) => e.stopPropagation()}>
               <Button variant="ghost" size="icon" className="h-8 w-8">
                 <MoreVertical className="w-4 h-4" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={(e) => {
+              <DropdownMenuItem onClick={(e: React.MouseEvent) => {
                 e.stopPropagation();
                 node.url && handleOpen(node.url);
               }}>
                 <ExternalLink className="w-4 h-4 mr-2" />
                 Open
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={(e) => {
+              <DropdownMenuItem onClick={(e: React.MouseEvent) => {
                 e.stopPropagation();
                 handleEdit(node as Bookmark);
               }}>
                 <Edit2 className="w-4 h-4 mr-2" />
                 Edit
               </DropdownMenuItem>
+              <DropdownMenuSeparator />
               <DropdownMenuItem
-                onClick={(e) => {
+                onClick={(e: React.MouseEvent) => {
                   e.stopPropagation();
                   handleDelete(node.id);
                 }}
@@ -207,143 +271,161 @@ export function Bookmarks() {
     );
   };
 
+  const folders = getAllFolders(bookmarkTree);
+
   return (
     <div className="flex flex-col h-full bg-background">
-      {/* Header */}
-      <div className="flex items-center justify-between p-6 border-b">
-        <div>
-          <h1 className="text-2xl font-bold">Bookmarks</h1>
-          <p className="text-muted-foreground">
-            {bookmarks.length} bookmark{bookmarks.length !== 1 ? 's' : ''}
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button
-            variant={viewMode === 'list' ? 'default' : 'outline'}
-            size="sm"
-            onClick={() => setViewMode('list')}
-          >
-            List
-          </Button>
-          <Button
-            variant={viewMode === 'tree' ? 'default' : 'outline'}
-            size="sm"
-            onClick={() => setViewMode('tree')}
-          >
-            Folders
-          </Button>
-        </div>
-      </div>
-
-      {/* Search */}
-      <div className="p-4 border-b">
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <Input
-            placeholder="Search bookmarks..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-10"
-          />
-        </div>
-      </div>
-
-      {/* Content */}
-      <div className="flex-1 overflow-auto p-4">
-        {loading ? (
-          <div className="flex items-center justify-center h-full">
-            <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
-          </div>
-        ) : viewMode === 'list' ? (
-          // List View
-          <div className="space-y-1">
-            {filteredBookmarks.length === 0 ? (
-              <div className="text-center py-12">
-                <Star className="w-12 h-12 mx-auto text-muted-foreground/50 mb-4" />
-                <h3 className="text-lg font-medium mb-2">No bookmarks yet</h3>
-                <p className="text-muted-foreground">
-                  Click the star icon in the address bar to bookmark pages
-                </p>
-              </div>
-            ) : (
-              filteredBookmarks.map((bookmark) => (
-                <div
-                  key={bookmark.id}
-                  className="flex items-center gap-3 p-3 rounded-lg hover:bg-muted/50 group cursor-pointer"
-                  onClick={() => handleOpen(bookmark.url)}
+      {/* Centered Container */}
+      <div className="flex-1 overflow-auto">
+        <div className="max-w-3xl mx-auto px-6 py-8">
+          {/* Header */}
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <h1 className="text-2xl font-bold">Bookmarks</h1>
+              <p className="text-sm text-muted-foreground mt-1">
+                {bookmarks.length} bookmark{bookmarks.length !== 1 ? 's' : ''} saved
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCreateFolderDialogOpen(true)}
+                className="gap-2"
+              >
+                <FolderPlus className="w-4 h-4" />
+                New Folder
+              </Button>
+              <div className="flex items-center rounded-lg border bg-muted/30 p-1">
+                <Button
+                  variant={viewMode === 'list' ? 'default' : 'ghost'}
+                  size="sm"
+                  onClick={() => setViewMode('list')}
+                  className="h-7 px-3"
                 >
-                  {bookmark.favicon ? (
-                    <img src={bookmark.favicon} alt="" className="w-5 h-5 rounded" />
-                  ) : (
-                    <Star className="w-5 h-5 text-yellow-500" />
-                  )}
-                  <div className="flex-1 min-w-0">
-                    <p className="font-medium truncate">{bookmark.title}</p>
-                    <p className="text-sm text-muted-foreground truncate">{bookmark.url}</p>
-                  </div>
-                  <span className="text-xs text-muted-foreground hidden sm:block">
-                    {formatDate(bookmark.dateAdded)}
-                  </span>
-                  <div className="opacity-0 group-hover:opacity-100 transition-opacity">
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                        <Button variant="ghost" size="icon" className="h-8 w-8">
-                          <MoreVertical className="w-4 h-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={(e) => {
-                          e.stopPropagation();
-                          handleOpen(bookmark.url);
-                        }}>
-                          <ExternalLink className="w-4 h-4 mr-2" />
-                          Open in new tab
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={(e) => {
-                          e.stopPropagation();
-                          handleEdit(bookmark);
-                        }}>
-                          <Edit2 className="w-4 h-4 mr-2" />
-                          Edit
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleDelete(bookmark.id);
-                          }}
-                          className="text-destructive"
-                        >
-                          <Trash2 className="w-4 h-4 mr-2" />
-                          Delete
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </div>
-                </div>
-              ))
-            )}
+                  List
+                </Button>
+                <Button
+                  variant={viewMode === 'tree' ? 'default' : 'ghost'}
+                  size="sm"
+                  onClick={() => setViewMode('tree')}
+                  className="h-7 px-3"
+                >
+                  Folders
+                </Button>
+              </div>
+            </div>
           </div>
-        ) : (
-          // Tree View
-          <div className="space-y-1">
-            {bookmarkTree.length === 0 ? (
-              <div className="text-center py-12">
-                <Folder className="w-12 h-12 mx-auto text-muted-foreground/50 mb-4" />
-                <h3 className="text-lg font-medium mb-2">No bookmarks yet</h3>
-                <p className="text-muted-foreground">
-                  Click the star icon in the address bar to bookmark pages
-                </p>
+
+          <div className="mb-6">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <Input
+                placeholder="Search bookmarks..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-10 bg-muted/30"
+              />
+            </div>
+          </div>
+
+          <div className="rounded-lg border bg-card">
+            {loading ? (
+              <div className="flex items-center justify-center py-20">
+                <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+              </div>
+            ) : viewMode === 'list' ? (
+              // List View
+              <div className="divide-y">
+                {filteredBookmarks.length === 0 ? (
+                  <div className="text-center py-16">
+                    <Star className="w-12 h-12 mx-auto text-muted-foreground/30 mb-4" />
+                    <h3 className="text-lg font-medium mb-2">No bookmarks yet</h3>
+                    <p className="text-sm text-muted-foreground">
+                      Click the star icon in the address bar to bookmark pages
+                    </p>
+                  </div>
+                ) : (
+                  filteredBookmarks.map((bookmark) => (
+                    <div
+                      key={bookmark.id}
+                      className="flex items-center gap-3 p-4 hover:bg-muted/50 group cursor-pointer transition-colors"
+                      onClick={() => handleOpen(bookmark.url)}
+                    >
+                      {bookmark.favicon ? (
+                        <img src={bookmark.favicon} alt="" className="w-5 h-5 rounded flex-shrink-0" />
+                      ) : (
+                        <Star className="w-5 h-5 text-yellow-500 flex-shrink-0" />
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium truncate">{bookmark.title}</p>
+                        <p className="text-sm text-muted-foreground truncate">{bookmark.url}</p>
+                      </div>
+                      <span className="text-xs text-muted-foreground hidden sm:block flex-shrink-0">
+                        {formatDate(bookmark.dateAdded)}
+                      </span>
+                      <div className="opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild onClick={(e: React.MouseEvent) => e.stopPropagation()}>
+                            <Button variant="ghost" size="icon" className="h-8 w-8">
+                              <MoreVertical className="w-4 h-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={(e: React.MouseEvent) => {
+                              e.stopPropagation();
+                              handleOpen(bookmark.url);
+                            }}>
+                              <ExternalLink className="w-4 h-4 mr-2" />
+                              Open in new tab
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={(e: React.MouseEvent) => {
+                              e.stopPropagation();
+                              handleEdit(bookmark);
+                            }}>
+                              <Edit2 className="w-4 h-4 mr-2" />
+                              Edit
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                              onClick={(e: React.MouseEvent) => {
+                                e.stopPropagation();
+                                handleDelete(bookmark.id);
+                              }}
+                              className="text-destructive"
+                            >
+                              <Trash2 className="w-4 h-4 mr-2" />
+                              Delete
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
+                    </div>
+                  ))
+                )}
               </div>
             ) : (
-              bookmarkTree.map((node) => renderTreeNode(node))
+              <div className="p-2">
+                {bookmarkTree.length === 0 ? (
+                  <div className="text-center py-16">
+                    <Folder className="w-12 h-12 mx-auto text-muted-foreground/30 mb-4" />
+                    <h3 className="text-lg font-medium mb-2">No bookmarks yet</h3>
+                    <p className="text-sm text-muted-foreground">
+                      Click the star icon in the address bar to bookmark pages
+                    </p>
+                  </div>
+                ) : (
+                  bookmarkTree.map((node) => renderTreeNode(node))
+                )}
+              </div>
             )}
           </div>
-        )}
+        </div>
       </div>
 
       {/* Edit Dialog */}
       <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
-        <DialogContent>
+        <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Edit Bookmark</DialogTitle>
             <DialogDescription>
@@ -375,6 +457,57 @@ export function Bookmarks() {
               Cancel
             </Button>
             <Button onClick={handleSaveEdit}>Save changes</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Create Folder Dialog */}
+      <Dialog open={createFolderDialogOpen} onOpenChange={setCreateFolderDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Create New Folder</DialogTitle>
+            <DialogDescription>
+              Create a folder to organize your bookmarks.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="folder-name">Folder Name</Label>
+              <Input
+                id="folder-name"
+                value={newFolderName}
+                onChange={(e) => setNewFolderName(e.target.value)}
+                placeholder="My Folder"
+                autoFocus
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="folder-parent">Location</Label>
+              <Select value={newFolderParent} onValueChange={setNewFolderParent}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a folder" />
+                </SelectTrigger>
+                <SelectContent>
+                  {folders.map((folder) => (
+                    <SelectItem key={folder.id} value={folder.id}>
+                      <span style={{ paddingLeft: `${folder.depth * 12}px` }}>
+                        {folder.title}
+                      </span>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => {
+              setCreateFolderDialogOpen(false);
+              setNewFolderName('');
+              setNewFolderParent(BOOKMARK_BAR_ID);
+            }}>
+              Cancel
+            </Button>
+            <Button onClick={handleCreateFolder}>Create Folder</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
