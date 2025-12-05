@@ -1,7 +1,7 @@
 import { desktopCapturer } from 'electron';
 import type { BrowserAPI } from '@/preload/types/browser.types';
 import { invoke, createEventListener, createSimpleListener } from '@/preload/utils/ipc-helpers';
-import type { TabInfo, HistoryQuery, AppSettings } from '@/shared/types';
+import type { TabInfo, HistoryQuery, AppSettings, TabsState } from '@/shared/types';
 
 export const createBrowserAPI = (): BrowserAPI => ({
   // Initialization
@@ -12,6 +12,10 @@ export const createBrowserAPI = (): BrowserAPI => ({
   closeTab: (tabId: string) => invoke('browser:close-tab', tabId),
   switchTab: (tabId: string) => invoke('browser:switch-tab', tabId),
   getTabs: () => invoke('browser:get-tabs'),
+  createTabGroup: (name: string, color: string, tabId?: string) => invoke('browser:create-tab-group', name, color, tabId),
+  assignTabToGroup: (tabId: string, groupId: string) => invoke('browser:assign-tab-group', tabId, groupId),
+  removeTabFromGroup: (tabId: string) => invoke('browser:remove-tab-from-group', tabId),
+  toggleTabGroupCollapsed: (groupId: string) => invoke('browser:toggle-tab-group', groupId),
 
   // Navigation
   navigate: (tabId: string, url: string) => invoke('browser:navigate', tabId, url),
@@ -128,7 +132,7 @@ export const createBrowserAPI = (): BrowserAPI => ({
 
   // Event listeners - Tab events
   onTabsUpdated: (callback) => 
-    createEventListener<{ tabs: TabInfo[]; activeTabId: string | null }>(
+    createEventListener<TabsState>(
       'browser:tabs-updated', 
       callback
     ),

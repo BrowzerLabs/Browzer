@@ -29,10 +29,15 @@ export function BrowserChrome() {
       {/* Tab Bar */}
       <TabBar
         tabs={browserAPI.tabs}
+        groups={browserAPI.groups}
         activeTabId={browserAPI.activeTabId}
         onTabClick={browserAPI.switchTab}
         onTabClose={browserAPI.closeTab}
         onNewTab={() => browserAPI.createTab()}
+        onCreateGroup={(name, color, tabId) => browserAPI.createTabGroup(name, color, tabId)}
+        onAssignGroup={(tabId, groupId) => browserAPI.assignTabToGroup(tabId, groupId)}
+        onRemoveFromGroup={(tabId) => browserAPI.removeTabFromGroup(tabId)}
+        onToggleGroup={(groupId) => browserAPI.toggleTabGroupCollapsed(groupId)}
       />
 
       {/* Navigation Bar */}

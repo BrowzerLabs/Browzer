@@ -137,4 +137,12 @@
   .tab-bar-draggable .interactive {
     -webkit-app-region: no-drag;
   }
+
+  /* Ensure dialogs sit above BrowserView and are interactive */
+  [data-slot="dialog-overlay"],
+  [data-slot="dialog-content"] {
+    z-index: 9999 !important;
+    -webkit-app-region: no-drag;
+    pointer-events: auto;
+  }
 }

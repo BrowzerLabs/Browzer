@@ -74,6 +74,22 @@ export class IPCHandlers extends EventEmitter {
     ipcMain.handle('browser:get-tabs', async () => {
       return this.tabService.getAllTabs();
     });
+
+    ipcMain.handle('browser:create-tab-group', async (_event, name: string, color: string, tabId?: string) => {
+      return this.tabService.createTabGroup(name, color, tabId);
+    });
+
+    ipcMain.handle('browser:assign-tab-group', async (_event, tabId: string, groupId: string) => {
+      return this.tabService.assignTabToGroup(tabId, groupId);
+    });
+
+    ipcMain.handle('browser:remove-tab-from-group', async (_event, tabId: string) => {
+      return this.tabService.removeTabFromGroup(tabId);
+    });
+
+    ipcMain.handle('browser:toggle-tab-group', async (_event, groupId: string) => {
+      return this.tabService.toggleGroupCollapsed(groupId);
+    });
   }
 
   private setupNavigationHandlers(): void {
@@ -467,6 +483,10 @@ export class IPCHandlers extends EventEmitter {
       'browser:close-tab',
       'browser:switch-tab',
       'browser:get-tabs',
+      'browser:create-tab-group',
+      'browser:assign-tab-group',
+      'browser:remove-tab-from-group',
+      'browser:toggle-tab-group',
       // Navigation handlers
       'browser:navigate',
       'browser:go-back',
