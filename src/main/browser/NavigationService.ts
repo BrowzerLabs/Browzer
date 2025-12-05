@@ -87,10 +87,17 @@ export class NavigationService {
     
     const hashMatch = url.match(/#\/([^?]+)/);
     if (hashMatch) {
-      const browzerUrl = `browzer://${hashMatch[1]}`;
+      const routePath = hashMatch[1];
+      if (routePath === 'error') return true;
+      
+      const browzerUrl = `browzer://${routePath}`;
       return getRouteFromURL(browzerUrl) !== null;
     }
     
     return false;
+  }
+
+  public isErrorPage(url: string): boolean {
+    return url.includes('#/error?data=') || url.includes('browzer://error');
   }
 }

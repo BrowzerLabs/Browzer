@@ -21,6 +21,11 @@ export interface BrowserAPI {
   canGoBack: (tabId: string) => Promise<boolean>;
   canGoForward: (tabId: string) => Promise<boolean>;
 
+  // Error handling
+  retryNavigation: (tabId: string) => Promise<boolean>;
+  getFailedURL: (tabId: string) => Promise<string | null>;
+  hasError: (tabId: string) => Promise<boolean>;
+
   // Sidebar Management
   setSidebarState: (visible: boolean) => Promise<boolean>;
   

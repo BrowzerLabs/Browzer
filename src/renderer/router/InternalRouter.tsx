@@ -3,10 +3,8 @@ import { History, Recordings, Automation, Settings } from '@/renderer/screens';
 import Profile from '@/renderer/pages/Profile';
 import { ROUTES } from '@/shared/routes';
 import { SubscriptionPage } from '@/renderer/pages/SubscriptionPage';
+import { ErrorPage } from '@/renderer/pages';
 
-/**
- * Internal page routes - Maps route names to React components
- */
 const ROUTE_COMPONENTS: Record<string, React.ComponentType> = {
   profile: Profile,
   settings: Settings,
@@ -14,6 +12,7 @@ const ROUTE_COMPONENTS: Record<string, React.ComponentType> = {
   recordings: Recordings,
   automation: Automation,
   subscription: SubscriptionPage,
+  error: ErrorPage,
 };
 
 export type InternalRouteName = keyof typeof ROUTES;
@@ -26,17 +25,21 @@ export function InternalRouter() {
       const hash = window.location.hash;
       console.log('InternalRouter: Checking route:', hash);
       
-      // Extract route name from hash (e.g., #/settings -> settings)
-      const routeName = hash.replace('#/', '') as InternalRouteName;
+      // Extract route name from hash (e.g., #/settings -> settings, #/error?data=... -> error)
+      const hashPath = hash.replace('#/', '').split('?')[0] as InternalRouteName;
       
-      if (routeName && ROUTES[routeName]) {
-        console.log('InternalRouter: Matched route:', routeName);
-        setCurrentRoute(routeName);
+      // Check for error page (special case with query params)
+      if (hashPath === 'error') {
+        setCurrentRoute('error' as InternalRouteName);
+        document.title = 'Error - Browzer';
+        return;
+      }
+      
+      if (hashPath && ROUTES[hashPath]) {
+        setCurrentRoute(hashPath);
         
-        // Update document title
-        document.title = `${ROUTES[routeName].title} - Browzer`;
+        document.title = `${ROUTES[hashPath].title} - Browzer`;
       } else {
-        console.log('InternalRouter: No matching route');
         setCurrentRoute(null);
       }
     };
@@ -68,8 +71,14 @@ export function useIsInternalPage(): boolean {
   useEffect(() => {
     const checkRoute = () => {
       const hash = window.location.hash;
-      const routeName = hash.replace('#/', '') as InternalRouteName;
-      setIsInternal(!!routeName && !!ROUTES[routeName]);
+      const hashPath = hash.replace('#/', '').split('?')[0] as InternalRouteName;
+      
+      if (hashPath === 'error') {
+        setIsInternal(true);
+        return;
+      }
+      
+      setIsInternal(!!hashPath && !!ROUTES[hashPath]);
     };
 
     checkRoute();

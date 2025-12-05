@@ -1,5 +1,9 @@
+export interface TabErrorState {
+  errorCode: number;
+  errorName: string;
+  failedUrl: string;
+}
 
-// Data that can be sent through IPC (serializable)
 export interface TabInfo {
   id: string;
   title: string;
@@ -8,4 +12,5 @@ export interface TabInfo {
   isLoading: boolean;
   canGoBack: boolean;
   canGoForward: boolean;
+  errorState?: TabErrorState;
 }

@@ -9,6 +9,7 @@ import { HistoryService } from '@/main/history/HistoryService';
 import { Tab, TabServiceEvents } from './types';
 import { NavigationService } from './NavigationService';
 import { DebuggerService } from './DebuggerService';
+import { ErrorPageService } from './ErrorPageService';
 import { PasswordAutomation } from '@/main/password';
 import { SettingsService, SettingsChangeEvent } from '@/main/settings/SettingsService';
 
@@ -38,6 +39,8 @@ export class TabService extends EventEmitter {
   private webContentsViewHeight = TabService.TAB_HEIGHT_WITHOUT_BOOKMARKS;
 
   private newTabUrl: string;
+  
+  private errorPageService: ErrorPageService;
 
   constructor(
     private baseWindow: BaseWindow,
@@ -48,6 +51,7 @@ export class TabService extends EventEmitter {
     private debuggerService: DebuggerService,
   ) {
     super();
+    this.errorPageService = new ErrorPageService();
     this.initializeFromSettings();
     this.setupSettingsListeners();
   }
@@ -172,6 +176,7 @@ export class TabService extends EventEmitter {
     }
 
     this.debuggerService.cleanupDebugger(tab.view, tabId);
+    this.errorPageService.cleanup(tabId);
 
     tab.view.webContents.close();
     this.tabs.delete(tabId);
@@ -231,9 +236,33 @@ export class TabService extends EventEmitter {
       tab = this.createTab(url);
     }
 
+    if(this.errorPageService.hasError(tabId)){
+      this.errorPageService.clearError(tabId);
+      if (tab.info.errorState) {
+        delete tab.info.errorState;
+      }
+    }
+
     const normalizedURL = this.navigationService.normalizeURL(url);
     tab.view.webContents.loadURL(normalizedURL);
     return true;
+  }
+
+  public retryNavigation(tabId: string): boolean {
+    const failedUrl = this.errorPageService.getRetryURL(tabId);
+    if (!failedUrl) {
+      console.warn(`[TabService] No failed URL to retry for tab ${tabId}`);
+      return false;
+    }
+    return this.navigate(tabId, failedUrl);
+  }
+
+  public getFailedURL(tabId: string): string | null {
+    return this.errorPageService.getFailedURL(tabId);
+  }
+
+  public hasError(tabId: string): boolean {
+    return this.errorPageService.hasError(tabId);
   }
 
   public goBack(tabId: string): boolean {
@@ -393,6 +422,13 @@ export class TabService extends EventEmitter {
     });
 
     webContents.on('did-navigate', (_, url) => {
+      // Don't update URL if we're navigating to an error page - keep the failed URL visible
+      if (this.errorPageService.isErrorPage(url)) {
+        info.canGoBack = webContents.navigationHistory.canGoBack();
+        info.canGoForward = webContents.navigationHistory.canGoForward();
+        return;
+      }
+      
       const internalPageInfo = this.navigationService.getInternalPageInfo(url);
       if (internalPageInfo) {
         info.url = internalPageInfo.url;
@@ -407,6 +443,11 @@ export class TabService extends EventEmitter {
     });
 
     webContents.on('did-navigate-in-page', (_, url) => {
+      // Don't update URL if we're on an error page
+      if (this.errorPageService.isErrorPage(url)) {
+        return;
+      }
+      
       const internalPageInfo = this.navigationService.getInternalPageInfo(url);
       if (internalPageInfo) {
         info.url = internalPageInfo.url;
@@ -467,12 +508,47 @@ export class TabService extends EventEmitter {
       }
     });
 
-    webContents.on('did-fail-load', (_, errorCode, errorDescription, validatedURL) => {
-      if (errorCode !== -3) {
-        console.error(`Failed to load ${validatedURL}: ${errorDescription}`);
-      }
+    webContents.on('did-fail-load', (event, errorCode, errorDescription, validatedURL, isMainFrame) => {
       info.isLoading = false;
+      const errorData = this.errorPageService.handleNavigationError(
+        tab.id,
+        errorCode,
+        errorDescription,
+        validatedURL,
+        isMainFrame
+      );
+      
+      if (errorData) {
+        info.title = errorData.title;
+        info.url = validatedURL; // Keep the original failed URL in address bar
+        info.errorState = {
+          errorCode,
+          errorName: errorData.errorName,
+          failedUrl: validatedURL,
+        };
+        
+        this.errorPageService.loadErrorPage(view, errorData);
+        
+        // Emit tabs:changed BEFORE loading error page to ensure URL is set
+        this.emit('tabs:changed');
+        return;
+      } else if (errorCode !== -3) {
+        console.error(`[TabService] Failed to load ${validatedURL}: ${errorDescription} (${errorCode})`);
+      }
+      
       this.emit('tabs:changed');
+    });
+    
+    webContents.on('did-finish-load', () => {
+      const currentUrl = webContents.getURL();
+      
+      if (!this.errorPageService.isErrorPage(currentUrl)) {
+        this.errorPageService.clearError(tab.id);
+        if (info.errorState) {
+          delete info.errorState;
+          this.emit('tabs:changed');
+        }
+      }
     });
   }
 
