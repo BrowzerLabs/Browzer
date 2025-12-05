@@ -24,6 +24,11 @@ export const createBrowserAPI = (): BrowserAPI => ({
   canGoBack: (tabId: string) => invoke('browser:can-go-back', tabId),
   canGoForward: (tabId: string) => invoke('browser:can-go-forward', tabId),
 
+  // Error handling
+  retryNavigation: (tabId: string) => invoke('browser:retry-navigation', tabId),
+  getFailedURL: (tabId: string) => invoke('browser:get-failed-url', tabId),
+  hasError: (tabId: string) => invoke('browser:has-error', tabId),
+
   // Sidebar Management
   setSidebarState: (visible: boolean) => 
     invoke('browser:set-sidebar-state', visible),

@@ -104,6 +104,18 @@ export class IPCHandlers extends EventEmitter {
     ipcMain.handle('browser:can-go-forward', async (_, tabId: string) => {
       return this.tabService.canGoForward(tabId);
     });
+
+    ipcMain.handle('browser:retry-navigation', async (_, tabId: string) => {
+      return this.tabService.retryNavigation(tabId);
+    });
+
+    ipcMain.handle('browser:get-failed-url', async (_, tabId: string) => {
+      return this.tabService.getFailedURL(tabId);
+    });
+
+    ipcMain.handle('browser:has-error', async (_, tabId: string) => {
+      return this.tabService.hasError(tabId);
+    });
   }
 
   private setupSidebarHandlers(): void {
@@ -475,6 +487,9 @@ export class IPCHandlers extends EventEmitter {
       'browser:stop',
       'browser:can-go-back',
       'browser:can-go-forward',
+      'browser:retry-navigation',
+      'browser:get-failed-url',
+      'browser:has-error',
       // Sidebar handlers
       'browser:set-sidebar-state',
       // Recording handlers

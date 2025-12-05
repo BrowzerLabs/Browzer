@@ -1,4 +1,7 @@
-import { Clock, type LucideIcon, Settings, Video, Bot, User, CreditCard, MailCheck, KeyRound, CheckCircle, XCircle, Loader2 } from "lucide-react";
+import { Clock, type LucideIcon, 
+  Settings, Video, Bot, User, CreditCard, MailCheck, KeyRound, CheckCircle, XCircle, Loader2, TriangleAlert, WifiOff,
+  Globe, ShieldAlert, ShieldX, ServerOff, RefreshCw, AlertTriangle, PlugZap, Unplug, Ban, Lock, FileX
+} from "lucide-react";
 
 export interface RouteConfig {
   path: string;
@@ -69,6 +72,11 @@ export const ROUTES: Record<string, RouteConfig> = {
     title: 'Subscription',
     favicon: 'credit-card',
   },
+  error: {
+    path: '/error',
+    title: 'Error',
+    favicon: 'triangle-alert',
+  }
 };
 
 export const ICON_MAP: Record<string, LucideIcon> = {
@@ -83,6 +91,27 @@ export const ICON_MAP: Record<string, LucideIcon> = {
   'check-circle': CheckCircle,
   'x-circle': XCircle,
   'loader': Loader2,
+  'triangle-alert': TriangleAlert,
+  'wifi-off': WifiOff,
+  'globe-lock': Globe,
+  'shield-alert': ShieldAlert,
+  'shield-x': ShieldX,
+  'shield-ban': ShieldX,
+  'server-off': ServerOff,
+  'timer-off': Clock,
+  'refresh-cw': RefreshCw,
+  'refresh-cw-off': RefreshCw,
+  'alert-triangle': AlertTriangle,
+  'plug-zap-off': PlugZap,
+  'unplug': Unplug,
+  'ban': Ban,
+  'lock': Lock,
+  'file-x': FileX,
+  'file-warning': FileX,
+  'map-pin-off': Globe,
+  'pause-circle': Clock,
+  'calendar-x': Clock,
+  'repeat': RefreshCw,
 };
 
 export function getRouteFromURL(url: string): RouteConfig | null {
