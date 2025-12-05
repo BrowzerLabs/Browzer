@@ -6,6 +6,7 @@ import { useSidebarStore } from '@/renderer/store/useSidebarStore';
 import { useRecording } from '@/renderer/hooks/useRecording';
 import { useAuth } from '@/renderer/hooks/useAuth';
 import { useUpdateProgress } from '@/renderer/hooks/useUpdateProgress';
+import { useDownloads } from '@/renderer/hooks/useDownloads';
 import { Input } from '@/renderer/ui/input';
 import ThemeToggle from '@/renderer/ui/theme-toggle';
 import { Button } from '@/renderer/ui/button';
@@ -41,6 +42,7 @@ export function NavigationBar({
   const { isRecording, isLoading, toggleRecording } = useRecording();
   const { user, signOut, loading } = useAuth();
   const { isDownloading, progress, version } = useUpdateProgress();
+  const { activeCount } = useDownloads({ notify: true });
 
   // Update URL input when active tab changes
   useEffect(() => {
@@ -156,6 +158,22 @@ export function NavigationBar({
         </div>
       )}
 
+      {/* Downloads quick access */}
+      <Button
+        variant="outline"
+        size="icon"
+        title="Downloads"
+        onClick={() => onNavigate('browzer://downloads')}
+        className="relative"
+      >
+        <Download className="w-4 h-4" />
+        {activeCount > 0 && (
+          <span className="absolute -top-1 -right-1 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-blue-500 text-[10px] font-semibold text-white px-1">
+            {activeCount}
+          </span>
+        )}
+      </Button>
+
       {/* Record Button */}
       <Button 
         variant="outline" 
@@ -233,6 +251,10 @@ export function NavigationBar({
           <DropdownMenuItem onClick={() => onNavigate('browzer://history')}>
             <Clock className="w-4 h-4 mr-2" />
             History
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => onNavigate('browzer://downloads')}>
+            <Download className="w-4 h-4 mr-2" />
+            Downloads
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem onClick={() => onNavigate('browzer://recordings')}>

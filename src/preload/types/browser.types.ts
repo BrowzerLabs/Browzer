@@ -1,4 +1,4 @@
-import type { TabInfo, HistoryEntry, HistoryQuery, HistoryStats, AppSettings } from '@/shared/types';
+import type { TabInfo, HistoryEntry, HistoryQuery, HistoryStats, AppSettings, DownloadItem, DownloadUpdatePayload } from '@/shared/types';
 
 export interface BrowserAPI {
   // Initialization
@@ -28,6 +28,16 @@ export interface BrowserAPI {
   toggleMaximize: () => Promise<void>;
   bringBrowserViewToFront: () => Promise<boolean>;
   bringBrowserViewToBottom: () => Promise<boolean>;
+
+  // Downloads
+  getDownloads: () => Promise<DownloadItem[]>;
+  pauseDownload: (id: string) => Promise<boolean>;
+  resumeDownload: (id: string) => Promise<boolean>;
+  cancelDownload: (id: string) => Promise<boolean>;
+  retryDownload: (id: string) => Promise<boolean>;
+  removeDownload: (id: string) => Promise<boolean>;
+  openDownload: (id: string) => Promise<boolean>;
+  showDownloadInFolder: (id: string) => Promise<boolean>;
   
   // Desktop Capturer (for video recording)
   getDesktopSources: () => Promise<Array<{ id: string; name: string; thumbnail: any }>>;
@@ -116,6 +126,9 @@ export interface BrowserAPI {
   onAutomationComplete: (callback: (data: { sessionId: string; result: any }) => void) => () => void;
   onAutomationError: (callback: (data: { sessionId: string; error: string }) => void) => () => void;
   
+  // Download event listeners
+  onDownloadsUpdated: (callback: (data: DownloadUpdatePayload) => void) => () => void;
+
   // Deep Link event listeners
   onDeepLink: (callback: (path: string) => void) => () => void;
   
