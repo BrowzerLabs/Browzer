@@ -181,6 +181,13 @@ export const createBrowserAPI = (): BrowserAPI => ({
   onBookmarkChanged: (callback) =>
     createSimpleListener('bookmark:changed', callback),
 
+  // Event listeners - Settings events
+  onSettingsChanged: (callback) =>
+    createEventListener<{ category: string; key: string; value: unknown }>(
+      'settings:changed',
+      callback
+    ),
+
   // Deep Link actions
   hideAllTabs: () => invoke('deeplink:hide-tabs'),
   showAllTabs: () => invoke('deeplink:show-tabs'),

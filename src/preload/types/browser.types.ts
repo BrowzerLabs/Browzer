@@ -128,7 +128,8 @@ export interface BrowserAPI {
   
   onBookmarkChanged: (callback: () => void) => () => void;
   
-  // Deep Link actions
+  onSettingsChanged: (callback: (data: { category: string; key: string; value: unknown }) => void) => () => void;
+  
   hideAllTabs: () => Promise<boolean>;
   showAllTabs: () => Promise<boolean>;
   navigateToTab: (url: string) => Promise<boolean>;

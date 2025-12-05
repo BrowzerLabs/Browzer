@@ -1,4 +1,5 @@
 import { AppSettings } from '@/shared/types';
+import { WebContentsView } from 'electron';
 import Store from 'electron-store';
 import { EventEmitter } from 'events';
 import { DEFAULT_SEARCH_ENGINE_ID } from '@/shared/searchEngines';
@@ -51,7 +52,9 @@ export class SettingsService extends EventEmitter {
     return super.emit(event, ...args);
   }
 
-  constructor() {
+  constructor(
+    private browserView: WebContentsView
+  ) {
     super();
     this.store = new Store<AppSettings>({
       name: 'settings',
@@ -97,6 +100,7 @@ export class SettingsService extends EventEmitter {
     };
     
     this.emitSettingsEvent(category, event);
+    this.browserView.webContents.send('settings:changed', { category, key, value });
   }
 
   public updateCategory<K extends keyof AppSettings>(

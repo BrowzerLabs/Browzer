@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useBrowserAPI } from '@/renderer/hooks/useBrowserAPI';
 import { useSidebarStore } from '@/renderer/store/useSidebarStore';
 import { TabBar } from './TabBar';
@@ -9,6 +9,26 @@ import { Sidebar } from './Sidebar';
 export function BrowserChrome() {
   const browserAPI = useBrowserAPI();
   const { isVisible: isSidebarVisible, showSidebar } = useSidebarStore();
+  const [showBookmarksBar, setShowBookmarksBar] = useState(false);
+
+  useEffect(() => {
+    const loadSetting = async () => {
+      const settings = await window.browserAPI.getAllSettings();
+      setShowBookmarksBar(settings.appearance.showBookmarksBar as boolean);
+    };
+
+    loadSetting();
+
+    const unsubSettings = window.browserAPI.onSettingsChanged((data: { category: string; key: string; value: unknown }) => {
+      if (data.category === 'appearance' && data.key === 'showBookmarksBar') {
+        setShowBookmarksBar(data.value as boolean);
+      }
+    });
+
+    return () => {
+      unsubSettings();
+    };
+  }, []);
 
   useEffect(() => {
     const unsubStart = window.browserAPI.onRecordingStarted(() => {
@@ -57,7 +77,9 @@ export function BrowserChrome() {
         }}
       />
 
-      <BookmarkBar onNavigate={(url) => {browserAPI.createTab(url)}} />
+      {showBookmarksBar && (
+        <BookmarkBar onNavigate={(url) => {browserAPI.createTab(url)}} />
+      )}
 
       <div className="flex-1 overflow-hidden relative flex">
         {isSidebarVisible && (

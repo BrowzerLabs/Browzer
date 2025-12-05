@@ -38,7 +38,7 @@ export class BrowserService {
     private browserView: WebContentsView
   ) {
     // Initialize services
-    this.settingsService = new SettingsService();
+    this.settingsService = new SettingsService(this.browserView);
     this.recordingStore = new RecordingStore();
     this.historyService = new HistoryService();
     this.passwordManager = new PasswordManager();
