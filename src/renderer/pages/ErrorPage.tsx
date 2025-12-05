@@ -1,59 +1,22 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState } from 'react';
 import { Button } from '@/renderer/ui/button';
 import { 
-  WifiOff, 
-  Globe, 
-  ShieldAlert, 
-  ShieldX, 
-  ServerOff, 
-  Clock, 
   RefreshCw, 
   AlertTriangle,
-  PlugZap,
-  Unplug,
-  Ban,
-  Lock,
-  FileX,
   ChevronDown,
   ChevronUp,
   Settings,
-  type LucideIcon,
-  TriangleAlert
+  TriangleAlert,
 } from 'lucide-react';
-import { ErrorPageData, ErrorCategory } from '@/shared/errorPages';
+import { ErrorPageData, isSecurityError } from '@/shared/errorPages';
+import { toast } from 'sonner';
 
-// Icon mapping for error types
-const ICON_MAP: Record<string, LucideIcon> = {
-  'wifi-off': WifiOff,
-  'globe-lock': Globe,
-  'shield-alert': ShieldAlert,
-  'shield-x': ShieldX,
-  'shield-ban': ShieldX,
-  'server-off': ServerOff,
-  'timer-off': Clock,
-  'clock': Clock,
-  'refresh-cw': RefreshCw,
-  'refresh-cw-off': RefreshCw,
-  'alert-triangle': AlertTriangle,
-  'plug-zap-off': PlugZap,
-  'unplug': Unplug,
-  'ban': Ban,
-  'lock': Lock,
-  'file-x': FileX,
-  'file-warning': FileX,
-  'map-pin-off': Globe,
-  'x-circle': AlertTriangle,
-  'pause-circle': Clock,
-  'calendar-x': Clock,
-  'repeat': RefreshCw,
-};
 
 export function ErrorPage() {
   const [showDetails, setShowDetails] = useState(false);
   const [isRetrying, setIsRetrying] = useState(false);
   const [errorData, setErrorData] = useState<ErrorPageData | null>(null);
   
-  // Parse error data from URL hash
   useEffect(() => {
     const parseErrorData = () => {
       const hash = window.location.hash;
@@ -77,7 +40,6 @@ export function ErrorPage() {
     
     setErrorData(parseErrorData());
     
-    // Listen for hash changes
     const handleHashChange = () => {
       setErrorData(parseErrorData());
     };
@@ -86,20 +48,15 @@ export function ErrorPage() {
     return () => window.removeEventListener('hashchange', handleHashChange);
   }, []);
 
-  // Get the icon component
-  const IconComponent = useMemo(() => {
-    if (!errorData?.icon) return AlertTriangle;
-    return ICON_MAP[errorData.icon] || AlertTriangle;
-  }, [errorData?.icon]);
-
-  // Handle retry
   const handleRetry = async () => {
-    if (!errorData?.url) return;
+    if (!errorData?.url){
+      toast('URL to reload not found');
+      return;
+    }
     
     setIsRetrying(true);
     try {
-      // Get the active tab and retry navigation
-      const { tabs, activeTabId } = await window.browserAPI.getTabs();
+      const { activeTabId } = await window.browserAPI.getTabs();
       if (activeTabId) {
         await window.browserAPI.navigate(activeTabId, errorData.url);
       }
@@ -110,20 +67,9 @@ export function ErrorPage() {
     }
   };
 
-  // Handle opening settings/diagnostics
   const handleOpenSettings = () => {
     window.browserAPI.navigate('', 'browzer://settings');
   };
-
-  // Extract hostname for display
-  const hostname = useMemo(() => {
-    if (!errorData?.url) return '';
-    try {
-      return new URL(errorData.url).hostname;
-    } catch {
-      return errorData.url;
-    }
-  }, [errorData?.url]);
 
   if (!errorData) {
     return (
@@ -135,13 +81,9 @@ export function ErrorPage() {
     );
   }
 
-  const isSecurityError = errorData.category === ErrorCategory.SSL || 
-                          errorData.category === ErrorCategory.CERTIFICATE;
-
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-background p-8 select-none">
       <TriangleAlert className="w-16 h-16 text-muted-foreground mb-4" />
-      {/* Title */}
       <h1 className="text-2xl font-semibold text-foreground mb-2 text-center">
         {errorData.title}
       </h1>
@@ -185,7 +127,6 @@ export function ErrorPage() {
         )}
       </div>
       
-      {/* Suggestions */}
       {errorData.suggestions.length > 0 && (
         <div className="w-full max-w-md">
           <button
@@ -217,8 +158,7 @@ export function ErrorPage() {
                 ))}
               </ul>
               
-              {/* Additional info for security errors */}
-              {isSecurityError && (
+              {isSecurityError(errorData.errorCode) && (
                 <div className="mt-4 pt-4 border-t border-border">
                   <p className="text-xs text-muted-foreground">
                     <strong>Warning:</strong> Proceeding to this site may expose your personal 
@@ -231,7 +171,6 @@ export function ErrorPage() {
         </div>
       )}
       
-      {/* Timestamp */}
       <p className="text-xs text-muted-foreground/50 mt-8">
         Error occurred at {new Date(errorData.timestamp).toLocaleTimeString()}
       </p>

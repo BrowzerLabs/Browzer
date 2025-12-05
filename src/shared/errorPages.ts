@@ -3,8 +3,6 @@
  * 
  * This file contains all the error codes that Chromium/Electron can return
  * during navigation, along with user-friendly messages and suggested actions.
- * 
- * Reference: https://source.chromium.org/chromium/chromium/src/+/main:net/base/net_error_list.h
  */
 
 export enum ErrorCategory {
@@ -246,23 +244,14 @@ export const ChromiumErrorCodes = {
 export type ChromiumErrorCode = typeof ChromiumErrorCodes[keyof typeof ChromiumErrorCodes];
 
 export interface ErrorPageConfig {
-  /** Error code from Chromium */
   code: number;
-  /** Category for grouping similar errors */
   category: ErrorCategory;
-  /** Short title for the error (like Chrome's "This site can't be reached") */
   title: string;
-  /** Detailed description of what happened */
   description: string;
-  /** Technical error name (e.g., ERR_NAME_NOT_RESOLVED) */
   errorName: string;
-  /** Suggested actions the user can take */
   suggestions: string[];
-  /** Whether the user can retry the request */
   canRetry: boolean;
-  /** Whether to show network diagnostics option */
   showDiagnostics: boolean;
-  /** Icon to display (matches Lucide icon names) */
   icon: string;
 }
 
@@ -927,9 +916,6 @@ export const ERROR_PAGE_CONFIGS: Record<number, ErrorPageConfig> = {
   },
 };
 
-/**
- * Get error page configuration for a given error code
- */
 export function getErrorPageConfig(errorCode: number): ErrorPageConfig {
   const config = ERROR_PAGE_CONFIGS[errorCode];
   
@@ -955,18 +941,6 @@ export function getErrorPageConfig(errorCode: number): ErrorPageConfig {
   };
 }
 
-/**
- * Get error name from error code
- */
-export function getErrorName(errorCode: number): string {
-  const config = ERROR_PAGE_CONFIGS[errorCode];
-  return config?.errorName || `ERR_UNKNOWN_${Math.abs(errorCode)}`;
-}
-
-/**
- * Check if an error code should show an error page
- * Some errors like ABORTED (-3) are user-initiated and shouldn't show error pages
- */
 export function shouldShowErrorPage(errorCode: number): boolean {
   // -3 (ABORTED) is typically user-initiated (clicking a link while loading, etc.)
   if (errorCode === ChromiumErrorCodes.ABORTED) {
@@ -982,24 +956,6 @@ export function shouldShowErrorPage(errorCode: number): boolean {
   return errorCode < 0;
 }
 
-/**
- * Check if the error is related to network connectivity
- */
-export function isNetworkError(errorCode: number): boolean {
-  const config = ERROR_PAGE_CONFIGS[errorCode];
-  if (!config) return false;
-  
-  return [
-    ErrorCategory.NETWORK,
-    ErrorCategory.DNS,
-    ErrorCategory.CONNECTION,
-    ErrorCategory.TIMEOUT,
-  ].includes(config.category);
-}
-
-/**
- * Check if the error is related to SSL/TLS
- */
 export function isSecurityError(errorCode: number): boolean {
   const config = ERROR_PAGE_CONFIGS[errorCode];
   if (!config) return false;
