@@ -120,12 +120,12 @@ export interface BrowserAPI {
   onAutomationComplete: (callback: (data: { sessionId: string; result: any }) => void) => () => void;
   onAutomationError: (callback: (data: { sessionId: string; error: string }) => void) => () => void;
   
-  // Deep Link event listeners
   onDeepLink: (callback: (path: string) => void) => () => void;
   
   onBookmarkChanged: (callback: () => void) => () => void;
   
-  // Deep Link actions
+  onSettingsChanged: (callback: (data: { category: string; key: string; value: unknown }) => void) => () => void;
+  
   hideAllTabs: () => Promise<boolean>;
   showAllTabs: () => Promise<boolean>;
   navigateToTab: (url: string) => Promise<boolean>;
