@@ -1,4 +1,4 @@
-import type { TabInfo, HistoryEntry, HistoryQuery, HistoryStats, AppSettings } from '@/shared/types';
+import type { TabInfo, HistoryEntry, HistoryQuery, HistoryStats, AppSettings, TabGroup, TabsState } from '@/shared/types';
 
 export interface BrowserAPI {
   // Initialization
@@ -8,7 +8,11 @@ export interface BrowserAPI {
   createTab: (url?: string) => Promise<TabInfo>;
   closeTab: (tabId: string) => Promise<boolean>;
   switchTab: (tabId: string) => Promise<boolean>;
-  getTabs: () => Promise<{ tabs: TabInfo[]; activeTabId: string | null }>;
+  getTabs: () => Promise<TabsState>;
+  createTabGroup: (name: string, color: string, tabId?: string) => Promise<TabGroup>;
+  assignTabToGroup: (tabId: string, groupId: string) => Promise<boolean>;
+  removeTabFromGroup: (tabId: string) => Promise<boolean>;
+  toggleTabGroupCollapsed: (groupId: string) => Promise<boolean>;
 
   // Navigation
   navigate: (tabId: string, url: string) => Promise<boolean>;
@@ -103,7 +107,7 @@ export interface BrowserAPI {
   stopAutomation: (sessionId: string) => Promise<{ success: boolean }>;
 
   // Event listeners
-  onTabsUpdated: (callback: (data: { tabs: TabInfo[]; activeTabId: string | null }) => void) => () => void;
+  onTabsUpdated: (callback: (data: TabsState) => void) => () => void;
   onRecordingAction: (callback: (action: any) => void) => () => void;
   onRecordingStarted: (callback: () => void) => () => void;
   onRecordingStopped: (callback: (data: { actions: any[]; duration: number; startUrl: string }) => void) => () => void;

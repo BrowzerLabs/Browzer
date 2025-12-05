@@ -1,21 +1,24 @@
 import { useEffect, useState, useCallback } from 'react';
-import type { TabInfo } from '@/shared/types';
+import type { TabInfo, TabGroup } from '@/shared/types';
 
 export function useBrowserAPI() {
   const [tabs, setTabs] = useState<TabInfo[]>([]);
   const [activeTabId, setActiveTabId] = useState<string | null>(null);
+  const [groups, setGroups] = useState<TabGroup[]>([]);
 
   // Subscribe to tab updates
   useEffect(() => {
-    const unsubscribe = window.browserAPI.onTabsUpdated((data: { tabs: TabInfo[]; activeTabId: string | null }) => {
+    const unsubscribe = window.browserAPI.onTabsUpdated((data) => {
       setTabs(data.tabs);
       setActiveTabId(data.activeTabId);
+      setGroups(data.groups || []);
     });
 
     // Initial load
-    window.browserAPI.getTabs().then((data: { tabs: TabInfo[]; activeTabId: string | null }) => {
+    window.browserAPI.getTabs().then((data) => {
       setTabs(data.tabs);
       setActiveTabId(data.activeTabId);
+      setGroups(data.groups || []);
     });
 
     return unsubscribe;
@@ -55,11 +58,29 @@ export function useBrowserAPI() {
     return await window.browserAPI.stop(tabId);
   }, []);
 
+  // Group management
+  const createTabGroup = useCallback(async (name: string, color: string, tabId?: string) => {
+    return await window.browserAPI.createTabGroup(name, color, tabId);
+  }, []);
+
+  const assignTabToGroup = useCallback(async (tabId: string, groupId: string) => {
+    return await window.browserAPI.assignTabToGroup(tabId, groupId);
+  }, []);
+
+  const removeTabFromGroup = useCallback(async (tabId: string) => {
+    return await window.browserAPI.removeTabFromGroup(tabId);
+  }, []);
+
+  const toggleTabGroupCollapsed = useCallback(async (groupId: string) => {
+    return await window.browserAPI.toggleTabGroupCollapsed(groupId);
+  }, []);
+
   // Get active tab
   const activeTab = tabs.find(tab => tab.id === activeTabId) || null;
 
   return {
     tabs,
+    groups,
     activeTabId,
     activeTab,
     createTab,
@@ -70,5 +91,9 @@ export function useBrowserAPI() {
     goForward,
     reload,
     stop,
+    createTabGroup,
+    assignTabToGroup,
+    removeTabFromGroup,
+    toggleTabGroupCollapsed,
   };
 }

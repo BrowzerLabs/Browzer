@@ -1,7 +1,7 @@
 import { BaseWindow, WebContentsView, Menu } from 'electron';
 import { EventEmitter } from 'events';
 import path from 'node:path';
-import { TabInfo, HistoryTransition } from '@/shared/types';
+import { TabInfo, HistoryTransition, TabGroup, TabsState } from '@/shared/types';
 import { VideoRecorder } from '@/main/recording';
 import { PasswordManager } from '@/main/password/PasswordManager';
 import { BrowserAutomationExecutor } from '@/main/automation';
@@ -29,6 +29,8 @@ export class TabService extends EventEmitter {
   private tabs: Map<string, Tab> = new Map();
   private activeTabId: string | null = null;
   private tabCounter = 0;
+  private groupCounter = 0;
+  private tabGroups: Map<string, TabGroup> = new Map();
   private currentSidebarWidth = 0;
 
   private readonly webContentsViewHeight = 84;
@@ -119,6 +121,7 @@ export class TabService extends EventEmitter {
 
     const wasActiveTab = this.activeTabId === tabId;
     let newActiveTabId: string | null = null;
+    this.removeTabFromGroup(tabId, true);
 
     // Remove view from window
     this.baseWindow.contentView.removeChildView(tab.view);
@@ -233,9 +236,14 @@ export class TabService extends EventEmitter {
     return tab ? tab.view.webContents.navigationHistory.canGoForward() : false;
   }
 
-  public getAllTabs(): { tabs: TabInfo[]; activeTabId: string | null } {
-    const tabs = Array.from(this.tabs.values()).map(tab => tab.info);
-    return { tabs, activeTabId: this.activeTabId };
+  public getAllTabs(): TabsState {
+    const tabs = Array.from(this.tabs.values()).map(tab => ({ ...tab.info }));
+    const groups = Array.from(this.tabGroups.values()).map(group => ({
+      ...group,
+      tabIds: [...group.tabIds],
+    }));
+
+    return { tabs, groups, activeTabId: this.activeTabId };
   }
 
   public getActiveTab(): Tab | null {
@@ -295,6 +303,7 @@ export class TabService extends EventEmitter {
     });
     this.tabs.clear();
     this.activeTabId = null;
+    this.tabGroups.clear();
   }
 
   private updateTabViewBounds(view: WebContentsView, sidebarWidth = 0): void {
@@ -455,5 +464,77 @@ export class TabService extends EventEmitter {
         tab.view.setVisible(true);
       }
     });
+  }
+
+  public createTabGroup(name: string, color: string, tabId?: string): TabGroup {
+    const groupId = `group-${++this.groupCounter}`;
+    const group: TabGroup = {
+      id: groupId,
+      name: name || `Group ${this.groupCounter}`,
+      color,
+      collapsed: false,
+      tabIds: [],
+    };
+
+    this.tabGroups.set(groupId, group);
+
+    if (tabId) {
+      this.assignTabToGroup(tabId, groupId, true);
+    }
+
+    this.emit('tabs:changed');
+    return group;
+  }
+
+  public assignTabToGroup(tabId: string, groupId: string, silent = false): boolean {
+    const tab = this.tabs.get(tabId);
+    const group = this.tabGroups.get(groupId);
+    if (!tab || !group) return false;
+
+    if (tab.info.groupId && tab.info.groupId !== groupId) {
+      this.removeTabFromGroup(tabId, true);
+    }
+
+    tab.info.groupId = groupId;
+    if (!group.tabIds.includes(tabId)) {
+      group.tabIds.push(tabId);
+    }
+
+    if (!silent) {
+      this.emit('tabs:changed');
+    }
+
+    return true;
+  }
+
+  public removeTabFromGroup(tabId: string, silent = false): boolean {
+    const tab = this.tabs.get(tabId);
+    const groupId = tab?.info.groupId;
+    if (!tab || !groupId) return false;
+
+    const group = this.tabGroups.get(groupId);
+    tab.info.groupId = undefined;
+
+    if (group) {
+      group.tabIds = group.tabIds.filter(id => id !== tabId);
+      if (group.tabIds.length === 0) {
+        this.tabGroups.delete(groupId);
+      }
+    }
+
+    if (!silent) {
+      this.emit('tabs:changed');
+    }
+
+    return true;
+  }
+
+  public toggleGroupCollapsed(groupId: string): boolean {
+    const group = this.tabGroups.get(groupId);
+    if (!group) return false;
+
+    group.collapsed = !group.collapsed;
+    this.emit('tabs:changed');
+    return true;
   }
 }
