@@ -40,7 +40,7 @@ export class BrowserService {
     this.sessionManager = new SessionManager();
 
     // Initialize managers
-    this.navigationService = new NavigationService();
+    this.navigationService = new NavigationService(this.settingsService);
     this.debuggerService = new DebuggerService();
     
     this.tabService = new TabService(

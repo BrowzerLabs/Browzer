@@ -1,10 +1,11 @@
 import { AppSettings } from '@/shared/types';
 import Store from 'electron-store';
 import { EventEmitter } from 'events';
+import { DEFAULT_SEARCH_ENGINE_ID } from '@/shared/searchEngines';
 
 const defaultSettings: AppSettings = {
   general: {
-    defaultSearchEngine: 'https://www.google.com/search?q=',
+    searchEngineId: DEFAULT_SEARCH_ENGINE_ID,
     newTabUrl: 'https://www.google.com',
   },
   privacy: {
