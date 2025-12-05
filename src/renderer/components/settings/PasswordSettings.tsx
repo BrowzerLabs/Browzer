@@ -244,14 +244,7 @@ export function PasswordSettings() {
 
   return (
     <div className='space-y-6'>
-      {/* Header */}
-      <div>
-        <h2 className='text-2xl font-semibold'>Passwords</h2>
-        <p className='text-muted-foreground mt-1 text-sm'>
-          Manage your saved passwords and security settings
-        </p>
-      </div>
-
+      <h2 className='text-2xl font-semibold'>Passwords</h2>
       {/* Stats Cards */}
       {stats && (
         <div className='grid grid-cols-3 gap-4'>
@@ -261,8 +254,8 @@ export function PasswordSettings() {
                 <Key className='h-5 w-5' />
               </div>
               <div>
-                <p className='text-muted-foreground text-sm'>Total Passwords</p>
-                <p className='text-2xl font-semibold'>{stats.totalPasswords}</p>
+                <p className='text-muted-foreground text-xs'>Total Passwords</p>
+                <p className='text-lg font-semibold'>{stats.totalPasswords}</p>
               </div>
             </div>
           </Card>
@@ -273,8 +266,8 @@ export function PasswordSettings() {
                 <Shield className='h-5 w-5' />
               </div>
               <div>
-                <p className='text-muted-foreground text-sm'>Blacklisted Sites</p>
-                <p className='text-2xl font-semibold'>{stats.blacklistedSites}</p>
+                <p className='text-muted-foreground text-xs'>Blacklisted Sites</p>
+                <p className='text-lg font-semibold'>{stats.blacklistedSites}</p>
               </div>
             </div>
           </Card>
@@ -285,8 +278,8 @@ export function PasswordSettings() {
                 <Globe className='h-5 w-5' />
               </div>
               <div>
-                <p className='text-muted-foreground text-sm'>Most Used</p>
-                <p className='text-sm font-medium truncate'>
+                <p className='text-muted-foreground text-xs'>Most Used</p>
+                <p className='text-lg font-medium truncate'>
                   {stats.mostUsedSites[0]?.origin ? getDomain(stats.mostUsedSites[0].origin) : 'None'}
                 </p>
               </div>
@@ -326,7 +319,7 @@ export function PasswordSettings() {
 
       {/* Passwords List */}
       <Card>
-        <ScrollArea className='h-[400px]'>
+        <ScrollArea className='h-[240px]'>
           <div className='divide-y'>
             {filteredPasswords.length === 0 ? (
               <div className='flex flex-col items-center justify-center py-12 text-center'>

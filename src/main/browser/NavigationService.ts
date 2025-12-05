@@ -1,7 +1,26 @@
 import path from 'node:path';
 import { getRouteFromURL } from '@/shared/routes';
+import { buildSearchUrl } from '@/shared/searchEngines';
+import { SettingsChangeEvent, SettingsService } from '@/main/settings/SettingsService';
 
 export class NavigationService {
+  private searchEngineId: string = 'google'
+  
+  constructor(
+    private settingsService: SettingsService,
+  ){
+    this.searchEngineId = this.settingsService.getSetting('general', 'searchEngineId') || 'google';
+    
+    this.setUpSettingsListner();
+  }
+
+  private setUpSettingsListner(){
+    this.settingsService.on('settings:general', (event: SettingsChangeEvent<'general'>) => {
+      const { newValue } = event;
+      this.searchEngineId = newValue.searchEngineId || 'google'
+    });
+  }
+
   public normalizeURL(url: string): string {
     const trimmed = url.trim();
     
@@ -17,7 +36,7 @@ export class NavigationService {
       return `https://${trimmed}`;
     }
     
-    return `https://www.google.com/search?q=${encodeURIComponent(trimmed)}`;
+    return buildSearchUrl(this.searchEngineId, trimmed);
   }
 
   private handleInternalURL(url: string): string {
