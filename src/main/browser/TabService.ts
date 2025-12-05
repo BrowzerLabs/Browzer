@@ -238,9 +238,9 @@ export class TabService extends EventEmitter {
 
     if(this.errorPageService.hasError(tabId)){
       this.errorPageService.clearError(tabId);
-      if (tab.info.errorState) {
-        delete tab.info.errorState;
-      }
+    }
+    if (tab.info.errorState) {
+      delete tab.info.errorState;
     }
 
     const normalizedURL = this.navigationService.normalizeURL(url);
@@ -462,7 +462,6 @@ export class TabService extends EventEmitter {
     });
 
     webContents.on('page-favicon-updated', (_, favicons) => {
-      // Don't update favicon for internal browzer:// pages
       if (!this.navigationService.isInternalPage(info.url) && favicons.length > 0) {
         info.favicon = favicons[0];
         this.emit('tabs:changed');
@@ -521,6 +520,7 @@ export class TabService extends EventEmitter {
       if (errorData) {
         info.title = errorData.title;
         info.url = validatedURL; // Keep the original failed URL in address bar
+        info.favicon = errorData.icon; // Set error icon as favicon for TabBar
         info.errorState = {
           errorCode,
           errorName: errorData.errorName,

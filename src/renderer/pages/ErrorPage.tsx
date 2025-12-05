@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { Button } from '@/renderer/ui/button';
 import { 
   RefreshCw, 
@@ -6,9 +6,9 @@ import {
   ChevronDown,
   ChevronUp,
   Settings,
-  TriangleAlert,
 } from 'lucide-react';
 import { ErrorPageData, isSecurityError } from '@/shared/errorPages';
+import { ICON_MAP } from '@/shared/routes';
 import { toast } from 'sonner';
 
 
@@ -48,6 +48,11 @@ export function ErrorPage() {
     return () => window.removeEventListener('hashchange', handleHashChange);
   }, []);
 
+  const ErrorIcon = useMemo(() => {
+    if (!errorData?.icon) return AlertTriangle;
+    return ICON_MAP[errorData.icon] || AlertTriangle;
+  }, [errorData?.icon]);
+
   const handleRetry = async () => {
     if (!errorData?.url){
       toast('URL to reload not found');
@@ -83,7 +88,7 @@ export function ErrorPage() {
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-background p-8 select-none">
-      <TriangleAlert className="w-16 h-16 text-muted-foreground mb-4" />
+      <ErrorIcon className="w-16 h-16 text-muted-foreground mb-4" />
       <h1 className="text-2xl font-semibold text-foreground mb-2 text-center">
         {errorData.title}
       </h1>

@@ -923,7 +923,6 @@ export function getErrorPageConfig(errorCode: number): ErrorPageConfig {
     return config;
   }
 
-  // Return a generic error config for unknown error codes
   return {
     code: errorCode,
     category: ErrorCategory.UNKNOWN,
@@ -966,9 +965,6 @@ export function isSecurityError(errorCode: number): boolean {
   ].includes(config.category);
 }
 
-/**
- * Get a user-friendly error message for display
- */
 export function getErrorMessage(errorCode: number, url?: string): string {
   const config = getErrorPageConfig(errorCode);
   
@@ -984,9 +980,6 @@ export function getErrorMessage(errorCode: number, url?: string): string {
   return config.description;
 }
 
-/**
- * Error page data structure for IPC communication
- */
 export interface ErrorPageData {
   errorCode: number;
   errorName: string;
@@ -1001,9 +994,6 @@ export interface ErrorPageData {
   timestamp: number;
 }
 
-/**
- * Create error page data from error code and URL
- */
 export function createErrorPageData(errorCode: number, url: string): ErrorPageData {
   const config = getErrorPageConfig(errorCode);
   
