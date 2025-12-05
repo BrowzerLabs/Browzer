@@ -42,7 +42,7 @@ export class BrowserService {
     this.sessionManager = new SessionManager();
 
     // Initialize managers
-    this.navigationService = new NavigationService(this.historyService);
+    this.navigationService = new NavigationService(this.settingsService, this.historyService);
     this.debuggerService = new DebuggerService();
     this.downloadService = new DownloadService(this.baseWindow, this.browserView.webContents);
     

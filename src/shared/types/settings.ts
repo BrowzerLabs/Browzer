@@ -1,6 +1,6 @@
 export interface AppSettings {
   general: {
-    defaultSearchEngine: string;
+    searchEngineId: string;
     newTabUrl: string;
   };
   

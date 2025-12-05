@@ -1,14 +1,26 @@
 import path from 'node:path';
 import { getRouteFromURL } from '@/shared/routes';
+import { buildSearchUrl } from '@/shared/searchEngines';
+import { SettingsChangeEvent, SettingsService } from '@/main/settings/SettingsService';
 import { AutocompleteSuggestion, AutocompleteSuggestionType } from '@/shared/types';
 import { HistoryService } from '@/main/history/HistoryService';
 import { isLikelyUrl } from '@/shared/utils';
 
 export class NavigationService {
-  constructor(
-    private historyService: HistoryService,
-  ) {}
+  private searchEngineId: string = 'google'
   
+  constructor(
+    private settingsService: SettingsService,
+    private historyService: HistoryService,
+  ){
+    this.searchEngineId = this.settingsService.getSetting('general', 'searchEngineId') || 'google';
+    
+    this.settingsService.on('settings:general', (event: SettingsChangeEvent<'general'>) => {
+      const { newValue } = event;
+      this.searchEngineId = newValue.searchEngineId || 'google'
+    });
+  }
+
   public normalizeURL(url: string): string {
     const trimmed = url.trim();
     
@@ -24,7 +36,7 @@ export class NavigationService {
       return `https://${trimmed}`;
     }
     
-    return `https://www.google.com/search?q=${encodeURIComponent(trimmed)}`;
+    return buildSearchUrl(this.searchEngineId, trimmed);
   }
 
   private handleInternalURL(url: string): string {

@@ -1,8 +1,10 @@
 import { Button } from '@/renderer/ui/button';
-import { RotateCcw, Globe, Home, Plus } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/renderer/ui/select';
+import { RotateCcw, Plus, Globe } from 'lucide-react';
 import type { AppSettings } from '@/shared/types';
 import { Field, FieldGroup, FieldLabel, FieldDescription } from '@/renderer/ui/field';
 import { BufferedInput } from '@/renderer/ui/BufferedInput';
+import { SEARCH_ENGINES } from '@/shared/searchEngines';
 
 interface GeneralSettingsProps {
   settings: AppSettings['general'];
@@ -32,15 +34,23 @@ export function GeneralSettings({ settings, onUpdate, onReset }: GeneralSettings
             <Globe className='h-4 w-4' />
             Default Search Engine
           </FieldLabel>
-          <BufferedInput
-            id='searchEngine'
-            type='url'
-            value={settings.defaultSearchEngine}
-            onSave={(value) => onUpdate('defaultSearchEngine', value)}
-            placeholder='https://www.google.com/search?q='
-          />
+          <Select
+            value={settings.searchEngineId}
+            onValueChange={(value) => onUpdate('searchEngineId', value)}
+          >
+            <SelectTrigger id='searchEngine'>
+              <SelectValue placeholder='Select a search engine' />
+            </SelectTrigger>
+            <SelectContent>
+              {SEARCH_ENGINES.map((engine) => (
+                <SelectItem key={engine.id} value={engine.id}>
+                  {engine.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           <FieldDescription>
-            URL template for search queries. Use %s as placeholder for the search term.
+            The search engine used when you type a search query in the address bar
           </FieldDescription>
         </Field>
 
