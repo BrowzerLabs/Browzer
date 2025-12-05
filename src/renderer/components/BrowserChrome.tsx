@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useBrowserAPI } from '@/renderer/hooks/useBrowserAPI';
 import { useSidebarStore } from '@/renderer/store/useSidebarStore';
 import { TabBar } from './TabBar';
@@ -14,6 +14,25 @@ import { Sidebar } from './Sidebar';
 export function BrowserChrome() {
   const browserAPI = useBrowserAPI();
   const { isVisible: isSidebarVisible, showSidebar } = useSidebarStore();
+  const [addressBarFocusTrigger, setAddressBarFocusTrigger] = useState(0);
+  const previousTabCountRef = useRef<number | null>(null);
+  const pendingNewTabFocusRef = useRef(false);
+
+  useEffect(() => {
+    const currentTabCount = browserAPI.tabs.length;
+    if (previousTabCountRef.current !== null && currentTabCount > previousTabCountRef.current) {
+      pendingNewTabFocusRef.current = true;
+    }
+    previousTabCountRef.current = currentTabCount;
+  }, [browserAPI.tabs.length]);
+
+  // Once the new tab is active, shift focus to the address bar.
+  useEffect(() => {
+    if (pendingNewTabFocusRef.current) {
+      pendingNewTabFocusRef.current = false;
+      setAddressBarFocusTrigger((prev) => prev + 1);
+    }
+  }, [browserAPI.activeTabId]);
 
   // Auto-open sidebar when recording starts
   useEffect(() => {
@@ -38,6 +57,7 @@ export function BrowserChrome() {
       {/* Navigation Bar */}
       <NavigationBar
         activeTab={browserAPI.activeTab}
+        focusAddressBarTrigger={addressBarFocusTrigger}
         onNavigate={(url) => {
           if (browserAPI.activeTabId) {
             browserAPI.navigate(browserAPI.activeTabId, url);

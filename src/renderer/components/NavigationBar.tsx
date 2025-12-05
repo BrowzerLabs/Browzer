@@ -24,6 +24,7 @@ interface NavigationBarProps {
   onForward: () => void;
   onReload: () => void;
   onStop: () => void;
+  focusAddressBarTrigger?: number;
 }
 
 export function NavigationBar({
@@ -33,6 +34,7 @@ export function NavigationBar({
   onForward,
   onReload,
   onStop,
+  focusAddressBarTrigger,
 }: NavigationBarProps) {
   const { isVisible: isSidebarVisible, toggleSidebar } = useSidebarStore();
   const { isRecording, isLoading, toggleRecording } = useRecording();
@@ -81,6 +83,7 @@ export function NavigationBar({
         currentUrl={activeTab?.url || ''}
         isSecure={isSecure}
         onNavigate={onNavigate}
+        focusTrigger={focusAddressBarTrigger}
       />
 
       {isDownloading && (
