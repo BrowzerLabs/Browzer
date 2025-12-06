@@ -5,8 +5,8 @@ import { EventEmitter } from 'events';
 
 const defaultSettings: AppSettings = {
   general: {
-    defaultSearchEngine: 'https://www.google.com/search?q=',
-    newTabUrl: 'https://www.google.com',
+    searchEngineId: 'google',
+    newTabUrl: '', // Empty string means use built-in new tab page
   },
   privacy: {
     clearCacheOnExit: false,
