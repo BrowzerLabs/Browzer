@@ -132,4 +132,11 @@ export interface BrowserAPI {
   getTheme: () => Promise<'light' | 'dark' | 'system'>;
   setTheme: (theme: 'light' | 'dark' | 'system') => Promise<boolean>;
   isDarkMode: () => Promise<boolean>;
+
+  // Print actions
+  print: (tabId?: string) => Promise<{ success: boolean; error?: string }>;
+  printToPDF: (tabId?: string, options?: {
+    landscape?: boolean;
+    pageSize?: string;
+  }) => Promise<{ success: boolean; filePath?: string; error?: string }>;
 }

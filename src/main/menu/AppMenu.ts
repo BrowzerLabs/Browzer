@@ -20,6 +20,7 @@ export class AppMenu {
     prevTab: this.isMac ? 'Cmd+Option+Left' : 'Ctrl+Shift+Tab',
     history: this.isMac ? 'Cmd+Y' : 'Ctrl+H',
     settings: this.isMac ? 'Cmd+,': 'Ctrl+,',
+    print: this.isMac ? 'Cmd+P' : 'Ctrl+P',
   };
 
   constructor(
@@ -109,6 +110,23 @@ export class AppMenu {
               if (activeTabId) {
                 this.tabService.closeTab(activeTabId);
               }
+            },
+          },
+          { type: 'separator' as const },
+          {
+            label: 'Print...',
+            accelerator: this.keys.print,
+            click: () => {
+              if (!this.hasActiveWindow()) return;
+              this.tabService.print();
+            },
+          },
+          {
+            label: 'Save as PDF...',
+            accelerator: this.isMac ? 'Cmd+Shift+P' : 'Ctrl+Shift+P',
+            click: () => {
+              if (!this.hasActiveWindow()) return;
+              this.tabService.printToPDF();
             },
           },
           { type: 'separator' as const },

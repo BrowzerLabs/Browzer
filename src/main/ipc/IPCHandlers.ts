@@ -51,6 +51,7 @@ export class IPCHandlers extends EventEmitter {
     this.setupDeepLinkHandlers();
     this.setupAutocompleteHandlers();
     this.setupThemeHandlers();
+    this.setupPrintHandlers();
   }
 
   private setupTabHandlers(): void {
@@ -470,6 +471,22 @@ export class IPCHandlers extends EventEmitter {
     });
   }
 
+  private setupPrintHandlers(): void {
+    // Print current page (opens native print dialog)
+    // On macOS, the native dialog includes "Save as PDF" option in the PDF dropdown
+    ipcMain.handle('browser:print', async (_, tabId?: string) => {
+      return this.tabService.print(tabId);
+    });
+
+    // Print to PDF with save dialog
+    ipcMain.handle('browser:print-to-pdf', async (_, tabId?: string, options?: {
+      landscape?: boolean;
+      pageSize?: string;
+    }) => {
+      return this.tabService.printToPDF(tabId, options);
+    });
+  }
+
   public cleanup(): void {
     const handlers = [
       // Tab handlers
@@ -584,6 +601,9 @@ export class IPCHandlers extends EventEmitter {
       'theme:get',
       'theme:set',
       'theme:is-dark',
+      // Print handlers
+      'browser:print',
+      'browser:print-to-pdf',
     ];
 
     handlers.forEach(channel => {

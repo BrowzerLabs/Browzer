@@ -407,12 +407,24 @@ export class TabService extends EventEmitter {
         { role: 'copy' },
         { role: 'paste' },
         { role: 'selectAll' },
+        { type: 'separator' },
+        {
+          label: 'Print...',
+          accelerator: process.platform === 'darwin' ? 'Cmd+P' : 'Ctrl+P',
+          click: () => {
+            this.print(tab.id);
+          }
+        },
       ]);
       menu.popup();
     });
 
     webContents.on('before-input-event', (event: any, input: any) => {
-      if ((input.control || input.meta) && input.shift && input.key.toLowerCase() === 'i') {
+      const key = input.key.toLowerCase();
+      const isCmdOrCtrl = input.control || input.meta;
+      
+      // DevTools: Cmd/Ctrl+Shift+I
+      if (isCmdOrCtrl && input.shift && key === 'i') {
         event.preventDefault();
         if (webContents.isDevToolsOpened()) {
           webContents.closeDevTools();
@@ -420,9 +432,22 @@ export class TabService extends EventEmitter {
           webContents.openDevTools({ mode: 'right', activate: true });
         }
       }
-      else if ((input.control || input.meta) && input.shift && input.key.toLowerCase() === 'c') {
+      // DevTools Inspector: Cmd/Ctrl+Shift+C
+      else if (isCmdOrCtrl && input.shift && key === 'c') {
         event.preventDefault();
         webContents.openDevTools({ mode: 'right', activate: true });
+      }
+      // Save as PDF: Cmd/Ctrl+Shift+P (check before Print to handle shift correctly)
+      else if (isCmdOrCtrl && input.shift && key === 'p') {
+        event.preventDefault();
+        console.log('[TabService] Cmd+Shift+P detected, saving as PDF');
+        this.printToPDF(tab.id);
+      }
+      // Print: Cmd/Ctrl+P (no shift)
+      else if (isCmdOrCtrl && !input.shift && key === 'p') {
+        event.preventDefault();
+        console.log('[TabService] Cmd+P detected, opening print dialog');
+        this.print(tab.id);
       }
     });
 
@@ -455,5 +480,117 @@ export class TabService extends EventEmitter {
         tab.view.setVisible(true);
       }
     });
+  }
+
+  /**
+   * Print the content of a tab
+   * Uses the native system print dialog which on macOS includes "Save as PDF" option
+   */
+  public async print(tabId?: string): Promise<{ success: boolean; error?: string }> {
+    const targetTabId = tabId || this.activeTabId;
+    if (!targetTabId) {
+      console.warn('[TabService] No tab to print');
+      return { success: false, error: 'No active tab to print' };
+    }
+
+    const tab = this.tabs.get(targetTabId);
+    if (!tab) {
+      console.warn('[TabService] Tab not found:', targetTabId);
+      return { success: false, error: 'Tab not found' };
+    }
+
+    console.log('[TabService] Opening print dialog for tab:', targetTabId);
+
+    return new Promise((resolve) => {
+      // Use the native system print dialog
+      // On macOS, this includes "Save as PDF" in the PDF dropdown
+      tab.view.webContents.print(
+        {
+          silent: false,           // Show print dialog (required for user interaction)
+          printBackground: true,   // Include background colors and images
+        },
+        (success, failureReason) => {
+          if (success) {
+            console.log('[TabService] Print completed successfully');
+            resolve({ success: true });
+          } else if (failureReason === 'cancelled') {
+            console.log('[TabService] Print cancelled by user');
+            resolve({ success: false, error: 'cancelled' });
+          } else {
+            console.error('[TabService] Print failed:', failureReason);
+            resolve({ success: false, error: failureReason });
+          }
+        }
+      );
+    });
+  }
+
+  /**
+   * Print to PDF and save to file
+   * Opens a save dialog for the user to choose where to save the PDF
+   */
+  public async printToPDF(tabId?: string, options?: {
+    landscape?: boolean;
+    pageSize?: string;
+    marginsType?: number;
+  }): Promise<{ success: boolean; filePath?: string; error?: string }> {
+    const targetTabId = tabId || this.activeTabId;
+    if (!targetTabId) {
+      console.warn('[TabService] No tab to print to PDF');
+      return { success: false, error: 'No active tab' };
+    }
+
+    const tab = this.tabs.get(targetTabId);
+    if (!tab) {
+      console.warn('[TabService] Tab not found:', targetTabId);
+      return { success: false, error: 'Tab not found' };
+    }
+
+    const { dialog } = require('electron');
+    const fs = require('fs');
+    const path = require('path');
+
+    // Get page title for default filename
+    const pageTitle = tab.info.title || 'document';
+    const sanitizedTitle = pageTitle.replace(/[^a-z0-9]/gi, '_').substring(0, 50);
+    const defaultFileName = `${sanitizedTitle}.pdf`;
+
+    try {
+      // Show save dialog
+      const { filePath, canceled } = await dialog.showSaveDialog(this.baseWindow, {
+        title: 'Save as PDF',
+        defaultPath: path.join(require('os').homedir(), 'Downloads', defaultFileName),
+        filters: [
+          { name: 'PDF Files', extensions: ['pdf'] }
+        ],
+        properties: ['createDirectory', 'showOverwriteConfirmation']
+      });
+
+      if (canceled || !filePath) {
+        console.log('[TabService] PDF save cancelled by user');
+        return { success: false, error: 'cancelled' };
+      }
+
+      console.log('[TabService] Generating PDF for tab:', targetTabId);
+
+      // Generate PDF
+      const pdfData = await tab.view.webContents.printToPDF({
+        printBackground: true,
+        landscape: options?.landscape ?? false,
+        pageSize: (options?.pageSize as any) ?? 'A4',
+        margins: {
+          marginType: 'default',
+        },
+      });
+
+      // Write to file
+      await fs.promises.writeFile(filePath, pdfData);
+      console.log('[TabService] PDF saved to:', filePath);
+
+      return { success: true, filePath };
+    } catch (error) {
+      console.error('[TabService] Print to PDF failed:', error);
+      return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+    }
   }
 }
