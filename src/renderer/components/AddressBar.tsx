@@ -11,6 +11,7 @@ interface AddressBarProps {
   isSecure: boolean;
   onNavigate: (url: string) => void;
   className?: string;
+  focusTrigger?: number;
 }
 
 export function AddressBar({
@@ -18,6 +19,7 @@ export function AddressBar({
   isSecure,
   onNavigate,
   className,
+  focusTrigger,
 }: AddressBarProps) {
   const [isEditing, setIsEditing] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -47,6 +49,23 @@ export function AddressBar({
       setInputValueSilent(currentUrl);
     }
   }, [currentUrl, isEditing, setInputValueSilent]);
+
+  // Handle focus trigger for new tabs
+  useEffect(() => {
+    if (!focusTrigger) return;
+
+    setInputValueSilent('');
+
+    void window.browserAPI.bringBrowserViewToFront();
+    requestAnimationFrame(() => {
+      const inputEl = inputRef.current;
+      if (inputEl) {
+        inputEl.focus();
+        inputEl.select();
+        setIsEditing(true);
+      }
+    });
+  }, [focusTrigger, setInputValueSilent]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
