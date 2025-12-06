@@ -18,6 +18,7 @@ export class AppMenu {
     forceReload: this.isMac ? 'Cmd+Shift+R' : 'Ctrl+Shift+R',
     nextTab: this.isMac ? 'Cmd+Option+Right' : 'Ctrl+Tab',
     prevTab: this.isMac ? 'Cmd+Option+Left' : 'Ctrl+Shift+Tab',
+    history: this.isMac ? 'Cmd+Y' : 'Ctrl+H',
     settings: this.isMac ? 'Cmd+,': 'Ctrl+,',
   };
 
@@ -168,6 +169,15 @@ export class AppMenu {
               const activeTabId = this.tabService.getActiveTabId();
               if (activeTabId) {
                 this.tabService.goForward(activeTabId);
+              }
+            },
+          },
+          {
+            label: 'History',
+            accelerator: this.keys.history,
+            click: () => {
+              if (this.ensureWindow()) {
+                this.tabService.createTab('browzer://history');
               }
             },
           },
