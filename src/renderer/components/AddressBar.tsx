@@ -92,9 +92,6 @@ export function AddressBar({
     }
   }, [handleAutocompleteKeyDown, onNavigate, setInputValueSilent, currentUrl, clearSuggestions]);
 
-  /**
-   * Handle suggestion click
-   */
   const handleSuggestionClick = useCallback((suggestion: AutocompleteSuggestion) => {
     setInputValueSilent(suggestion.url);
     onNavigate(suggestion.url);

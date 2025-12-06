@@ -1,5 +1,3 @@
-
-
 export function isLikelyUrl(input: string): boolean {
   const trimmed = input.trim();
   

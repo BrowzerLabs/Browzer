@@ -33,6 +33,7 @@ export function useAddressBar(options: UseAddressBarOptions = {}): UseAddressBar
   } = options;
 
   const [inputValue, setInputValueState] = useState('');
+  const [originalInputValue, setOriginalInputValue] = useState('');
   const [suggestions, setSuggestions] = useState<AutocompleteSuggestion[]>([]);
   const [searchSuggestions, setSearchSuggestions] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -111,6 +112,7 @@ export function useAddressBar(options: UseAddressBarOptions = {}): UseAddressBar
 
   const handleInputChange = useCallback((value: string) => {
     setInputValueState(value);
+    setOriginalInputValue(value); // Store original user input
 
     if (debounceTimerRef.current) {
       clearTimeout(debounceTimerRef.current);
@@ -121,7 +123,21 @@ export function useAddressBar(options: UseAddressBarOptions = {}): UseAddressBar
     }, debounceMs);
   }, [debounceMs, fetchSuggestions]);
 
-    const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>): string | null => {
+  const getValueForIndex = useCallback((index: number): string => {
+    if (index === -1) {
+      return originalInputValue;
+    }
+    if (index < suggestions.length) {
+      return suggestions[index].url;
+    }
+    const searchIndex = index - suggestions.length;
+    if (searchIndex < searchSuggestions.length) {
+      return searchSuggestions[searchIndex];
+    }
+    return originalInputValue;
+  }, [suggestions, searchSuggestions, originalInputValue]);
+
+  const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>): string | null => {
     if (!isOpen && e.key !== 'ArrowDown') {
       return null;
     }
@@ -131,17 +147,22 @@ export function useAddressBar(options: UseAddressBarOptions = {}): UseAddressBar
         e.preventDefault();
         if (!isOpen && inputValue) {
           setIsOpen(true);
+          setOriginalInputValue(inputValue);
           fetchSuggestions(inputValue);
-        } else {
-          setSelectedIndex(prev => 
-            prev < totalSuggestions - 1 ? prev + 1 : prev
-          );
+        } else if (totalSuggestions > 0) {
+          const newIndex = selectedIndex < totalSuggestions - 1 ? selectedIndex + 1 : 0;
+          setSelectedIndex(newIndex);
+          setInputValueState(getValueForIndex(newIndex));
         }
         return null;
 
       case 'ArrowUp':
         e.preventDefault();
-        setSelectedIndex(prev => (prev > -1 ? prev - 1 : -1));
+        if (totalSuggestions > 0) {
+          const newIndex = selectedIndex <= 0 ? totalSuggestions - 1 : selectedIndex - 1;
+          setSelectedIndex(newIndex);
+          setInputValueState(getValueForIndex(newIndex));
+        }
         return null;
 
       case 'Enter':
@@ -184,7 +205,7 @@ export function useAddressBar(options: UseAddressBarOptions = {}): UseAddressBar
       default:
         return null;
     }
-  }, [isOpen, inputValue, selectedIndex, suggestions, searchSuggestions, totalSuggestions, fetchSuggestions]);
+  }, [isOpen, inputValue, selectedIndex, suggestions, searchSuggestions, totalSuggestions, fetchSuggestions, originalInputValue, getValueForIndex]);
 
   const clearSuggestions = useCallback(() => {
     setSuggestions([]);
