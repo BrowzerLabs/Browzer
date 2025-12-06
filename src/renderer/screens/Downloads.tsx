@@ -16,6 +16,7 @@ import {
   Trash2,
   ExternalLink,
 } from 'lucide-react';
+import { formatBytes } from '@/renderer/lib/utils';
 
 const statusStyles: Record<DownloadItem['state'], string> = {
   completed: 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300',
@@ -35,13 +36,6 @@ const statusLabel: Record<DownloadItem['state'], string> = {
   failed: 'Failed',
   interrupted: 'Interrupted',
   queued: 'Queued',
-};
-
-const formatBytes = (bytes: number): string => {
-  if (bytes <= 0) return '0 B';
-  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
-  const index = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
-  return `${(bytes / 1024 ** index).toFixed(index === 0 ? 0 : 1)} ${units[index]}`;
 };
 
 export function Downloads() {
@@ -72,7 +66,7 @@ export function Downloads() {
 
     if (item.state === 'progressing') {
       return (
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-2 pointer-events-auto">
           <Button variant="outline" size="sm" className={commonClasses} onClick={() => pauseDownload(item.id)}>
             <Pause className="w-4 h-4 mr-2" />
             Pause
@@ -87,7 +81,7 @@ export function Downloads() {
 
     if (item.state === 'paused') {
       return (
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-2 pointer-events-auto">
           <Button
             variant="outline"
             size="sm"
@@ -108,7 +102,7 @@ export function Downloads() {
 
     if (item.state === 'completed') {
       return (
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-2 pointer-events-auto">
           <Button variant="outline" size="sm" className={commonClasses} onClick={() => openDownload(item.id)}>
             <ExternalLink className="w-4 h-4 mr-2" />
             Open
@@ -127,7 +121,7 @@ export function Downloads() {
 
     if (item.state === 'failed' || item.state === 'interrupted' || item.state === 'cancelled') {
       return (
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-2 pointer-events-auto">
           <Button variant="outline" size="sm" className={commonClasses} onClick={() => retryDownload(item.id)}>
             <RotateCcw className="w-4 h-4 mr-2" />
             Retry
@@ -211,7 +205,7 @@ export function Downloads() {
             {downloads.map((item) => (
               <Card
                 key={item.id}
-                className="border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm"
+                className="border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm pointer-events-auto"
               >
                 <CardHeader className="flex flex-row items-start justify-between space-y-0">
                   <div className="space-y-1">
