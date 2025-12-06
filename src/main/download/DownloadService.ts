@@ -8,12 +8,18 @@ import { randomUUID } from 'node:crypto';
 interface ManagedDownload {
   item?: Electron.DownloadItem;
   data: DownloadItem;
+  lastReceivedBytes: number;
+  lastUpdateTime: number;
 }
+
+const MAX_DOWNLOADS_HISTORY = 100;
+const THROTTLE_MS = 250;
 
 export class DownloadService extends EventEmitter {
   private downloads = new Map<string, ManagedDownload>();
   private pendingSavePaths = new Map<string, string>();
   private pendingRetryIds = new Map<string, string>();
+  private throttleTimers = new Map<string, NodeJS.Timeout>();
   private readonly handleWillDownload: (event: Electron.Event, item: Electron.DownloadItem) => void;
 
   constructor(private baseWindow: BaseWindow, private rendererContents: WebContents) {
@@ -27,6 +33,8 @@ export class DownloadService extends EventEmitter {
 
   public destroy(): void {
     session.defaultSession.removeListener('will-download', this.handleWillDownload);
+    this.throttleTimers.forEach(timer => clearTimeout(timer));
+    this.throttleTimers.clear();
     this.downloads.clear();
     this.pendingSavePaths.clear();
   }
@@ -142,6 +150,8 @@ export class DownloadService extends EventEmitter {
     const managed: ManagedDownload = {
       item,
       data: download,
+      lastReceivedBytes: download.receivedBytes,
+      lastUpdateTime: Date.now(),
     };
 
     this.downloads.set(id, managed);
@@ -160,31 +170,52 @@ export class DownloadService extends EventEmitter {
     const entry = this.downloads.get(id);
     if (!entry) return;
 
+    const now = Date.now();
+    const timeDelta = (now - entry.lastUpdateTime) / 1000;
+    const bytesDelta = item.getReceivedBytes() - entry.lastReceivedBytes;
+
     entry.data.totalBytes = Math.max(item.getTotalBytes(), entry.data.totalBytes);
     entry.data.receivedBytes = item.getReceivedBytes();
     entry.data.progress = this.calculateProgress(entry.data.receivedBytes, entry.data.totalBytes);
     entry.data.canResume = item.canResume();
 
+    if (timeDelta > 0) {
+      entry.data.speed = Math.round(bytesDelta / timeDelta);
+      const remaining = entry.data.totalBytes - entry.data.receivedBytes;
+      entry.data.remainingTime = entry.data.speed > 0 ? Math.round(remaining / entry.data.speed) : undefined;
+    }
+
+    entry.lastReceivedBytes = entry.data.receivedBytes;
+    entry.lastUpdateTime = now;
+
     if (state === 'interrupted') {
       entry.data.state = 'interrupted';
       entry.data.error = 'Download interrupted';
+      this.notifyRenderer(id);
     } else {
       entry.data.state = item.isPaused() ? 'paused' : 'progressing';
       entry.data.error = undefined;
+      this.throttledNotify(id);
     }
-
-    this.notifyRenderer(id);
   }
 
   private onItemDone(id: string, item: Electron.DownloadItem, state: 'completed' | 'cancelled' | 'interrupted'): void {
     const entry = this.downloads.get(id);
     if (!entry) return;
 
+    const timer = this.throttleTimers.get(id);
+    if (timer) {
+      clearTimeout(timer);
+      this.throttleTimers.delete(id);
+    }
+
     entry.data.totalBytes = Math.max(item.getTotalBytes(), entry.data.totalBytes);
     entry.data.receivedBytes = item.getReceivedBytes();
     entry.data.progress = this.calculateProgress(entry.data.receivedBytes, entry.data.totalBytes);
     entry.data.endTime = Date.now();
     entry.data.canResume = false;
+    entry.data.speed = undefined;
+    entry.data.remainingTime = undefined;
     entry.item = undefined;
 
     switch (state) {
@@ -203,6 +234,7 @@ export class DownloadService extends EventEmitter {
         break;
     }
 
+    this.pruneOldDownloads();
     this.notifyRenderer(id);
   }
 
@@ -235,6 +267,31 @@ export class DownloadService extends EventEmitter {
       return randomUUID();
     } catch {
       return `dl-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    }
+  }
+
+  private throttledNotify(id: string): void {
+    if (this.throttleTimers.has(id)) return;
+
+    const timer = setTimeout(() => {
+      this.throttleTimers.delete(id);
+      this.notifyRenderer(id);
+    }, THROTTLE_MS);
+
+    this.throttleTimers.set(id, timer);
+  }
+
+  private pruneOldDownloads(): void {
+    const entries = Array.from(this.downloads.entries());
+    if (entries.length <= MAX_DOWNLOADS_HISTORY) return;
+
+    const completed = entries
+      .filter(([, m]) => m.data.state === 'completed' || m.data.state === 'cancelled' || m.data.state === 'failed')
+      .sort((a, b) => (a[1].data.endTime ?? 0) - (b[1].data.endTime ?? 0));
+
+    const toRemove = entries.length - MAX_DOWNLOADS_HISTORY;
+    for (let i = 0; i < toRemove && i < completed.length; i++) {
+      this.downloads.delete(completed[i][0]);
     }
   }
 

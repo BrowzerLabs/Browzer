@@ -48,3 +48,21 @@ export function formatBytes(bytes?: number): string {
   const value = bytes / 1024 ** index;
   return `${value.toFixed(index === 0 ? 0 : 1)} ${units[index]}`;
 }
+
+export function formatSpeed(bytesPerSecond?: number): string {
+  if (!bytesPerSecond || bytesPerSecond <= 0) return '';
+  return `${formatBytes(bytesPerSecond)}/s`;
+}
+
+export function formatRemainingTime(seconds?: number): string {
+  if (!seconds || seconds <= 0) return '';
+  if (seconds < 60) return `${seconds}s left`;
+  if (seconds < 3600) {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return secs > 0 ? `${mins}m ${secs}s left` : `${mins}m left`;
+  }
+  const hours = Math.floor(seconds / 3600);
+  const mins = Math.floor((seconds % 3600) / 60);
+  return mins > 0 ? `${hours}h ${mins}m left` : `${hours}h left`;
+}

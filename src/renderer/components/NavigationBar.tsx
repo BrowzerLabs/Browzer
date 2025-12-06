@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, KeyboardEvent } from 'react';
 import { ArrowLeft, ArrowRight, RotateCw, X, Lock, Globe, Circle, Square, Settings, Clock, User, MoreVertical, Video, ChevronRight, ChevronLeft, Loader2, LogOut, DiamondIcon, Download, Pause, Play, XCircle } from 'lucide-react';
 import type { TabInfo } from '@/shared/types';
-import { cn, formatBytes } from '@/renderer/lib/utils';
+import { cn, formatBytes, formatSpeed, formatRemainingTime } from '@/renderer/lib/utils';
 import { useSidebarStore } from '@/renderer/store/useSidebarStore';
 import { useRecording } from '@/renderer/hooks/useRecording';
 import { useAuth } from '@/renderer/hooks/useAuth';
@@ -193,20 +193,31 @@ export function NavigationBar({
                         <div className="text-xs font-medium text-gray-900 dark:text-gray-100 truncate">
                           {item.fileName}
                         </div>
-                        <div className="text-[11px] text-gray-500 dark:text-gray-400 truncate">
-                          {item.state === 'completed'
-                            ? 'Completed'
-                            : item.state === 'paused'
-                            ? 'Paused'
-                            : isFailed
-                            ? 'Failed'
-                            : isCancelled
-                            ? 'Cancelled'
-                            : 'In progress'}
+                        <div className="text-xs text-gray-500 dark:text-gray-400">
+                          <span>
+                            {item.state === 'completed'
+                              ? 'Completed'
+                              : item.state === 'paused'
+                              ? 'Paused'
+                              : isFailed
+                              ? 'Failed'
+                              : isCancelled
+                              ? 'Cancelled'
+                              : 'In progress'}
+                          </span>
                           {!isCancelled && (
-                            <>
-                              {' '}• {formatBytes(item.receivedBytes)} of {item.totalBytes > 0 ? formatBytes(item.totalBytes) : 'Unknown'} ({percent}%)
-                            </>
+                            <span>
+                              {formatBytes(item.receivedBytes)}/{item.totalBytes > 0 ? formatBytes(item.totalBytes) : '?'}
+                            </span>
+                          )}
+                          <br />
+                          {isActive && formatSpeed(item.speed) && (
+                            <span className="text-primary">
+                              {formatSpeed(item.speed)}
+                            </span>
+                          )}
+                          {isActive && formatRemainingTime(item.remainingTime) && (
+                            <span> {formatRemainingTime(item.remainingTime)}</span>
                           )}
                         </div>
                       </div>
@@ -218,15 +229,6 @@ export function NavigationBar({
                             className="p-1 rounded hover:bg-gray-100 dark:hover:bg-slate-800"
                           >
                             <Pause className="w-4 h-4" />
-                          </button>
-                        )}
-                        {isPaused && (
-                          <button
-                            title="Resume"
-                            onClick={() => resumeDownload(item.id)}
-                            className="p-1 rounded hover:bg-gray-100 dark:hover:bg-slate-800"
-                          >
-                            <Play className="w-4 h-4" />
                           </button>
                         )}
                         {isPaused && (
