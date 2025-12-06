@@ -50,6 +50,7 @@ export class MainService {
     });
 
     this.baseWindow.contentView.addChildView(this.browserView);
+    // this.browserView.webContents.openDevTools({ mode: 'detach' });
 
     this.browserService = new BrowserService(this.baseWindow, this.browserView);
 

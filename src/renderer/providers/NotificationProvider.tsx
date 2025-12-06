@@ -4,6 +4,7 @@ import { toast } from 'sonner';
 import {
   NotificationPayload,
   NotificationType,
+  ToastPayload,
 } from '@/shared/types/notification';
 import { 
   registerAppNotificationCallbacks, 
@@ -69,6 +70,23 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
     }
   }, []);
 
+  const handleToastNotification2 = useCallback((payload: ToastPayload) => {
+    const { message, description, variant } = payload;
+    switch(variant){
+      case 'error': 
+        toast.error(message, { description })
+        break;
+      case 'success':
+        toast.success(message, { description })
+        break;
+      case 'warning':
+        toast.warning(message, { description })
+        break;
+      default:
+        toast.info(message, { description })
+    }
+  }, []);
+
   const handleDialogNotification = useCallback(async (notification: NotificationPayload) => {
     const { title, message } = notification;
     toast.info(title)
@@ -98,21 +116,15 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
       if (handler) {
         handler(callback_data);
         
-        toast.success(title, {
-          description: message,
-        });
+        toast.success(title, { description: message });
       } else {
         console.warn(`[NotificationProvider] No handler registered for callback: ${callback_name}`);
-        toast.error('Action Failed', {
-          description: `No handler found for: ${callback_name}`,
-        });
+        toast.error('Action Failed', { description: `No handler found for: ${callback_name}` });
       }
     }
   }, []);
 
   const handleNotification = useCallback((notification: NotificationPayload) => {
-    console.log('[NotificationProvider] Received notification:', notification);
-
     try {
       const { type } = notification;
 
@@ -137,27 +149,23 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
       }
     } catch (error) {
       console.error('[NotificationProvider] Error handling notification:', error);
-      toast.error('Notification Error', {
-        description: 'Failed to process notification',
-      });
+      toast.error('Notification Error', {description: 'Failed to process notification'});
     }
   }, [handleToastNotification, handleDialogNotification, handleNavigationNotification, handleCallbackNotification]);
 
-  /**
-   * Subscribe to notification events on mount
-   */
   useEffect(() => {
-    // Subscribe to notification events
     unsubscribeRef.current = window.notificationAPI.onNotification(handleNotification);
     registerAppNotificationCallbacks();
 
-    // Cleanup on unmount
+    const unsubscribeToast = window.notificationAPI.onToast(handleToastNotification2);
+
     return () => {
       if (unsubscribeRef.current) {
         unsubscribeRef.current();
       }
       
       unregisterAppNotificationCallbacks();
+      unsubscribeToast();
     };
   }, [handleNotification]);
 
