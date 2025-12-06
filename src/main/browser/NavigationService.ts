@@ -28,6 +28,10 @@ export class NavigationService {
       return this.handleInternalURL(trimmed);
     }
     
+    if (trimmed.startsWith('data:')) {
+      return trimmed;
+    }
+    
     if (/^[a-z]+:\/\//i.test(trimmed)) {
       return trimmed;
     }

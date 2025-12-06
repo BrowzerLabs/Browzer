@@ -89,10 +89,7 @@ export class ContextMenuService extends EventEmitter {
       
       menu.append(new MenuItem({
         label: 'Copy Email Address',
-        click: () => {
-          clipboard.writeText(email)
-          this.emit('toast', { message: `${email.substring(0, 10)}... copied to clipboard` });
-        },
+        click: () => clipboard.writeText(email),
       }));
 
       menu.append(new MenuItem({
@@ -104,10 +101,7 @@ export class ContextMenuService extends EventEmitter {
       
       menu.append(new MenuItem({
         label: 'Copy Phone Number',
-        click: () => {
-          clipboard.writeText(phone)
-          this.emit('toast', { message: `${phone.substring(0, 10)}... copied to clipboard` });
-        }
+        click: () => clipboard.writeText(phone),
       }));
 
       menu.append(new MenuItem({
@@ -134,25 +128,21 @@ export class ContextMenuService extends EventEmitter {
 
       menu.append(new MenuItem({
         label: 'Copy Link Address',
-        click: () => {
-          clipboard.writeText(params.linkURL)
-          this.emit('toast', { message: `${params.linkURL.substring(0, 10)}... copied to clipboard`, variant: 'success' });
-        },
+        click: () => clipboard.writeText(params.linkURL),
       }));
 
       if (params.linkText) {
         menu.append(new MenuItem({
           label: 'Copy Link Text',
-          click: () => {
-            clipboard.writeText(params.linkText)
-            this.emit('toast', { message: `${params.linkText.substring(0, 10)}... copied to clipboard`, variant: 'success' });
-          },
+          click: () => clipboard.writeText(params.linkText),
         }));
       }
     }
   }
 
   private addImageMenuItems(menu: Menu, webContents: WebContents, params: ContextMenuParams): void {
+    const isBase64Image = this.isBase64DataUrl(params.srcURL);
+
     menu.append(new MenuItem({
       label: 'Open Image in New Tab',
       click: () => this.emit('open-link-in-new-tab', params.srcURL),
@@ -165,11 +155,11 @@ export class ContextMenuService extends EventEmitter {
 
     menu.append(new MenuItem({
       label: 'Copy Image',
-      click: () => this.copyImageToClipboard(webContents, params),
+      click: () => this.copyImageToClipboard(params.srcURL),
     }));
 
     menu.append(new MenuItem({
-      label: 'Copy Image Address',
+      label: isBase64Image ? 'Copy Image Data URL' : 'Copy Image Address',
       click: () => clipboard.writeText(params.srcURL),
     }));
   }
@@ -323,7 +313,6 @@ export class ContextMenuService extends EventEmitter {
 
     menu.append(new MenuItem({ type: 'separator' }));
 
-    // Page actions
     menu.append(new MenuItem({
       label: 'Save As...',
       accelerator: 'CmdOrCtrl+S',
@@ -366,6 +355,11 @@ export class ContextMenuService extends EventEmitter {
 
   private async saveImageAs(url: string): Promise<void> {
     try {
+      if (this.isBase64DataUrl(url)) {
+        await this.saveBase64ImageAs(url);
+        return;
+      }
+
       const urlObj = new URL(url);
       let filename = path.basename(urlObj.pathname) || 'image';
       
@@ -387,38 +381,26 @@ export class ContextMenuService extends EventEmitter {
     }
   }
 
-  private async copyImageToClipboard(webContents: WebContents, params: ContextMenuParams): Promise<void> {
+  private async copyImageToClipboard(srcURL: string): Promise<void> {
     try {
-      const image = await this.fetchImageAsNativeImage(params.srcURL);
-      if (image) {
+      if (this.isBase64DataUrl(srcURL)) {
+        const image = this.base64ToNativeImage(srcURL);
+        if (image && !image.isEmpty()) {
+          clipboard.writeImage(image);
+          return;
+        }
+      }
+
+      const image = await this.fetchImageAsNativeImage(srcURL);
+      if (image && !image.isEmpty()) {
         clipboard.writeImage(image);
+      } else {
+        clipboard.writeText(srcURL);
       }
     } catch (error) {
       console.error('[ContextMenuService] Failed to copy image:', error);
-      clipboard.writeText(params.srcURL);
+      clipboard.writeText(srcURL);
     }
-  }
-
-  private fetchImageAsNativeImage(url: string): Promise<Electron.NativeImage | null> {
-    return new Promise((resolve) => {
-      const protocol = url.startsWith('https') ? https : http;
-      
-      protocol.get(url, (response) => {
-        const chunks: Buffer[] = [];
-        
-        response.on('data', (chunk) => chunks.push(chunk));
-        response.on('end', () => {
-          try {
-            const buffer = Buffer.concat(chunks);
-            const image = nativeImage.createFromBuffer(buffer);
-            resolve(image);
-          } catch {
-            resolve(null);
-          }
-        });
-        response.on('error', () => resolve(null));
-      }).on('error', () => resolve(null));
-    });
   }
 
   private async saveMediaAs(url: string, mediaType: string): Promise<void> {
@@ -442,6 +424,110 @@ export class ContextMenuService extends EventEmitter {
       console.error('[ContextMenuService] Failed to save media:', error);
       dialog.showErrorBox('Download Failed', 'Failed to save the media file. Please try again.');
     }
+  }
+
+  private async savePageAs(webContents: WebContents): Promise<void> {
+    try {
+      const pageTitle = webContents.getTitle() || 'page';
+      const sanitizedTitle = pageTitle.replace(/[<>:"/\\|?*]/g, '_');
+      
+      const { filePath } = await dialog.showSaveDialog({
+        defaultPath: `${sanitizedTitle}.html`,
+        title: 'Save Page As',
+      });
+
+      if (filePath) {
+        const html = await webContents.executeJavaScript('document.documentElement.outerHTML');
+        fs.writeFileSync(filePath, html, 'utf-8');
+      }
+    } catch (error) {
+      console.error('[ContextMenuService] Failed to save page:', error);
+      dialog.showErrorBox('Save Failed', 'Failed to save the page. Please try again.');
+    }
+  }
+
+  private isBase64DataUrl(url: string): boolean {
+    return url.startsWith('data:image/');
+  }
+
+  private base64ToNativeImage(dataUrl: string): Electron.NativeImage | null {
+    try {
+      const matches = dataUrl.match(/^data:image\/([a-zA-Z0-9+]+);base64,(.+)$/);
+      if (!matches) {
+        return null;
+      }
+
+      const base64Data = matches[2];
+      const buffer = Buffer.from(base64Data, 'base64');
+      return nativeImage.createFromBuffer(buffer);
+    } catch (error) {
+      console.error('[ContextMenuService] Failed to convert base64 to image:', error);
+      return null;
+    }
+  }
+
+  private async saveBase64ImageAs(dataUrl: string): Promise<void> {
+    try {
+      const matches = dataUrl.match(/^data:image\/([a-zA-Z0-9+]+);base64,(.+)$/);
+      if (!matches) {
+        dialog.showErrorBox('Save Failed', 'Invalid image data.');
+        return;
+      }
+
+      const mimeType = matches[1];
+      const base64Data = matches[2];
+      
+      const extensionMap: Record<string, string> = {
+        'jpeg': 'jpg',
+        'jpg': 'jpg',
+        'png': 'png',
+        'gif': 'gif',
+        'webp': 'webp',
+        'svg+xml': 'svg',
+        'bmp': 'bmp',
+      };
+      const extension = extensionMap[mimeType.toLowerCase()] || 'png';
+      
+      const { filePath } = await dialog.showSaveDialog({
+        defaultPath: `image.${extension}`,
+        title: 'Save Image As',
+      });
+
+      if (filePath) {
+        const buffer = Buffer.from(base64Data, 'base64');
+        fs.writeFileSync(filePath, buffer);
+      }
+    } catch (error) {
+      console.error('[ContextMenuService] Failed to save base64 image:', error);
+      dialog.showErrorBox('Save Failed', 'Failed to save the image. Please try again.');
+    }
+  }
+
+  private fetchImageAsNativeImage(url: string): Promise<Electron.NativeImage | null> {
+    return new Promise((resolve) => {
+      if (this.isBase64DataUrl(url)) {
+        resolve(this.base64ToNativeImage(url));
+        return;
+      }
+
+      const protocol = url.startsWith('https') ? https : http;
+      
+      protocol.get(url, (response) => {
+        const chunks: Buffer[] = [];
+        
+        response.on('data', (chunk) => chunks.push(chunk));
+        response.on('end', () => {
+          try {
+            const buffer = Buffer.concat(chunks);
+            const image = nativeImage.createFromBuffer(buffer);
+            resolve(image);
+          } catch {
+            resolve(null);
+          }
+        });
+        response.on('error', () => resolve(null));
+      }).on('error', () => resolve(null));
+    });
   }
 
   private downloadFile(url: string, filePath: string): Promise<void> {
@@ -524,25 +610,5 @@ export class ContextMenuService extends EventEmitter {
         }
       })();
     `).catch(err => console.error('[ContextMenuService] Failed to toggle controls:', err));
-  }
-
-  private async savePageAs(webContents: WebContents): Promise<void> {
-    try {
-      const pageTitle = webContents.getTitle() || 'page';
-      const sanitizedTitle = pageTitle.replace(/[<>:"/\\|?*]/g, '_');
-      
-      const { filePath } = await dialog.showSaveDialog({
-        defaultPath: `${sanitizedTitle}.html`,
-        title: 'Save Page As',
-      });
-
-      if (filePath) {
-        const html = await webContents.executeJavaScript('document.documentElement.outerHTML');
-        fs.writeFileSync(filePath, html, 'utf-8');
-      }
-    } catch (error) {
-      console.error('[ContextMenuService] Failed to save page:', error);
-      dialog.showErrorBox('Save Failed', 'Failed to save the page. Please try again.');
-    }
   }
 }
