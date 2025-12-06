@@ -4,10 +4,11 @@ import { toast } from 'sonner';
 
 interface UseDownloadsOptions {
   notify?: boolean;
+  onNewDownload?: (item: DownloadItem) => void;
 }
 
 export function useDownloads(options: UseDownloadsOptions = {}) {
-  const { notify = false } = options;
+  const { notify = false, onNewDownload } = options;
   const [downloads, setDownloads] = useState<DownloadItem[]>([]);
   const [loading, setLoading] = useState(true);
   const previous = useRef<Map<string, DownloadItem>>(new Map());
@@ -49,7 +50,12 @@ export function useDownloads(options: UseDownloadsOptions = {}) {
       if (!notify) return;
 
       if (!prev) {
-        toast.message(`Downloading ${changed.fileName}`, { duration: 2000 });
+        if (onNewDownload) {
+          onNewDownload(changed);
+        }
+        if (notify) {
+          toast.message(`Downloading ${changed.fileName}`, { duration: 2000 });
+        }
         return;
       }
 
