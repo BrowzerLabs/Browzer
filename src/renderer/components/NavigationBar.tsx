@@ -1,12 +1,10 @@
-import { useState, useEffect, KeyboardEvent } from 'react';
-import { ArrowLeft, ArrowRight, RotateCw, X, Lock, Globe, Circle, Square, Settings, Clock, User, MoreVertical, Video, ChevronRight, ChevronLeft, Loader2, LogOut, DiamondIcon, Download } from 'lucide-react';
+import { ArrowLeft, ArrowRight, RotateCw, X, Circle, Square, Settings, Clock, MoreVertical, Video, ChevronRight, ChevronLeft, Loader2, LogOut, DiamondIcon, Download } from 'lucide-react';
 import type { TabInfo } from '@/shared/types';
 import { cn } from '@/renderer/lib/utils';
 import { useSidebarStore } from '@/renderer/store/useSidebarStore';
 import { useRecording } from '@/renderer/hooks/useRecording';
 import { useAuth } from '@/renderer/hooks/useAuth';
 import { useUpdateProgress } from '@/renderer/hooks/useUpdateProgress';
-import { Input } from '@/renderer/ui/input';
 import ThemeToggle from '@/renderer/ui/theme-toggle';
 import { Button } from '@/renderer/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/renderer/ui/avatar';
@@ -17,6 +15,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/renderer/ui/dropdown-menu';
+import { AddressBar } from '@/renderer/components/AddressBar';
 
 interface NavigationBarProps {
   activeTab: TabInfo | null;
@@ -35,37 +34,16 @@ export function NavigationBar({
   onReload,
   onStop,
 }: NavigationBarProps) {
-  const [urlInput, setUrlInput] = useState('');
-  const [isEditing, setIsEditing] = useState(false);
   const { isVisible: isSidebarVisible, toggleSidebar } = useSidebarStore();
   const { isRecording, isLoading, toggleRecording } = useRecording();
   const { user, signOut, loading } = useAuth();
   const { isDownloading, progress, version } = useUpdateProgress();
 
-  // Update URL input when active tab changes
-  useEffect(() => {
-    if (activeTab && !isEditing) {
-      setUrlInput(activeTab.url);
-    }
-  }, [activeTab, isEditing]);
-
-  const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter') {
-      onNavigate(urlInput);
-      setIsEditing(false);
-      (e.target as HTMLInputElement).blur();
-    } else if (e.key === 'Escape') {
-      setUrlInput(activeTab?.url || '');
-      setIsEditing(false);
-      (e.target as HTMLInputElement).blur();
-    }
-  };
-
   const handleSignOut = async () => {
     await signOut();
   };
 
-  const isSecure = activeTab?.url.startsWith('https://');
+  const isSecure = activeTab?.url.startsWith('https://') ?? false;
 
   return (
     <div className="flex items-center h-12 px-3 gap-2 bg-background">
@@ -99,26 +77,11 @@ export function NavigationBar({
         </NavButton>
       </div>
 
-      <div className="flex-1 flex items-center rounded-lg pl-3 h-9 gap-2">
-        <div className="flex-shrink-0">
-          {isSecure ? (
-            <Lock className="w-4 h-4 text-green-500" />
-          ) : (
-            <Globe className="w-4 h-4 text-gray-500" />
-          )}
-        </div>
-
-        <Input
-          type="text"
-          value={urlInput}
-          onChange={(e) => setUrlInput(e.target.value)}
-          onFocus={() => setIsEditing(true)}
-          onBlur={() => setIsEditing(false)}
-          onKeyDown={handleKeyDown}
-          placeholder="Search or enter address"
-          className="rounded-full focus-visible:ring-1 focus-visible:ring-gray-300 focus-visible:border-gray-800 dark:focus-visible:border-gray-200"
-        />
-      </div>
+      <AddressBar
+        currentUrl={activeTab?.url || ''}
+        isSecure={isSecure}
+        onNavigate={onNavigate}
+      />
 
       {isDownloading && (
         <div className="relative">
@@ -156,7 +119,6 @@ export function NavigationBar({
         </div>
       )}
 
-      {/* Record Button */}
       <Button 
         variant="outline" 
         size="icon" 
@@ -177,10 +139,8 @@ export function NavigationBar({
         )}
       </Button>
 
-      {/* Theme Toggle */}
       <ThemeToggle />
 
-      {/* Sidebar Toggle Button */}
       <Button 
         variant="outline" 
         size="icon" 
@@ -194,71 +154,68 @@ export function NavigationBar({
         )}
       </Button>
 
-      {/* Menu Dropdown */}
-      <DropdownMenu
-        onOpenChange={(open) => {
-          if (open) {
-            void window.browserAPI.bringBrowserViewToFront();
-          } else {
-            void window.browserAPI.bringBrowserViewToBottom();
-          }
-        }}
-      >
-        <DropdownMenuTrigger asChild>
-          <Button variant="outline" size="icon" title="More options">
-            <MoreVertical className="w-4 h-4" />
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-56">
-          <DropdownMenuItem onClick={() => onNavigate('browzer://profile')}>
-            <Avatar className="size-7">
-              <AvatarImage src={user?.photo_url || undefined} />
-              <AvatarFallback className="bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-400 text-sm">
-                {user?.display_name 
-                  ? user.display_name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
-                  : user?.email?.slice(0, 2).toUpperCase() || 'U'}
-              </AvatarFallback>
-            </Avatar>
-            {user?.display_name || 'Profile'}
-          </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => onNavigate('browzer://subscription')}>
-            <DiamondIcon className="w-4 h-4 mr-2" />
-            Subscription
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={() => onNavigate('browzer://settings')}>
-            <Settings className="w-4 h-4 mr-2" />
-            Settings
-          </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => onNavigate('browzer://history')}>
-            <Clock className="w-4 h-4 mr-2" />
-            History
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={() => onNavigate('browzer://recordings')}>
-            <Video className="w-4 h-4 mr-2" />
-            Recordings
-          </DropdownMenuItem>
-          
-          <DropdownMenuItem onClick={() => onNavigate('browzer://automation')}>
-            <Clock className="w-4 h-4 mr-2" />
-            Automation
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem 
-            onClick={handleSignOut}
-            disabled={loading}
-            variant='destructive'
-          >
-            {loading ? (
-              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-            ) : (
-              <LogOut className="w-4 h-4 mr-2" />
-            )}
-            Sign Out
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
+      <DropdownMenu onOpenChange={(open) => {
+            if (open) {
+              void window.browserAPI.bringBrowserViewToFront();
+            } else {
+              void window.browserAPI.bringBrowserViewToBottom();
+            }
+          }}>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="icon" title="More options">
+                <MoreVertical className="w-4 h-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56">
+              <DropdownMenuItem onClick={() => onNavigate('browzer://profile')}>
+                <Avatar className="size-7">
+                  <AvatarImage src={user?.photo_url || undefined} />
+                  <AvatarFallback className="bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-400 text-sm">
+                    {user?.display_name 
+                      ? user.display_name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
+                      : user?.email?.slice(0, 2).toUpperCase() || 'U'}
+                  </AvatarFallback>
+                </Avatar>
+                {user?.display_name || 'Profile'}
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => onNavigate('browzer://subscription')}>
+                <DiamondIcon className="w-4 h-4 mr-2" />
+                Subscription
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => onNavigate('browzer://settings')}>
+                <Settings className="w-4 h-4 mr-2" />
+                Settings
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => onNavigate('browzer://history')}>
+                <Clock className="w-4 h-4 mr-2" />
+                History
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => onNavigate('browzer://recordings')}>
+                <Video className="w-4 h-4 mr-2" />
+                Recordings
+              </DropdownMenuItem>
+              
+              <DropdownMenuItem onClick={() => onNavigate('browzer://automation')}>
+                <Clock className="w-4 h-4 mr-2" />
+                Automation
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem 
+                onClick={handleSignOut}
+                disabled={loading}
+                variant='destructive'
+              >
+                {loading ? (
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                ) : (
+                  <LogOut className="w-4 h-4 mr-2" />
+                )}
+                Sign Out
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
     </div>
   );
 }

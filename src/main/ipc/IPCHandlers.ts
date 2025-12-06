@@ -5,7 +5,7 @@ import { PasswordManager } from '@/main/password/PasswordManager';
 import { AuthService } from '@/main/auth';
 import { SubscriptionService } from '@/main/subscription/SubscriptionService';
 import { ThemeService } from '@/main/theme';
-import { RecordedAction, HistoryQuery, AppSettings, SignUpCredentials, SignInCredentials, UpdateProfileRequest } from '@/shared/types';
+import { RecordedAction, HistoryQuery, AppSettings, SignUpCredentials, SignInCredentials, UpdateProfileRequest, AutocompleteSuggestion } from '@/shared/types';
 import { CheckoutSessionRequest, PortalSessionRequest } from '@/shared/types/subscription';
 import { TabService } from '@/main/browser';
 import { EventEmitter } from 'events';
@@ -49,6 +49,7 @@ export class IPCHandlers extends EventEmitter {
     this.setupSubscriptionHandlers();
     this.setupShellHandlers();
     this.setupDeepLinkHandlers();
+    this.setupAutocompleteHandlers();
     this.setupThemeHandlers();
   }
 
@@ -444,6 +445,16 @@ export class IPCHandlers extends EventEmitter {
     });
   }
 
+  private setupAutocompleteHandlers(): void {
+    ipcMain.handle('autocomplete:get-suggestions', async (_, query: string): Promise<AutocompleteSuggestion[]> => {
+      return this.browserService.getAutocompleteSuggestions(query);
+    });
+
+    ipcMain.handle('autocomplete:get-search-suggestions', async (_, query: string): Promise<string[]> => {
+      return this.browserService.getSearchSuggestions(query);
+    });
+  }
+
   private setupThemeHandlers(): void {
     ipcMain.handle('theme:get', async () => {
       return this.themeService.getTheme();
@@ -566,6 +577,9 @@ export class IPCHandlers extends EventEmitter {
       'deeplink:hide-tabs',
       'deeplink:show-tabs',
       'deeplink:navigate-tab',
+      // Autocomplete handlers
+      'autocomplete:get-suggestions',
+      'autocomplete:get-search-suggestions',
       // Theme handlers
       'theme:get',
       'theme:set',
