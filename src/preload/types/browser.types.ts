@@ -135,4 +135,15 @@ export interface BrowserAPI {
   getTheme: () => Promise<'light' | 'dark' | 'system'>;
   setTheme: (theme: 'light' | 'dark' | 'system') => Promise<boolean>;
   isDarkMode: () => Promise<boolean>;
+
+  // Download actions
+  getDownloads: () => Promise<DownloadItem[]>;
+  pauseDownload: (id: string) => Promise<boolean>,
+  resumeDownload: (id: string) => Promise<boolean>,
+  cancelDownload: (id: string) => Promise<boolean>,
+  retryDownload: (id: string) => Promise<boolean>,
+  removeDownload: (id: string) => Promise<boolean>,
+  openDownload: (id: string) => Promise<boolean>,
+  showDownloadInFolder: (id: string) => Promise<boolean>,
+
 }
