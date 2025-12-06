@@ -1,4 +1,4 @@
-import { Clock, type LucideIcon, Settings, Video, Bot, User, CreditCard, MailCheck, KeyRound, CheckCircle, XCircle, Loader2, BookmarkIcon } from "lucide-react";
+import { Clock, type LucideIcon, Settings, Video, Bot, User, CreditCard, MailCheck, KeyRound, CheckCircle, XCircle, Loader2, BookmarkIcon, Home } from "lucide-react";
 
 export interface RouteConfig {
   path: string;
@@ -6,9 +6,17 @@ export interface RouteConfig {
   favicon?: string;
   params?: string;
   fragment?: string;
+  /** If true, this page should show empty URL in address bar */
+  showEmptyUrl?: boolean;
 }
 
 export const ROUTES: Record<string, RouteConfig> = {
+  newtab: {
+    path: '/newtab',
+    title: 'New Tab',
+    favicon: 'home',
+    showEmptyUrl: true,
+  },
   'auth/confirm-signup': {
     path: '/auth/confirm-signup',
     title: 'Confirm Email',
@@ -89,6 +97,7 @@ export const ICON_MAP: Record<string, LucideIcon> = {
   'x-circle': XCircle,
   'loader': Loader2,
   'star': BookmarkIcon,
+  'home': Home,
 };
 
 export function getRouteFromURL(url: string): RouteConfig | null {

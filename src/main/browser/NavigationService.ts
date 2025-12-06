@@ -81,6 +81,22 @@ export class NavigationService {
     return false;
   }
 
+  /**
+   * Check if the URL is the new tab page
+   */
+  public isNewTabPage(url: string): boolean {
+    if (url.includes('#/newtab')) return true;
+    if (url === 'browzer://newtab') return true;
+    return false;
+  }
+
+  /**
+   * Generate the new tab page URL
+   */
+  public getNewTabPageURL(): string {
+    return this.generateInternalPageURL('newtab');
+  }
+
   public async getSearchSuggestions(query: string): Promise<string[]> {
     if (!query.trim()) return [];
 

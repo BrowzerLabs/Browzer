@@ -53,7 +53,9 @@ export class TabService extends EventEmitter {
   }
 
   private initializeFromSettings(): void {
-    this.newTabUrl = this.settingsService.getSetting('general', 'newTabUrl') || 'https://www.google.com';
+    // Empty string means use built-in new tab page
+    const customNewTabUrl = this.settingsService.getSetting('general', 'newTabUrl');
+    this.newTabUrl = customNewTabUrl || '';
     
     this.webContentsViewHeight = this.settingsService.getSetting('appearance', 'showBookmarksBar')
       ? TabService.TAB_HEIGHT_WITH_BOOKMARKS 
@@ -63,7 +65,8 @@ export class TabService extends EventEmitter {
   private setupSettingsListeners(): void {
     this.settingsService.on('settings:general', (event: SettingsChangeEvent<'general'>) => {
       const { newValue } = event;
-      this.newTabUrl = newValue.newTabUrl || 'https://www.google.com';
+      // Empty string means use built-in new tab page
+      this.newTabUrl = newValue.newTabUrl || '';
     });
     
     this.settingsService.on('settings:appearance', (event: SettingsChangeEvent<'appearance'>) => {
@@ -98,17 +101,37 @@ export class TabService extends EventEmitter {
       },
     });
 
-    const urlToLoad = url || this.newTabUrl;
+    // Determine the URL to load
+    // If no URL provided and newTabUrl is empty, use built-in new tab page
+    let urlToLoad: string;
+    let isBuiltInNewTab = false;
+    
+    if (url) {
+      urlToLoad = url;
+    } else if (this.newTabUrl) {
+      urlToLoad = this.newTabUrl;
+    } else {
+      // Use built-in new tab page
+      urlToLoad = this.navigationService.getNewTabPageURL();
+      isBuiltInNewTab = true;
+    }
     
     let displayUrl = urlToLoad;
     let displayTitle = 'New Tab';
     let displayIcon: string | undefined;
     
-    const internalPageInfo = this.navigationService.getInternalPageInfo(urlToLoad);
-    if (internalPageInfo) {
-      displayUrl = internalPageInfo.url;
-      displayTitle = internalPageInfo.title;
-      displayIcon = internalPageInfo.favicon;
+    // For built-in new tab page, show empty URL in address bar
+    if (isBuiltInNewTab || this.navigationService.isNewTabPage(urlToLoad)) {
+      displayUrl = ''; // Empty URL for new tab page
+      displayTitle = 'New Tab';
+      displayIcon = 'home';
+    } else {
+      const internalPageInfo = this.navigationService.getInternalPageInfo(urlToLoad);
+      if (internalPageInfo) {
+        displayUrl = internalPageInfo.url;
+        displayTitle = internalPageInfo.title;
+        displayIcon = internalPageInfo.favicon;
+      }
     }
 
     const tabInfo: TabInfo = {
@@ -393,13 +416,20 @@ export class TabService extends EventEmitter {
     });
 
     webContents.on('did-navigate', (_, url) => {
-      const internalPageInfo = this.navigationService.getInternalPageInfo(url);
-      if (internalPageInfo) {
-        info.url = internalPageInfo.url;
-        info.title = internalPageInfo.title;
-        info.favicon = internalPageInfo.favicon;
+      // Check if this is the new tab page - show empty URL
+      if (this.navigationService.isNewTabPage(url)) {
+        info.url = '';
+        info.title = 'New Tab';
+        info.favicon = 'home';
       } else {
-        info.url = url;
+        const internalPageInfo = this.navigationService.getInternalPageInfo(url);
+        if (internalPageInfo) {
+          info.url = internalPageInfo.url;
+          info.title = internalPageInfo.title;
+          info.favicon = internalPageInfo.favicon;
+        } else {
+          info.url = url;
+        }
       }
       info.canGoBack = webContents.navigationHistory.canGoBack();
       info.canGoForward = webContents.navigationHistory.canGoForward();
@@ -407,13 +437,20 @@ export class TabService extends EventEmitter {
     });
 
     webContents.on('did-navigate-in-page', (_, url) => {
-      const internalPageInfo = this.navigationService.getInternalPageInfo(url);
-      if (internalPageInfo) {
-        info.url = internalPageInfo.url;
-        info.title = internalPageInfo.title;
-        info.favicon = internalPageInfo.favicon;
+      // Check if this is the new tab page - show empty URL
+      if (this.navigationService.isNewTabPage(url)) {
+        info.url = '';
+        info.title = 'New Tab';
+        info.favicon = 'home';
       } else {
-        info.url = url;
+        const internalPageInfo = this.navigationService.getInternalPageInfo(url);
+        if (internalPageInfo) {
+          info.url = internalPageInfo.url;
+          info.title = internalPageInfo.title;
+          info.favicon = internalPageInfo.favicon;
+        } else {
+          info.url = url;
+        }
       }
       info.canGoBack = webContents.navigationHistory.canGoBack();
       info.canGoForward = webContents.navigationHistory.canGoForward();
