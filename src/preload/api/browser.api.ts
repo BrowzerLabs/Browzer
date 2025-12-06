@@ -171,4 +171,9 @@ export const createBrowserAPI = (): BrowserAPI => ({
   getTheme: () => invoke('theme:get'),
   setTheme: (theme: 'light' | 'dark' | 'system') => invoke('theme:set', theme),
   isDarkMode: () => invoke('theme:is-dark'),
+
+  // Print API
+  print: (tabId?: string) => invoke('browser:print', tabId),
+  printToPDF: (tabId?: string, options?: { landscape?: boolean; pageSize?: string }) => 
+    invoke('browser:print-to-pdf', tabId, options),
 });
