@@ -55,6 +55,7 @@ export class BrowserService {
     
     this.tabService = new TabService(
       baseWindow,
+      browserView,
       this.passwordManager,
       this.settingsService,
       this.historyService,
