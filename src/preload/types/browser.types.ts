@@ -1,4 +1,4 @@
-import type { TabInfo, HistoryEntry, HistoryQuery, HistoryStats, AppSettings, AutocompleteSuggestion } from '@/shared/types';
+import type { TabInfo, HistoryEntry, HistoryQuery, HistoryStats, AppSettings, AutocompleteSuggestion, DownloadItem, DownloadUpdatePayload } from '@/shared/types';
 
 export interface BrowserAPI {
   // Initialization
@@ -120,6 +120,9 @@ export interface BrowserAPI {
   onAutomationComplete: (callback: (data: { sessionId: string; result: any }) => void) => () => void;
   onAutomationError: (callback: (data: { sessionId: string; error: string }) => void) => () => void;
   
+  // Download event listeners
+  onDownloadsUpdated: (callback: (data: DownloadUpdatePayload) => void) => () => void;
+
   // Deep Link event listeners
   onDeepLink: (callback: (path: string) => void) => () => void;
   
