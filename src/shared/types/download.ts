@@ -21,6 +21,8 @@ export interface DownloadItem {
   endTime?: number;
   canResume: boolean;
   error?: string;
+  speed?: number;
+  remainingTime?: number;
 }
 
 export interface DownloadUpdatePayload {

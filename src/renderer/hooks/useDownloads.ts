@@ -89,7 +89,7 @@ export function useDownloads(options: UseDownloadsOptions = {}) {
       isMounted = false;
       unsubscribe();
     };
-  }, []);
+  }, [notify, onNewDownload]);
 
   const withFeedback = useCallback(async (fn: () => Promise<boolean>, onError: string, onSuccess?: string) => {
     try {

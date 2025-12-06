@@ -16,7 +16,7 @@ import {
   Trash2,
   ExternalLink,
 } from 'lucide-react';
-import { formatBytes } from '@/renderer/lib/utils';
+import { formatBytes, formatSpeed, formatRemainingTime } from '@/renderer/lib/utils';
 
 const statusStyles: Record<DownloadItem['state'], string> = {
   completed: 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300',
@@ -140,18 +140,32 @@ export function Downloads() {
   const renderProgress = (item: DownloadItem) => {
     const showProgressBar = item.state !== 'completed' && item.state !== 'cancelled';
     const percent = Math.round((item.progress || 0) * 100);
+    const speed = formatSpeed(item.speed);
+    const remaining = formatRemainingTime(item.remainingTime);
 
     return (
       <div className="space-y-1">
         {showProgressBar && (
           <Progress value={percent} className="h-2 bg-gray-200 dark:bg-slate-800" />
         )}
-        <div className="text-xs text-gray-600 dark:text-gray-400 flex items-center gap-2">
+        <div className="text-xs text-gray-600 dark:text-gray-400 flex items-center gap-2 flex-wrap">
           <span>
             {formatBytes(item.receivedBytes)} of {item.totalBytes > 0 ? formatBytes(item.totalBytes) : 'Unknown'}
           </span>
           {showProgressBar && <span className="text-gray-400">•</span>}
           {showProgressBar && <span>{percent}%</span>}
+          {item.state === 'progressing' && speed && (
+            <>
+              <span className="text-gray-400">•</span>
+              <span className="text-primary">{speed}</span>
+            </>
+          )}
+          {item.state === 'progressing' && remaining && (
+            <>
+              <span className="text-gray-400">•</span>
+              <span>{remaining}</span>
+            </>
+          )}
           {item.error && (
             <>
               <span className="text-gray-400">•</span>
