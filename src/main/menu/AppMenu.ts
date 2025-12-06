@@ -20,6 +20,7 @@ export class AppMenu {
     prevTab: this.isMac ? 'Cmd+Option+Left' : 'Ctrl+Shift+Tab',
     history: this.isMac ? 'Cmd+Y' : 'Ctrl+H',
     settings: this.isMac ? 'Cmd+,': 'Ctrl+,',
+    downloads: this.isMac ? 'Cmd+Shift+J' : 'Ctrl+J',
   };
 
   constructor(
@@ -201,6 +202,16 @@ export class AppMenu {
               const activeTabId = this.tabService.getActiveTabId();
               if (activeTabId) {
                 this.tabService.reload(activeTabId);
+              }
+            },
+          },
+          { type: 'separator' as const },
+          {
+            label: 'Downloads',
+            accelerator: this.keys.downloads,
+            click: () => {
+              if (this.ensureWindow()){
+                this.tabService.createTab('browzer://downloads');
               }
             },
           },
