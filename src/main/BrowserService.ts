@@ -12,6 +12,7 @@ import {
   NavigationService,
   DebuggerService,
 } from './browser';
+import { DownloadService } from './download/DownloadService';
 
 export class BrowserService {
   // Modular components
@@ -20,6 +21,7 @@ export class BrowserService {
   private automationManager: AutomationManager;
   private navigationService: NavigationService;
   private debuggerService: DebuggerService;
+  private downloadService: DownloadService;
 
   // Services (shared across managers)
   private historyService: HistoryService;
@@ -40,6 +42,7 @@ export class BrowserService {
     // Initialize managers
     this.navigationService = new NavigationService(this.historyService);
     this.debuggerService = new DebuggerService();
+    this.downloadService = new DownloadService(this.baseWindow, this.browserView.webContents);
     
     this.tabService = new TabService(
       baseWindow,
@@ -183,6 +186,10 @@ export class BrowserService {
     return this.passwordManager;
   }
 
+  public getDownloadService(): DownloadService {
+    return this.downloadService;
+  }
+
   public getActiveAutomationExecutor(): BrowserAutomationExecutor | null {
     const activeTab = this.tabService.getActiveTab();
     return activeTab.automationExecutor;
@@ -231,6 +238,7 @@ export class BrowserService {
     this.tabService.destroy();
     this.recordingManager.destroy();
     this.automationManager.destroy();
+    this.downloadService.destroy();
     this.sessionManager.close();
   }
 

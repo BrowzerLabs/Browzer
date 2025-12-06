@@ -38,6 +38,7 @@ export class IPCHandlers extends EventEmitter {
   private setupHandlers(): void {
     this.setupTabHandlers();
     this.setupNavigationHandlers();
+    this.setupDownloadHandlers();
     this.setupSidebarHandlers();
     this.setupRecordingHandlers();
     this.setupSettingsHandlers();
@@ -104,6 +105,40 @@ export class IPCHandlers extends EventEmitter {
 
     ipcMain.handle('browser:can-go-forward', async (_, tabId: string) => {
       return this.tabService.canGoForward(tabId);
+    });
+  }
+
+  private setupDownloadHandlers(): void {
+    ipcMain.handle('download:get-all', async () => {
+      return this.browserService.getDownloadService().getDownloads();
+    });
+
+    ipcMain.handle('download:pause', async (_event, id: string) => {
+      return this.browserService.getDownloadService().pauseDownload(id);
+    });
+
+    ipcMain.handle('download:resume', async (_event, id: string) => {
+      return this.browserService.getDownloadService().resumeDownload(id);
+    });
+
+    ipcMain.handle('download:cancel', async (_event, id: string) => {
+      return this.browserService.getDownloadService().cancelDownload(id);
+    });
+
+    ipcMain.handle('download:retry', async (_event, id: string) => {
+      return this.browserService.getDownloadService().retryDownload(id);
+    });
+
+    ipcMain.handle('download:remove', async (_event, id: string) => {
+      return this.browserService.getDownloadService().removeDownload(id);
+    });
+
+    ipcMain.handle('download:open', async (_event, id: string) => {
+      return this.browserService.getDownloadService().openDownload(id);
+    });
+
+    ipcMain.handle('download:show-in-folder', async (_event, id: string) => {
+      return this.browserService.getDownloadService().showInFolder(id);
     });
   }
 
@@ -486,6 +521,15 @@ export class IPCHandlers extends EventEmitter {
       'browser:stop',
       'browser:can-go-back',
       'browser:can-go-forward',
+      // Download handlers
+      'download:get-all',
+      'download:pause',
+      'download:resume',
+      'download:cancel',
+      'download:retry',
+      'download:remove',
+      'download:open',
+      'download:show-in-folder',
       // Sidebar handlers
       'browser:set-sidebar-state',
       // Recording handlers

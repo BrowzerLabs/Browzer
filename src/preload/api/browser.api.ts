@@ -1,7 +1,7 @@
 import { desktopCapturer } from 'electron';
 import type { BrowserAPI } from '@/preload/types/browser.types';
 import { invoke, createEventListener, createSimpleListener } from '@/preload/utils/ipc-helpers';
-import type { TabInfo, HistoryQuery, AppSettings } from '@/shared/types';
+import type { TabInfo, HistoryQuery, AppSettings, DownloadUpdatePayload } from '@/shared/types';
 
 export const createBrowserAPI = (): BrowserAPI => ({
   // Initialization
@@ -32,6 +32,16 @@ export const createBrowserAPI = (): BrowserAPI => ({
   toggleMaximize: () => invoke('window:toggle-maximize'),
   bringBrowserViewToFront: () => invoke('browser:bring-view-front'),
   bringBrowserViewToBottom: () => invoke('browser:bring-view-bottom'),
+
+
+  getDownloads: () => invoke('download:get-all'),
+  pauseDownload: (id: string) => invoke('download:pause', id),
+  resumeDownload: (id: string) => invoke('download:resume', id),
+  cancelDownload: (id: string) => invoke('download:cancel', id),
+  retryDownload: (id: string) => invoke('download:retry', id),
+  removeDownload: (id: string) => invoke('download:remove', id),
+  openDownload: (id: string) => invoke('download:open', id),
+  showDownloadInFolder: (id: string) => invoke('download:show-in-folder', id),
 
   // Recording Management
   startRecording: () => invoke('browser:start-recording'),
@@ -158,6 +168,10 @@ export const createBrowserAPI = (): BrowserAPI => ({
     createEventListener('automation:complete', callback),
   onAutomationError: (callback) => 
     createEventListener('automation:error', callback),
+
+  // Event listeners - Download events
+  onDownloadsUpdated: (callback) =>
+    createEventListener<DownloadUpdatePayload>('downloads:updated', callback),
 
   // Event listeners - Deep Link events
   onDeepLink: (callback) => 
