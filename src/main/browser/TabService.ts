@@ -1,7 +1,7 @@
-import { BaseWindow, WebContentsView, Menu } from 'electron';
+import { BaseWindow, WebContentsView } from 'electron';
 import { EventEmitter } from 'events';
 import path from 'node:path';
-import { TabInfo, HistoryTransition } from '@/shared/types';
+import { TabInfo, HistoryTransition, ToastPayload } from '@/shared/types';
 import { VideoRecorder } from '@/main/recording';
 import { PasswordManager } from '@/main/password/PasswordManager';
 import { BrowserAutomationExecutor } from '@/main/automation';
@@ -10,6 +10,7 @@ import { Tab, TabServiceEvents } from './types';
 import { NavigationService } from './NavigationService';
 import { DebuggerService } from './DebuggerService';
 import { PasswordAutomation } from '@/main/password';
+import { ContextMenuService } from './ContextMenuService';
 
 export class TabService extends EventEmitter {
   public on<K extends keyof TabServiceEvents>(
@@ -30,17 +31,23 @@ export class TabService extends EventEmitter {
   private activeTabId: string | null = null;
   private tabCounter = 0;
   private currentSidebarWidth = 0;
+  private contextMenuService: ContextMenuService;
 
   private readonly webContentsViewHeight = 84;
 
   constructor(
     private baseWindow: BaseWindow,
+    private browserView: WebContentsView,
     private passwordManager: PasswordManager,
     private historyService: HistoryService,
     private navigationService: NavigationService,
     private debuggerService: DebuggerService,
   ) {
     super();
+    
+    this.contextMenuService = new ContextMenuService();
+    this.contextMenuService.on('open-link-in-new-tab', (url: string) => this.createTab(url));
+    this.contextMenuService.on('toast', (payload: ToastPayload) => this.browserView.webContents.send('toast', payload));
   }
 
   public createTab(url?: string): Tab {
@@ -392,25 +399,6 @@ export class TabService extends EventEmitter {
       return { action: 'deny' };
     });
 
-    webContents.on('context-menu', (_event: any, params: any) => {
-      const menu = Menu.buildFromTemplate([
-        {
-          label: 'Inspect Element',
-          click: () => {
-            webContents.inspectElement(params.x, params.y);
-          }
-        },
-        { type: 'separator' },
-        { role: 'reload' },
-        { role: 'forceReload' },
-        { type: 'separator' },
-        { role: 'copy' },
-        { role: 'paste' },
-        { role: 'selectAll' },
-      ]);
-      menu.popup();
-    });
-
     webContents.on('before-input-event', (event: any, input: any) => {
       if ((input.control || input.meta) && input.shift && input.key.toLowerCase() === 'i') {
         event.preventDefault();
@@ -432,6 +420,14 @@ export class TabService extends EventEmitter {
       }
       info.isLoading = false;
       this.emit('tabs:changed');
+    });
+
+    webContents.on('context-menu', (_, params) => {
+      if (this.navigationService.isInternalPage(info.url)) {
+        return;
+      }
+      
+      this.contextMenuService.showContextMenu(webContents, params);
     });
   }
 
