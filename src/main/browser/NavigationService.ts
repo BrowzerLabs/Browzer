@@ -2,6 +2,7 @@ import path from 'node:path';
 import { getRouteFromURL } from '@/shared/routes';
 import { AutocompleteSuggestion, AutocompleteSuggestionType } from '@/shared/types';
 import { HistoryService } from '@/main/history/HistoryService';
+import { isLikelyUrl } from '@/shared/utils';
 
 export class NavigationService {
   constructor(
@@ -99,27 +100,6 @@ export class NavigationService {
     }
   }
 
-  public isLikelyUrl(input: string): boolean {
-    if (input.startsWith('http://') || input.startsWith('https://')) {
-      return true;
-    }
-    
-    const tldPattern = /\.(com|org|net|io|dev|co|app|edu|gov|me|info|biz|tv|cc|ai|xyz)($|\/)/i;
-    if (tldPattern.test(input)) {
-      return true;
-    }
-    
-    if (input.includes('.') && !input.includes(' ') && input.length > 3) {
-      return true;
-    }
-    
-    if (input.startsWith('localhost') || /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}/.test(input)) {
-      return true;
-    }
-    
-    return false;
-  }
-
   public extractDomain(url: string): string {
     try {
       const urlObj = new URL(url);
@@ -147,8 +127,6 @@ export class NavigationService {
         }));
       }
 
-      const isLikelyUrl = this.isLikelyUrl(trimmedQuery);
-
       const historySuggestions = await this.historyService.getAutocompleteSuggestions(trimmedQuery, 6);
       historySuggestions.forEach((entry, index) => {
         suggestions.push({
@@ -163,7 +141,7 @@ export class NavigationService {
         });
       });
 
-      if (!isLikelyUrl) {
+      if (!isLikelyUrl(trimmedQuery)) {
         suggestions.push({
           id: 'search-google',
           type: AutocompleteSuggestionType.SEARCH,
