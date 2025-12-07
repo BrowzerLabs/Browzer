@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback, KeyboardEvent } from 'react';
 import { Search, Loader2 } from 'lucide-react';
 import { cn } from '@/renderer/lib/utils';
+import { Input } from '@/renderer/ui/input';
 
 interface UseSearchBoxOptions {
   debounceMs?: number;
@@ -217,54 +218,37 @@ export function Home() {
   const showDropdown = isOpen && suggestions.length > 0;
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-background to-background/95 flex flex-col items-center justify-start pt-[18vh] px-4">
-      <div className="mb-10 select-none">
-        <h1 className="text-6xl font-bold tracking-tight">
+    <div className="min-h-screen  flex flex-col items-center justify-start pt-[18vh] bg-background">
+      <h1 className="text-6xl font-bold tracking-tight mb-10">
           <span className="bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 bg-clip-text text-transparent">
             Browzer
           </span>
-        </h1>
-      </div>
+      </h1>
 
-      <div className="w-full max-w-[600px] relative">
+      <div className="w-full max-w-[700px] relative">
         <div
           className={cn(
             "relative flex items-center",
-            "bg-card/80 backdrop-blur-sm",
-            "border border-border/50",
-            "shadow-lg shadow-black/5",
-            "transition-all duration-200",
-            showDropdown 
-              ? "rounded-t-2xl border-b-transparent" 
-              : "rounded-2xl hover:shadow-xl hover:border-border"
           )}
         >
-          <Search className="absolute left-5 h-5 w-5 text-muted-foreground/70" />
+          <Search className="absolute left-4 size-4 text-muted-foreground/70" />
           
-          <input
+          <Input
             ref={inputRef}
-            type="text"
             value={inputValue}
             onChange={(e) => setInputValue(e.target.value)}
             onKeyDown={handleKeyDown}
             onBlur={handleBlur}
-            placeholder="Search the web"
-            autoComplete="off"
-            autoCorrect="off"
-            autoCapitalize="off"
+            placeholder="Search Browzer"
             spellCheck={false}
             className={cn(
-              "w-full py-4 pl-14 pr-12",
-              "bg-transparent",
-              "text-foreground text-base",
-              "placeholder:text-muted-foreground/50",
-              "focus:outline-none",
-              "transition-colors"
+              "pl-12 pr-12 rounded-full shadow-xl border-1",
+              "h-12 font-semibold"
             )}
           />
 
           {isLoading && (
-            <Loader2 className="absolute right-5 h-5 w-5 text-muted-foreground/50 animate-spin" />
+            <Loader2 className="absolute right-4 size-4 text-muted-foreground/50 animate-spin" />
           )}
         </div>
 
@@ -272,12 +256,7 @@ export function Home() {
           <div
             ref={dropdownRef}
             className={cn(
-              "absolute left-0 right-0 z-50",
-              "bg-card/80 backdrop-blur-sm",
-              "border border-t-0 border-border/50",
-              "rounded-b-2xl",
-              "shadow-lg shadow-black/5",
-              "overflow-hidden"
+              "bg-background/70 backdrop-blur-sm rounded-2xl z-10 shadow-xl border-1 border-primary/70",
             )}
           >
             <ul className="py-2">
