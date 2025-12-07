@@ -246,16 +246,6 @@ export class AppMenu {
               this.tabService.selectPreviousTab();
             },
           },
-          { type: 'separator' as const },
-          // Tab shortcuts 1-9
-          ...Array.from({ length: 9 }, (_, i) => ({
-            label: `Select Tab ${i + 1}`,
-            accelerator: this.isMac ? `Cmd+${i + 1}` : `Ctrl+${i + 1}`,
-            click: () => {
-              if (!this.hasActiveWindow()) return;
-              this.tabService.selectTabByIndex(i);
-            },
-          })),
           ...(this.isMac
             ? [
                 { type: 'separator' as const },
