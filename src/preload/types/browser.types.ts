@@ -1,4 +1,4 @@
-import type { TabInfo, HistoryEntry, HistoryQuery, HistoryStats, AppSettings, AutocompleteSuggestion, DownloadItem, DownloadUpdatePayload } from '@/shared/types';
+import type { TabInfo, HistoryEntry, HistoryQuery, HistoryStats, AppSettings, AutocompleteSuggestion, DownloadItem, DownloadUpdatePayload, Bookmark, BookmarkFolder, BookmarkTreeNode, CreateBookmarkParams, CreateFolderParams, UpdateBookmarkParams, MoveBookmarkParams } from '@/shared/types';
 
 export interface BrowserAPI {
   // Initialization
@@ -126,7 +126,10 @@ export interface BrowserAPI {
   // Deep Link event listeners
   onDeepLink: (callback: (path: string) => void) => () => void;
   
-  // Deep Link actions
+  onBookmarkChanged: (callback: () => void) => () => void;
+  
+  onSettingsChanged: (callback: (data: { category: string; key: string; value: unknown }) => void) => () => void;
+  
   hideAllTabs: () => Promise<boolean>;
   showAllTabs: () => Promise<boolean>;
   navigateToTab: (url: string) => Promise<boolean>;
@@ -146,4 +149,20 @@ export interface BrowserAPI {
   openDownload: (id: string) => Promise<boolean>,
   showDownloadInFolder: (id: string) => Promise<boolean>,
 
+
+  // Bookmark Management
+  createBookmark: (params: CreateBookmarkParams) => Promise<Bookmark>;
+  createBookmarkFolder: (params: CreateFolderParams) => Promise<BookmarkFolder>;
+  getBookmark: (id: string) => Promise<BookmarkTreeNode | null>;
+  getBookmarkByUrl: (url: string) => Promise<Bookmark | null>;
+  isBookmarked: (url: string) => Promise<boolean>;
+  getBookmarkChildren: (parentId: string) => Promise<BookmarkTreeNode[]>;
+  getBookmarkTree: () => Promise<BookmarkTreeNode[]>;
+  getBookmarkBar: () => Promise<BookmarkTreeNode[]>;
+  updateBookmark: (params: UpdateBookmarkParams) => Promise<boolean>;
+  moveBookmark: (params: MoveBookmarkParams) => Promise<boolean>;
+  deleteBookmark: (id: string) => Promise<boolean>;
+  searchBookmarks: (query: string, limit?: number) => Promise<Bookmark[]>;
+  getAllBookmarks: () => Promise<Bookmark[]>;
+  getRecentBookmarks: (limit?: number) => Promise<Bookmark[]>;
 }

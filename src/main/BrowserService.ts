@@ -3,6 +3,8 @@ import { AutocompleteSuggestion, RecordedAction } from '@/shared/types';
 import { RecordingStore } from '@/main/recording';
 import { HistoryService } from '@/main/history/HistoryService';
 import { PasswordManager } from '@/main/password/PasswordManager';
+import { BookmarkService } from '@/main/bookmark';
+import { BrowserAutomationExecutor } from './automation';
 import { SessionManager } from '@/main/llm/session/SessionManager';
 import {
   TabService,
@@ -27,6 +29,7 @@ export class BrowserService {
   private settingsService: SettingsService;
   private historyService: HistoryService;
   private passwordManager: PasswordManager;
+  private bookmarkService: BookmarkService;
   private recordingStore: RecordingStore;
   private sessionManager: SessionManager;
 
@@ -35,10 +38,11 @@ export class BrowserService {
     private browserView: WebContentsView
   ) {
     // Initialize services
-    this.settingsService = new SettingsService();
+    this.settingsService = new SettingsService(this.browserView);
     this.recordingStore = new RecordingStore();
     this.historyService = new HistoryService();
     this.passwordManager = new PasswordManager();
+    this.bookmarkService = new BookmarkService(this.browserView);
     this.sessionManager = new SessionManager();
 
     // Initialize managers
@@ -53,6 +57,7 @@ export class BrowserService {
       this.historyService,
       this.navigationService,
       this.debuggerService,
+      this.bookmarkService
     );
     
     this.setupTabEventListeners();
@@ -192,8 +197,17 @@ export class BrowserService {
     return this.passwordManager;
   }
 
+  public getBookmarkService(): BookmarkService {
+    return this.bookmarkService;
+  }
+
   public getDownloadService(): DownloadService {
     return this.downloadService;
+  }
+
+  public getActiveAutomationExecutor(): BrowserAutomationExecutor | null {
+    const activeTab = this.tabService.getActiveTab();
+    return activeTab.automationExecutor;
   }
 
   public updateLayout(_windowWidth: number, _windowHeight: number, sidebarWidth = 0): void {

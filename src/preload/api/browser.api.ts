@@ -1,7 +1,7 @@
 import { desktopCapturer } from 'electron';
 import type { BrowserAPI } from '@/preload/types/browser.types';
 import { invoke, createEventListener, createSimpleListener } from '@/preload/utils/ipc-helpers';
-import type { TabInfo, HistoryQuery, AppSettings, DownloadUpdatePayload } from '@/shared/types';
+import type { TabInfo, HistoryQuery, AppSettings, DownloadUpdatePayload, CreateBookmarkParams, CreateFolderParams, UpdateBookmarkParams, MoveBookmarkParams } from '@/shared/types';
 
 export const createBrowserAPI = (): BrowserAPI => ({
   // Initialization
@@ -177,6 +177,17 @@ export const createBrowserAPI = (): BrowserAPI => ({
   onDeepLink: (callback) => 
     createEventListener<string>('deeplink:navigate', callback),
 
+  // Event listeners - Bookmark events
+  onBookmarkChanged: (callback) =>
+    createSimpleListener('bookmark:changed', callback),
+
+  // Event listeners - Settings events
+  onSettingsChanged: (callback) =>
+    createEventListener<{ category: string; key: string; value: unknown }>(
+      'settings:changed',
+      callback
+    ),
+
   // Deep Link actions
   hideAllTabs: () => invoke('deeplink:hide-tabs'),
   showAllTabs: () => invoke('deeplink:show-tabs'),
@@ -185,4 +196,20 @@ export const createBrowserAPI = (): BrowserAPI => ({
   getTheme: () => invoke('theme:get'),
   setTheme: (theme: 'light' | 'dark' | 'system') => invoke('theme:set', theme),
   isDarkMode: () => invoke('theme:is-dark'),
+
+  // Bookmark Management API
+  createBookmark: (params: CreateBookmarkParams) => invoke('bookmark:create', params),
+  createBookmarkFolder: (params: CreateFolderParams) => invoke('bookmark:create-folder', params),
+  getBookmark: (id: string) => invoke('bookmark:get', id),
+  getBookmarkByUrl: (url: string) => invoke('bookmark:get-by-url', url),
+  isBookmarked: (url: string) => invoke('bookmark:is-bookmarked', url),
+  getBookmarkChildren: (parentId: string) => invoke('bookmark:get-children', parentId),
+  getBookmarkTree: () => invoke('bookmark:get-tree'),
+  getBookmarkBar: () => invoke('bookmark:get-bar'),
+  updateBookmark: (params: UpdateBookmarkParams) => invoke('bookmark:update', params),
+  moveBookmark: (params: MoveBookmarkParams) => invoke('bookmark:move', params),
+  deleteBookmark: (id: string) => invoke('bookmark:delete', id),
+  searchBookmarks: (query: string, limit?: number) => invoke('bookmark:search', query, limit),
+  getAllBookmarks: () => invoke('bookmark:get-all'),
+  getRecentBookmarks: (limit?: number) => invoke('bookmark:get-recent', limit),
 });

@@ -12,3 +12,4 @@ export * from './notification';
 export * from './prompts';
 export * from './update';
 export * from './download';
+export * from './bookmark';

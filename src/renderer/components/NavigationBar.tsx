@@ -1,4 +1,4 @@
-import { ArrowLeft, ArrowRight, RotateCw, X, Circle, Square, Settings, Clock, MoreVertical, Video, ChevronRight, ChevronLeft, Loader2, LogOut, DiamondIcon, Download } from 'lucide-react';
+import { ArrowLeft, ArrowRight, RotateCw, X, Circle, Square, Settings, Clock, MoreVertical, Video, ChevronRight, ChevronLeft, Loader2, LogOut, DiamondIcon, Download, Bookmark } from 'lucide-react';
 import type { TabInfo } from '@/shared/types';
 import { cn } from '@/renderer/lib/utils';
 import { useSidebarStore } from '@/renderer/store/useSidebarStore';
@@ -17,6 +17,8 @@ import {
 } from '@/renderer/ui/dropdown-menu';
 import { AddressBar } from '@/renderer/components/AddressBar';
 import { DownloadsDropdown } from '@/renderer/components/DownloadsDropdown';
+import { BookmarkButton } from '@/renderer/components/BookmarkButton';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/renderer/ui/tooltip';
 
 interface NavigationBarProps {
   activeTab: TabInfo | null;
@@ -47,7 +49,7 @@ export function NavigationBar({
   const isSecure = activeTab?.url.startsWith('https://') ?? false;
 
   return (
-    <div className="flex items-center h-12 px-3 gap-2 bg-background">
+    <div className="flex items-center h-10 px-3 gap-2 bg-background">
       <div className="flex items-center gap-1">
         <NavButton
           onClick={onBack}
@@ -84,44 +86,24 @@ export function NavigationBar({
         onNavigate={onNavigate}
       />
 
-      {isDownloading && (
-        <div className="relative">
-          <Button 
-            variant="outline" 
-            size="icon"
-            disabled
-            title={`Downloading update v${version} - ${Math.round(progress)}%`}
-            className="relative overflow-hidden"
-          >
-            <Download className="w-4 h-4 text-blue-500 z-10" />
-            <svg className="absolute inset-0 w-full h-full -rotate-90" viewBox="0 0 36 36">
-              <circle
-                cx="18"
-                cy="18"
-                r="16"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                className="text-gray-200 dark:text-gray-700"
-              />
-              <circle
-                cx="18"
-                cy="18"
-                r="16"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeDasharray={`${progress} 100`}
-                className="text-blue-500 transition-all duration-300"
-              />
-            </svg>
-          </Button>
-        </div>
-      )}
+      <BookmarkButton
+        url={activeTab?.url || ''}
+        title={activeTab?.title || ''}
+        favicon={activeTab?.favicon}
+      />
 
-      <DownloadsDropdown onNavigate={onNavigate} />
-
-      {/* Record Button */}
+      {
+        isDownloading && (
+          <Tooltip>
+            <TooltipTrigger>
+              <p className="text-xs font-bold">{progress}%</p>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Downloading update v{version} - {progress}%</p>
+            </TooltipContent>
+          </Tooltip>
+        )
+      }
       <Button 
         variant="outline" 
         size="icon" 
@@ -157,7 +139,6 @@ export function NavigationBar({
         )}
       </Button>
 
-      {/* Menu Dropdown */}
       <DropdownMenu
         onOpenChange={(open) => {
           if (open) {
@@ -200,6 +181,10 @@ export function NavigationBar({
           <DropdownMenuItem onClick={() => onNavigate('browzer://downloads')}>
             <Download className="w-4 h-4 mr-2" />
             Downloads
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => onNavigate('browzer://bookmarks')}>
+            <Bookmark className="w-4 h-4 mr-2" />
+            Bookmarks
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem onClick={() => onNavigate('browzer://recordings')}>
