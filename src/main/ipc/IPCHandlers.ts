@@ -80,6 +80,10 @@ export class IPCHandlers extends EventEmitter {
     ipcMain.handle('browser:get-tabs', async () => {
       return this.tabService.getAllTabs();
     });
+
+    ipcMain.handle('browser:reorder-tab', async (_, tabId: string, newIndex: number) => {
+      return this.tabService.reorderTab(tabId, newIndex);
+    });
   }
 
   private setupNavigationHandlers(): void {
@@ -589,6 +593,7 @@ export class IPCHandlers extends EventEmitter {
       'browser:close-tab',
       'browser:switch-tab',
       'browser:get-tabs',
+      'browser:reorder-tab',
       // Navigation handlers
       'browser:navigate',
       'browser:go-back',

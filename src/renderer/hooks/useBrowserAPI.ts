@@ -7,9 +7,20 @@ export function useBrowserAPI() {
 
   // Subscribe to tab updates
   useEffect(() => {
-    const unsubscribe = window.browserAPI.onTabsUpdated((data: { tabs: TabInfo[]; activeTabId: string | null }) => {
+    const unsubscribeTabsUpdated = window.browserAPI.onTabsUpdated((data: { tabs: TabInfo[]; activeTabId: string | null }) => {
       setTabs(data.tabs);
       setActiveTabId(data.activeTabId);
+    });
+
+    const unsubscribeTabReordered = window.browserAPI.onTabReordered((data: { tabId: string; from: number; to: number }) => {
+      setTabs(prevTabs => {
+        const newTabs = [...prevTabs];
+        const [movedTab] = newTabs.splice(data.from, 1);
+        if (movedTab) {
+          newTabs.splice(data.to, 0, movedTab);
+        }
+        return newTabs;
+      });
     });
 
     // Initial load
@@ -18,7 +29,10 @@ export function useBrowserAPI() {
       setActiveTabId(data.activeTabId);
     });
 
-    return unsubscribe;
+    return () => {
+      unsubscribeTabsUpdated();
+      unsubscribeTabReordered();
+    };
   }, []);
 
   // Tab management
