@@ -123,7 +123,7 @@ export class DownloadService extends EventEmitter {
     const download: DownloadItem = existing?.data ?? {
       id,
       url: item.getURL(),
-      fileName: item.getFilename(),
+      fileName: path.basename(savePath),
       savePath,
       mimeType: item.getMimeType(),
       totalBytes: Math.max(item.getTotalBytes(), 0),
@@ -141,6 +141,7 @@ export class DownloadService extends EventEmitter {
     download.error = undefined;
 
     download.savePath = savePath;
+    download.fileName = path.basename(savePath);
     download.totalBytes = Math.max(item.getTotalBytes(), download.totalBytes);
     download.receivedBytes = item.getReceivedBytes();
     download.progress = this.calculateProgress(download.receivedBytes, download.totalBytes);
@@ -253,8 +254,27 @@ export class DownloadService extends EventEmitter {
     }
 
     const defaultPath = path.join(app.getPath('downloads'), item.getFilename());
-    item.setSavePath(defaultPath);
-    return defaultPath;
+    const uniquePath = this.getUniqueFilePath(defaultPath);
+    item.setSavePath(uniquePath);
+    return uniquePath;
+  }
+
+  private getUniqueFilePath(filePath: string): string {
+    if (!fs.existsSync(filePath)) {
+      return filePath;
+    }
+
+    const dir = path.dirname(filePath);
+    const ext = path.extname(filePath);
+    const baseName = path.basename(filePath, ext);
+    let counter = 1;
+    let newPath = path.join(dir, `${baseName}(${counter})${ext}`);
+    while (fs.existsSync(newPath)) {
+      counter++;
+      newPath = path.join(dir, `${baseName}(${counter})${ext}`);
+    }
+
+    return newPath;
   }
 
   private calculateProgress(received: number, total: number): number {
