@@ -29,6 +29,7 @@ export class TabService extends EventEmitter {
   }
 
   private tabs: Map<string, Tab> = new Map();
+  private orderedTabIds: string[] = [];
   private activeTabId: string | null = null;
   private tabCounter = 0;
   private currentSidebarWidth = 0;
@@ -146,6 +147,7 @@ export class TabService extends EventEmitter {
     };
 
     this.tabs.set(tabId, tab);
+    this.orderedTabIds.push(tabId);
     this.setupTabEvents(tab);
 
     // Initialize debugger asynchronously
@@ -186,13 +188,24 @@ export class TabService extends EventEmitter {
 
     tab.view.webContents.close();
     this.tabs.delete(tabId);
+    
+    const orderIndex = this.orderedTabIds.indexOf(tabId);
+    if (orderIndex !== -1) {
+      this.orderedTabIds.splice(orderIndex, 1);
+    }
 
     // If this was the active tab, switch to another
     if (wasActiveTab) {
-      const remainingTabs = Array.from(this.tabs.keys());
-      if (remainingTabs.length > 0) {
-        this.switchToTab(remainingTabs[0]);
-        newActiveTabId = remainingTabs[0];
+      if (this.orderedTabIds.length > 0) {
+        let targetIndex = orderIndex;
+        if (targetIndex >= this.orderedTabIds.length) {
+          targetIndex = this.orderedTabIds.length - 1;
+        }
+        if (targetIndex < 0) {
+          targetIndex = 0;
+        }
+        newActiveTabId = this.orderedTabIds[targetIndex];
+        this.switchToTab(newActiveTabId);
       } else {
         this.activeTabId = null;
       }
@@ -286,7 +299,10 @@ export class TabService extends EventEmitter {
   }
 
   public getAllTabs(): { tabs: TabInfo[]; activeTabId: string | null } {
-    const tabs = Array.from(this.tabs.values()).map(tab => tab.info);
+    const tabs = this.orderedTabIds
+      .map(tabId => this.tabs.get(tabId))
+      .filter((tab): tab is Tab => tab !== undefined)
+      .map(tab => tab.info);
     return { tabs, activeTabId: this.activeTabId };
   }
 
@@ -307,27 +323,74 @@ export class TabService extends EventEmitter {
   }
 
   public selectNextTab(): void {
-    const tabs = Array.from(this.tabs.values());
-    if (tabs.length === 0) return;
+    if (this.orderedTabIds.length === 0) return;
 
-    const currentIndex = tabs.findIndex(tab => tab.id === this.activeTabId);
-    const nextIndex = (currentIndex + 1) % tabs.length;
-    this.switchToTab(tabs[nextIndex].id);
+    const currentIndex = this.orderedTabIds.indexOf(this.activeTabId || '');
+    const nextIndex = currentIndex === -1 ? 0 : (currentIndex + 1) % this.orderedTabIds.length;
+    this.switchToTab(this.orderedTabIds[nextIndex]);
   }
 
   public selectPreviousTab(): void {
-    const tabs = Array.from(this.tabs.values());
-    if (tabs.length === 0) return;
+    if (this.orderedTabIds.length === 0) return;
 
-    const currentIndex = tabs.findIndex(tab => tab.id === this.activeTabId);
-    const prevIndex = currentIndex <= 0 ? tabs.length - 1 : currentIndex - 1;
-    this.switchToTab(tabs[prevIndex].id);
+    const currentIndex = this.orderedTabIds.indexOf(this.activeTabId || '');
+    const prevIndex = currentIndex <= 0 ? this.orderedTabIds.length - 1 : currentIndex - 1;
+    this.switchToTab(this.orderedTabIds[prevIndex]);
   }
 
   public selectTabByIndex(index: number): void {
-    const tabs = Array.from(this.tabs.values());
-    if (index >= 0 && index < tabs.length) {
-      this.switchToTab(tabs[index].id);
+    if (index >= 0 && index < this.orderedTabIds.length) {
+      this.switchToTab(this.orderedTabIds[index]);
+    }
+  }
+
+  public reorderTab(tabId: string, newIndex: number): boolean {
+    const currentIndex = this.orderedTabIds.indexOf(tabId);
+    if (currentIndex === -1) {
+      console.warn('[TabService] reorderTab: tab not found:', tabId);
+      return false;
+    }
+
+    const maxIndex = this.orderedTabIds.length - 1;
+    const clampedIndex = Math.max(0, Math.min(newIndex, maxIndex));
+    
+    if (clampedIndex === currentIndex) {
+      return false;
+    }
+
+    this.orderedTabIds.splice(currentIndex, 1);
+    this.orderedTabIds.splice(clampedIndex, 0, tabId);
+    
+    this.reorderSingleTabView(tabId, clampedIndex);
+    
+    this.emit('tab:reordered', { tabId, from: currentIndex, to: clampedIndex });
+    return true;
+  }
+
+  private reorderSingleTabView(tabId: string, newOrderIndex: number): void {
+    const tab = this.tabs.get(tabId);
+    if (!tab) return;
+
+    this.baseWindow.contentView.removeChildView(tab.view);
+    
+    const children = this.baseWindow.contentView.children;
+    let insertIndex = children.length;
+    
+    if (newOrderIndex < this.orderedTabIds.length - 1) {
+      const nextTabId = this.orderedTabIds[newOrderIndex + 1];
+      const nextTab = this.tabs.get(nextTabId);
+      if (nextTab) {
+        const nextViewIndex = children.indexOf(nextTab.view);
+        if (nextViewIndex !== -1) {
+          insertIndex = nextViewIndex;
+        }
+      }
+    }
+    
+    if (insertIndex >= children.length) {
+      this.baseWindow.contentView.addChildView(tab.view);
+    } else {
+      this.baseWindow.contentView.addChildView(tab.view, insertIndex);
     }
   }
 
@@ -346,6 +409,7 @@ export class TabService extends EventEmitter {
       tab.view.webContents.close();
     });
     this.tabs.clear();
+    this.orderedTabIds = [];
     this.activeTabId = null;
   }
 

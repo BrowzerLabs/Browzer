@@ -264,6 +264,10 @@ export class BrowserService {
       this.notifyTabsChanged();
     });
 
+    this.tabService.on('tab:reordered', (data: { tabId: string; from: number; to: number }) => {
+      this.notifyTabReordered(data);
+    });
+
     this.tabService.on('tab:switched', (previousTabId, newTab) => {
       if (this.recordingManager.isRecordingActive()) {
         this.recordingManager.handleTabSwitch(previousTabId, newTab);
@@ -319,5 +323,14 @@ export class BrowserService {
         this.browserView.webContents.send('request-address-bar-focus');
       }
     }, 10);
+  }
+
+  private notifyTabReordered(data: { tabId: string; from: number; to: number }): void {
+    const allViews = this.baseWindow.contentView.children;
+    allViews.forEach(view => {
+      if (view instanceof WebContentsView && !view.webContents.isDestroyed()) {
+        view.webContents.send('browser:tab-reordered', data);
+      }
+    });
   }
 }

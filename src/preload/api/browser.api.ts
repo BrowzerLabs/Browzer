@@ -12,6 +12,7 @@ export const createBrowserAPI = (): BrowserAPI => ({
   closeTab: (tabId: string) => invoke('browser:close-tab', tabId),
   switchTab: (tabId: string) => invoke('browser:switch-tab', tabId),
   getTabs: () => invoke('browser:get-tabs'),
+  reorderTab: (tabId: string, newIndex: number) => invoke('browser:reorder-tab', tabId, newIndex),
 
   // Navigation
   navigate: (tabId: string, url: string) => invoke('browser:navigate', tabId, url),
@@ -144,6 +145,11 @@ export const createBrowserAPI = (): BrowserAPI => ({
   onTabsUpdated: (callback) => 
     createEventListener<{ tabs: TabInfo[]; activeTabId: string | null }>(
       'browser:tabs-updated', 
+      callback
+    ),
+  onTabReordered: (callback) => 
+    createEventListener<{ tabId: string; from: number; to: number }>(
+      'browser:tab-reordered',
       callback
     ),
 

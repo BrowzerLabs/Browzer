@@ -9,6 +9,7 @@ export interface BrowserAPI {
   closeTab: (tabId: string) => Promise<boolean>;
   switchTab: (tabId: string) => Promise<boolean>;
   getTabs: () => Promise<{ tabs: TabInfo[]; activeTabId: string | null }>;
+  reorderTab: (tabId: string, newIndex: number) => Promise<boolean>;
 
   // Navigation
   navigate: (tabId: string, url: string) => Promise<boolean>;
@@ -108,6 +109,7 @@ export interface BrowserAPI {
 
   // Event listeners
   onTabsUpdated: (callback: (data: { tabs: TabInfo[]; activeTabId: string | null }) => void) => () => void;
+  onTabReordered: (callback: (data: { tabId: string; from: number; to: number }) => void) => () => void;
   onRecordingAction: (callback: (action: any) => void) => () => void;
   onRecordingStarted: (callback: () => void) => () => void;
   onRecordingStopped: (callback: (data: { actions: any[]; duration: number; startUrl: string }) => void) => () => void;
