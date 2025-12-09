@@ -78,32 +78,39 @@ export function BookmarkButton({
     }
   }, [isOpen]);
 
-  useEffect(() => {
-    const checkBookmarkStatus = async () => {
-      if (!url) {
-        setIsBookmarked(false);
-        setCurrentBookmark(null);
-        return;
-      }
+  const checkBookmarkStatus = useCallback(async () => {
+    if (!url) {
+      setIsBookmarked(false);
+      setCurrentBookmark(null);
+      return;
+    }
 
-      try {
-        const bookmark = await window.browserAPI.getBookmarkByUrl(url);
-        setIsBookmarked(!!bookmark);
-        setCurrentBookmark(bookmark);
-        if (bookmark) {
-          setEditTitle(bookmark.title || '');
-          setSelectedFolder(bookmark.parentId || BOOKMARK_BAR_ID);
-        } else {
-          setEditTitle(title || '');
-          setSelectedFolder(BOOKMARK_BAR_ID);
-        }
-      } catch (err) {
-        console.error('[BookmarkButton] Failed to check bookmark status:', err);
+    try {
+      const bookmark = await window.browserAPI.getBookmarkByUrl(url);
+      setIsBookmarked(!!bookmark);
+      setCurrentBookmark(bookmark);
+      if (bookmark) {
+        setEditTitle(bookmark.title || '');
+        setSelectedFolder(bookmark.parentId || BOOKMARK_BAR_ID);
+      } else {
+        setEditTitle(title || '');
+        setSelectedFolder(BOOKMARK_BAR_ID);
       }
-    };
-
-    checkBookmarkStatus();
+    } catch (err) {
+      console.error('[BookmarkButton] Failed to check bookmark status:', err);
+    }
   }, [url, title]);
+
+  useEffect(() => {
+    checkBookmarkStatus();
+  }, [checkBookmarkStatus]);
+
+  useEffect(() => {
+    const unsubscribe = window.browserAPI.onBookmarkChanged(() => {
+      checkBookmarkStatus();
+    });
+    return () => unsubscribe();
+  }, [checkBookmarkStatus]);
 
   const closePopover = useCallback(() => {
     setIsOpen(false);

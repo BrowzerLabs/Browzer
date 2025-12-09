@@ -221,7 +221,7 @@ export function BookmarkBar({ onNavigate }: BookmarkBarProps) {
     try {
       const success = await window.browserAPI.updateBookmark({
         id: editDialog.item.id,
-        title: editDialog.name.trim() || null,
+        title: editDialog.name.trim(),
         url: editDialog.item.isFolder ? undefined : editDialog.url.trim(),
       });
 
@@ -270,6 +270,7 @@ export function BookmarkBar({ onNavigate }: BookmarkBarProps) {
         );
       }
 
+      const hasTitle = child.title && child.title.trim().length > 0;
       return (
         <DropdownMenuItem
           key={child.id}
@@ -277,7 +278,7 @@ export function BookmarkBar({ onNavigate }: BookmarkBarProps) {
           className="gap-2"
         >
           <Favicon favicon={child.favicon} title={child.title} url={child.url} size="md" />
-          {child.title && <span className="truncate max-w-[180px]">{child.title}</span>}
+          {hasTitle && <span className="truncate max-w-[180px]">{child.title}</span>}
         </DropdownMenuItem>
       );
     });
@@ -378,6 +379,7 @@ export function BookmarkBar({ onNavigate }: BookmarkBarProps) {
       );
     }
 
+    const hasTitle = item.title && item.title.trim().length > 0;
     return (
       <DropdownMenuItem
         key={item.id}
@@ -385,7 +387,7 @@ export function BookmarkBar({ onNavigate }: BookmarkBarProps) {
         className="gap-2"
       >
         <Favicon favicon={item.favicon} title={item.title} url={item.url} size="md" />
-        {item.title && <span className="truncate max-w-[180px]">{item.title}</span>}
+        {hasTitle && <span className="truncate max-w-[180px]">{item.title}</span>}
       </DropdownMenuItem>
     );
   };

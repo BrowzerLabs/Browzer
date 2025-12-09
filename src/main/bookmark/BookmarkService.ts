@@ -290,7 +290,24 @@ export class BookmarkService extends EventEmitter {
     const { id, title, url } = params;
     const now = Date.now();
 
-    const result = this.stmts.update.run(title || null, url || null, now, id);
+    if (title !== undefined) {
+      const actualTitle = title.trim();
+      const urlValue = url === undefined ? null : (url || null);
+      
+      const stmt = this.db.prepare(`
+        UPDATE bookmarks 
+        SET title = ?,
+            url = COALESCE(?, url),
+            date_modified = ?
+        WHERE id = ?
+      `);
+      const result = stmt.run(actualTitle, urlValue, now, id);
+      this.notifyBookmarkChanged();
+      return result.changes > 0;
+    }
+    
+    const urlValue = url === undefined ? null : (url || null);
+    const result = this.stmts.update.run(null, urlValue, now, id);
     this.notifyBookmarkChanged();
     return result.changes > 0;
   }
@@ -323,7 +340,6 @@ export class BookmarkService extends EventEmitter {
     const node = this.getById(id);
     if (!node) return false;
 
-    // If it's a folder, delete all children first
     if (node.isFolder) {
       const children = this.getChildren(id);
       for (const child of children) {
