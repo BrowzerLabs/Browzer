@@ -43,7 +43,7 @@ export class NavigationService {
     const route = getRouteFromURL(url);
     if (!route) {
       console.warn('Unknown browzer:// URL:', url);
-      return 'https://www.google.com';
+      return 'browzer://home';
     }
     
     return this.generateInternalPageURL(route.path.replace('/', ''));

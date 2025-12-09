@@ -9,7 +9,7 @@ import { SubscriptionCancelPage } from '@/renderer/pages/subscription/Subscripti
 import { BrowserChrome } from '@/renderer/components/BrowserChrome';
 import { InternalRouter, useIsInternalPage } from './InternalRouter';
 import { useDeepLink } from '@/renderer/hooks/useDeepLink';
-import NotFound from '@/renderer/pages/not-found';
+import NotFound from '@/renderer/pages/NotFound';
 import { NotificationProvider } from '@/renderer/providers/NotificationProvider';
 import { OnboardingFlow } from '@/renderer/pages/onboarding';
 import { useOnboardingStore } from '@/renderer/stores/onboardingStore';

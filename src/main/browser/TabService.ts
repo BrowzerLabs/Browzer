@@ -57,14 +57,14 @@ export class TabService extends EventEmitter {
   }
 
   private initializeFromSettings(): void {
-    this.newTabUrl = this.settingsService.getSetting('general', 'newTabUrl') || 'https://www.google.com';
+    this.newTabUrl = this.settingsService.getSetting('general', 'newTabUrl') || 'browzer://home';
     this.webContentsViewHeight = TabService.TAB_HEIGHT_WITHOUT_BOOKMARKS;
   }
 
   private setupListeners(): void {
     this.settingsService.on('settings:general', (event: SettingsChangeEvent<'general'>) => {
       const { newValue } = event;
-      this.newTabUrl = newValue.newTabUrl || 'https://www.google.com';
+      this.newTabUrl = newValue.newTabUrl || 'browzer://home';
     });
     
     this.settingsService.on('settings:appearance', (event: SettingsChangeEvent<'appearance'>) => {
