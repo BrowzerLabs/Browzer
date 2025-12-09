@@ -1,4 +1,4 @@
-import { Menu, MenuItem, clipboard, shell, dialog, nativeImage, WebContents, BrowserWindow, ContextMenuParams } from 'electron';
+import { Menu, clipboard, shell, dialog, nativeImage, WebContents, BrowserWindow, ContextMenuParams, MenuItemConstructorOptions } from 'electron';
 import path from 'node:path';
 import fs from 'node:fs';
 import https from 'node:https';
@@ -26,103 +26,107 @@ export class ContextMenuService extends EventEmitter {
   }
 
   private buildContextMenu(wc: WebContents, params: ContextMenuParams): Menu {
-    const menu = new Menu();
-    const sections: Array<() => void> = [];
+    const sections: MenuItemConstructorOptions[][] = [];
 
-    if (params.misspelledWord) sections.push(() => this.addSpellingItems(menu, wc, params));
-    if (params.linkURL) sections.push(() => this.addLinkItems(menu, params));
-    if (params.mediaType === 'image' && params.srcURL) sections.push(() => this.addImageItems(menu, params));
-    if (params.mediaType === 'video' || params.mediaType === 'audio') sections.push(() => this.addMediaItems(menu, wc, params));
-    if (params.isEditable) sections.push(() => this.addEditableItems(menu, wc, params));
-    if (params.selectionText && !params.isEditable) sections.push(() => this.addSelectionItems(menu, wc, params));
-    sections.push(() => this.addPageItems(menu, wc, params));
+    if (params.misspelledWord) sections.push(this.addSpellingItems(wc, params));
+    if (params.linkURL) sections.push(this.addLinkItems(params));
+    if (params.mediaType === 'image' && params.srcURL) sections.push(this.addImageItems(params));
+    if (params.mediaType === 'video' || params.mediaType === 'audio') sections.push(this.addMediaItems(wc, params));
+    if (params.isEditable) sections.push(this.addEditableItems(wc, params));
+    if (params.selectionText && !params.isEditable) sections.push(this.addSelectionItems(wc, params));
+    sections.push(this.addPageItems(wc, params));
 
-    sections.forEach((fn, i) => {
-      fn();
-      if (i < sections.length - 1) menu.append(new MenuItem({ type: 'separator' }));
-    });
-
-    return menu;
+    const template = sections.flatMap((items, i) => i === sections.length - 1 ? items : [...items, { type: 'separator' as const }]);
+    return Menu.buildFromTemplate(template);
   }
 
   // ==================== Menu Sections ====================
 
-  private addSpellingItems(menu: Menu, wc: WebContents, params: ContextMenuParams): void {
+  private addSpellingItems(wc: WebContents, params: ContextMenuParams): MenuItemConstructorOptions[] {
     const suggestions = params.dictionarySuggestions.slice(0, 5);
-    
-    if (suggestions.length) {
-      suggestions.forEach(s => menu.append(new MenuItem({ label: s, click: () => wc.replaceMisspelling(s) })));
-    } else {
-      menu.append(new MenuItem({ label: 'No spelling suggestions', enabled: false }));
-    }
 
-    menu.append(new MenuItem({ type: 'separator' }));
-    menu.append(new MenuItem({
-      label: 'Add to Dictionary',
-      click: () => wc.session.addWordToSpellCheckerDictionary(params.misspelledWord),
-    }));
+    const suggestionItems = suggestions.length
+      ? suggestions.map(s => ({ label: s, click: () => wc.replaceMisspelling(s) }))
+      : [{ label: 'No spelling suggestions', enabled: false }];
+
+    return [
+      ...suggestionItems,
+      { type: 'separator' },
+      {
+        label: 'Add to Dictionary',
+        click: () => wc.session.addWordToSpellCheckerDictionary(params.misspelledWord),
+      },
+    ];
   }
 
-  private addLinkItems(menu: Menu, params: ContextMenuParams): void {
+  private addLinkItems(params: ContextMenuParams): MenuItemConstructorOptions[] {
     const { linkURL, linkText } = params;
 
     if (linkURL.startsWith('mailto:')) {
       const email = linkURL.replace('mailto:', '').split('?')[0];
-      menu.append(new MenuItem({ label: 'Copy Email Address', click: () => clipboard.writeText(email) }));
-      menu.append(new MenuItem({ label: 'Send Email', click: () => shell.openExternal(linkURL) }));
-    } else if (linkURL.startsWith('tel:')) {
-      const phone = linkURL.replace('tel:', '');
-      menu.append(new MenuItem({ label: 'Copy Phone Number', click: () => clipboard.writeText(phone) }));
-      menu.append(new MenuItem({ label: 'Call', click: () => shell.openExternal(linkURL) }));
-    } else {
-      menu.append(new MenuItem({ label: 'Open Link in New Tab', click: () => this.emit('open-link-in-new-tab', linkURL) }));
-      menu.append(new MenuItem({ label: 'Open Link in New Window', click: () => shell.openExternal(linkURL) }));
-      menu.append(new MenuItem({ type: 'separator' }));
-      menu.append(new MenuItem({ label: 'Save Link As...', click: () => this.saveAs(linkURL, 'download') }));
-      menu.append(new MenuItem({ label: 'Copy Link Address', click: () => clipboard.writeText(linkURL) }));
-      if (linkText) {
-        menu.append(new MenuItem({ label: 'Copy Link Text', click: () => clipboard.writeText(linkText) }));
-      }
+      return [
+        { label: 'Copy Email Address', click: () => clipboard.writeText(email) },
+        { label: 'Send Email', click: () => shell.openExternal(linkURL) },
+      ];
     }
+
+    if (linkURL.startsWith('tel:')) {
+      const phone = linkURL.replace('tel:', '');
+      return [
+        { label: 'Copy Phone Number', click: () => clipboard.writeText(phone) },
+        { label: 'Call', click: () => shell.openExternal(linkURL) },
+      ];
+    }
+
+    return [
+      { label: 'Open Link in New Tab', click: () => this.emit('open-link-in-new-tab', linkURL) },
+      { label: 'Open Link in New Window', click: () => shell.openExternal(linkURL) },
+      { type: 'separator' },
+      { label: 'Save Link As...', click: () => this.saveAs(linkURL, 'download') },
+      { label: 'Copy Link Address', click: () => clipboard.writeText(linkURL) },
+      ...(linkText ? [{ label: 'Copy Link Text', click: () => clipboard.writeText(linkText) }] : []),
+    ];
   }
 
-  private addImageItems(menu: Menu, params: ContextMenuParams): void {
+  private addImageItems(params: ContextMenuParams): MenuItemConstructorOptions[] {
     const { srcURL } = params;
     const isBase64 = srcURL.startsWith('data:image/');
 
-    menu.append(new MenuItem({ label: 'Open Image in New Tab', click: () => this.emit('open-link-in-new-tab', srcURL) }));
-    menu.append(new MenuItem({ label: 'Save Image As...', click: () => this.saveImageAs(srcURL) }));
-    menu.append(new MenuItem({ label: 'Copy Image', click: () => this.copyImageToClipboard(srcURL) }));
-    menu.append(new MenuItem({ label: isBase64 ? 'Copy Image Data URL' : 'Copy Image Address', click: () => clipboard.writeText(srcURL) }));
+    return [
+      { label: 'Open Image in New Tab', click: () => this.emit('open-link-in-new-tab', srcURL) },
+      { label: 'Save Image As...', click: () => this.saveImageAs(srcURL) },
+      { label: 'Copy Image', click: () => this.copyImageToClipboard(srcURL) },
+      { label: isBase64 ? 'Copy Image Data URL' : 'Copy Image Address', click: () => clipboard.writeText(srcURL) },
+    ];
   }
 
-  private addMediaItems(menu: Menu, wc: WebContents, params: ContextMenuParams): void {
+  private addMediaItems(wc: WebContents, params: ContextMenuParams): MenuItemConstructorOptions[] {
     const { srcURL, mediaType } = params;
     const label = mediaType === 'video' ? 'Video' : 'Audio';
     const ext = mediaType === 'video' ? '.mp4' : '.mp3';
 
-    menu.append(new MenuItem({ label: `Open ${label} in New Tab`, click: () => this.emit('open-link-in-new-tab', srcURL) }));
-    menu.append(new MenuItem({ label: `Save ${label} As...`, click: () => this.saveAs(srcURL, mediaType, ext) }));
-    menu.append(new MenuItem({ label: `Copy ${label} Address`, click: () => clipboard.writeText(srcURL) }));
-    menu.append(new MenuItem({ type: 'separator' }));
-    menu.append(new MenuItem({ label: 'Play/Pause', click: () => this.execMediaAction(wc, params, 'element.paused ? element.play() : element.pause()') }));
-    menu.append(new MenuItem({ label: 'Mute/Unmute', click: () => this.execMediaAction(wc, params, 'element.muted = !element.muted') }));
-
-    if (mediaType === 'video') {
-      menu.append(new MenuItem({ label: 'Toggle Loop', click: () => this.execMediaAction(wc, params, 'element.loop = !element.loop') }));
-      menu.append(new MenuItem({ label: 'Toggle Controls', click: () => this.execMediaAction(wc, params, 'element.controls = !element.controls') }));
-    }
+    return [
+      { label: `Open ${label} in New Tab`, click: () => this.emit('open-link-in-new-tab', srcURL) },
+      { label: `Save ${label} As...`, click: () => this.saveAs(srcURL, mediaType, ext) },
+      { label: `Copy ${label} Address`, click: () => clipboard.writeText(srcURL) },
+      { type: 'separator' },
+      { label: 'Play/Pause', click: () => this.execMediaAction(wc, params, 'element.paused ? element.play() : element.pause()') },
+      { label: 'Mute/Unmute', click: () => this.execMediaAction(wc, params, 'element.muted = !element.muted') },
+      ...(mediaType === 'video'
+        ? [
+            { label: 'Toggle Loop', click: () => this.execMediaAction(wc, params, 'element.loop = !element.loop') },
+            { label: 'Toggle Controls', click: () => this.execMediaAction(wc, params, 'element.controls = !element.controls') },
+          ]
+        : []),
+    ];
   }
 
-  private addEditableItems(menu: Menu, wc: WebContents, params: ContextMenuParams): void {
+  private addEditableItems(wc: WebContents, params: ContextMenuParams): MenuItemConstructorOptions[] {
     const { editFlags } = params;
     const items: Array<{ label: string; accel?: string; enabled: boolean; action: () => void }> = [
       { label: 'Undo', accel: 'CmdOrCtrl+Z', enabled: editFlags.canUndo, action: () => wc.undo() },
       { label: 'Redo', accel: 'CmdOrCtrl+Shift+Z', enabled: editFlags.canRedo, action: () => wc.redo() },
     ];
-
-    items.forEach(i => menu.append(new MenuItem({ label: i.label, accelerator: i.accel, enabled: i.enabled, click: i.action })));
-    menu.append(new MenuItem({ type: 'separator' }));
 
     const clipboardItems: typeof items = [
       { label: 'Cut', accel: 'CmdOrCtrl+X', enabled: editFlags.canCut, action: () => wc.cut() },
@@ -132,31 +136,39 @@ export class ContextMenuService extends EventEmitter {
       { label: 'Delete', enabled: editFlags.canDelete, action: () => wc.delete() },
     ];
 
-    clipboardItems.forEach(i => menu.append(new MenuItem({ label: i.label, accelerator: i.accel, enabled: i.enabled, click: i.action })));
-    menu.append(new MenuItem({ type: 'separator' }));
-    menu.append(new MenuItem({ label: 'Select All', accelerator: 'CmdOrCtrl+A', enabled: editFlags.canSelectAll, click: () => wc.selectAll() }));
+    return [
+      ...items.map(i => ({ label: i.label, accelerator: i.accel, enabled: i.enabled, click: i.action })),
+      { type: 'separator' },
+      ...clipboardItems.map(i => ({ label: i.label, accelerator: i.accel, enabled: i.enabled, click: i.action })),
+      { type: 'separator' },
+      { label: 'Select All', accelerator: 'CmdOrCtrl+A', enabled: editFlags.canSelectAll, click: () => wc.selectAll() },
+    ];
   }
 
-  private addSelectionItems(menu: Menu, wc: WebContents, params: ContextMenuParams): void {
+  private addSelectionItems(wc: WebContents, params: ContextMenuParams): MenuItemConstructorOptions[] {
     const text = params.selectionText.trim();
     const displayText = text.length > 50 ? `${text.substring(0, 50)}...` : text;
 
-    menu.append(new MenuItem({ label: 'Copy', accelerator: 'CmdOrCtrl+C', click: () => wc.copy() }));
-    menu.append(new MenuItem({
-      label: `Search Browzer for "${displayText}"`,
-      click: () => this.emit('open-link-in-new-tab', `https://www.google.com/search?q=${encodeURIComponent(text)}`),
-    }));
+    return [
+      { label: 'Copy', accelerator: 'CmdOrCtrl+C', click: () => wc.copy() },
+      {
+        label: `Search Browzer for "${displayText}"`,
+        click: () => this.emit('open-link-in-new-tab', `https://www.google.com/search?q=${encodeURIComponent(text)}`),
+      },
+    ];
   }
 
-  private addPageItems(menu: Menu, wc: WebContents, params: ContextMenuParams): void {
-    menu.append(new MenuItem({ label: 'Back', accelerator: 'Alt+Left', enabled: wc.navigationHistory.canGoBack(), click: () => wc.navigationHistory.goBack() }));
-    menu.append(new MenuItem({ label: 'Forward', accelerator: 'Alt+Right', enabled: wc.navigationHistory.canGoForward(), click: () => wc.navigationHistory.goForward() }));
-    menu.append(new MenuItem({ label: 'Reload', accelerator: 'CmdOrCtrl+R', click: () => wc.reload() }));
-    menu.append(new MenuItem({ type: 'separator' }));
-    menu.append(new MenuItem({ label: 'Save As...', accelerator: 'CmdOrCtrl+S', click: () => this.savePageAs(wc) }));
-    menu.append(new MenuItem({ label: 'Print...', accelerator: 'CmdOrCtrl+P', click: () => wc.print() }));
-    menu.append(new MenuItem({ type: 'separator' }));
-    menu.append(new MenuItem({ label: 'Inspect', accelerator: 'CmdOrCtrl+Shift+I', click: () => wc.inspectElement(params.x, params.y) }));
+  private addPageItems(wc: WebContents, params: ContextMenuParams): MenuItemConstructorOptions[] {
+    return [
+      { label: 'Back', accelerator: 'Alt+Left', enabled: wc.navigationHistory.canGoBack(), click: () => wc.navigationHistory.goBack() },
+      { label: 'Forward', accelerator: 'Alt+Right', enabled: wc.navigationHistory.canGoForward(), click: () => wc.navigationHistory.goForward() },
+      { label: 'Reload', accelerator: 'CmdOrCtrl+R', click: () => wc.reload() },
+      { type: 'separator' },
+      { label: 'Save As...', accelerator: 'CmdOrCtrl+S', click: () => this.savePageAs(wc) },
+      { label: 'Print...', accelerator: 'CmdOrCtrl+P', click: () => wc.print() },
+      { type: 'separator' },
+      { label: 'Inspect', accelerator: 'CmdOrCtrl+Shift+I', click: () => wc.inspectElement(params.x, params.y) },
+    ];
   }
 
   // ==================== Save Operations ====================
