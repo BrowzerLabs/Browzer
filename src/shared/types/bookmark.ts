@@ -5,7 +5,7 @@
 export interface Bookmark {
   id: string;
   url: string;
-  title: string;
+  title: string | null;
   favicon?: string;
   parentId: string | null; // null for root level, folder id for nested
   index: number; // Position within parent folder
@@ -29,7 +29,7 @@ export type BookmarkNode = (Bookmark | BookmarkFolder) & {
 
 export interface BookmarkTreeNode {
   id: string;
-  title: string;
+  title: string | null;
   url?: string;
   favicon?: string;
   parentId: string | null;
@@ -46,7 +46,7 @@ export const OTHER_BOOKMARKS_ID = 'other-bookmarks';
 
 export interface CreateBookmarkParams {
   url: string;
-  title: string;
+  title?: string;
   parentId?: string;
   index?: number;
   favicon?: string;

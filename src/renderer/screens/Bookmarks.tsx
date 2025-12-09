@@ -118,7 +118,7 @@ export function Bookmarks() {
 
   const handleEdit = (bookmark: Bookmark) => {
     setEditingBookmark(bookmark);
-    setEditTitle(bookmark.title);
+    setEditTitle(bookmark.title || '');
     setEditUrl(bookmark.url);
     setEditDialogOpen(true);
   };
@@ -184,7 +184,7 @@ export function Bookmarks() {
   // Edit folder handlers
   const handleEditFolder = (folder: BookmarkTreeNode) => {
     setEditingFolder(folder);
-    setEditFolderName(folder.title);
+    setEditFolderName(folder.title || '');
     setEditFolderDialogOpen(true);
   };
 
@@ -284,7 +284,7 @@ export function Bookmarks() {
     
     const traverse = (node: BookmarkTreeNode, depth: number) => {
       if (node.isFolder) {
-        folders.push({ id: node.id, title: node.title, depth });
+        folders.push({ id: node.id, title: node.title || 'Untitled', depth });
         node.children?.forEach(child => traverse(child, depth + 1));
       }
     };
@@ -315,7 +315,7 @@ export function Bookmarks() {
               )}
             </button>
             <Folder className="w-4 h-4 text-yellow-500 flex-shrink-0" />
-            <span className="font-medium truncate flex-1">{node.title}</span>
+            <span className="font-medium truncate flex-1">{node.title || 'Untitled'}</span>
             <span className="text-xs text-muted-foreground flex-shrink-0 mr-2">
               {node.children?.filter(c => !c.isFolder).length || 0} bookmarks
             </span>
@@ -337,7 +337,7 @@ export function Bookmarks() {
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={(e: React.MouseEvent) => {
                     e.stopPropagation();
-                    handleMoveClick({ id: node.id, title: node.title, isFolder: true, parentId: node.parentId });
+                    handleMoveClick({ id: node.id, title: node.title || 'Untitled', isFolder: true, parentId: node.parentId });
                   }}>
                     <FolderInput className="w-4 h-4 mr-2" />
                     Move to...
@@ -376,7 +376,7 @@ export function Bookmarks() {
           <Star className="w-4 h-4 text-yellow-500 flex-shrink-0" />
         )}
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-medium truncate">{node.title}</p>
+          <p className="text-sm font-medium truncate">{node.title || <span className="text-muted-foreground italic">No title (favicon only)</span>}</p>
           <p className="text-xs text-muted-foreground truncate">{node.url}</p>
         </div>
         <div className="opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
@@ -403,7 +403,7 @@ export function Bookmarks() {
               </DropdownMenuItem>
               <DropdownMenuItem onClick={(e: React.MouseEvent) => {
                 e.stopPropagation();
-                handleMoveClick({ id: node.id, title: node.title, isFolder: false, parentId: node.parentId });
+                handleMoveClick({ id: node.id, title: node.title || 'Untitled', isFolder: false, parentId: node.parentId });
               }}>
                 <FolderInput className="w-4 h-4 mr-2" />
                 Move to...
@@ -605,7 +605,7 @@ export function Bookmarks() {
                 id="edit-title"
                 value={editTitle}
                 onChange={(e) => setEditTitle(e.target.value)}
-                placeholder="Bookmark name"
+                placeholder="Bookmark name (Optional)"
               />
             </div>
             <div className="space-y-2">

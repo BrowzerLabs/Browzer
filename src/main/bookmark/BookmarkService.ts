@@ -188,14 +188,14 @@ export class BookmarkService extends EventEmitter {
       idx = (result?.max_idx ?? -1) + 1;
     }
 
-    this.stmts.insert.run(id, title, url, favicon || null, parentId, idx, 0, now, now);
+    this.stmts.insert.run(id, title || null, url, favicon || null, parentId, idx, 0, now, now);
 
     this.notifyBookmarkChanged();
 
     return {
       id,
       url,
-      title,
+      title: title || null,
       favicon,
       parentId,
       index: idx,

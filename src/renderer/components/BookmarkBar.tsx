@@ -66,6 +66,8 @@ export function BookmarkBar({ onNavigate }: BookmarkBarProps) {
         );
       }
 
+      const displayChar = child.title?.charAt(0)?.toUpperCase() || child.url?.charAt(0)?.toUpperCase() || '?';
+      
       return (
         <DropdownMenuItem
           key={child.id}
@@ -77,11 +79,11 @@ export function BookmarkBar({ onNavigate }: BookmarkBarProps) {
           ) : (
             <div className="w-4 h-4 rounded bg-muted flex items-center justify-center flex-shrink-0">
               <span className="text-[10px] text-muted-foreground">
-                {child.title.charAt(0).toUpperCase()}
+                {displayChar}
               </span>
             </div>
           )}
-          <span className="truncate max-w-[180px]">{child.title}</span>
+          {child.title && <span className="truncate max-w-[180px]">{child.title}</span>}
         </DropdownMenuItem>
       );
     });
@@ -109,25 +111,28 @@ export function BookmarkBar({ onNavigate }: BookmarkBarProps) {
       );
     }
 
+    const displayChar = item.title?.charAt(0)?.toUpperCase() || item.url?.charAt(0)?.toUpperCase() || '?';
+    const hasTitle = item.title && item.title.trim().length > 0;
+    
     return (
       <Button
         key={item.id}
         variant="ghost"
         size="sm"
         onClick={() => handleItemClick(item)}
-        className="h-6 px-2 gap-1.5 text-xs font-normal shrink-0"
-        title={item.url}
+        className={`h-6 gap-1.5 text-xs font-normal shrink-0 ${hasTitle ? 'px-2' : 'px-1.5'}`}
+        title={item.title || item.url}
       >
         {item.favicon ? (
           <img src={item.favicon} alt="" className="w-3.5 h-3.5 rounded shrink-0" />
         ) : (
           <div className="w-3.5 h-3.5 rounded bg-muted flex items-center justify-center shrink-0">
             <span className="text-[9px] text-muted-foreground">
-              {item.title.charAt(0).toUpperCase()}
+              {displayChar}
             </span>
           </div>
         )}
-        <span className="truncate max-w-[120px]">{item.title}</span>
+        {hasTitle && <span className="truncate max-w-[120px]">{item.title}</span>}
       </Button>
     );
   };

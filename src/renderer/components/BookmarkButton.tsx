@@ -41,7 +41,7 @@ export function BookmarkButton({
     
     const traverse = (node: BookmarkTreeNode, depth: number) => {
       if (node.isFolder) {
-        result.push({ id: node.id, title: node.title, depth });
+        result.push({ id: node.id, title: node.title || 'Untitled', depth });
         node.children?.forEach(child => traverse(child, depth + 1));
       }
     };
@@ -91,10 +91,10 @@ export function BookmarkButton({
         setIsBookmarked(!!bookmark);
         setCurrentBookmark(bookmark);
         if (bookmark) {
-          setEditTitle(bookmark.title);
+          setEditTitle(bookmark.title || '');
           setSelectedFolder(bookmark.parentId || BOOKMARK_BAR_ID);
         } else {
-          setEditTitle(title);
+          setEditTitle(title || '');
           setSelectedFolder(BOOKMARK_BAR_ID);
         }
       } catch (err) {
@@ -116,13 +116,10 @@ export function BookmarkButton({
     if (!url || isLoading) return;
 
     if (isBookmarked && currentBookmark) {
-      // Already bookmarked - open popover for editing (like Chrome)
-      // Reset edit fields to current bookmark values
-      setEditTitle(currentBookmark.title);
+      setEditTitle(currentBookmark.title || '');
       setSelectedFolder(currentBookmark.parentId || BOOKMARK_BAR_ID);
       setIsOpen(true);
     } else {
-      // Not bookmarked - create new bookmark and open popover
       setIsLoading(true);
       try {
         const bookmark = await window.browserAPI.createBookmark({
@@ -133,7 +130,7 @@ export function BookmarkButton({
         });
         setIsBookmarked(true);
         setCurrentBookmark(bookmark);
-        setEditTitle(bookmark.title);
+        setEditTitle(bookmark.title || '');
         setSelectedFolder(bookmark.parentId || BOOKMARK_BAR_ID);
         setIsOpen(true);
         onBookmarkChange?.(true);
@@ -153,7 +150,6 @@ export function BookmarkButton({
 
     setIsLoading(true);
     try {
-      // Update title if changed
       if (editTitle !== currentBookmark.title) {
         await window.browserAPI.updateBookmark({
           id: currentBookmark.id,
@@ -161,7 +157,6 @@ export function BookmarkButton({
         });
       }
 
-      // Move to different folder if changed
       if (selectedFolder !== currentBookmark.parentId) {
         await window.browserAPI.moveBookmark({
           id: currentBookmark.id,
@@ -169,7 +164,6 @@ export function BookmarkButton({
         });
       }
 
-      // Update local state
       setCurrentBookmark({ ...currentBookmark, title: editTitle, parentId: selectedFolder });
       closePopover();
     } catch (err) {
@@ -190,7 +184,7 @@ export function BookmarkButton({
       await window.browserAPI.deleteBookmark(currentBookmark.id);
       setIsBookmarked(false);
       setCurrentBookmark(null);
-      setEditTitle(title);
+      setEditTitle(title || '');
       setSelectedFolder(BOOKMARK_BAR_ID);
       onBookmarkChange?.(false);
       closePopover();
@@ -250,7 +244,7 @@ export function BookmarkButton({
               id="bookmark-name"
               value={editTitle}
               onChange={(e) => setEditTitle(e.target.value)}
-              placeholder="Bookmark name"
+              placeholder="Leave empty to show only favicon"
               className="h-8 text-sm"
             />
           </div>
