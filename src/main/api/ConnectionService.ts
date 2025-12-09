@@ -1,4 +1,4 @@
-import { WebContents } from 'electron';
+import { BaseWindow, WebContentsView } from 'electron';
 import { ApiClient, ApiConfig } from './ApiClient';
 import { SSEClient, SSEConfig } from './SSEClient';
 import { initializeApi } from './api';
@@ -17,14 +17,12 @@ export class ConnectionService extends EventEmitter {
   private status: ConnectionStatus = ConnectionStatus.DISCONNECTED;
   private apiBaseURL: string;
 
-  private browserUIWebContents: WebContents;
-
   constructor(
-    browserUIWebContents: WebContents
+    private baseWindow: BaseWindow,
+    private browserView: WebContentsView
   ) {
     super();
     this.apiBaseURL = process.env.BACKEND_API_URL ?? 'http://localhost:8000/api/v1'; 
-    this.browserUIWebContents = browserUIWebContents;
 
     const apiConfig: ApiConfig = {
       baseURL: this.apiBaseURL,
@@ -32,8 +30,6 @@ export class ConnectionService extends EventEmitter {
     };
 
     this.apiClient = new ApiClient(apiConfig);
-    
-    // Initialize global api instance
     initializeApi(this.apiClient);
     
     this.initialize().catch(err => {
@@ -75,11 +71,12 @@ export class ConnectionService extends EventEmitter {
 
   private async initializeSSE(url: string): Promise<void> {
     const sseConfig: SSEConfig = {
+      baseWindow: this.baseWindow,
+      browserView: this.browserView,
       url,
       electronId: this.apiClient.getElectronId(),
       reconnectInterval: 3000,
       heartbeatTimeout: 29000,
-      browserUIWebContents: this.browserUIWebContents,
     };
 
     this.sseClient = new SSEClient(sseConfig);
