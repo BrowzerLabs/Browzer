@@ -177,6 +177,10 @@ export const createBrowserAPI = (): BrowserAPI => ({
   onDeepLink: (callback) => 
     createEventListener<string>('deeplink:navigate', callback),
 
+  // Event listeners - Address Bar focus
+  onRequestAddressBarFocus: (callback) => 
+    createSimpleListener('request-address-bar-focus', callback),
+
   // Event listeners - Bookmark events
   onBookmarkChanged: (callback) =>
     createSimpleListener('bookmark:changed', callback),

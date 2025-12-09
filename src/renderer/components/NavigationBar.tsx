@@ -104,6 +104,9 @@ export function NavigationBar({
           </Tooltip>
         )
       }
+
+      <DownloadsDropdown onNavigate={onNavigate} />
+      
       <Button 
         variant="outline" 
         size="icon" 

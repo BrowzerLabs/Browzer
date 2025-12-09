@@ -20,6 +20,7 @@ export function AddressBar({
   className,
 }: AddressBarProps) {
   const [isEditing, setIsEditing] = useState(false);
+  const [focusTrigger, setFocusTrigger] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -49,6 +50,16 @@ export function AddressBar({
   }, [currentUrl, isEditing, setInputValueSilent]);
 
   useEffect(() => {
+    if (focusTrigger > 0 && inputRef.current) {
+      setInputValueSilent('');
+      setIsEditing(true);
+      clearSuggestions();
+      inputRef.current.focus();
+      inputRef.current.select();
+    }
+  }, [focusTrigger, setInputValueSilent, clearSuggestions]);
+
+  useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (
         dropdownRef.current &&
@@ -64,6 +75,14 @@ export function AddressBar({
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [setIsOpen]);
+
+  useEffect(() => {
+    const unsubscribe = window.browserAPI.onRequestAddressBarFocus(() => {
+      setFocusTrigger(prev => prev + 1);
+    });
+    
+    return () => unsubscribe();
+  }, []);
 
   const handleBlur = useCallback(() => {
     setTimeout(() => {
