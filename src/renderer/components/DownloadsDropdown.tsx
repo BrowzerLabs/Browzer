@@ -47,6 +47,14 @@ export function DownloadsDropdown({ onNavigate }: DownloadsDropdownProps) {
     return null;
   }
 
+  const recentDownloads = [...downloads]
+    .sort((a, b) => {
+      const timeA = a.endTime ?? a.startTime;
+      const timeB = b.endTime ?? b.startTime;
+      return timeB - timeA;
+    })
+    .slice(0, 3);
+
   return (
     <DropdownMenu open={isOpen} onOpenChange={handleOpenChange}>
       <DropdownMenuTrigger asChild>
@@ -75,8 +83,8 @@ export function DownloadsDropdown({ onNavigate }: DownloadsDropdownProps) {
             View all
           </button>
         </div>
-        <div className="space-y-2 max-h-80 overflow-auto pr-1">
-          {downloads.map((item) => (
+        <div className="space-y-2 pr-1">
+          {recentDownloads.map((item) => (
             <DownloadItemCard
               key={item.id}
               item={item}
