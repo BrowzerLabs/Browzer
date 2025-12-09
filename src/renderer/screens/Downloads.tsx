@@ -139,28 +139,46 @@ export function Downloads() {
 
   const renderProgress = (item: DownloadItem) => {
     const showProgressBar = item.state !== 'completed' && item.state !== 'cancelled';
-    const percent = Math.round((item.progress || 0) * 100);
+    const hasUnknownTotal = item.totalBytes <= 0;
+    const percent = hasUnknownTotal ? undefined : Math.round((item.progress || 0) * 100);
     const speed = formatSpeed(item.speed);
     const remaining = formatRemainingTime(item.remainingTime);
 
     return (
       <div className="space-y-1">
         {showProgressBar && (
-          <Progress value={percent} className="h-2 bg-gray-200 dark:bg-slate-800" />
+          hasUnknownTotal ? (
+            <div className="h-2 w-full bg-gray-200 dark:bg-slate-800 rounded-full overflow-hidden relative">
+              <div 
+                className="h-full bg-primary rounded-full absolute" 
+                style={{ 
+                  width: '40%',
+                  animation: 'shimmer 1.5s ease-in-out infinite'
+                }} 
+              />
+            </div>
+          ) : (
+            <Progress value={percent} className="h-2 bg-gray-200 dark:bg-slate-800" />
+          )
         )}
         <div className="text-xs text-gray-600 dark:text-gray-400 flex items-center gap-2 flex-wrap">
           <span>
-            {formatBytes(item.receivedBytes)} of {item.totalBytes > 0 ? formatBytes(item.totalBytes) : 'Unknown'}
+            {formatBytes(item.receivedBytes)}
+            {hasUnknownTotal ? (
+              <span> • Resuming</span>
+            ) : (
+              <span> of {formatBytes(item.totalBytes)}</span>
+            )}
           </span>
-          {showProgressBar && <span className="text-gray-400">•</span>}
-          {showProgressBar && <span>{percent}%</span>}
+          {showProgressBar && !hasUnknownTotal && <span className="text-gray-400">•</span>}
+          {showProgressBar && !hasUnknownTotal && <span>{percent}%</span>}
           {item.state === 'progressing' && speed && (
             <>
               <span className="text-gray-400">•</span>
               <span className="text-primary">{speed}</span>
             </>
           )}
-          {item.state === 'progressing' && remaining && (
+          {item.state === 'progressing' && !hasUnknownTotal && remaining && (
             <>
               <span className="text-gray-400">•</span>
               <span>{remaining}</span>
@@ -178,8 +196,15 @@ export function Downloads() {
   };
 
   return (
-    <div className="h-full overflow-y-auto bg-gray-50 dark:bg-slate-950">
-      <div className="max-w-5xl mx-auto p-6 space-y-6">
+    <>
+      <style>{`
+        @keyframes shimmer {
+          0% { transform: translateX(-100%); }
+          100% { transform: translateX(350%); }
+        }
+      `}</style>
+      <div className="h-full overflow-y-auto bg-gray-50 dark:bg-slate-950">
+        <div className="max-w-5xl mx-auto p-6 space-y-6">
         <div className="flex items-center justify-between gap-4">
           <div>
             <h1 className="text-2xl font-semibold text-gray-900 dark:text-white">Downloads</h1>
@@ -242,8 +267,9 @@ export function Downloads() {
             ))}
           </div>
         )}
+        </div>
       </div>
-    </div>
+    </>
   );
 }
 

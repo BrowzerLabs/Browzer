@@ -107,13 +107,14 @@ interface DownloadItemCardProps {
 }
 
 function DownloadItemCard({ item, onPause, onResume, onCancel }: DownloadItemCardProps) {
-  const percent = Math.round((item.progress || 0) * 100);
   const isActive = item.state === 'progressing';
   const isPaused = item.state === 'paused';
   const isDone = item.state === 'completed';
   const isCancelled = item.state === 'cancelled';
   const isFailed = item.state === 'failed' || item.state === 'interrupted';
   const isTerminal = isDone || isCancelled || isFailed;
+  const hasUnknownTotal = item.totalBytes <= 0;
+  const percent = hasUnknownTotal ? undefined : Math.round((item.progress || 0) * 100);
 
   const statusText = isDone
     ? 'Completed'
@@ -136,7 +137,12 @@ function DownloadItemCard({ item, onPause, onResume, onCancel }: DownloadItemCar
             <span>{statusText}</span>
             {!isCancelled && (
               <span>
-                {' '}• {formatBytes(item.receivedBytes)}/{item.totalBytes > 0 ? formatBytes(item.totalBytes) : '?'}
+                {' '}• {formatBytes(item.receivedBytes)}
+                {hasUnknownTotal ? (
+                  <span> • Resuming</span>
+                ) : (
+                  <span>/{formatBytes(item.totalBytes)}</span>
+                )}
               </span>
             )}
             <br />
@@ -145,7 +151,7 @@ function DownloadItemCard({ item, onPause, onResume, onCancel }: DownloadItemCar
                 {formatSpeed(item.speed)}
               </span>
             )}
-            {isActive && formatRemainingTime(item.remainingTime) && (
+            {isActive && !hasUnknownTotal && formatRemainingTime(item.remainingTime) && (
               <span> • {formatRemainingTime(item.remainingTime)}</span>
             )}
           </div>
@@ -180,7 +186,27 @@ function DownloadItemCard({ item, onPause, onResume, onCancel }: DownloadItemCar
           )}
         </div>
       </div>
-      {!isTerminal && <Progress value={percent} className="h-1.5" />}
+      {!isTerminal && (
+        hasUnknownTotal ? (
+          <div className="h-1.5 w-full bg-primary/20 rounded-full overflow-hidden relative">
+            <div 
+              className="h-full bg-primary rounded-full absolute" 
+              style={{ 
+                width: '40%',
+                animation: 'shimmer 1.5s ease-in-out infinite'
+              }} 
+            />
+          </div>
+        ) : (
+          <Progress value={percent} className="h-1.5" />
+        )
+      )}
+      <style>{`
+        @keyframes shimmer {
+          0% { transform: translateX(-100%); }
+          100% { transform: translateX(350%); }
+        }
+      `}</style>
     </div>
   );
 }
