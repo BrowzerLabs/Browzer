@@ -10,6 +10,7 @@ import { Tab, TabServiceEvents } from './types';
 import { NavigationService } from './NavigationService';
 import { DebuggerService } from './DebuggerService';
 import { PasswordAutomation } from '@/main/password';
+import { SettingsService, SettingsChangeEvent } from '@/main/settings/SettingsService';
 
 export class TabService extends EventEmitter {
   public on<K extends keyof TabServiceEvents>(
@@ -31,16 +32,55 @@ export class TabService extends EventEmitter {
   private tabCounter = 0;
   private currentSidebarWidth = 0;
 
-  private readonly webContentsViewHeight = 84;
+  private static readonly TAB_HEIGHT_WITHOUT_BOOKMARKS = 84;
+  private static readonly TAB_HEIGHT_WITH_BOOKMARKS = 104;
+  
+  private webContentsViewHeight = TabService.TAB_HEIGHT_WITHOUT_BOOKMARKS;
+
+  private newTabUrl: string;
 
   constructor(
     private baseWindow: BaseWindow,
     private passwordManager: PasswordManager,
+    private settingsService: SettingsService,
     private historyService: HistoryService,
     private navigationService: NavigationService,
     private debuggerService: DebuggerService,
   ) {
     super();
+    this.initializeFromSettings();
+    this.setupSettingsListeners();
+  }
+
+  private initializeFromSettings(): void {
+    this.newTabUrl = this.settingsService.getSetting('general', 'newTabUrl') || 'https://www.google.com';
+    
+    this.webContentsViewHeight = this.settingsService.getSetting('appearance', 'showBookmarksBar')
+      ? TabService.TAB_HEIGHT_WITH_BOOKMARKS 
+      : TabService.TAB_HEIGHT_WITHOUT_BOOKMARKS;
+  }
+
+  private setupSettingsListeners(): void {
+    this.settingsService.on('settings:general', (event: SettingsChangeEvent<'general'>) => {
+      const { newValue } = event;
+      this.newTabUrl = newValue.newTabUrl || 'https://www.google.com';
+    });
+    
+    this.settingsService.on('settings:appearance', (event: SettingsChangeEvent<'appearance'>) => {
+      this.handleAppearanceSettingsChange(event);
+    });
+  }
+
+  private handleAppearanceSettingsChange(event: SettingsChangeEvent<'appearance'>): void {
+    const { newValue, key } = event;
+    
+    if (key === 'showBookmarksBar') {
+      this.webContentsViewHeight = newValue.showBookmarksBar 
+        ? TabService.TAB_HEIGHT_WITH_BOOKMARKS 
+        : TabService.TAB_HEIGHT_WITHOUT_BOOKMARKS;
+      
+      this.updateLayout(this.currentSidebarWidth);
+    }
   }
 
   public createTab(url?: string): Tab {
@@ -58,11 +98,13 @@ export class TabService extends EventEmitter {
       },
     });
 
-    let displayUrl = url ?? 'https://www.google.com';
+    const urlToLoad = url || this.newTabUrl;
+    
+    let displayUrl = urlToLoad;
     let displayTitle = 'New Tab';
     let displayIcon: string | undefined;
     
-    const internalPageInfo = this.navigationService.getInternalPageInfo(url || '');
+    const internalPageInfo = this.navigationService.getInternalPageInfo(urlToLoad);
     if (internalPageInfo) {
       displayUrl = internalPageInfo.url;
       displayTitle = internalPageInfo.title;
@@ -103,7 +145,6 @@ export class TabService extends EventEmitter {
     this.baseWindow.contentView.addChildView(view);
     this.updateTabViewBounds(view, this.currentSidebarWidth);
 
-    const urlToLoad = url || 'https://www.google.com';
     view.webContents.loadURL(this.navigationService.normalizeURL(urlToLoad));
 
     this.switchToTab(tabId);

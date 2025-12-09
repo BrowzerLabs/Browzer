@@ -5,17 +5,10 @@ import { TabBar } from './TabBar';
 import { NavigationBar } from './NavigationBar';
 import { Sidebar } from './Sidebar';
 
-/**
- * BrowserChrome - Main browser UI (tabs + navigation + resizable content)
- * 
- * This is the "Agent UI" WebContentsView that contains all browser controls
- * and manages the layout between web content and the agent sidebar
- */
 export function BrowserChrome() {
   const browserAPI = useBrowserAPI();
   const { isVisible: isSidebarVisible, showSidebar } = useSidebarStore();
 
-  // Auto-open sidebar when recording starts
   useEffect(() => {
     const unsubStart = window.browserAPI.onRecordingStarted(() => {
       showSidebar();
@@ -26,7 +19,6 @@ export function BrowserChrome() {
 
   return (
     <div className="h-full w-full flex flex-col select-none">
-      {/* Tab Bar */}
       <TabBar
         tabs={browserAPI.tabs}
         activeTabId={browserAPI.activeTabId}
@@ -35,7 +27,6 @@ export function BrowserChrome() {
         onNewTab={() => browserAPI.createTab()}
       />
 
-      {/* Navigation Bar */}
       <NavigationBar
         activeTab={browserAPI.activeTab}
         onNavigate={(url) => {
@@ -65,12 +56,9 @@ export function BrowserChrome() {
         }}
       />
 
-      {/* Content Area: Web Content + Sidebar */}
+      <div className='h-7 bg-background' />
+
       <div className="flex-1 overflow-hidden relative flex">
-        {/* Web Content Area - Transparent (shows WebContentsView below) */}
-        <div className="flex-1 pointer-events-none" />
-        
-        {/* Sidebar - Positioned on the right */}
         {isSidebarVisible && (
           <div className="absolute top-0 right-0 bottom-0 w-[30%] min-w-[300px] max-w-[600px] pointer-events-auto">
             <Sidebar />
