@@ -15,6 +15,7 @@ import {
 } from './browser';
 import { SettingsService } from './settings/SettingsService';
 import { DownloadService } from './download/DownloadService';
+import { AdBlockerService } from './adblocker/AdBlockerService';
 
 export class BrowserService {
   // Modular components
@@ -24,6 +25,7 @@ export class BrowserService {
   private navigationService: NavigationService;
   private debuggerService: DebuggerService;
   private downloadService: DownloadService;
+  private adBlockerService: AdBlockerService;
 
   // Services (shared across managers)
   private settingsService: SettingsService;
@@ -44,6 +46,7 @@ export class BrowserService {
     this.passwordManager = new PasswordManager();
     this.bookmarkService = new BookmarkService(this.browserView);
     this.sessionManager = new SessionManager();
+    this.adBlockerService = new AdBlockerService();
 
     // Initialize managers
     this.navigationService = new NavigationService(this.settingsService, this.historyService);
@@ -61,6 +64,7 @@ export class BrowserService {
     );
     
     this.setupTabEventListeners();
+    this.setupAdBlocker();
 
     this.recordingManager = new RecordingManager(
       this.recordingStore,
@@ -268,6 +272,28 @@ export class BrowserService {
 
     this.tabService.on('tab:created', () => {
       this.requestAddressBarFocus();
+    });
+  }
+
+  private setupAdBlocker(): void {
+    const privacySettings = this.settingsService.getSetting('privacy');
+    if (privacySettings.enableAdBlocker) {
+      this.adBlockerService.enable();
+    }
+
+    this.settingsService.on('settings:privacy', (event) => {
+      if (event.key === 'enableAdBlocker') {
+        if (event.value as boolean) {
+          this.adBlockerService.enable();
+        } else {
+          this.adBlockerService.disable();
+        }
+      }
+    });
+
+    // Register WebContents for cosmetic filtering when tabs are created
+    this.tabService.on('tab:created', (tab) => {
+      this.adBlockerService.registerWebContents(tab.view.webContents);
     });
   }
 
