@@ -1,5 +1,6 @@
 import Database from 'better-sqlite3';
 import { WebContentsView, app } from 'electron';
+import { EventEmitter } from 'events';
 import path from 'path';
 import { randomUUID } from 'crypto';
 import {
@@ -14,7 +15,24 @@ import {
   OTHER_BOOKMARKS_ID,
 } from '@/shared/types';
 
-export class BookmarkService {
+export interface BookmarkServiceEvents {
+  'bookmark:changed': () => void;
+}
+
+export class BookmarkService extends EventEmitter {
+  public on<K extends keyof BookmarkServiceEvents>(
+    event: K,
+    listener: BookmarkServiceEvents[K]
+  ): this {
+    return super.on(event, listener);
+  }
+
+  public emit<K extends keyof BookmarkServiceEvents>(
+    event: K,
+    ...args: Parameters<BookmarkServiceEvents[K]>
+  ): boolean {
+    return super.emit(event, ...args);
+  }
   private db: Database.Database;
 
   private stmts: {
@@ -34,6 +52,7 @@ export class BookmarkService {
   constructor(
     private browserView: WebContentsView
   ) {
+    super();
     const userDataPath = app.getPath('userData');
     const dbPath = path.join(userDataPath, 'bookmarks.db');
 
@@ -171,7 +190,7 @@ export class BookmarkService {
 
     this.stmts.insert.run(id, title, url, favicon || null, parentId, idx, 0, now, now);
 
-    this.browserView.webContents.send('bookmark:changed');
+    this.notifyBookmarkChanged();
 
     return {
       id,
@@ -198,7 +217,7 @@ export class BookmarkService {
     }
 
     this.stmts.insert.run(id, title, null, null, parentId, idx, 1, now, now);
-    this.browserView.webContents.send('bookmark:changed');
+    this.notifyBookmarkChanged();
 
     return {
       id,
@@ -252,12 +271,27 @@ export class BookmarkService {
     return this.getChildren(BOOKMARK_BAR_ID);
   }
 
+  public getBookmarkBarCount(): number {
+    return this.getChildren(BOOKMARK_BAR_ID).length;
+  }
+
+  public hasBookmarksInBar(): boolean {
+    return this.getBookmarkBarCount() > 0;
+  }
+
+  private notifyBookmarkChanged(): void {
+    if (this.browserView && !this.browserView.webContents.isDestroyed()) {
+      this.browserView.webContents.send('bookmark:changed');
+    }
+    this.emit('bookmark:changed');
+  }
+
   public update(params: UpdateBookmarkParams): boolean {
     const { id, title, url } = params;
     const now = Date.now();
 
     const result = this.stmts.update.run(title || null, url || null, now, id);
-    this.browserView.webContents.send('bookmark:changed');
+    this.notifyBookmarkChanged();
     return result.changes > 0;
   }
 
@@ -277,7 +311,7 @@ export class BookmarkService {
     }
 
     const result = this.stmts.updateIndex.run(newParentId, newIndex, now, id);
-    this.browserView.webContents.send('bookmark:changed');
+    this.notifyBookmarkChanged();
     return result.changes > 0;
   }
 
@@ -298,7 +332,7 @@ export class BookmarkService {
     }
 
     const result = this.stmts.deleteById.run(id);
-    this.browserView.webContents.send('bookmark:changed');
+    this.notifyBookmarkChanged();
     return result.changes > 0;
   }
 

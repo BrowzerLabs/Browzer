@@ -6,6 +6,7 @@ import { VideoRecorder } from '@/main/recording';
 import { PasswordManager } from '@/main/password/PasswordManager';
 import { BrowserAutomationExecutor } from '@/main/automation';
 import { HistoryService } from '@/main/history/HistoryService';
+import { BookmarkService } from '@/main/bookmark';
 import { Tab, TabServiceEvents } from './types';
 import { NavigationService } from './NavigationService';
 import { DebuggerService } from './DebuggerService';
@@ -46,21 +47,20 @@ export class TabService extends EventEmitter {
     private historyService: HistoryService,
     private navigationService: NavigationService,
     private debuggerService: DebuggerService,
+    private bookmarkService: BookmarkService
   ) {
     super();
     this.initializeFromSettings();
-    this.setupSettingsListeners();
+    this.setupListeners();
+    this.recalculateBookmarkBarHeight();
   }
 
   private initializeFromSettings(): void {
     this.newTabUrl = this.settingsService.getSetting('general', 'newTabUrl') || 'https://www.google.com';
-    
-    this.webContentsViewHeight = this.settingsService.getSetting('appearance', 'showBookmarksBar')
-      ? TabService.TAB_HEIGHT_WITH_BOOKMARKS 
-      : TabService.TAB_HEIGHT_WITHOUT_BOOKMARKS;
+    this.webContentsViewHeight = TabService.TAB_HEIGHT_WITHOUT_BOOKMARKS;
   }
 
-  private setupSettingsListeners(): void {
+  private setupListeners(): void {
     this.settingsService.on('settings:general', (event: SettingsChangeEvent<'general'>) => {
       const { newValue } = event;
       this.newTabUrl = newValue.newTabUrl || 'https://www.google.com';
@@ -69,18 +69,29 @@ export class TabService extends EventEmitter {
     this.settingsService.on('settings:appearance', (event: SettingsChangeEvent<'appearance'>) => {
       this.handleAppearanceSettingsChange(event);
     });
+
+    this.bookmarkService.on('bookmark:changed', () => {
+      this.recalculateBookmarkBarHeight();
+    });
   }
 
   private handleAppearanceSettingsChange(event: SettingsChangeEvent<'appearance'>): void {
-    const { newValue, key } = event;
+    const { key } = event;
     
     if (key === 'showBookmarksBar') {
-      this.webContentsViewHeight = newValue.showBookmarksBar 
-        ? TabService.TAB_HEIGHT_WITH_BOOKMARKS 
-        : TabService.TAB_HEIGHT_WITHOUT_BOOKMARKS;
-      
-      this.updateLayout(this.currentSidebarWidth);
+      this.recalculateBookmarkBarHeight();
     }
+  }
+
+  public recalculateBookmarkBarHeight(): void {
+    const showBookmarksBar = this.settingsService.getSetting('appearance', 'showBookmarksBar');
+    const hasBookmarks = this.bookmarkService.hasBookmarksInBar();
+    
+    this.webContentsViewHeight = showBookmarksBar && hasBookmarks
+      ? TabService.TAB_HEIGHT_WITH_BOOKMARKS 
+      : TabService.TAB_HEIGHT_WITHOUT_BOOKMARKS;
+    
+    this.updateLayout(this.currentSidebarWidth);
   }
 
   public createTab(url?: string): Tab {

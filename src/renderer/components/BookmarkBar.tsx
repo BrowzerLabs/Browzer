@@ -48,11 +48,7 @@ export function BookmarkBar({ onNavigate }: BookmarkBarProps) {
 
   const renderFolderContents = (children: BookmarkTreeNode[] | undefined) => {
     if (!children || children.length === 0) {
-      return (
-        <DropdownMenuItem disabled className="text-muted-foreground text-xs">
-          (empty)
-        </DropdownMenuItem>
-      );
+      return null;
     }
 
     return children.map((child) => {
@@ -137,11 +133,7 @@ export function BookmarkBar({ onNavigate }: BookmarkBarProps) {
   };
 
   if (bookmarkBarItems.length === 0) {
-    return (
-      <div className="flex items-center h-7 px-2 bg-background border-b border-border/40 overflow-hidden">
-        <span className="text-muted-foreground text-xs">No bookmarks yet</span>
-      </div>
-    )
+    return null;
   }
 
   return (

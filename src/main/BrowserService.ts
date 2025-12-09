@@ -57,6 +57,7 @@ export class BrowserService {
       this.historyService,
       this.navigationService,
       this.debuggerService,
+      this.bookmarkService
     );
     
     this.setupTabEventListeners();
