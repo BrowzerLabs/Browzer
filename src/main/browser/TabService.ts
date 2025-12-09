@@ -34,7 +34,7 @@ export class TabService extends EventEmitter {
   private tabCounter = 0;
   private currentSidebarWidth = 0;
   private webContentsViewHeight = TAB_HEIGHT.WITHOUT_BOOKMARKS;
-  private newTabUrl = 'https://www.google.com';
+  private newTabUrl = 'browzer://home';
   private readonly contextMenuService = new ContextMenuService();
 
   constructor(
