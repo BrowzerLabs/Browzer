@@ -127,7 +127,6 @@ export class BookmarkService extends EventEmitter {
 
     } catch (error) {
       console.error('[BookmarkService] Failed to create tables:', error);
-      throw error;
     }
   }
 
@@ -149,7 +148,6 @@ export class BookmarkService extends EventEmitter {
       );
     }
 
-    // Check if Other Bookmarks exists
     const otherBookmarks = this.stmts.getById.get(OTHER_BOOKMARKS_ID);
     if (!otherBookmarks) {
       this.stmts.insert.run(
@@ -166,9 +164,6 @@ export class BookmarkService extends EventEmitter {
     }
   }
 
-  /**
-   * Create a new bookmark
-   */
   public createBookmark(params: CreateBookmarkParams): Bookmark {
     const {
       url,
@@ -181,7 +176,6 @@ export class BookmarkService extends EventEmitter {
     const id = randomUUID();
     const now = Date.now();
 
-    // Get next index if not specified
     let idx = index;
     if (idx === undefined) {
       const result = this.stmts.getMaxIndex.get(parentId) as { max_idx: number | null };

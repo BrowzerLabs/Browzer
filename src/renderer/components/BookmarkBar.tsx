@@ -226,7 +226,6 @@ export function BookmarkBar({ onNavigate }: BookmarkBarProps) {
       });
 
       if (success) {
-        toast.success(editDialog.item.isFolder ? 'Folder updated' : 'Bookmark updated');
         closeEditDialog();
       } else {
         toast.error('Failed to update');
@@ -240,9 +239,7 @@ export function BookmarkBar({ onNavigate }: BookmarkBarProps) {
   const handleDelete = useCallback(async (item: BookmarkTreeNode) => {
     try {
       const success = await window.browserAPI.deleteBookmark(item.id);
-      if (success) {
-        toast.success(item.isFolder ? 'Folder deleted' : 'Bookmark deleted');
-      } else {
+      if (!success) {
         toast.error('Failed to delete');
       }
     } catch (err) {
