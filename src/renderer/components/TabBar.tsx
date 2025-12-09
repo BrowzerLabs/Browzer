@@ -1,5 +1,5 @@
 import { X, Plus, Loader2, Globe } from 'lucide-react';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import type { TabInfo } from '@/shared/types';
 import { cn } from '@/renderer/lib/utils';
 import { Button } from '@/renderer/ui/button';
@@ -11,87 +11,154 @@ interface TabBarProps {
   onTabClick: (tabId: string) => void;
   onTabClose: (tabId: string) => void;
   onNewTab: () => void;
+  onMoveTabLeft?: () => void;
+  onMoveTabRight?: () => void;
 }
 
-export function TabBar({ tabs, activeTabId, onTabClick, onTabClose, onNewTab }: TabBarProps) {
+const LAYOUT = {
+  PADDING_LEFT: 80,
+  PADDING_RIGHT: 8,
+  NEW_TAB_BUTTON_SPACE: 40,
+  MAX_TAB_WIDTH: 180,
+  MIN_TAB_WIDTH: 60,
+  GAP_NORMAL: 4,
+  GAP_COMPACT: 2,
+  COMPACT_THRESHOLD: 10,
+} as const;
+
+export function TabBar({ 
+  tabs, 
+  activeTabId, 
+  onTabClick, 
+  onTabClose, 
+  onNewTab,
+  onMoveTabLeft,
+  onMoveTabRight,
+}: TabBarProps) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const [tabWidth, setTabWidth] = useState(200);
-  const [draggedTabId, setDraggedTabId] = useState<string | null>(null);
-  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+  const [tabWidth, setTabWidth] = useState<number>(LAYOUT.MAX_TAB_WIDTH);
+  const [dragState, setDragState] = useState<{
+    draggedTabId: string | null;
+    dropIndex: number | null;
+  }>({ draggedTabId: null, dropIndex: null });
   
+  const rafRef = useRef<number | null>(null);
+  const gap = tabs.length > LAYOUT.COMPACT_THRESHOLD ? LAYOUT.GAP_COMPACT : LAYOUT.GAP_NORMAL;
+
   const handleDoubleClick = () => {
     window.browserAPI.toggleMaximize();
   };
 
-  const handleDragOver = (e: React.DragEvent) => {
+  const getDropIndex = useCallback((clientX: number): number | null => {
+    if (!containerRef.current || !dragState.draggedTabId) return null;
+    
+    const rect = containerRef.current.getBoundingClientRect();
+    const x = clientX - rect.left;
+    const draggedIndex = tabs.findIndex(t => t.id === dragState.draggedTabId);
+    
+    if (draggedIndex === -1) return null;
+
+    let dropIndex = 0;
+    let currentX = LAYOUT.PADDING_LEFT;
+    
+    for (let i = 0; i < tabs.length; i++) {
+      const tabCenter = currentX + tabWidth / 2;
+      
+      if (x < tabCenter) {
+        dropIndex = i;
+        break;
+      }
+      currentX += tabWidth + gap;
+      dropIndex = i + 1;
+    }
+
+    dropIndex = Math.max(0, Math.min(dropIndex, tabs.length));
+    
+    if (dropIndex > draggedIndex) {
+      dropIndex = dropIndex - 1;
+    }
+    
+    if (dropIndex === draggedIndex) {
+      return null;
+    }
+    
+    return dropIndex;
+  }, [dragState.draggedTabId, tabs, tabWidth, gap]);
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
     
-    if (!containerRef.current || draggedTabId === null) return;
-    
-    const rect = containerRef.current.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const paddingLeft = 80;
-    const gap = tabs.length > 10 ? 2 : 4;
-    let currentX = paddingLeft;
-    let targetIndex = 0;
-    const draggedIndex = tabs.findIndex(t => t.id === draggedTabId);
-    const lastTabEnd = paddingLeft + (tabs.length * (tabWidth + gap)) - gap;
-    if (x > lastTabEnd) {
-      targetIndex = tabs.length;
-    } else {
-      for (let i = 0; i < tabs.length; i++) {
-        const tabStart = currentX;
-        const tabEnd = currentX + tabWidth;
-        const tabMid = (tabStart + tabEnd) / 2;
-        
-        if (x >= tabStart && x < tabEnd) {
-          targetIndex = x < tabMid ? i : i + 1;
-          break;
-        }
-        currentX = tabEnd + gap;
-        targetIndex = i + 1;
-      }
-      targetIndex = Math.max(0, Math.min(targetIndex, tabs.length));
+    if (rafRef.current) {
+      cancelAnimationFrame(rafRef.current);
     }
     
-    if (targetIndex === draggedIndex || (targetIndex === draggedIndex + 1 && draggedIndex < tabs.length - 1)) {
-      setDragOverIndex(null);
-    } else {
-      setDragOverIndex(targetIndex);
-    }
-  };
+    rafRef.current = requestAnimationFrame(() => {
+      const dropIndex = getDropIndex(e.clientX);
+      setDragState(prev => ({ ...prev, dropIndex }));
+    });
+  }, [getDropIndex]);
 
-  const handleDrop = async (e: React.DragEvent) => {
+  const handleDrop = useCallback(async (e: React.DragEvent) => {
     e.preventDefault();
     
-    const droppedTabId = e.dataTransfer.getData('text/plain');
-    if (!droppedTabId) return;
+    if (rafRef.current) {
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = null;
+    }
     
-    const currentIndex = tabs.findIndex(t => t.id === droppedTabId);
-    if (currentIndex === -1) return;
+    const { draggedTabId, dropIndex } = dragState;
     
-    let newIndex = dragOverIndex !== null ? dragOverIndex : currentIndex;
-    
-    if (newIndex === currentIndex || (newIndex === currentIndex + 1 && currentIndex < tabs.length - 1)) {
-      setDraggedTabId(null);
-      setDragOverIndex(null);
+    if (!draggedTabId || dropIndex === null) {
+      setDragState({ draggedTabId: null, dropIndex: null });
       return;
     }
     
-    newIndex = Math.max(0, Math.min(newIndex, tabs.length));
+    try {
+      await window.browserAPI.reorderTab(draggedTabId, dropIndex);
+    } catch (error) {
+      console.error('[TabBar] Failed to reorder tab:', error);
+    }
     
-    const apiIndex = newIndex === tabs.length ? tabs.length - 1 : newIndex;
-    
-    await window.browserAPI.reorderTab(droppedTabId, apiIndex);
-    
-    setDraggedTabId(null);
-    setDragOverIndex(null);
-  };
+    setDragState({ draggedTabId: null, dropIndex: null });
+  }, [dragState]);
 
-  const handleDragLeave = () => {
-    setDragOverIndex(null);
-  };
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    const rect = containerRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    
+    const { clientX, clientY } = e;
+    const isOutside = clientX < rect.left || clientX > rect.right || 
+                      clientY < rect.top || clientY > rect.bottom;
+    
+    if (isOutside) {
+      setDragState(prev => ({ ...prev, dropIndex: null }));
+    }
+  }, []);
+
+  const handleDragEnd = useCallback(() => {
+    if (rafRef.current) {
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = null;
+    }
+    setDragState({ draggedTabId: null, dropIndex: null });
+  }, []);
+
+  const handleTabDragStart = useCallback((tabId: string) => {
+    setDragState({ draggedTabId: tabId, dropIndex: null });
+  }, []);
+
+  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if ((e.ctrlKey || e.metaKey) && e.shiftKey) {
+      if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        onMoveTabLeft?.();
+      } else if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        onMoveTabRight?.();
+      }
+    }
+  }, [onMoveTabLeft, onMoveTabRight]);
 
   useEffect(() => {
     const calculateTabWidth = () => {
@@ -100,61 +167,82 @@ export function TabBar({ tabs, activeTabId, onTabClick, onTabClose, onNewTab }: 
       const tabCount = tabs.length;
       if (tabCount === 0) return;
 
-      const maxWidth = 180; 
-      const minWidth = 60; 
-      
       const containerWidth = containerRef.current.offsetWidth;
-      const paddingLeft = 80; 
-      const paddingRight = 8;
-      const newTabButtonSpace = 40;
-      const gap = tabCount > 10 ? 2 : 4;
-      const gapSpace = (tabCount - 1) * gap;
+      const currentGap = tabCount > LAYOUT.COMPACT_THRESHOLD ? LAYOUT.GAP_COMPACT : LAYOUT.GAP_NORMAL;
+      const gapSpace = (tabCount - 1) * currentGap;
       
-      const availableSpace = containerWidth - paddingLeft - paddingRight - newTabButtonSpace - gapSpace;
+      const availableSpace = containerWidth - LAYOUT.PADDING_LEFT - LAYOUT.PADDING_RIGHT - LAYOUT.NEW_TAB_BUTTON_SPACE - gapSpace;
       const calculatedWidth = Math.floor(availableSpace / tabCount);
       
-      const finalWidth = Math.max(minWidth, Math.min(maxWidth, calculatedWidth));
-      setTabWidth(finalWidth);
+      setTabWidth(Math.max(LAYOUT.MIN_TAB_WIDTH, Math.min(LAYOUT.MAX_TAB_WIDTH, calculatedWidth)));
     };
 
     calculateTabWidth();
-
     window.addEventListener('resize', calculateTabWidth);
     return () => window.removeEventListener('resize', calculateTabWidth);
   }, [tabs.length]);
 
+  useEffect(() => {
+    return () => {
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    };
+  }, []);
+
+  const getDropIndicatorPosition = (): { beforeIndex: number } | null => {
+    const { draggedTabId, dropIndex } = dragState;
+    if (!draggedTabId || dropIndex === null) return null;
+    
+    const draggedIndex = tabs.findIndex(t => t.id === draggedTabId);
+    if (draggedIndex === -1) return null;
+    
+    if (dropIndex < draggedIndex) {
+      return { beforeIndex: dropIndex };
+    } else {
+      return { beforeIndex: dropIndex + 1 };
+    }
+  };
+
+  const dropIndicator = getDropIndicatorPosition();
+
   return (
     <div 
       ref={containerRef}
-      className="flex items-center h-9 pl-20 pr-2 gap-1 tab-bar-draggable overflow-hidden bg-background"
+      className="flex items-center h-9 pl-20 pr-2 tab-bar-draggable overflow-hidden bg-background"
+      style={{ gap: `${gap}px` }}
       onDoubleClick={handleDoubleClick}
       onDragOver={handleDragOver}
       onDrop={handleDrop}
       onDragLeave={handleDragLeave}
+      onKeyDown={handleKeyDown}
+      role="tablist"
+      aria-label="Browser tabs"
     >
-      {/* Tabs */}
       {tabs.map((tab, index) => (
-        <Tab
-          key={tab.id}
-          tab={tab}
-          isActive={tab.id === activeTabId}
-          onClick={() => onTabClick(tab.id)}
-          onClose={() => onTabClose(tab.id)}
-          width={tabWidth}
-          isDragging={draggedTabId === tab.id}
-          isDragOver={dragOverIndex === index}
-          onDragStart={() => setDraggedTabId(tab.id)}
-          onDragEnd={() => {
-            setDraggedTabId(null);
-            setDragOverIndex(null);
-          }}
-        />
+        <div key={tab.id} className="relative flex items-center">
+          {dropIndicator?.beforeIndex === index && (
+            <DropIndicator />
+          )}
+          
+          <Tab
+            tab={tab}
+            isActive={tab.id === activeTabId}
+            onClick={() => onTabClick(tab.id)}
+            onClose={() => onTabClose(tab.id)}
+            width={tabWidth}
+            isDragging={dragState.draggedTabId === tab.id}
+            onDragStart={() => handleTabDragStart(tab.id)}
+            onDragEnd={handleDragEnd}
+          />
+        </div>
       ))}
+      
+      {dropIndicator?.beforeIndex === tabs.length && (
+        <DropIndicator />
+      )}
 
-      {/* New Tab Button */}
       <Button
         onClick={onNewTab}
-        title="New Tab"
+        title="New Tab (Ctrl+T)"
         size='icon-sm'
         variant='outline'
         className="interactive"
@@ -165,6 +253,15 @@ export function TabBar({ tabs, activeTabId, onTabClick, onTabClose, onNewTab }: 
   );
 }
 
+function DropIndicator() {
+  return (
+    <div 
+      className="w-4 h-6 rounded-lg bg-gradient-to-b from-blue-400 to-blue-600 dark:from-blue-500 dark:to-blue-700 opacity-90 shadow-lg shadow-blue-500/30 animate-pulse flex-shrink-0"
+      aria-hidden="true"
+    />
+  );
+}
+
 interface TabProps {
   tab: TabInfo;
   isActive: boolean;
@@ -172,12 +269,11 @@ interface TabProps {
   onClose: () => void;
   width: number;
   isDragging?: boolean;
-  isDragOver?: boolean;
   onDragStart: () => void;
   onDragEnd: () => void;
 }
 
-function Tab({ tab, isActive, onClick, onClose, width, isDragging, isDragOver, onDragStart, onDragEnd }: TabProps) {
+function Tab({ tab, isActive, onClick, onClose, width, isDragging, onDragStart, onDragEnd }: TabProps) {
   const handleClose = (e: React.MouseEvent) => {
     e.stopPropagation();
     onClose();
@@ -187,10 +283,6 @@ function Tab({ tab, isActive, onClick, onClose, width, isDragging, isDragOver, o
     e.dataTransfer.effectAllowed = 'move';
     e.dataTransfer.setData('text/plain', tab.id);
     onDragStart();
-  };
-
-  const handleDragEnd = () => {
-    onDragEnd();
   };
 
   const renderIcon = () => {
@@ -213,14 +305,17 @@ function Tab({ tab, isActive, onClick, onClose, width, isDragging, isDragOver, o
     <div
       draggable
       onDragStart={handleDragStart}
-      onDragEnd={handleDragEnd}
+      onDragEnd={onDragEnd}
       onClick={onClick}
       style={{ width: `${width}px` }}
+      role="tab"
+      aria-selected={isActive}
+      aria-label={tab.title || 'New Tab'}
+      tabIndex={isActive ? 0 : -1}
       className={cn(
-        'flex items-center gap-1.5 h-7 px-2.5 rounded-xl cursor-grab group tab-item flex-shrink-0',
+        'flex items-center gap-1.5 h-7 px-2.5 rounded-xl group tab-item flex-shrink-0',
         'transition-all duration-150',
-        isDragging && 'opacity-50 cursor-grabbing',
-        isDragOver && 'ring-2 ring-primary ring-offset-1',
+        isDragging && 'opacity-40 scale-95',
         isActive
           ? 'dark:bg-slate-900 bg-slate-50'
           : 'bg-slate-300 dark:bg-slate-600 dark:hover:bg-[#2a2a2a]'
@@ -239,7 +334,8 @@ function Tab({ tab, isActive, onClick, onClose, width, isDragging, isDragOver, o
         className={cn(
           'flex items-center justify-center size-5 rounded-full hover:bg-slate-200 dark:hover:bg-slate-600',
         )}
-        title="Close Tab"
+        title="Close Tab (Ctrl+W)"
+        aria-label={`Close ${tab.title || 'tab'}`}
       >
         <X className="w-3 h-3" />
       </button>

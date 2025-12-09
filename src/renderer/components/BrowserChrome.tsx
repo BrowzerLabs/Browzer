@@ -46,6 +46,8 @@ export function BrowserChrome() {
         onTabClick={browserAPI.switchTab}
         onTabClose={browserAPI.closeTab}
         onNewTab={() => browserAPI.createTab()}
+        onMoveTabLeft={browserAPI.moveActiveTabLeft}
+        onMoveTabRight={browserAPI.moveActiveTabRight}
       />
 
       <NavigationBar

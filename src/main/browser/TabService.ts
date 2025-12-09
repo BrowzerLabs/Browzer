@@ -346,25 +346,52 @@ export class TabService extends EventEmitter {
 
   public reorderTab(tabId: string, newIndex: number): boolean {
     const currentIndex = this.orderedTabIds.indexOf(tabId);
-    if (currentIndex === -1) return false;
-    newIndex = Math.max(0, Math.min(newIndex, this.orderedTabIds.length - 1));
-    if (newIndex === currentIndex) return false;
-    this.orderedTabIds.splice(currentIndex, 1);
-    this.orderedTabIds.splice(newIndex, 0, tabId);
+    if (currentIndex === -1) {
+      console.warn('[TabService] reorderTab: tab not found:', tabId);
+      return false;
+    }
+
+    const maxIndex = this.orderedTabIds.length - 1;
+    const clampedIndex = Math.max(0, Math.min(newIndex, maxIndex));
     
-    this.reorderTabViews();
-    this.emit('tab:reordered', { tabId, from: currentIndex, to: newIndex });
+    if (clampedIndex === currentIndex) {
+      return false;
+    }
+
+    this.orderedTabIds.splice(currentIndex, 1);
+    this.orderedTabIds.splice(clampedIndex, 0, tabId);
+    
+    this.reorderSingleTabView(tabId, clampedIndex);
+    
+    this.emit('tab:reordered', { tabId, from: currentIndex, to: clampedIndex });
     return true;
   }
 
-  private reorderTabViews(): void {
-    this.orderedTabIds.forEach((tabId, index) => {
-      const tab = this.tabs.get(tabId);
-      if (tab) {
-        this.baseWindow.contentView.removeChildView(tab.view);
-        this.baseWindow.contentView.addChildView(tab.view);
+  private reorderSingleTabView(tabId: string, newOrderIndex: number): void {
+    const tab = this.tabs.get(tabId);
+    if (!tab) return;
+
+    this.baseWindow.contentView.removeChildView(tab.view);
+    
+    const children = this.baseWindow.contentView.children;
+    let insertIndex = children.length;
+    
+    if (newOrderIndex < this.orderedTabIds.length - 1) {
+      const nextTabId = this.orderedTabIds[newOrderIndex + 1];
+      const nextTab = this.tabs.get(nextTabId);
+      if (nextTab) {
+        const nextViewIndex = children.indexOf(nextTab.view);
+        if (nextViewIndex !== -1) {
+          insertIndex = nextViewIndex;
+        }
       }
-    });
+    }
+    
+    if (insertIndex >= children.length) {
+      this.baseWindow.contentView.addChildView(tab.view);
+    } else {
+      this.baseWindow.contentView.addChildView(tab.view, insertIndex);
+    }
   }
 
   public updateLayout(sidebarWidth = 0): void {
