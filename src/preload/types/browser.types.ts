@@ -126,6 +126,9 @@ export interface BrowserAPI {
   // Deep Link event listeners
   onDeepLink: (callback: (path: string) => void) => () => void;
   
+  // Address Bar focus event listener
+  onRequestAddressBarFocus: (callback: () => void) => () => void;
+  
   onBookmarkChanged: (callback: () => void) => () => void;
   
   onSettingsChanged: (callback: (data: { category: string; key: string; value: unknown }) => void) => () => void;

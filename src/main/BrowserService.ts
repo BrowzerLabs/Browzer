@@ -265,6 +265,10 @@ export class BrowserService {
         this.recordingManager.handleTabSwitch(previousTabId, newTab);
       }
     });
+
+    this.tabService.on('tab:created', () => {
+      this.requestAddressBarFocus();
+    });
   }
 
   /**
@@ -277,5 +281,17 @@ export class BrowserService {
         view.webContents.send('browser:tabs-updated', this.tabService.getAllTabs());
       }
     });
+  }
+
+  public requestAddressBarFocus(): void {
+    if (this.browserView.webContents.isDestroyed()) {
+      return;
+    }
+    this.browserView.webContents.focus();
+    setTimeout(() => {
+      if (!this.browserView.webContents.isDestroyed()) {
+        this.browserView.webContents.send('request-address-bar-focus');
+      }
+    }, 10);
   }
 }
