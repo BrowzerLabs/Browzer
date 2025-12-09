@@ -78,47 +78,62 @@ function useSearchBox(
     return suggestions[index] || originalInputValue;
   }, [suggestions, originalInputValue]);
 
+  const openSuggestions = useCallback(() => {
+    if (!isOpen && inputValue) {
+      setIsOpen(true);
+      setOriginalInputValue(inputValue);
+      fetchSuggestions(inputValue);
+      return true;
+    }
+    return false;
+  }, [fetchSuggestions, inputValue, isOpen]);
+
+  const cycleSelection = useCallback((direction: 1 | -1) => {
+    if (!suggestions.length) {
+      return;
+    }
+
+    const atStart = selectedIndex <= 0;
+    const atEnd = selectedIndex >= suggestions.length - 1;
+
+    const newIndex = direction === 1
+      ? (atEnd ? 0 : selectedIndex + 1)
+      : (atStart ? suggestions.length - 1 : selectedIndex - 1);
+
+    setSelectedIndex(newIndex);
+    setInputValueState(getValueForIndex(newIndex));
+  }, [getValueForIndex, selectedIndex, suggestions]);
+
   const handleKeyDown = useCallback((e: KeyboardEvent<HTMLInputElement>) => {
-    switch (e.key) {
-      case 'ArrowDown':
-        e.preventDefault();
-        if (!isOpen && inputValue) {
-          setIsOpen(true);
-          setOriginalInputValue(inputValue);
-          fetchSuggestions(inputValue);
-        } else if (suggestions.length > 0) {
-          const newIndex = selectedIndex < suggestions.length - 1 ? selectedIndex + 1 : 0;
-          setSelectedIndex(newIndex);
-          setInputValueState(getValueForIndex(newIndex));
+    const actions: Record<string, () => void> = {
+      ArrowDown: () => {
+        if (!openSuggestions()) {
+          cycleSelection(1);
         }
-        break;
-
-      case 'ArrowUp':
-        e.preventDefault();
-        if (suggestions.length > 0) {
-          const newIndex = selectedIndex <= 0 ? suggestions.length - 1 : selectedIndex - 1;
-          setSelectedIndex(newIndex);
-          setInputValueState(getValueForIndex(newIndex));
-        }
-        break;
-
-      case 'Enter':
-        e.preventDefault();
+      },
+      ArrowUp: () => cycleSelection(-1),
+      Enter: () => {
         if (inputValue.trim()) {
           onNavigate(inputValue.trim());
           setIsOpen(false);
           setSuggestions([]);
         }
-        break;
-
-      case 'Escape':
-        e.preventDefault();
+      },
+      Escape: () => {
         setIsOpen(false);
         setSelectedIndex(-1);
         setInputValueState(originalInputValue);
-        break;
+      },
+    };
+
+    const action = actions[e.key];
+    if (!action) {
+      return;
     }
-  }, [isOpen, inputValue, selectedIndex, suggestions, fetchSuggestions, originalInputValue, getValueForIndex, onNavigate]);
+
+    e.preventDefault();
+    action();
+  }, [cycleSelection, inputValue, onNavigate, openSuggestions, originalInputValue]);
 
   const clearSuggestions = useCallback(() => {
     setSuggestions([]);
