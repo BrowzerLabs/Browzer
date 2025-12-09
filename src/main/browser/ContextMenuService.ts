@@ -5,610 +5,317 @@ import https from 'node:https';
 import http from 'node:http';
 import { EventEmitter } from 'events';
 
+const EXTENSION_MAP: Record<string, string> = {
+  jpeg: 'jpg', jpg: 'jpg', png: 'png', gif: 'gif', 
+  webp: 'webp', 'svg+xml': 'svg', bmp: 'bmp',
+};
+
+const DOWNLOAD_CONFIG = { MAX_REDIRECTS: 5, TIMEOUT_MS: 30000 };
+
 export class ContextMenuService extends EventEmitter {
-  constructor() {
-    super();
+  public destroy(): void {
+    this.removeAllListeners();
   }
 
   public showContextMenu(webContents: WebContents, params: ContextMenuParams): void {
-    const menu = this.buildContextMenu(webContents, params);
-    menu.popup({
+    this.buildContextMenu(webContents, params).popup({
       window: BrowserWindow.fromWebContents(webContents) || undefined,
       x: params.x,
       y: params.y,
     });
   }
 
-  private buildContextMenu(webContents: WebContents, params: ContextMenuParams): Menu {
+  private buildContextMenu(wc: WebContents, params: ContextMenuParams): Menu {
     const menu = new Menu();
+    const sections: Array<() => void> = [];
 
-    if (params.misspelledWord) {
-      this.addSpellingSuggestions(menu, webContents, params);
-      menu.append(new MenuItem({ type: 'separator' }));
-    }
+    if (params.misspelledWord) sections.push(() => this.addSpellingItems(menu, wc, params));
+    if (params.linkURL) sections.push(() => this.addLinkItems(menu, params));
+    if (params.mediaType === 'image' && params.srcURL) sections.push(() => this.addImageItems(menu, params));
+    if (params.mediaType === 'video' || params.mediaType === 'audio') sections.push(() => this.addMediaItems(menu, wc, params));
+    if (params.isEditable) sections.push(() => this.addEditableItems(menu, wc, params));
+    if (params.selectionText && !params.isEditable) sections.push(() => this.addSelectionItems(menu, wc, params));
+    sections.push(() => this.addPageItems(menu, wc, params));
 
-    if (params.linkURL) {
-      this.addLinkMenuItems(menu, webContents, params);
-      menu.append(new MenuItem({ type: 'separator' }));
-    }
-
-    if (params.mediaType === 'image' && params.srcURL) {
-      this.addImageMenuItems(menu, webContents, params);
-      menu.append(new MenuItem({ type: 'separator' }));
-    }
-
-    if (params.mediaType === 'video' || params.mediaType === 'audio') {
-      this.addMediaMenuItems(menu, webContents, params);
-      menu.append(new MenuItem({ type: 'separator' }));
-    }
-
-    if (params.isEditable) {
-      this.addEditableMenuItems(menu, webContents, params);
-      menu.append(new MenuItem({ type: 'separator' }));
-    }
-
-    if (params.selectionText && !params.isEditable) {
-      this.addSelectionMenuItems(menu, webContents, params);
-      menu.append(new MenuItem({ type: 'separator' }));
-    }
-
-    this.addPageMenuItems(menu, webContents, params);
+    sections.forEach((fn, i) => {
+      fn();
+      if (i < sections.length - 1) menu.append(new MenuItem({ type: 'separator' }));
+    });
 
     return menu;
   }
 
-  private addSpellingSuggestions(menu: Menu, webContents: WebContents, params: ContextMenuParams): void {
-    if (params.dictionarySuggestions.length > 0) {
-      params.dictionarySuggestions.slice(0, 5).forEach(suggestion => {
-        menu.append(new MenuItem({
-          label: suggestion,
-          click: () => webContents.replaceMisspelling(suggestion),
-        }));
-      });
+  // ==================== Menu Sections ====================
+
+  private addSpellingItems(menu: Menu, wc: WebContents, params: ContextMenuParams): void {
+    const suggestions = params.dictionarySuggestions.slice(0, 5);
+    
+    if (suggestions.length) {
+      suggestions.forEach(s => menu.append(new MenuItem({ label: s, click: () => wc.replaceMisspelling(s) })));
     } else {
-      menu.append(new MenuItem({
-        label: 'No spelling suggestions',
-        enabled: false,
-      }));
+      menu.append(new MenuItem({ label: 'No spelling suggestions', enabled: false }));
     }
 
     menu.append(new MenuItem({ type: 'separator' }));
-
     menu.append(new MenuItem({
       label: 'Add to Dictionary',
-      click: () => webContents.session.addWordToSpellCheckerDictionary(params.misspelledWord),
+      click: () => wc.session.addWordToSpellCheckerDictionary(params.misspelledWord),
     }));
   }
 
-  private addLinkMenuItems(menu: Menu, webContents: WebContents, params: ContextMenuParams): void {
-    const isEmailLink = params.linkURL.startsWith('mailto:');
-    const isTelLink = params.linkURL.startsWith('tel:');
+  private addLinkItems(menu: Menu, params: ContextMenuParams): void {
+    const { linkURL, linkText } = params;
 
-    if (isEmailLink) {
-      const email = params.linkURL.replace('mailto:', '').split('?')[0];
-      
-      menu.append(new MenuItem({
-        label: 'Copy Email Address',
-        click: () => clipboard.writeText(email),
-      }));
-
-      menu.append(new MenuItem({
-        label: 'Send Email',
-        click: () => shell.openExternal(params.linkURL),
-      }));
-    } else if (isTelLink) {
-      const phone = params.linkURL.replace('tel:', '');
-      
-      menu.append(new MenuItem({
-        label: 'Copy Phone Number',
-        click: () => clipboard.writeText(phone),
-      }));
-
-      menu.append(new MenuItem({
-        label: 'Call',
-        click: () => shell.openExternal(params.linkURL),
-      }));
+    if (linkURL.startsWith('mailto:')) {
+      const email = linkURL.replace('mailto:', '').split('?')[0];
+      menu.append(new MenuItem({ label: 'Copy Email Address', click: () => clipboard.writeText(email) }));
+      menu.append(new MenuItem({ label: 'Send Email', click: () => shell.openExternal(linkURL) }));
+    } else if (linkURL.startsWith('tel:')) {
+      const phone = linkURL.replace('tel:', '');
+      menu.append(new MenuItem({ label: 'Copy Phone Number', click: () => clipboard.writeText(phone) }));
+      menu.append(new MenuItem({ label: 'Call', click: () => shell.openExternal(linkURL) }));
     } else {
-      menu.append(new MenuItem({
-        label: 'Open Link in New Tab',
-        click: () => this.emit('open-link-in-new-tab', params.linkURL),
-      }));
-
-      menu.append(new MenuItem({
-        label: 'Open Link in New Window',
-        click: () => shell.openExternal(params.linkURL),
-      }));
-
+      menu.append(new MenuItem({ label: 'Open Link in New Tab', click: () => this.emit('open-link-in-new-tab', linkURL) }));
+      menu.append(new MenuItem({ label: 'Open Link in New Window', click: () => shell.openExternal(linkURL) }));
       menu.append(new MenuItem({ type: 'separator' }));
-
-      menu.append(new MenuItem({
-        label: 'Save Link As...',
-        click: () => this.saveLinkAs(params.linkURL),
-      }));
-
-      menu.append(new MenuItem({
-        label: 'Copy Link Address',
-        click: () => clipboard.writeText(params.linkURL),
-      }));
-
-      if (params.linkText) {
-        menu.append(new MenuItem({
-          label: 'Copy Link Text',
-          click: () => clipboard.writeText(params.linkText),
-        }));
+      menu.append(new MenuItem({ label: 'Save Link As...', click: () => this.saveAs(linkURL, 'download') }));
+      menu.append(new MenuItem({ label: 'Copy Link Address', click: () => clipboard.writeText(linkURL) }));
+      if (linkText) {
+        menu.append(new MenuItem({ label: 'Copy Link Text', click: () => clipboard.writeText(linkText) }));
       }
     }
   }
 
-  private addImageMenuItems(menu: Menu, webContents: WebContents, params: ContextMenuParams): void {
-    const isBase64Image = this.isBase64DataUrl(params.srcURL);
+  private addImageItems(menu: Menu, params: ContextMenuParams): void {
+    const { srcURL } = params;
+    const isBase64 = srcURL.startsWith('data:image/');
 
-    menu.append(new MenuItem({
-      label: 'Open Image in New Tab',
-      click: () => this.emit('open-link-in-new-tab', params.srcURL),
-    }));
-
-    menu.append(new MenuItem({
-      label: 'Save Image As...',
-      click: () => this.saveImageAs(params.srcURL),
-    }));
-
-    menu.append(new MenuItem({
-      label: 'Copy Image',
-      click: () => this.copyImageToClipboard(params.srcURL),
-    }));
-
-    menu.append(new MenuItem({
-      label: isBase64Image ? 'Copy Image Data URL' : 'Copy Image Address',
-      click: () => clipboard.writeText(params.srcURL),
-    }));
+    menu.append(new MenuItem({ label: 'Open Image in New Tab', click: () => this.emit('open-link-in-new-tab', srcURL) }));
+    menu.append(new MenuItem({ label: 'Save Image As...', click: () => this.saveImageAs(srcURL) }));
+    menu.append(new MenuItem({ label: 'Copy Image', click: () => this.copyImageToClipboard(srcURL) }));
+    menu.append(new MenuItem({ label: isBase64 ? 'Copy Image Data URL' : 'Copy Image Address', click: () => clipboard.writeText(srcURL) }));
   }
 
-  private addMediaMenuItems(menu: Menu, webContents: WebContents, params: ContextMenuParams): void {
-    const mediaLabel = params.mediaType === 'video' ? 'Video' : 'Audio';
+  private addMediaItems(menu: Menu, wc: WebContents, params: ContextMenuParams): void {
+    const { srcURL, mediaType } = params;
+    const label = mediaType === 'video' ? 'Video' : 'Audio';
+    const ext = mediaType === 'video' ? '.mp4' : '.mp3';
 
-    menu.append(new MenuItem({
-      label: `Open ${mediaLabel} in New Tab`,
-      click: () => this.emit('open-link-in-new-tab', params.srcURL),
-    }));
-
-    menu.append(new MenuItem({
-      label: `Save ${mediaLabel} As...`,
-      click: () => this.saveMediaAs(params.srcURL, params.mediaType),
-    }));
-
-    menu.append(new MenuItem({
-      label: `Copy ${mediaLabel} Address`,
-      click: () => clipboard.writeText(params.srcURL),
-    }));
-
+    menu.append(new MenuItem({ label: `Open ${label} in New Tab`, click: () => this.emit('open-link-in-new-tab', srcURL) }));
+    menu.append(new MenuItem({ label: `Save ${label} As...`, click: () => this.saveAs(srcURL, mediaType, ext) }));
+    menu.append(new MenuItem({ label: `Copy ${label} Address`, click: () => clipboard.writeText(srcURL) }));
     menu.append(new MenuItem({ type: 'separator' }));
+    menu.append(new MenuItem({ label: 'Play/Pause', click: () => this.execMediaAction(wc, params, 'element.paused ? element.play() : element.pause()') }));
+    menu.append(new MenuItem({ label: 'Mute/Unmute', click: () => this.execMediaAction(wc, params, 'element.muted = !element.muted') }));
 
-    menu.append(new MenuItem({
-      label: 'Play/Pause',
-      click: () => this.toggleMediaPlayback(webContents, params),
-    }));
-
-    menu.append(new MenuItem({
-      label: 'Mute/Unmute',
-      click: () => this.toggleMediaMute(webContents, params),
-    }));
-
-    if (params.mediaType === 'video') {
-      menu.append(new MenuItem({
-        label: 'Toggle Loop',
-        click: () => this.toggleMediaLoop(webContents, params),
-      }));
-
-      menu.append(new MenuItem({
-        label: 'Toggle Controls',
-        click: () => this.toggleMediaControls(webContents, params),
-      }));
+    if (mediaType === 'video') {
+      menu.append(new MenuItem({ label: 'Toggle Loop', click: () => this.execMediaAction(wc, params, 'element.loop = !element.loop') }));
+      menu.append(new MenuItem({ label: 'Toggle Controls', click: () => this.execMediaAction(wc, params, 'element.controls = !element.controls') }));
     }
   }
 
-  private addEditableMenuItems(menu: Menu, webContents: WebContents, params: ContextMenuParams): void {
-    menu.append(new MenuItem({
-      label: 'Undo',
-      accelerator: 'CmdOrCtrl+Z',
-      enabled: params.editFlags.canUndo,
-      click: () => webContents.undo(),
-    }));
+  private addEditableItems(menu: Menu, wc: WebContents, params: ContextMenuParams): void {
+    const { editFlags } = params;
+    const items: Array<{ label: string; accel?: string; enabled: boolean; action: () => void }> = [
+      { label: 'Undo', accel: 'CmdOrCtrl+Z', enabled: editFlags.canUndo, action: () => wc.undo() },
+      { label: 'Redo', accel: 'CmdOrCtrl+Shift+Z', enabled: editFlags.canRedo, action: () => wc.redo() },
+    ];
 
-    menu.append(new MenuItem({
-      label: 'Redo',
-      accelerator: 'CmdOrCtrl+Shift+Z',
-      enabled: params.editFlags.canRedo,
-      click: () => webContents.redo(),
-    }));
-
+    items.forEach(i => menu.append(new MenuItem({ label: i.label, accelerator: i.accel, enabled: i.enabled, click: i.action })));
     menu.append(new MenuItem({ type: 'separator' }));
 
-    menu.append(new MenuItem({
-      label: 'Cut',
-      accelerator: 'CmdOrCtrl+X',
-      enabled: params.editFlags.canCut,
-      click: () => webContents.cut(),
-    }));
+    const clipboardItems: typeof items = [
+      { label: 'Cut', accel: 'CmdOrCtrl+X', enabled: editFlags.canCut, action: () => wc.cut() },
+      { label: 'Copy', accel: 'CmdOrCtrl+C', enabled: editFlags.canCopy, action: () => wc.copy() },
+      { label: 'Paste', accel: 'CmdOrCtrl+V', enabled: editFlags.canPaste, action: () => wc.paste() },
+      { label: 'Paste and Match Style', accel: 'CmdOrCtrl+Shift+V', enabled: editFlags.canPaste, action: () => wc.pasteAndMatchStyle() },
+      { label: 'Delete', enabled: editFlags.canDelete, action: () => wc.delete() },
+    ];
 
-    menu.append(new MenuItem({
-      label: 'Copy',
-      accelerator: 'CmdOrCtrl+C',
-      enabled: params.editFlags.canCopy,
-      click: () => webContents.copy(),
-    }));
-
-    menu.append(new MenuItem({
-      label: 'Paste',
-      accelerator: 'CmdOrCtrl+V',
-      enabled: params.editFlags.canPaste,
-      click: () => webContents.paste(),
-    }));
-
-    menu.append(new MenuItem({
-      label: 'Paste and Match Style',
-      accelerator: 'CmdOrCtrl+Shift+V',
-      enabled: params.editFlags.canPaste,
-      click: () => webContents.pasteAndMatchStyle(),
-    }));
-
-    menu.append(new MenuItem({
-      label: 'Delete',
-      enabled: params.editFlags.canDelete,
-      click: () => webContents.delete(),
-    }));
-
+    clipboardItems.forEach(i => menu.append(new MenuItem({ label: i.label, accelerator: i.accel, enabled: i.enabled, click: i.action })));
     menu.append(new MenuItem({ type: 'separator' }));
-
-    menu.append(new MenuItem({
-      label: 'Select All',
-      accelerator: 'CmdOrCtrl+A',
-      enabled: params.editFlags.canSelectAll,
-      click: () => webContents.selectAll(),
-    }));
+    menu.append(new MenuItem({ label: 'Select All', accelerator: 'CmdOrCtrl+A', enabled: editFlags.canSelectAll, click: () => wc.selectAll() }));
   }
 
-  private addSelectionMenuItems(menu: Menu, webContents: WebContents, params: ContextMenuParams): void {
-    menu.append(new MenuItem({
-      label: 'Copy',
-      accelerator: 'CmdOrCtrl+C',
-      click: () => webContents.copy(),
-    }));
+  private addSelectionItems(menu: Menu, wc: WebContents, params: ContextMenuParams): void {
+    const text = params.selectionText.trim();
+    const displayText = text.length > 50 ? `${text.substring(0, 50)}...` : text;
 
-    // Search with default search engine
-    const searchText = params.selectionText.trim().substring(0, 50);
-    const displayText = searchText.length < params.selectionText.trim().length 
-      ? `${searchText}...` 
-      : searchText;
-
+    menu.append(new MenuItem({ label: 'Copy', accelerator: 'CmdOrCtrl+C', click: () => wc.copy() }));
     menu.append(new MenuItem({
       label: `Search Browzer for "${displayText}"`,
-      click: () => {
-        const searchUrl = `https://www.google.com/search?q=${encodeURIComponent(params.selectionText.trim())}`;
-        this.emit('open-link-in-new-tab', searchUrl);
-      },
+      click: () => this.emit('open-link-in-new-tab', `https://www.google.com/search?q=${encodeURIComponent(text)}`),
     }));
   }
 
-  private addPageMenuItems(menu: Menu, webContents: WebContents, params: ContextMenuParams): void {
-    menu.append(new MenuItem({
-      label: 'Back',
-      accelerator: 'Alt+Left',
-      enabled: webContents.navigationHistory.canGoBack(),
-      click: () => webContents.navigationHistory.goBack(),
-    }));
-
-    menu.append(new MenuItem({
-      label: 'Forward',
-      accelerator: 'Alt+Right',
-      enabled: webContents.navigationHistory.canGoForward(),
-      click: () => webContents.navigationHistory.goForward(),
-    }));
-
-    menu.append(new MenuItem({
-      label: 'Reload',
-      accelerator: 'CmdOrCtrl+R',
-      click: () => webContents.reload(),
-    }));
-
+  private addPageItems(menu: Menu, wc: WebContents, params: ContextMenuParams): void {
+    menu.append(new MenuItem({ label: 'Back', accelerator: 'Alt+Left', enabled: wc.navigationHistory.canGoBack(), click: () => wc.navigationHistory.goBack() }));
+    menu.append(new MenuItem({ label: 'Forward', accelerator: 'Alt+Right', enabled: wc.navigationHistory.canGoForward(), click: () => wc.navigationHistory.goForward() }));
+    menu.append(new MenuItem({ label: 'Reload', accelerator: 'CmdOrCtrl+R', click: () => wc.reload() }));
     menu.append(new MenuItem({ type: 'separator' }));
-
-    menu.append(new MenuItem({
-      label: 'Save As...',
-      accelerator: 'CmdOrCtrl+S',
-      click: () => this.savePageAs(webContents),
-    }));
-
-    menu.append(new MenuItem({
-      label: 'Print...',
-      accelerator: 'CmdOrCtrl+P',
-      click: () => webContents.print(),
-    }));
-
+    menu.append(new MenuItem({ label: 'Save As...', accelerator: 'CmdOrCtrl+S', click: () => this.savePageAs(wc) }));
+    menu.append(new MenuItem({ label: 'Print...', accelerator: 'CmdOrCtrl+P', click: () => wc.print() }));
     menu.append(new MenuItem({ type: 'separator' }));
-
-    menu.append(new MenuItem({
-      label: 'Inspect',
-      accelerator: 'CmdOrCtrl+Shift+I',
-      click: () => webContents.inspectElement(params.x, params.y),
-    }));
+    menu.append(new MenuItem({ label: 'Inspect', accelerator: 'CmdOrCtrl+Shift+I', click: () => wc.inspectElement(params.x, params.y) }));
   }
 
-  private async saveLinkAs(url: string): Promise<void> {
+  // ==================== Save Operations ====================
+
+  private async saveAs(url: string, defaultName: string, defaultExt = ''): Promise<void> {
     try {
-      const urlObj = new URL(url);
-      const filename = path.basename(urlObj.pathname) || 'download';
-      
-      const { filePath } = await dialog.showSaveDialog({
-        defaultPath: filename,
-        title: 'Save Link As',
-      });
+      let filename = defaultName;
+      try {
+        filename = path.basename(new URL(url).pathname) || defaultName;
+      } catch { /* use default */ }
 
-      if (filePath) {
-        await this.downloadFile(url, filePath);
-      }
+      if (defaultExt && !path.extname(filename)) filename += defaultExt;
+
+      const { filePath } = await dialog.showSaveDialog({ defaultPath: filename, title: 'Save As' });
+      if (filePath) await this.downloadFile(url, filePath);
     } catch (error) {
-      console.error('[ContextMenuService] Failed to save link:', error);
-      dialog.showErrorBox('Download Failed', 'Failed to save the link. Please try again.');
+      console.error('[ContextMenuService] Save failed:', error);
+      dialog.showErrorBox('Download Failed', 'Failed to save. Please try again.');
     }
   }
 
   private async saveImageAs(url: string): Promise<void> {
-    try {
-      if (this.isBase64DataUrl(url)) {
-        await this.saveBase64ImageAs(url);
-        return;
-      }
-
-      const urlObj = new URL(url);
-      let filename = path.basename(urlObj.pathname) || 'image';
-      
-      if (!path.extname(filename)) {
-        filename += '.png';
-      }
-      
-      const { filePath } = await dialog.showSaveDialog({
-        defaultPath: filename,
-        title: 'Save Image As',
-      });
-
-      if (filePath) {
-        await this.downloadFile(url, filePath);
-      }
-    } catch (error) {
-      console.error('[ContextMenuService] Failed to save image:', error);
-      dialog.showErrorBox('Download Failed', 'Failed to save the image. Please try again.');
+    if (url.startsWith('data:image/')) {
+      await this.saveBase64Image(url);
+      return;
     }
+    await this.saveAs(url, 'image', '.png');
   }
 
-  private async copyImageToClipboard(srcURL: string): Promise<void> {
+  private async saveBase64Image(dataUrl: string): Promise<void> {
     try {
-      if (this.isBase64DataUrl(srcURL)) {
-        const image = this.base64ToNativeImage(srcURL);
-        if (image && !image.isEmpty()) {
-          clipboard.writeImage(image);
-          return;
-        }
-      }
-
-      const image = await this.fetchImageAsNativeImage(srcURL);
-      if (image && !image.isEmpty()) {
-        clipboard.writeImage(image);
-      } else {
-        clipboard.writeText(srcURL);
-      }
-    } catch (error) {
-      console.error('[ContextMenuService] Failed to copy image:', error);
-      clipboard.writeText(srcURL);
-    }
-  }
-
-  private async saveMediaAs(url: string, mediaType: string): Promise<void> {
-    try {
-      const urlObj = new URL(url);
-      let filename = path.basename(urlObj.pathname) || (mediaType === 'video' ? 'video' : 'audio');
-      
-      if (!path.extname(filename)) {
-        filename += mediaType === 'video' ? '.mp4' : '.mp3';
-      }
-      
-      const { filePath } = await dialog.showSaveDialog({
-        defaultPath: filename,
-        title: `Save ${mediaType === 'video' ? 'Video' : 'Audio'} As`,
-      });
-
-      if (filePath) {
-        await this.downloadFile(url, filePath);
-      }
-    } catch (error) {
-      console.error('[ContextMenuService] Failed to save media:', error);
-      dialog.showErrorBox('Download Failed', 'Failed to save the media file. Please try again.');
-    }
-  }
-
-  private async savePageAs(webContents: WebContents): Promise<void> {
-    try {
-      const pageTitle = webContents.getTitle() || 'page';
-      const sanitizedTitle = pageTitle.replace(/[<>:"/\\|?*]/g, '_');
-      
-      const { filePath } = await dialog.showSaveDialog({
-        defaultPath: `${sanitizedTitle}.html`,
-        title: 'Save Page As',
-      });
-
-      if (filePath) {
-        const html = await webContents.executeJavaScript('document.documentElement.outerHTML');
-        fs.writeFileSync(filePath, html, 'utf-8');
-      }
-    } catch (error) {
-      console.error('[ContextMenuService] Failed to save page:', error);
-      dialog.showErrorBox('Save Failed', 'Failed to save the page. Please try again.');
-    }
-  }
-
-  private isBase64DataUrl(url: string): boolean {
-    return url.startsWith('data:image/');
-  }
-
-  private base64ToNativeImage(dataUrl: string): Electron.NativeImage | null {
-    try {
-      const matches = dataUrl.match(/^data:image\/([a-zA-Z0-9+]+);base64,(.+)$/);
-      if (!matches) {
-        return null;
-      }
-
-      const base64Data = matches[2];
-      const buffer = Buffer.from(base64Data, 'base64');
-      return nativeImage.createFromBuffer(buffer);
-    } catch (error) {
-      console.error('[ContextMenuService] Failed to convert base64 to image:', error);
-      return null;
-    }
-  }
-
-  private async saveBase64ImageAs(dataUrl: string): Promise<void> {
-    try {
-      const matches = dataUrl.match(/^data:image\/([a-zA-Z0-9+]+);base64,(.+)$/);
-      if (!matches) {
+      const match = dataUrl.match(/^data:image\/([a-zA-Z0-9+]+);base64,(.+)$/);
+      if (!match) {
         dialog.showErrorBox('Save Failed', 'Invalid image data.');
         return;
       }
 
-      const mimeType = matches[1];
-      const base64Data = matches[2];
+      const ext = EXTENSION_MAP[match[1].toLowerCase()] || 'png';
+      const { filePath } = await dialog.showSaveDialog({ defaultPath: `image.${ext}`, title: 'Save Image As' });
       
-      const extensionMap: Record<string, string> = {
-        'jpeg': 'jpg',
-        'jpg': 'jpg',
-        'png': 'png',
-        'gif': 'gif',
-        'webp': 'webp',
-        'svg+xml': 'svg',
-        'bmp': 'bmp',
-      };
-      const extension = extensionMap[mimeType.toLowerCase()] || 'png';
-      
-      const { filePath } = await dialog.showSaveDialog({
-        defaultPath: `image.${extension}`,
-        title: 'Save Image As',
-      });
-
       if (filePath) {
-        const buffer = Buffer.from(base64Data, 'base64');
-        fs.writeFileSync(filePath, buffer);
+        fs.writeFileSync(filePath, Buffer.from(match[2], 'base64'));
       }
     } catch (error) {
-      console.error('[ContextMenuService] Failed to save base64 image:', error);
-      dialog.showErrorBox('Save Failed', 'Failed to save the image. Please try again.');
+      console.error('[ContextMenuService] Save base64 image failed:', error);
+      dialog.showErrorBox('Save Failed', 'Failed to save the image.');
     }
   }
 
-  private fetchImageAsNativeImage(url: string): Promise<Electron.NativeImage | null> {
-    return new Promise((resolve) => {
-      if (this.isBase64DataUrl(url)) {
-        resolve(this.base64ToNativeImage(url));
-        return;
-      }
-
-      const protocol = url.startsWith('https') ? https : http;
+  private async savePageAs(wc: WebContents): Promise<void> {
+    try {
+      const title = (wc.getTitle() || 'page').replace(/[<>:"/\\|?*]/g, '_');
+      const { filePath } = await dialog.showSaveDialog({ defaultPath: `${title}.html`, title: 'Save Page As' });
       
-      protocol.get(url, (response) => {
+      if (filePath) {
+        const html = await wc.executeJavaScript('document.documentElement.outerHTML');
+        fs.writeFileSync(filePath, html, 'utf-8');
+      }
+    } catch (error) {
+      console.error('[ContextMenuService] Save page failed:', error);
+      dialog.showErrorBox('Save Failed', 'Failed to save the page.');
+    }
+  }
+
+  // ==================== Image Operations ====================
+
+  private async copyImageToClipboard(url: string): Promise<void> {
+    try {
+      const image = url.startsWith('data:image/') 
+        ? this.base64ToImage(url) 
+        : await this.fetchImage(url);
+
+      if (image && !image.isEmpty()) {
+        clipboard.writeImage(image);
+      } else {
+        clipboard.writeText(url);
+      }
+    } catch {
+      clipboard.writeText(url);
+    }
+  }
+
+  private base64ToImage(dataUrl: string): Electron.NativeImage | null {
+    const match = dataUrl.match(/^data:image\/[a-zA-Z0-9+]+;base64,(.+)$/);
+    return match ? nativeImage.createFromBuffer(Buffer.from(match[1], 'base64')) : null;
+  }
+
+  private fetchImage(url: string): Promise<Electron.NativeImage | null> {
+    return new Promise(resolve => {
+      const proto = url.startsWith('https') ? https : http;
+      proto.get(url, res => {
         const chunks: Buffer[] = [];
-        
-        response.on('data', (chunk) => chunks.push(chunk));
-        response.on('end', () => {
-          try {
-            const buffer = Buffer.concat(chunks);
-            const image = nativeImage.createFromBuffer(buffer);
-            resolve(image);
-          } catch {
-            resolve(null);
-          }
+        res.on('data', c => chunks.push(c));
+        res.on('end', () => {
+          try { resolve(nativeImage.createFromBuffer(Buffer.concat(chunks))); } 
+          catch { resolve(null); }
         });
-        response.on('error', () => resolve(null));
+        res.on('error', () => resolve(null));
       }).on('error', () => resolve(null));
     });
   }
 
-  private downloadFile(url: string, filePath: string): Promise<void> {
+  // ==================== Media Controls ====================
+
+  private execMediaAction(wc: WebContents, params: ContextMenuParams, action: string): void {
+    const src = params.srcURL.replace(/'/g, "\\'");
+    wc.executeJavaScript(`
+      (function() {
+        const m = document.querySelector('video[src="${src}"], audio[src="${src}"], video source[src="${src}"], audio source[src="${src}"]');
+        const element = m?.tagName === 'SOURCE' ? m.parentElement : m;
+        if (element && (element.tagName === 'VIDEO' || element.tagName === 'AUDIO')) { ${action}; }
+      })();
+    `).catch(e => console.error('[ContextMenuService] Media action failed:', e));
+  }
+
+  // ==================== Download ====================
+
+  private downloadFile(url: string, filePath: string, redirects = 0): Promise<void> {
     return new Promise((resolve, reject) => {
-      const protocol = url.startsWith('https') ? https : http;
+      if (redirects > DOWNLOAD_CONFIG.MAX_REDIRECTS) {
+        return reject(new Error('Too many redirects'));
+      }
+
+      const proto = url.startsWith('https') ? https : http;
       const file = fs.createWriteStream(filePath);
-      
-      protocol.get(url, (response) => {
-        if (response.statusCode === 301 || response.statusCode === 302) {
-          const redirectUrl = response.headers.location;
-          if (redirectUrl) {
-            file.close();
-            fs.unlinkSync(filePath);
-            this.downloadFile(redirectUrl, filePath).then(resolve).catch(reject);
-            return;
-          }
-        }
-        
-        response.pipe(file);
-        
-        file.on('finish', () => {
+      let opened = false;
+
+      const cleanup = () => { if (opened) fs.unlink(filePath, () => {}); };
+
+      file.on('open', () => { opened = true; });
+
+      const req = proto.get(url, res => {
+        const { statusCode, headers } = res;
+
+        if ([301, 302, 307].includes(statusCode!) && headers.location) {
           file.close();
-          resolve();
-        });
-        
-        file.on('error', (err) => {
-          fs.unlinkSync(filePath);
-          reject(err);
-        });
-      }).on('error', (err) => {
-        fs.unlinkSync(filePath);
-        reject(err);
+          cleanup();
+          const next = headers.location.startsWith('http') ? headers.location : new URL(headers.location, url).href;
+          return this.downloadFile(next, filePath, redirects + 1).then(resolve).catch(reject);
+        }
+
+        if (!statusCode || statusCode < 200 || statusCode >= 300) {
+          file.close();
+          cleanup();
+          return reject(new Error(`HTTP ${statusCode}`));
+        }
+
+        res.pipe(file);
+        file.on('finish', () => { file.close(); resolve(); });
+        file.on('error', e => { cleanup(); reject(e); });
+      });
+
+      req.on('error', e => { file.close(); cleanup(); reject(e); });
+      req.setTimeout(DOWNLOAD_CONFIG.TIMEOUT_MS, () => {
+        req.destroy();
+        file.close();
+        cleanup();
+        reject(new Error('Download timeout'));
       });
     });
-  }
-
-  private toggleMediaPlayback(webContents: WebContents, params: ContextMenuParams): void {
-    webContents.executeJavaScript(`
-      (function() {
-        const media = document.elementFromPoint(${params.x}, ${params.y});
-        if (media && (media.tagName === 'VIDEO' || media.tagName === 'AUDIO')) {
-          if (media.paused) {
-            media.play();
-          } else {
-            media.pause();
-          }
-        }
-      })();
-    `).catch(err => console.error('[ContextMenuService] Failed to toggle playback:', err));
-  }
-
-  private toggleMediaMute(webContents: WebContents, params: ContextMenuParams): void {
-    webContents.executeJavaScript(`
-      (function() {
-        const media = document.elementFromPoint(${params.x}, ${params.y});
-        if (media && (media.tagName === 'VIDEO' || media.tagName === 'AUDIO')) {
-          media.muted = !media.muted;
-        }
-      })();
-    `).catch(err => console.error('[ContextMenuService] Failed to toggle mute:', err));
-  }
-
-  private toggleMediaLoop(webContents: WebContents, params: ContextMenuParams): void {
-    webContents.executeJavaScript(`
-      (function() {
-        const media = document.elementFromPoint(${params.x}, ${params.y});
-        if (media && media.tagName === 'VIDEO') {
-          media.loop = !media.loop;
-        }
-      })();
-    `).catch(err => console.error('[ContextMenuService] Failed to toggle loop:', err));
-  }
-
-  private toggleMediaControls(webContents: WebContents, params: ContextMenuParams): void {
-    webContents.executeJavaScript(`
-      (function() {
-        const media = document.elementFromPoint(${params.x}, ${params.y});
-        if (media && media.tagName === 'VIDEO') {
-          media.controls = !media.controls;
-        }
-      })();
-    `).catch(err => console.error('[ContextMenuService] Failed to toggle controls:', err));
   }
 }
