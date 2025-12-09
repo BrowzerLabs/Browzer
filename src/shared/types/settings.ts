@@ -8,6 +8,7 @@ export interface AppSettings {
     clearCacheOnExit: boolean;
     doNotTrack: boolean;
     blockThirdPartyCookies: boolean;
+    enableAdBlocker: boolean;
   };
   
   appearance: {

@@ -13,6 +13,7 @@ const defaultSettings: AppSettings = {
     clearCacheOnExit: false,
     doNotTrack: true,
     blockThirdPartyCookies: false,
+    enableAdBlocker: true,
   },
   appearance: {
     fontSize: 16,
