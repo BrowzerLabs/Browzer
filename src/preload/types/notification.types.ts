@@ -1,8 +1,6 @@
-import type { NotificationPayload } from '@/shared/types/notification';
+import type { NotificationPayload, ToastPayload } from '@/shared/types/notification';
 
-/**
- * Notification API - Handles in-app notifications
- */
 export interface NotificationAPI {
   onNotification: (callback: (notification: NotificationPayload) => void) => () => void;
+  onToast: (callback: (toast: ToastPayload) => void) => () => void;
 }

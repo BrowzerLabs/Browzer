@@ -1,7 +1,7 @@
-import { BaseWindow, WebContentsView, Menu } from 'electron';
+import { BaseWindow, WebContentsView } from 'electron';
 import { EventEmitter } from 'events';
 import path from 'node:path';
-import { TabInfo, HistoryTransition } from '@/shared/types';
+import { TabInfo, HistoryTransition, ToastPayload } from '@/shared/types';
 import { VideoRecorder } from '@/main/recording';
 import { PasswordManager } from '@/main/password/PasswordManager';
 import { BrowserAutomationExecutor } from '@/main/automation';
@@ -12,37 +12,34 @@ import { NavigationService } from './NavigationService';
 import { DebuggerService } from './DebuggerService';
 import { PasswordAutomation } from '@/main/password';
 import { SettingsService, SettingsChangeEvent } from '@/main/settings/SettingsService';
+import { ContextMenuService } from './ContextMenuService';
+
+const TAB_HEIGHT = {
+  WITHOUT_BOOKMARKS: 75 as number,
+  WITH_BOOKMARKS: 104 as number,
+};
 
 export class TabService extends EventEmitter {
-  public on<K extends keyof TabServiceEvents>(
-    event: K,
-    listener: TabServiceEvents[K]
-  ): this {
+  public on<K extends keyof TabServiceEvents>(event: K, listener: TabServiceEvents[K]): this {
     return super.on(event, listener);
   }
 
-  public emit<K extends keyof TabServiceEvents>(
-    event: K,
-    ...args: Parameters<TabServiceEvents[K]>
-  ): boolean {
+  public emit<K extends keyof TabServiceEvents>(event: K, ...args: Parameters<TabServiceEvents[K]>): boolean {
     return super.emit(event, ...args);
   }
 
-  private tabs: Map<string, Tab> = new Map();
+  private tabs = new Map<string, Tab>();
   private orderedTabIds: string[] = [];
   private activeTabId: string | null = null;
   private tabCounter = 0;
   private currentSidebarWidth = 0;
-
-  private static readonly TAB_HEIGHT_WITHOUT_BOOKMARKS = 75;
-  private static readonly TAB_HEIGHT_WITH_BOOKMARKS = 104;
-  
-  private webContentsViewHeight = TabService.TAB_HEIGHT_WITHOUT_BOOKMARKS;
-
-  private newTabUrl: string;
+  private webContentsViewHeight = TAB_HEIGHT.WITHOUT_BOOKMARKS;
+  private newTabUrl = 'browzer://home';
+  private readonly contextMenuService = new ContextMenuService();
 
   constructor(
     private baseWindow: BaseWindow,
+    private browserView: WebContentsView,
     private passwordManager: PasswordManager,
     private settingsService: SettingsService,
     private historyService: HistoryService,
@@ -51,37 +48,32 @@ export class TabService extends EventEmitter {
     private bookmarkService: BookmarkService
   ) {
     super();
-    this.initializeFromSettings();
-    this.setupListeners();
+    this.initialize();
+  }
+
+  private initialize(): void {
+    this.newTabUrl = this.settingsService.getSetting('general', 'newTabUrl') || 'browzer://home';
+    this.setupEventListeners();
     this.recalculateBookmarkBarHeight();
   }
 
-  private initializeFromSettings(): void {
-    this.newTabUrl = this.settingsService.getSetting('general', 'newTabUrl') || 'browzer://home';
-    this.webContentsViewHeight = TabService.TAB_HEIGHT_WITHOUT_BOOKMARKS;
-  }
-
-  private setupListeners(): void {
+  private setupEventListeners(): void {
     this.settingsService.on('settings:general', (event: SettingsChangeEvent<'general'>) => {
-      const { newValue } = event;
-      this.newTabUrl = newValue.newTabUrl || 'browzer://home';
+      this.newTabUrl = event.newValue.newTabUrl || 'browzer://home';
     });
     
     this.settingsService.on('settings:appearance', (event: SettingsChangeEvent<'appearance'>) => {
-      this.handleAppearanceSettingsChange(event);
+      if (event.key === 'showBookmarksBar') {
+        this.recalculateBookmarkBarHeight();
+      }
     });
 
-    this.bookmarkService.on('bookmark:changed', () => {
-      this.recalculateBookmarkBarHeight();
-    });
-  }
+    this.bookmarkService.on('bookmark:changed', () => this.recalculateBookmarkBarHeight());
 
-  private handleAppearanceSettingsChange(event: SettingsChangeEvent<'appearance'>): void {
-    const { key } = event;
-    
-    if (key === 'showBookmarksBar') {
-      this.recalculateBookmarkBarHeight();
-    }
+    this.contextMenuService.on('open-link-in-new-tab', (url: string) => this.createTab(url));
+    this.contextMenuService.on('toast', (payload: ToastPayload) => {
+      this.browserView.webContents.send('toast', payload);
+    });
   }
 
   public recalculateBookmarkBarHeight(): void {
@@ -89,15 +81,17 @@ export class TabService extends EventEmitter {
     const hasBookmarks = this.bookmarkService.hasBookmarksInBar();
     
     this.webContentsViewHeight = showBookmarksBar && hasBookmarks
-      ? TabService.TAB_HEIGHT_WITH_BOOKMARKS 
-      : TabService.TAB_HEIGHT_WITHOUT_BOOKMARKS;
+      ? TAB_HEIGHT.WITH_BOOKMARKS 
+      : TAB_HEIGHT.WITHOUT_BOOKMARKS;
     
     this.updateLayout(this.currentSidebarWidth);
   }
 
+
   public createTab(url?: string): Tab {
     const previousActiveTabId = this.activeTabId;
     const tabId = `tab-${++this.tabCounter}`;
+    const urlToLoad = url || this.newTabUrl;
     
     const view = new WebContentsView({
       webPreferences: {
@@ -110,23 +104,13 @@ export class TabService extends EventEmitter {
       },
     });
 
-    const urlToLoad = url || this.newTabUrl;
-    
-    let displayUrl = urlToLoad;
-    let displayTitle = 'New Tab';
-    let displayIcon: string | undefined;
-    
     const internalPageInfo = this.navigationService.getInternalPageInfo(urlToLoad);
-    if (internalPageInfo) {
-      displayUrl = internalPageInfo.url;
-      displayTitle = internalPageInfo.title;
-      displayIcon = internalPageInfo.favicon;
-    }
-
+    
     const tabInfo: TabInfo = {
       id: tabId,
-      title: displayTitle,
-      url: displayUrl,
+      title: internalPageInfo?.title || 'New Tab',
+      url: internalPageInfo?.url || urlToLoad,
+      favicon: internalPageInfo?.favicon,
       isLoading: false,
       canGoBack: false,
       canGoForward: false,
@@ -148,22 +132,18 @@ export class TabService extends EventEmitter {
 
     this.tabs.set(tabId, tab);
     this.orderedTabIds.push(tabId);
-    this.setupTabEvents(tab);
+    this.setupTabWebContentsEvents(tab);
 
-    // Initialize debugger asynchronously
     this.debuggerService.initializeDebugger(view, tabId).catch(err => 
-      console.error('[TabService] Failed to initialize debugger for tab:', tabId, err)
+      console.error('[TabService] Failed to initialize debugger:', tabId, err)
     );
 
     this.baseWindow.contentView.addChildView(view);
     this.updateTabViewBounds(view, this.currentSidebarWidth);
-
     view.webContents.loadURL(this.navigationService.normalizeURL(urlToLoad));
-
     this.switchToTab(tabId);
     
     this.emit('tab:created', tab, previousActiveTabId);
-
     return tab;
   }
 
@@ -172,47 +152,28 @@ export class TabService extends EventEmitter {
     if (!tab) return false;
 
     const wasActiveTab = this.activeTabId === tabId;
-    let newActiveTabId: string | null = null;
-
-    // Remove view from window
-    this.baseWindow.contentView.removeChildView(tab.view);
-
-    // Clean up password automation
-    if (tab.passwordAutomation) {
-      tab.passwordAutomation.stop().catch(err => 
-        console.error('[TabService] Error stopping password automation:', err)
-      );
-    }
-
-    this.debuggerService.cleanupDebugger(tab.view, tabId);
-
-    tab.view.webContents.close();
-    this.tabs.delete(tabId);
-    
     const orderIndex = this.orderedTabIds.indexOf(tabId);
+
+    this.baseWindow.contentView.removeChildView(tab.view);
+    tab.passwordAutomation?.stop().catch(console.error);
+    this.debuggerService.cleanupDebugger(tab.view, tabId);
+    tab.view.webContents.close();
+    
+    this.tabs.delete(tabId);
     if (orderIndex !== -1) {
       this.orderedTabIds.splice(orderIndex, 1);
     }
 
-    // If this was the active tab, switch to another
-    if (wasActiveTab) {
-      if (this.orderedTabIds.length > 0) {
-        let targetIndex = orderIndex;
-        if (targetIndex >= this.orderedTabIds.length) {
-          targetIndex = this.orderedTabIds.length - 1;
-        }
-        if (targetIndex < 0) {
-          targetIndex = 0;
-        }
-        newActiveTabId = this.orderedTabIds[targetIndex];
-        this.switchToTab(newActiveTabId);
-      } else {
-        this.activeTabId = null;
-      }
+    let newActiveTabId: string | null = null;
+    if (wasActiveTab && this.orderedTabIds.length > 0) {
+      const targetIndex = Math.min(orderIndex, this.orderedTabIds.length - 1);
+      newActiveTabId = this.orderedTabIds[Math.max(0, targetIndex)];
+      this.switchToTab(newActiveTabId);
+    } else if (wasActiveTab) {
+      this.activeTabId = null;
     }
 
     this.emit('tabs:changed');
-    
     this.emit('tab:closed', tabId, newActiveTabId, wasActiveTab);
     
     if (this.tabs.size === 0) {
@@ -228,18 +189,12 @@ export class TabService extends EventEmitter {
 
     const previousTabId = this.activeTabId;
 
-    // Hide current active tab
     if (this.activeTabId && this.activeTabId !== tabId) {
-      const currentTab = this.tabs.get(this.activeTabId);
-      if (currentTab) {
-        currentTab.view.setVisible(false);
-      }
+      this.tabs.get(this.activeTabId)?.view.setVisible(false);
     }
 
-    // Show new tab
     tab.view.setVisible(true);
     this.activeTabId = tabId;
-
     this.emit('tabs:changed');
     
     if (previousTabId && previousTabId !== tabId) {
@@ -251,25 +206,23 @@ export class TabService extends EventEmitter {
 
   public navigate(tabId: string, url: string): boolean {
     let tab = this.tabs.get(tabId);
-    if (!tab){
+    if (!tab) {
       tab = this.createTab(url);
     }
-
-    const normalizedURL = this.navigationService.normalizeURL(url);
-    tab.view.webContents.loadURL(normalizedURL);
+    tab.view.webContents.loadURL(this.navigationService.normalizeURL(url));
     return true;
   }
 
   public goBack(tabId: string): boolean {
     const tab = this.tabs.get(tabId);
-    if (!tab || !tab.view.webContents.navigationHistory.canGoBack()) return false;
+    if (!tab?.view.webContents.navigationHistory.canGoBack()) return false;
     tab.view.webContents.navigationHistory.goBack();
     return true;
   }
 
   public goForward(tabId: string): boolean {
     const tab = this.tabs.get(tabId);
-    if (!tab || !tab.view.webContents.navigationHistory.canGoForward()) return false;
+    if (!tab?.view.webContents.navigationHistory.canGoForward()) return false;
     tab.view.webContents.navigationHistory.goForward();
     return true;
   }
@@ -289,50 +242,23 @@ export class TabService extends EventEmitter {
   }
 
   public canGoBack(tabId: string): boolean {
-    const tab = this.tabs.get(tabId);
-    return tab ? tab.view.webContents.navigationHistory.canGoBack() : false;
+    return this.tabs.get(tabId)?.view.webContents.navigationHistory.canGoBack() ?? false;
   }
 
   public canGoForward(tabId: string): boolean {
-    const tab = this.tabs.get(tabId);
-    return tab ? tab.view.webContents.navigationHistory.canGoForward() : false;
+    return this.tabs.get(tabId)?.view.webContents.navigationHistory.canGoForward() ?? false;
   }
 
-  public getAllTabs(): { tabs: TabInfo[]; activeTabId: string | null } {
-    const tabs = this.orderedTabIds
-      .map(tabId => this.tabs.get(tabId))
-      .filter((tab): tab is Tab => tab !== undefined)
-      .map(tab => tab.info);
-    return { tabs, activeTabId: this.activeTabId };
-  }
-
-  public getActiveTab(): Tab | null {
-    return this.activeTabId ? this.tabs.get(this.activeTabId) || null : null;
-  }
-
-  public getTab(tabId: string): Tab | undefined {
-    return this.tabs.get(tabId);
-  }
-
-  public getTabs(): Map<string, Tab> {
-    return this.tabs;
-  }
-
-  public getActiveTabId(): string | null {
-    return this.activeTabId;
-  }
 
   public selectNextTab(): void {
     if (this.orderedTabIds.length === 0) return;
-
     const currentIndex = this.orderedTabIds.indexOf(this.activeTabId || '');
-    const nextIndex = currentIndex === -1 ? 0 : (currentIndex + 1) % this.orderedTabIds.length;
+    const nextIndex = (currentIndex + 1) % this.orderedTabIds.length;
     this.switchToTab(this.orderedTabIds[nextIndex]);
   }
 
   public selectPreviousTab(): void {
     if (this.orderedTabIds.length === 0) return;
-
     const currentIndex = this.orderedTabIds.indexOf(this.activeTabId || '');
     const prevIndex = currentIndex <= 0 ? this.orderedTabIds.length - 1 : currentIndex - 1;
     this.switchToTab(this.orderedTabIds[prevIndex]);
@@ -351,16 +277,11 @@ export class TabService extends EventEmitter {
       return false;
     }
 
-    const maxIndex = this.orderedTabIds.length - 1;
-    const clampedIndex = Math.max(0, Math.min(newIndex, maxIndex));
-    
-    if (clampedIndex === currentIndex) {
-      return false;
-    }
+    const clampedIndex = Math.max(0, Math.min(newIndex, this.orderedTabIds.length - 1));
+    if (clampedIndex === currentIndex) return false;
 
     this.orderedTabIds.splice(currentIndex, 1);
     this.orderedTabIds.splice(clampedIndex, 0, tabId);
-    
     this.reorderSingleTabView(tabId, clampedIndex);
     
     this.emit('tab:reordered', { tabId, from: currentIndex, to: clampedIndex });
@@ -377,40 +298,43 @@ export class TabService extends EventEmitter {
     let insertIndex = children.length;
     
     if (newOrderIndex < this.orderedTabIds.length - 1) {
-      const nextTabId = this.orderedTabIds[newOrderIndex + 1];
-      const nextTab = this.tabs.get(nextTabId);
+      const nextTab = this.tabs.get(this.orderedTabIds[newOrderIndex + 1]);
       if (nextTab) {
         const nextViewIndex = children.indexOf(nextTab.view);
-        if (nextViewIndex !== -1) {
-          insertIndex = nextViewIndex;
-        }
+        if (nextViewIndex !== -1) insertIndex = nextViewIndex;
       }
     }
     
-    if (insertIndex >= children.length) {
-      this.baseWindow.contentView.addChildView(tab.view);
-    } else {
-      this.baseWindow.contentView.addChildView(tab.view, insertIndex);
-    }
+    this.baseWindow.contentView.addChildView(tab.view, Math.min(insertIndex, children.length));
+  }
+
+  public getAllTabs(): { tabs: TabInfo[]; activeTabId: string | null } {
+    const tabs = this.orderedTabIds
+      .map(id => this.tabs.get(id))
+      .filter((tab): tab is Tab => !!tab)
+      .map(tab => tab.info);
+    return { tabs, activeTabId: this.activeTabId };
+  }
+
+  public getActiveTab(): Tab | null {
+    return this.activeTabId ? this.tabs.get(this.activeTabId) ?? null : null;
+  }
+
+  public getTab(tabId: string): Tab | undefined {
+    return this.tabs.get(tabId);
+  }
+
+  public getTabs(): Map<string, Tab> {
+    return this.tabs;
+  }
+
+  public getActiveTabId(): string | null {
+    return this.activeTabId;
   }
 
   public updateLayout(sidebarWidth = 0): void {
     this.currentSidebarWidth = sidebarWidth;
-    
-    this.tabs.forEach(tab => {
-      this.updateTabViewBounds(tab.view, sidebarWidth);
-    });
-  }
-
-  public destroy(): void {
-    this.tabs.forEach(tab => {
-      this.debuggerService.cleanupDebugger(tab.view, tab.id);
-      this.baseWindow.contentView.removeChildView(tab.view);
-      tab.view.webContents.close();
-    });
-    this.tabs.clear();
-    this.orderedTabIds = [];
-    this.activeTabId = null;
+    this.tabs.forEach(tab => this.updateTabViewBounds(tab.view, sidebarWidth));
   }
 
   private updateTabViewBounds(view: WebContentsView, sidebarWidth = 0): void {
@@ -423,37 +347,61 @@ export class TabService extends EventEmitter {
     });
   }
 
-  private setupTabEvents(tab: Tab): void {
-    const { view, info } = tab;
-    const webContents = view.webContents;
 
-    webContents.on('page-title-updated', (_, title) => {
-      const internalPageTitle = this.navigationService.getInternalPageTitle(info.url);
-      if (internalPageTitle) {
-        info.title = internalPageTitle;
-      } else {
-        info.title = title || 'Untitled';
+  public hideAllTabs(): void {
+    this.tabs.forEach(tab => tab.view.setVisible(false));
+  }
+
+  public showAllTabs(): void {
+    this.tabs.forEach(tab => {
+      if (tab.id === this.activeTabId) {
+        tab.view.setVisible(true);
       }
+    });
+  }
+
+  public destroy(): void {
+    this.contextMenuService.destroy();
+    this.tabs.forEach(tab => {
+      this.debuggerService.cleanupDebugger(tab.view, tab.id);
+      this.baseWindow.contentView.removeChildView(tab.view);
+      tab.view.webContents.close();
+    });
+    this.tabs.clear();
+    this.orderedTabIds = [];
+    this.activeTabId = null;
+  }
+
+  public handleCredentialSelected(tabId: string, credentialId: string, username: string): void {
+    const tab = this.tabs.get(tabId);
+    if (tab) {
+      tab.selectedCredentialId = credentialId;
+      tab.selectedCredentialUsername = username;
+    }
+  }
+
+  private setupTabWebContentsEvents(tab: Tab): void {
+    const { view, info } = tab;
+    const wc = view.webContents;
+
+    wc.on('page-title-updated', (_, title) => {
+      info.title = this.navigationService.getInternalPageTitle(info.url) || title || 'Untitled';
       this.emit('tabs:changed');
     });
 
-    webContents.on('did-start-loading', () => {
+    wc.on('did-start-loading', () => {
       info.isLoading = true;
       this.emit('tabs:changed');
     });
 
-    webContents.on('did-stop-loading', async () => {
+    wc.on('did-stop-loading', async () => {
       info.isLoading = false;
-      info.canGoBack = webContents.navigationHistory.canGoBack();
-      info.canGoForward = webContents.navigationHistory.canGoForward();
+      info.canGoBack = wc.navigationHistory.canGoBack();
+      info.canGoForward = wc.navigationHistory.canGoForward();
       
       if (info.url && info.title) {
-        this.historyService.addEntry(
-          info.url,
-          info.title,
-          HistoryTransition.LINK,
-          info.favicon
-        ).catch(err => console.error('Failed to add history entry:', err));
+        this.historyService.addEntry(info.url, info.title, HistoryTransition.LINK, info.favicon)
+          .catch(err => console.error('Failed to add history entry:', err));
       }
       
       if (tab.passwordAutomation && !this.navigationService.isInternalPage(info.url)) {
@@ -467,109 +415,58 @@ export class TabService extends EventEmitter {
       this.emit('tabs:changed');
     });
 
-    webContents.on('did-navigate', (_, url) => {
-      const internalPageInfo = this.navigationService.getInternalPageInfo(url);
-      if (internalPageInfo) {
-        info.url = internalPageInfo.url;
-        info.title = internalPageInfo.title;
-        info.favicon = internalPageInfo.favicon;
-      } else {
-        info.url = url;
-      }
-      info.canGoBack = webContents.navigationHistory.canGoBack();
-      info.canGoForward = webContents.navigationHistory.canGoForward();
-      this.emit('tabs:changed');
-    });
+    wc.on('did-navigate', (_, url) => this.handleNavigation(info, wc, url));
+    wc.on('did-navigate-in-page', (_, url) => this.handleNavigation(info, wc, url));
 
-    webContents.on('did-navigate-in-page', (_, url) => {
-      const internalPageInfo = this.navigationService.getInternalPageInfo(url);
-      if (internalPageInfo) {
-        info.url = internalPageInfo.url;
-        info.title = internalPageInfo.title;
-        info.favicon = internalPageInfo.favicon;
-      } else {
-        info.url = url;
-      }
-      info.canGoBack = webContents.navigationHistory.canGoBack();
-      info.canGoForward = webContents.navigationHistory.canGoForward();
-      this.emit('tabs:changed');
-    });
-
-    webContents.on('page-favicon-updated', (_, favicons) => {
-      // Don't update favicon for internal browzer:// pages
+    wc.on('page-favicon-updated', (_, favicons) => {
       if (!this.navigationService.isInternalPage(info.url) && favicons.length > 0) {
         info.favicon = favicons[0];
         this.emit('tabs:changed');
       }
     });
 
-    webContents.setWindowOpenHandler(({ url }) => {
+    wc.setWindowOpenHandler(({ url }) => {
       this.createTab(url);
       return { action: 'deny' };
     });
 
-    webContents.on('context-menu', (_event: any, params: any) => {
-      const menu = Menu.buildFromTemplate([
-        {
-          label: 'Inspect Element',
-          click: () => {
-            webContents.inspectElement(params.x, params.y);
-          }
-        },
-        { type: 'separator' },
-        { role: 'reload' },
-        { role: 'forceReload' },
-        { type: 'separator' },
-        { role: 'copy' },
-        { role: 'paste' },
-        { role: 'selectAll' },
-      ]);
-      menu.popup();
-    });
-
-    webContents.on('before-input-event', (event: any, input: any) => {
-      if ((input.control || input.meta) && input.shift && input.key.toLowerCase() === 'i') {
+    wc.on('before-input-event', (event: any, input: any) => {
+      const isDevToolsShortcut = (input.control || input.meta) && input.shift;
+      if (isDevToolsShortcut && input.key.toLowerCase() === 'i') {
         event.preventDefault();
-        if (webContents.isDevToolsOpened()) {
-          webContents.closeDevTools();
-        } else {
-          webContents.openDevTools({ mode: 'right', activate: true });
-        }
-      }
-      else if ((input.control || input.meta) && input.shift && input.key.toLowerCase() === 'c') {
+        wc.isDevToolsOpened() ? wc.closeDevTools() : wc.openDevTools({ mode: 'right', activate: true });
+      } else if (isDevToolsShortcut && input.key.toLowerCase() === 'c') {
         event.preventDefault();
-        webContents.openDevTools({ mode: 'right', activate: true });
+        wc.openDevTools({ mode: 'right', activate: true });
       }
     });
 
-    webContents.on('did-fail-load', (_, errorCode, errorDescription, validatedURL) => {
+    wc.on('did-fail-load', (_, errorCode, errorDescription, validatedURL) => {
       if (errorCode !== -3) {
         console.error(`Failed to load ${validatedURL}: ${errorDescription}`);
       }
       info.isLoading = false;
       this.emit('tabs:changed');
     });
-  }
 
-  public handleCredentialSelected(tabId: string, credentialId: string, username: string): void {
-    const tab = this.tabs.get(tabId);
-    if (tab) {
-      tab.selectedCredentialId = credentialId;
-      tab.selectedCredentialUsername = username;
-    }
-  }
-
-  public hideAllTabs(): void {
-    this.tabs.forEach(tab => {
-      tab.view.setVisible(false);
-    });
-  }
-
-  public showAllTabs(): void {
-    this.tabs.forEach(tab => {
-      if (tab.id === this.activeTabId) {
-        tab.view.setVisible(true);
+    wc.on('context-menu', (_, params) => {
+      if (!this.navigationService.isInternalPage(info.url)) {
+        this.contextMenuService.showContextMenu(wc, params);
       }
     });
+  }
+
+  private handleNavigation(info: TabInfo, wc: Electron.WebContents, url: string): void {
+    const internalPageInfo = this.navigationService.getInternalPageInfo(url);
+    if (internalPageInfo) {
+      info.url = internalPageInfo.url;
+      info.title = internalPageInfo.title;
+      info.favicon = internalPageInfo.favicon;
+    } else {
+      info.url = url;
+    }
+    info.canGoBack = wc.navigationHistory.canGoBack();
+    info.canGoForward = wc.navigationHistory.canGoForward();
+    this.emit('tabs:changed');
   }
 }
