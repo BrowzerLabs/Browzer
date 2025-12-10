@@ -334,5 +334,4 @@ export class BrowserService {
       }
     });
   }
-
 }
