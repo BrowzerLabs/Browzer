@@ -31,6 +31,9 @@ export const createBrowserAPI = (): BrowserAPI => ({
 
   // Window Management
   toggleMaximize: () => invoke('window:toggle-maximize'),
+  isFullScreen: () => invoke('window:is-fullscreen'),
+  onFullScreenChanged: (callback) =>
+    createEventListener<boolean>('window:fullscreen-changed', callback),
   bringBrowserViewToFront: () => invoke('browser:bring-view-front'),
   bringBrowserViewToBottom: () => invoke('browser:bring-view-bottom'),
 

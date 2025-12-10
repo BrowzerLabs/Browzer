@@ -296,6 +296,10 @@ export class IPCHandlers extends EventEmitter {
       }
     });
 
+    ipcMain.handle('window:is-fullscreen', async () => {
+      return this.baseWindow.isFullScreen();
+    });
+
     ipcMain.handle('browser:bring-view-front', async () => {
       this.browserService.bringBrowserViewToFront();
       return true;
