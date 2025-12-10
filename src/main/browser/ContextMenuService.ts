@@ -274,7 +274,7 @@ export class ContextMenuService extends EventEmitter {
   // ==================== Media Controls ====================
 
   private execMediaAction(wc: WebContents, params: ContextMenuParams, action: string): void {
-    const src = params.srcURL.replace(/'/g, "\\'");
+    const src = params.srcURL.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
     wc.executeJavaScript(`
       (function() {
         const m = document.querySelector('video[src="${src}"], audio[src="${src}"], video source[src="${src}"], audio source[src="${src}"]');
