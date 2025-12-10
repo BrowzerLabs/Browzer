@@ -12,7 +12,6 @@ import {
   AutomationManager,
   NavigationService,
   DebuggerService,
-  networkMonitor,
 } from './browser';
 import { SettingsService } from './settings/SettingsService';
 import { DownloadService } from './download/DownloadService';
@@ -67,7 +66,6 @@ export class BrowserService {
     
     this.setupTabEventListeners();
     this.setupAdBlocker();
-    this.setupNetworkMonitor();
 
     this.recordingManager = new RecordingManager(
       this.recordingStore,
@@ -260,7 +258,6 @@ export class BrowserService {
     this.automationManager.destroy();
     this.downloadService.destroy();
     this.sessionManager.close();
-    networkMonitor.destroy();
   }
 
   private setupTabEventListeners(): void {
@@ -338,28 +335,4 @@ export class BrowserService {
     });
   }
 
-  private setupNetworkMonitor(): void {
-    networkMonitor.on('online', () => {
-      this.tabService.retryNetworkFailedTabs();
-      this.notifyNetworkStatus(true);
-      this.browserView.webContents.send('toast', { message: 'You are online', variant: 'success' });
-    });
-
-    networkMonitor.on('offline', () => {
-      this.notifyNetworkStatus(false);
-      this.browserView.webContents.send('toast', { message: 'You went offline', variant: 'warning' });
-    });
-
-    networkMonitor.start();
-  }
-
-
-  private notifyNetworkStatus(isOnline: boolean): void {
-    const allViews = this.baseWindow.contentView.children;
-    allViews.forEach(view => {
-      if (view instanceof WebContentsView && !view.webContents.isDestroyed()) {
-        view.webContents.send('browser:network-status', { isOnline });
-      }
-    });
-  }
 }

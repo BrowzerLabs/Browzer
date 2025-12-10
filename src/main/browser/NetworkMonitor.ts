@@ -1,5 +1,5 @@
 import { EventEmitter } from 'events';
-import { net } from 'electron';
+import { net, powerMonitor } from 'electron';
 
 export interface NetworkMonitorEvents {
   'online': () => void;
@@ -8,105 +8,116 @@ export interface NetworkMonitorEvents {
 
 export class NetworkMonitor extends EventEmitter {
   private isOnline: boolean = true;
-  private checkInterval: NodeJS.Timeout | null = null;
-  private readonly CHECK_INTERVAL_MS = 5000;
-  private readonly CHECK_URLS = [
-    'https://www.google.com/generate_204',
-    'https://www.cloudflare.com/cdn-cgi/trace',
-    'https://connectivity-check.ubuntu.com/',
-  ];
+  private isStarted = false;
+  private pollTimer: NodeJS.Timeout | null = null;
+  private lastOnlineState: boolean = true;
 
-  public on<K extends keyof NetworkMonitorEvents>(
-    event: K,
-    listener: NetworkMonitorEvents[K]
-  ): this {
+  private readonly VERIFY_URL = 'https://www.google.com/generate_204';
+  private readonly VERIFY_TIMEOUT_MS = 5000;
+  private readonly POLL_INTERVAL_ONLINE = 30000;  // 30s when online (just to catch edge cases)
+  private readonly POLL_INTERVAL_OFFLINE = 5000;  // 5s when offline (to detect recovery quickly)
+
+  public on<K extends keyof NetworkMonitorEvents>(event: K, listener: NetworkMonitorEvents[K]): this {
     return super.on(event, listener);
   }
 
-  public emit<K extends keyof NetworkMonitorEvents>(
-    event: K,
-    ...args: Parameters<NetworkMonitorEvents[K]>
-  ): boolean {
+  public emit<K extends keyof NetworkMonitorEvents>(event: K, ...args: Parameters<NetworkMonitorEvents[K]>): boolean {
     return super.emit(event, ...args);
   }
 
   constructor() {
     super();
     this.isOnline = net.isOnline();
+    this.lastOnlineState = this.isOnline;
   }
 
   public start(): void {
-    if (this.checkInterval) {
-      return;   
-    }
+    if (this.isStarted) return;
+    this.isStarted = true;
 
-    this.checkConnectivity();
+    powerMonitor.on('resume', () => this.checkNow());
 
-    this.checkInterval = setInterval(() => {
-      this.checkConnectivity();
-    }, this.CHECK_INTERVAL_MS);
+    this.scheduleNextPoll();
 
-    console.log('[NetworkMonitor] Started monitoring network connectivity');
+    console.log('[NetworkMonitor] Started (adaptive polling mode)');
   }
 
   public stop(): void {
-    if (this.checkInterval) {
-      clearInterval(this.checkInterval);
-      this.checkInterval = null;
-      console.log('[NetworkMonitor] Stopped monitoring network connectivity');
-    }
+    if (!this.isStarted) return;
+    this.isStarted = false;
+    this.clearPollTimer();
+    powerMonitor.removeAllListeners('resume');
+    console.log('[NetworkMonitor] Stopped');
   }
 
   public getIsOnline(): boolean {
     return this.isOnline;
   }
 
-  public async checkConnectivity(): Promise<boolean> {
-    const wasOnline = this.isOnline;
-    const electronOnline = net.isOnline();
+  public checkNow(): void {
+    this.clearPollTimer();
+    this.poll();
+  }
+
+  private scheduleNextPoll(): void {
+    this.clearPollTimer();
     
-    if (!electronOnline) {
-      this.updateStatus(false, wasOnline);
-      return false;
+    const interval = this.isOnline ? this.POLL_INTERVAL_ONLINE : this.POLL_INTERVAL_OFFLINE;
+    
+    this.pollTimer = setTimeout(() => this.poll(), interval);
+  }
+
+  private async poll(): Promise<void> {
+    if (!this.isStarted) return;
+
+    const osOnline = net.isOnline();
+    
+    if (!osOnline) {
+      this.setOnlineStatus(false);
+      this.scheduleNextPoll();
+      return;
     }
 
-    const actuallyOnline = await this.verifyConnectivity();
-    this.updateStatus(actuallyOnline, wasOnline);
-    
-    return actuallyOnline;
+      if (!this.lastOnlineState || !this.isOnline) {
+      const verified = await this.verifyConnectivity();
+      this.setOnlineStatus(verified);
+    }
+
+    this.scheduleNextPoll();
+  }
+
+  private clearPollTimer(): void {
+    if (this.pollTimer) {
+      clearTimeout(this.pollTimer);
+      this.pollTimer = null;
+    }
   }
 
   private async verifyConnectivity(): Promise<boolean> {
-    for (const url of this.CHECK_URLS) {
-      try {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 3000);
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), this.VERIFY_TIMEOUT_MS);
 
-        const response = await net.fetch(url, {
-          method: 'HEAD',
-          signal: controller.signal,
-        });
+      const response = await net.fetch(this.VERIFY_URL, {
+        method: 'HEAD',
+        signal: controller.signal,
+      });
 
-        clearTimeout(timeoutId);
-
-        if (response.ok || response.status === 204) {
-          return true;
-        }
-      } catch {
-        // Try next URL
-        continue;
-      }
+      clearTimeout(timeoutId);
+      return response.ok || response.status === 204;
+    } catch {
+      return false;
     }
-
-    return false;
   }
 
-  private updateStatus(newStatus: boolean, wasOnline: boolean): void {
-    this.isOnline = newStatus;
+  private setOnlineStatus(online: boolean): void {
+    this.lastOnlineState = this.isOnline;
+    
+    if (this.isOnline === online) return;
 
-    if (newStatus !== wasOnline) {
-      newStatus ? this.emit('online') : this.emit('offline');
-    }
+    this.isOnline = online;
+    this.emit(online ? 'online' : 'offline');
+    console.log(`[NetworkMonitor] Status: ${online ? 'online' : 'offline'}`);
   }
 
   public destroy(): void {
