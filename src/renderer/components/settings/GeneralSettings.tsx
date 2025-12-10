@@ -64,7 +64,7 @@ export function GeneralSettings({ settings, onUpdate, onReset }: GeneralSettings
             type='url'
             value={settings.newTabUrl}
             onSave={(value) => onUpdate('newTabUrl', value)}
-            placeholder='https://www.google.com'
+            placeholder='browzer://home'
           />
           <FieldDescription>
             The page that opens when you create a new tab

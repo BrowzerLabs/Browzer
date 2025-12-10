@@ -157,7 +157,6 @@ export function AddressBar({
         value={inputValue}
         onChange={(e) => setInputValue(e.target.value)}
         onBlur={handleBlur}
-        onFocus={() => inputRef.current?.select()}
         onKeyDown={handleKeyDown}
         placeholder="Search or enter address"
         className="h-8 pl-9 pr-9 rounded-full text-sm placeholder:text-muted-foreground focus:border-primary"
