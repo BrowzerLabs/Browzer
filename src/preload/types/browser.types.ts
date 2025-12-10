@@ -1,8 +1,5 @@
-import type { TabInfo, HistoryEntry, HistoryQuery, HistoryStats, AppSettings } from '@/shared/types';
+import type { TabInfo, HistoryEntry, HistoryQuery, HistoryStats, AppSettings, AutocompleteSuggestion, DownloadItem, DownloadUpdatePayload, Bookmark, BookmarkFolder, BookmarkTreeNode, CreateBookmarkParams, CreateFolderParams, UpdateBookmarkParams, MoveBookmarkParams } from '@/shared/types';
 
-/**
- * Browser API - Handles tab management, navigation, and browser operations
- */
 export interface BrowserAPI {
   // Initialization
   initializeBrowser: () => Promise<boolean>;
@@ -12,6 +9,7 @@ export interface BrowserAPI {
   closeTab: (tabId: string) => Promise<boolean>;
   switchTab: (tabId: string) => Promise<boolean>;
   getTabs: () => Promise<{ tabs: TabInfo[]; activeTabId: string | null }>;
+  reorderTab: (tabId: string, newIndex: number) => Promise<boolean>;
 
   // Navigation
   navigate: (tabId: string, url: string) => Promise<boolean>;
@@ -25,10 +23,14 @@ export interface BrowserAPI {
   canGoForward: (tabId: string) => Promise<boolean>;
 
   // Sidebar Management
-  setSidebarState: (visible: boolean, widthPercent: number) => Promise<boolean>;
+  setSidebarState: (visible: boolean) => Promise<boolean>;
   
   // Window Management
   toggleMaximize: () => Promise<void>;
+  isFullScreen: () => Promise<boolean>;
+  onFullScreenChanged: (callback: (isFullScreen: boolean) => void) => () => void;
+  bringBrowserViewToFront: () => Promise<boolean>;
+  bringBrowserViewToBottom: () => Promise<boolean>;
   
   // Desktop Capturer (for video recording)
   getDesktopSources: () => Promise<Array<{ id: string; name: string; thumbnail: any }>>;
@@ -87,6 +89,10 @@ export interface BrowserAPI {
   getMostVisited: (limit?: number) => Promise<HistoryEntry[]>;
   getRecentlyVisited: (limit?: number) => Promise<HistoryEntry[]>;
 
+  // Autocomplete
+  getAutocompleteSuggestions: (query: string) => Promise<AutocompleteSuggestion[]>;
+  getSearchSuggestions: (query: string) => Promise<string[]>;
+
   // LLM Automation
   executeLLMAutomation: (userGoal: string, recordedSessionId: string) => Promise<{
     success: boolean;
@@ -105,6 +111,7 @@ export interface BrowserAPI {
 
   // Event listeners
   onTabsUpdated: (callback: (data: { tabs: TabInfo[]; activeTabId: string | null }) => void) => () => void;
+  onTabReordered: (callback: (data: { tabId: string; from: number; to: number }) => void) => () => void;
   onRecordingAction: (callback: (action: any) => void) => () => void;
   onRecordingStarted: (callback: () => void) => () => void;
   onRecordingStopped: (callback: (data: { actions: any[]; duration: number; startUrl: string }) => void) => () => void;
@@ -117,11 +124,52 @@ export interface BrowserAPI {
   onAutomationComplete: (callback: (data: { sessionId: string; result: any }) => void) => () => void;
   onAutomationError: (callback: (data: { sessionId: string; error: string }) => void) => () => void;
   
+  // Download event listeners
+  onDownloadsUpdated: (callback: (data: DownloadUpdatePayload) => void) => () => void;
+
   // Deep Link event listeners
   onDeepLink: (callback: (path: string) => void) => () => void;
   
-  // Deep Link actions
+  // Address Bar focus event listener
+  onRequestAddressBarFocus: (callback: () => void) => () => void;
+  
+  onBookmarkChanged: (callback: () => void) => () => void;
+  
+  onSettingsChanged: (callback: (data: { category: string; key: string; value: unknown }) => void) => () => void;
+  
   hideAllTabs: () => Promise<boolean>;
   showAllTabs: () => Promise<boolean>;
   navigateToTab: (url: string) => Promise<boolean>;
+
+  // Theme actions
+  getTheme: () => Promise<'light' | 'dark' | 'system'>;
+  setTheme: (theme: 'light' | 'dark' | 'system') => Promise<boolean>;
+  isDarkMode: () => Promise<boolean>;
+
+  // Download actions
+  getDownloads: () => Promise<DownloadItem[]>;
+  pauseDownload: (id: string) => Promise<boolean>,
+  resumeDownload: (id: string) => Promise<boolean>,
+  cancelDownload: (id: string) => Promise<boolean>,
+  retryDownload: (id: string) => Promise<boolean>,
+  removeDownload: (id: string) => Promise<boolean>,
+  openDownload: (id: string) => Promise<boolean>,
+  showDownloadInFolder: (id: string) => Promise<boolean>,
+
+
+  // Bookmark Management
+  createBookmark: (params: CreateBookmarkParams) => Promise<Bookmark>;
+  createBookmarkFolder: (params: CreateFolderParams) => Promise<BookmarkFolder>;
+  getBookmark: (id: string) => Promise<BookmarkTreeNode | null>;
+  getBookmarkByUrl: (url: string) => Promise<Bookmark | null>;
+  isBookmarked: (url: string) => Promise<boolean>;
+  getBookmarkChildren: (parentId: string) => Promise<BookmarkTreeNode[]>;
+  getBookmarkTree: () => Promise<BookmarkTreeNode[]>;
+  getBookmarkBar: () => Promise<BookmarkTreeNode[]>;
+  updateBookmark: (params: UpdateBookmarkParams) => Promise<boolean>;
+  moveBookmark: (params: MoveBookmarkParams) => Promise<boolean>;
+  deleteBookmark: (id: string) => Promise<boolean>;
+  searchBookmarks: (query: string, limit?: number) => Promise<Bookmark[]>;
+  getAllBookmarks: () => Promise<Bookmark[]>;
+  getRecentBookmarks: (limit?: number) => Promise<Bookmark[]>;
 }

@@ -17,12 +17,14 @@ export interface Tab {
   // Track selected credential for multi-step flows
   selectedCredentialId?: string;
   selectedCredentialUsername?: string;
+  bypassedCertificateHosts?: Set<string>;
 }
 
-export interface TabManagerEvents {
+export interface TabServiceEvents {
   'tab:created': (tab: Tab, previousActiveTabId: string | null) => void;
   'tab:closed': (closedTabId: string, newActiveTabId: string | null, wasActiveTab: boolean) => void;
   'tab:switched': (previousTabId: string, newTab: Tab) => void;
+  'tab:reordered': (data: { tabId: string; from: number; to: number }) => void;
   'tabs:changed': () => void;
 }
 

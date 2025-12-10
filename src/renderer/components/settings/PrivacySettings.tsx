@@ -1,6 +1,6 @@
 import { Switch } from '@/renderer/ui/switch';
 import { Button } from '@/renderer/ui/button';
-import { RotateCcw, Trash2, ShieldAlert, Cookie } from 'lucide-react';
+import { RotateCcw, Trash2, ShieldAlert, Cookie, ShieldCheck } from 'lucide-react';
 import type { AppSettings } from '@/shared/types';
 import { Field, FieldGroup, FieldLabel, FieldDescription, FieldContent } from '@/renderer/ui/field';
 
@@ -79,6 +79,24 @@ export function PrivacySettings({ settings, onUpdate, onReset }: PrivacySettings
             id='blockCookies'
             checked={settings.blockThirdPartyCookies}
             onCheckedChange={(checked) => onUpdate('blockThirdPartyCookies', checked)}
+          />
+        </Field>
+
+        {/* Enable Ad Blocker */}
+        <Field orientation='horizontal'>
+          <FieldContent>
+            <FieldLabel htmlFor='enableAdBlocker'>
+              <ShieldCheck className='h-4 w-4' />
+              Enable ad blocker
+            </FieldLabel>
+            <FieldDescription>
+              Block ads and trackers for a faster, cleaner browsing experience
+            </FieldDescription>
+          </FieldContent>
+          <Switch
+            id='enableAdBlocker'
+            checked={settings.enableAdBlocker}
+            onCheckedChange={(checked) => onUpdate('enableAdBlocker', checked)}
           />
         </Field>
       </FieldGroup>

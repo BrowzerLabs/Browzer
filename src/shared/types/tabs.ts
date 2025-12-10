@@ -1,3 +1,4 @@
+import { NavigationError } from './navigation-error';
 
 // Data that can be sent through IPC (serializable)
 export interface TabInfo {
@@ -8,4 +9,6 @@ export interface TabInfo {
   isLoading: boolean;
   canGoBack: boolean;
   canGoForward: boolean;
+  error?: NavigationError | null;
+  failedUrl?: string;
 }

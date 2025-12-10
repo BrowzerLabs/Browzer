@@ -1,17 +1,8 @@
-/**
- * Browser module - Modular browser management components
- * 
- * This module provides a clean separation of concerns for browser functionality:
- * - TabManager: Tab lifecycle and state management
- * - RecordingManager: Recording orchestration across tabs
- * - AutomationManager: LLM automation session management
- * - NavigationManager: URL normalization and internal page routing
- * - DebuggerManager: CDP debugger lifecycle management
- */
-
-export { TabManager } from './TabManager';
+export { TabService } from './TabService';
 export { RecordingManager } from './RecordingManager';
 export { AutomationManager } from './AutomationManager';
-export { NavigationManager } from './NavigationManager';
-export { DebuggerManager } from './DebuggerManager';
+export { NavigationService } from './NavigationService';
+export { DebuggerService } from './DebuggerService';
+export { ContextMenuService } from './ContextMenuService';
+export { ErrorPageService, errorPageService } from './ErrorPageService';
 export * from './types';

@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { RecordedAction } from '@/shared/types';
 import AgentView from './AgentView';
-import { ErrorBoundary } from './ErrorBoundary';
 import { LiveRecordingView } from './recording';
 import { toast } from 'sonner';
 
@@ -90,8 +89,7 @@ export function Sidebar() {
   const showRecordingView = isRecording || showSaveForm;
 
   return (
-    <ErrorBoundary>
-      <section className="h-full w-full flex flex-col overflow-hidden">
+    <section className="h-full w-full flex flex-col overflow-hidden bg-background border-l border-l-foreground">
         {showRecordingView ? (
           <LiveRecordingView 
             actions={actions} 
@@ -105,6 +103,5 @@ export function Sidebar() {
           <AgentView />
         )}
       </section>
-    </ErrorBoundary>
   );
 }

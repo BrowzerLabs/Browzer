@@ -1,19 +1,22 @@
 import { useEffect, useState } from 'react';
-import { History, Recordings, Automation, Settings } from '@/renderer/screens';
+import { History, Recordings, Automation, Settings, Downloads, Bookmarks } from '@/renderer/screens';
 import Profile from '@/renderer/pages/Profile';
 import { ROUTES } from '@/shared/routes';
-import { SubscriptionPage } from '@/renderer/pages/SubscriptionPage';
+import { SubscriptionPage, Home } from '@/renderer/pages';
 
 /**
  * Internal page routes - Maps route names to React components
  */
 const ROUTE_COMPONENTS: Record<string, React.ComponentType> = {
+  home: Home,
   profile: Profile,
   settings: Settings,
   history: History,
   recordings: Recordings,
+  downloads: Downloads,
   automation: Automation,
   subscription: SubscriptionPage,
+  bookmarks: Bookmarks,
 };
 
 export type InternalRouteName = keyof typeof ROUTES;

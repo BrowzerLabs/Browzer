@@ -1,48 +1,52 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
-import { ipcMain, shell } from 'electron';
-import { BrowserManager } from '@/main/BrowserManager';
-import { LayoutManager } from '@/main/window/LayoutManager';
-import { WindowManager } from '@/main/window/WindowManager';
-import { SettingsStore } from '@/main/settings/SettingsStore';
+import { BaseWindow, ipcMain, shell } from 'electron';
+import { BrowserService } from '@/main/BrowserService';
 import { PasswordManager } from '@/main/password/PasswordManager';
+import { BookmarkService } from '@/main/bookmark';
 import { AuthService } from '@/main/auth';
 import { SubscriptionService } from '@/main/subscription/SubscriptionService';
-import { RecordedAction, HistoryQuery, AppSettings, SignUpCredentials, SignInCredentials, UpdateProfileRequest } from '@/shared/types';
+import { ThemeService } from '@/main/theme';
+import { RecordedAction, HistoryQuery, AppSettings, SignUpCredentials, SignInCredentials, UpdateProfileRequest, AutocompleteSuggestion, CreateBookmarkParams, CreateFolderParams, UpdateBookmarkParams, MoveBookmarkParams } from '@/shared/types';
 import { CheckoutSessionRequest, PortalSessionRequest } from '@/shared/types/subscription';
-import { TabManager } from '@/main/browser';
+import { TabService } from '@/main/browser';
+import { EventEmitter } from 'events';
+import { SettingsService } from '@/main/settings/SettingsService';
 
-/**
- * IPCHandlers - Centralized IPC communication setup
- * Registers all IPC handlers for main <-> renderer communication
- */
-export class IPCHandlers {
-  private settingsStore: SettingsStore;
+export class IPCHandlers extends EventEmitter {
+  private settingsService: SettingsService;
   private passwordManager: PasswordManager;
-  private tabManager: TabManager;
+  private bookmarkService: BookmarkService;
+  private tabService: TabService;
   private authService: AuthService;
   private subscriptionService: SubscriptionService;
+  private themeService: ThemeService;
+  private baseWindow: BaseWindow;
 
   constructor(
-    private browserManager: BrowserManager,
-    private layoutManager: LayoutManager,
-    private windowManager: WindowManager,
+    baseWindow: BaseWindow,
+    private browserService: BrowserService,
     authService: AuthService,
   ) {
-    this.tabManager = this.browserManager.getTabManager();
-    this.settingsStore = new SettingsStore();
-    this.passwordManager = this.browserManager.getPasswordManager();
+    super();
+    this.baseWindow = baseWindow;
+    this.tabService = this.browserService.getTabService();
+    this.settingsService = this.browserService.getSettingsService();
+    this.passwordManager = this.browserService.getPasswordManager();
+    this.bookmarkService = this.browserService.getBookmarkService();
     this.authService = authService;
     this.subscriptionService = new SubscriptionService();
+    this.themeService = ThemeService.getInstance();
     this.setupHandlers();
   }
 
   private setupHandlers(): void {
     this.setupTabHandlers();
     this.setupNavigationHandlers();
+    this.setupDownloadHandlers();
     this.setupSidebarHandlers();
     this.setupRecordingHandlers();
     this.setupSettingsHandlers();
     this.setupHistoryHandlers();
+    this.setupBookmarkHandlers();
     this.setupPasswordHandlers();
     this.setupWindowHandlers();
     this.setupAutomationHandlers();
@@ -50,94 +54,133 @@ export class IPCHandlers {
     this.setupSubscriptionHandlers();
     this.setupShellHandlers();
     this.setupDeepLinkHandlers();
+    this.setupAutocompleteHandlers();
+    this.setupThemeHandlers();
   }
 
   private setupTabHandlers(): void {
     ipcMain.handle('browser:initialize', async () => {
-      this.browserManager.initializeAfterAuth();
+      this.browserService.initializeAfterAuth();
       return true;
     });
 
     ipcMain.handle('browser:create-tab', async (_, url?: string) => {
-      const tab = this.tabManager.createTab(url);
+      const tab = this.tabService.createTab(url);
       return tab.info;
     });
 
     ipcMain.handle('browser:close-tab', async (_, tabId: string) => {
-      return this.tabManager.closeTab(tabId);
+      return this.tabService.closeTab(tabId);
     });
 
     ipcMain.handle('browser:switch-tab', async (_, tabId: string) => {
-      return this.tabManager.switchToTab(tabId);
+      return this.tabService.switchToTab(tabId);
     });
 
     ipcMain.handle('browser:get-tabs', async () => {
-      return this.tabManager.getAllTabs();
+      return this.tabService.getAllTabs();
+    });
+
+    ipcMain.handle('browser:reorder-tab', async (_, tabId: string, newIndex: number) => {
+      return this.tabService.reorderTab(tabId, newIndex);
     });
   }
 
   private setupNavigationHandlers(): void {
     ipcMain.handle('browser:navigate', async (_, tabId: string, url: string) => {
-      return this.tabManager.navigate(tabId, url);
+      return this.tabService.navigate(tabId, url);
     });
 
     ipcMain.handle('browser:go-back', async (_, tabId: string) => {
-      return this.tabManager.goBack(tabId);
+      return this.tabService.goBack(tabId);
     });
 
     ipcMain.handle('browser:go-forward', async (_, tabId: string) => {
-      return this.tabManager.goForward(tabId);
+      return this.tabService.goForward(tabId);
     });
 
     ipcMain.handle('browser:reload', async (_, tabId: string) => {
-      return this.tabManager.reload(tabId);
+      return this.tabService.reload(tabId);
     });
 
     ipcMain.handle('browser:stop', async (_, tabId: string) => {
-      return this.tabManager.stop(tabId);
+      return this.tabService.stop(tabId);
     });
 
     ipcMain.handle('browser:can-go-back', async (_, tabId: string) => {
-      return this.tabManager.canGoBack(tabId);
+      return this.tabService.canGoBack(tabId);
     });
 
     ipcMain.handle('browser:can-go-forward', async (_, tabId: string) => {
-      return this.tabManager.canGoForward(tabId);
+      return this.tabService.canGoForward(tabId);
+    });
+  }
+
+  private setupDownloadHandlers(): void {
+    ipcMain.handle('download:get-all', async () => {
+      return this.browserService.getDownloadService().getDownloads();
+    });
+
+    ipcMain.handle('download:pause', async (_event, id: string) => {
+      return this.browserService.getDownloadService().pauseDownload(id);
+    });
+
+    ipcMain.handle('download:resume', async (_event, id: string) => {
+      return this.browserService.getDownloadService().resumeDownload(id);
+    });
+
+    ipcMain.handle('download:cancel', async (_event, id: string) => {
+      return this.browserService.getDownloadService().cancelDownload(id);
+    });
+
+    ipcMain.handle('download:retry', async (_event, id: string) => {
+      return this.browserService.getDownloadService().retryDownload(id);
+    });
+
+    ipcMain.handle('download:remove', async (_event, id: string) => {
+      return this.browserService.getDownloadService().removeDownload(id);
+    });
+
+    ipcMain.handle('download:open', async (_event, id: string) => {
+      return this.browserService.getDownloadService().openDownload(id);
+    });
+
+    ipcMain.handle('download:show-in-folder', async (_event, id: string) => {
+      return this.browserService.getDownloadService().showInFolder(id);
     });
   }
 
   private setupSidebarHandlers(): void {
-    ipcMain.handle('browser:set-sidebar-state', async (_, visible: boolean, widthPercent: number) => {
-      this.layoutManager.setSidebarState(visible, widthPercent);
-      this.updateLayout();
+    ipcMain.handle('browser:set-sidebar-state', async (_, visible: boolean) => {
+      this.emit('sidebar-state-changed', visible);
       return true;
     });
   }
 
   private setupRecordingHandlers(): void {
     ipcMain.handle('browser:start-recording', async () => {
-      return this.browserManager.startRecording();
+      return this.browserService.startRecording();
     });
     ipcMain.handle('browser:stop-recording', async () => {
-      return this.browserManager.stopRecording();
+      return this.browserService.stopRecording();
     });
     ipcMain.handle('browser:save-recording', async (_, name: string, description: string, actions: RecordedAction[]) => {
-      return this.browserManager.saveRecording(name, description, actions);
+      return this.browserService.saveRecording(name, description, actions);
     });
     ipcMain.handle('browser:get-all-recordings', async () => {
-      return this.browserManager.getRecordingStore().getAllRecordings();
+      return this.browserService.getRecordingStore().getAllRecordings();
     });
     ipcMain.handle('browser:delete-recording', async (_, id: string) => {
-      return this.browserManager.deleteRecording(id);
+      return this.browserService.deleteRecording(id);
     });
     ipcMain.handle('browser:is-recording', async () => {
-      return this.browserManager.isRecordingActive();
+      return this.browserService.isRecordingActive();
     });
     ipcMain.handle('browser:get-recorded-actions', async () => {
-      return this.browserManager.getRecordedActions();
+      return this.browserService.getRecordedActions();
     });
     ipcMain.handle('browser:export-recording', async (_, id: string) => {
-      return await this.browserManager.getRecordingStore().exportRecording(id);
+      return await this.browserService.getRecordingStore().exportRecording(id);
     });
     ipcMain.handle('video:open-file', async (_, videoPath: string) => {
       try {
@@ -160,44 +203,44 @@ export class IPCHandlers {
 
   private setupSettingsHandlers(): void {
     ipcMain.handle('settings:get-all', async () => {
-      return this.settingsStore.getAllSettings();
+      return this.settingsService.getAllSettings();
     });
 
     ipcMain.handle('settings:get-category', async (_, category: keyof AppSettings) => {
-      return this.settingsStore.getSetting(category);
+      return this.settingsService.getSetting(category);
     });
 
     ipcMain.handle('settings:update', async (_, category: keyof AppSettings, key: string, value: unknown) => {
-      this.settingsStore.updateSetting(category, key as never, value as never);
+      this.settingsService.updateSetting(category, key as never, value as never);
       return true;
     });
 
     ipcMain.handle('settings:update-category', async (_, category: keyof AppSettings, values: unknown) => {
-      this.settingsStore.updateCategory(category, values as never);
+      this.settingsService.updateCategory(category, values as never);
       return true;
     });
 
     ipcMain.handle('settings:reset-all', async () => {
-      this.settingsStore.resetToDefaults();
+      this.settingsService.resetToDefaults();
       return true;
     });
 
     ipcMain.handle('settings:reset-category', async (_, category: keyof AppSettings) => {
-      this.settingsStore.resetCategory(category);
+      this.settingsService.resetCategory(category);
       return true;
     });
 
     ipcMain.handle('settings:export', async () => {
-      return this.settingsStore.exportSettings();
+      return this.settingsService.exportSettings();
     });
 
     ipcMain.handle('settings:import', async (_, jsonString: string) => {
-      return this.settingsStore.importSettings(jsonString);
+      return this.settingsService.importSettings(jsonString);
     });
   }
 
   private setupHistoryHandlers(): void {
-    const historyService = this.browserManager.getHistoryService();
+    const historyService = this.browserService.getHistoryService();
 
     ipcMain.handle('history:get-all', async (_, limit?: number) => {
       return historyService.getAll(limit);
@@ -244,36 +287,27 @@ export class IPCHandlers {
     });
   }
 
-  private updateLayout(): void {
-    const browserUIView = this.windowManager.getBrowserUIView();
-    const baseWindow = this.windowManager.getWindow();
-    
-    if (!baseWindow) return;
-
-    const bounds = baseWindow.getBounds();
-    const sidebarState = this.layoutManager.getSidebarState();
-    const sidebarWidth = sidebarState.visible 
-      ? Math.floor(bounds.width * (sidebarState.widthPercent / 100))
-      : 0;
-
-    if (browserUIView) {
-      const browserUIBounds = this.layoutManager.calculateBrowserUIBounds();
-      browserUIView.setBounds(browserUIBounds);
-    }
-    
-    this.browserManager.updateLayout(bounds.width, bounds.height, sidebarWidth);
-  }
-
   private setupWindowHandlers(): void {
     ipcMain.handle('window:toggle-maximize', async () => {
-      const window = this.windowManager.getWindow();
-      if (window) {
-        if (window.isMaximized()) {
-          window.unmaximize();
+      if (this.baseWindow.isMaximized()) {
+          this.baseWindow.unmaximize();
         } else {
-          window.maximize();
-        }
+          this.baseWindow.maximize();
       }
+    });
+
+    ipcMain.handle('window:is-fullscreen', async () => {
+      return this.baseWindow.isFullScreen();
+    });
+
+    ipcMain.handle('browser:bring-view-front', async () => {
+      this.browserService.bringBrowserViewToFront();
+      return true;
+    });
+
+    ipcMain.handle('browser:bring-view-bottom', async () => {
+      this.browserService.bringBrowserViewToBottom();
+      return true;
     });
   }
 
@@ -334,34 +368,34 @@ export class IPCHandlers {
    */
   private setupAutomationHandlers(): void {
     ipcMain.handle('automation:execute-llm', async (_, userGoal: string, recordedSessionId: string) => {
-     return await this.browserManager.executeIterativeAutomation(userGoal, recordedSessionId);
+     return await this.browserService.executeIterativeAutomation(userGoal, recordedSessionId);
     });
     ipcMain.handle('automation:stop', async (_, sessionId: string) => {
-      this.browserManager.stopAutomation(sessionId);
+      this.browserService.stopAutomation(sessionId);
       return { success: true };
     });
     ipcMain.handle('automation:load-session', async (_, sessionId: string) => {
-      return await this.browserManager.loadAutomationSession(sessionId);
+      return await this.browserService.loadAutomationSession(sessionId);
     });
     
     ipcMain.handle('automation:get-session-history', async (_, limit?: number) => {
-      return await this.browserManager.getAutomationSessionHistory(limit);
+      return await this.browserService.getAutomationSessionHistory(limit);
     });
     
     ipcMain.handle('automation:get-sessions', async () => {
-      return await this.browserManager.getAutomationSessions();
+      return await this.browserService.getAutomationSessions();
     });
     
     ipcMain.handle('automation:get-session-details', async (_, sessionId: string) => {
-      return await this.browserManager.getAutomationSessionDetails(sessionId);
+      return await this.browserService.getAutomationSessionDetails(sessionId);
     });
     
     ipcMain.handle('automation:resume-session', async (_, sessionId: string) => {
-      return await this.browserManager.resumeAutomationSession(sessionId);
+      return await this.browserService.resumeAutomationSession(sessionId);
     });
     
     ipcMain.handle('automation:delete-session', async (_, sessionId: string) => {
-      return await this.browserManager.deleteAutomationSession(sessionId);
+      return await this.browserService.deleteAutomationSession(sessionId);
     });
   }
 
@@ -445,20 +479,261 @@ export class IPCHandlers {
 
   private setupDeepLinkHandlers(): void {
     ipcMain.handle('deeplink:hide-tabs', async () => {
-      this.browserManager.hideAllTabs();
+      this.browserService.hideAllTabs();
       return true;
     });
     ipcMain.handle('deeplink:show-tabs', async () => {
-      this.browserManager.showAllTabs();
+      this.browserService.showAllTabs();
       return true;
     });
     ipcMain.handle('deeplink:navigate-tab', async (_, url: string) => {
-      this.browserManager.navigateToBrowzerURL(url);
+      this.browserService.navigateToBrowzerURL(url);
       return true;
     });
   }
 
+  private setupAutocompleteHandlers(): void {
+    ipcMain.handle('autocomplete:get-suggestions', async (_, query: string): Promise<AutocompleteSuggestion[]> => {
+      return this.browserService.getAutocompleteSuggestions(query);
+    });
+
+    ipcMain.handle('autocomplete:get-search-suggestions', async (_, query: string): Promise<string[]> => {
+      return this.browserService.getSearchSuggestions(query);
+    });
+  }
+
+  private setupThemeHandlers(): void {
+    ipcMain.handle('theme:get', async () => {
+      return this.themeService.getTheme();
+    });
+
+    ipcMain.handle('theme:set', async (_, theme: 'light' | 'dark' | 'system') => {
+      this.themeService.setTheme(theme);
+      return true;
+    });
+
+    ipcMain.handle('theme:is-dark', async () => {
+      return this.themeService.isDarkMode();
+    });
+  }
+
+  private setupBookmarkHandlers(): void {
+    // Create bookmark
+    ipcMain.handle('bookmark:create', async (_, params: CreateBookmarkParams) => {
+      return this.bookmarkService.createBookmark(params);
+    });
+
+    // Create folder
+    ipcMain.handle('bookmark:create-folder', async (_, params: CreateFolderParams) => {
+      return this.bookmarkService.createFolder(params);
+    });
+
+    // Get bookmark by ID
+    ipcMain.handle('bookmark:get', async (_, id: string) => {
+      return this.bookmarkService.getById(id);
+    });
+
+    // Get bookmark by URL
+    ipcMain.handle('bookmark:get-by-url', async (_, url: string) => {
+      return this.bookmarkService.getByUrl(url);
+    });
+
+    // Check if URL is bookmarked
+    ipcMain.handle('bookmark:is-bookmarked', async (_, url: string) => {
+      return this.bookmarkService.isBookmarked(url);
+    });
+
+    // Get children of a folder
+    ipcMain.handle('bookmark:get-children', async (_, parentId: string) => {
+      return this.bookmarkService.getChildren(parentId);
+    });
+
+    // Get full bookmark tree
+    ipcMain.handle('bookmark:get-tree', async () => {
+      return this.bookmarkService.getTree();
+    });
+
+    // Get bookmark bar contents
+    ipcMain.handle('bookmark:get-bar', async () => {
+      return this.bookmarkService.getBookmarkBar();
+    });
+
+    // Update bookmark
+    ipcMain.handle('bookmark:update', async (_, params: UpdateBookmarkParams) => {
+      return this.bookmarkService.update(params);
+    });
+
+    // Move bookmark
+    ipcMain.handle('bookmark:move', async (_, params: MoveBookmarkParams) => {
+      return this.bookmarkService.move(params);
+    });
+
+    // Delete bookmark
+    ipcMain.handle('bookmark:delete', async (_, id: string) => {
+      return this.bookmarkService.delete(id);
+    });
+
+    // Search bookmarks
+    ipcMain.handle('bookmark:search', async (_, query: string, limit?: number) => {
+      return this.bookmarkService.search(query, limit);
+    });
+
+    // Get all bookmarks
+    ipcMain.handle('bookmark:get-all', async () => {
+      return this.bookmarkService.getAllBookmarks();
+    });
+
+    // Get recent bookmarks
+    ipcMain.handle('bookmark:get-recent', async (_, limit?: number) => {
+      return this.bookmarkService.getRecentBookmarks(limit);
+    });
+  }
+
   public cleanup(): void {
+    const handlers = [
+      // Tab handlers
+      'browser:initialize',
+      'browser:create-tab',
+      'browser:close-tab',
+      'browser:switch-tab',
+      'browser:get-tabs',
+      'browser:reorder-tab',
+      // Navigation handlers
+      'browser:navigate',
+      'browser:go-back',
+      'browser:go-forward',
+      'browser:reload',
+      'browser:stop',
+      'browser:can-go-back',
+      'browser:can-go-forward',
+      // Download handlers
+      'download:get-all',
+      'download:pause',
+      'download:resume',
+      'download:cancel',
+      'download:retry',
+      'download:remove',
+      'download:open',
+      'download:show-in-folder',
+      // Sidebar handlers
+      'browser:set-sidebar-state',
+      // Recording handlers
+      'browser:start-recording',
+      'browser:stop-recording',
+      'browser:save-recording',
+      'browser:get-all-recordings',
+      'browser:delete-recording',
+      'browser:is-recording',
+      'browser:get-recorded-actions',
+      'browser:export-recording',
+      'video:open-file',
+      'video:get-file-url',
+      // Settings handlers
+      'settings:get-all',
+      'settings:get-category',
+      'settings:update',
+      'settings:update-category',
+      'settings:reset-all',
+      'settings:reset-category',
+      'settings:export',
+      'settings:import',
+      // History handlers
+      'history:get-all',
+      'history:search',
+      'history:get-today',
+      'history:get-last-n-days',
+      'history:delete-entry',
+      'history:delete-entries',
+      'history:delete-by-date-range',
+      'history:clear-all',
+      'history:get-stats',
+      'history:get-most-visited',
+      'history:get-recently-visited',
+      // Window handlers
+      'window:toggle-maximize',
+      'browser:bring-view-front',
+      'browser:bring-view-bottom',
+      // Password handlers
+      'password:get-all',
+      'password:save',
+      'password:get-for-origin',
+      'password:get-password',
+      'password:update',
+      'password:delete',
+      'password:delete-multiple',
+      'password:search',
+      'password:get-blacklist',
+      'password:add-to-blacklist',
+      'password:remove-from-blacklist',
+      'password:is-blacklisted',
+      'password:export',
+      'password:import',
+      'password:get-stats',
+      // Automation handlers
+      'automation:execute-llm',
+      'automation:stop',
+      'automation:load-session',
+      'automation:get-session-history',
+      'automation:get-sessions',
+      'automation:get-session-details',
+      'automation:resume-session',
+      'automation:delete-session',
+      // Auth handlers
+      'auth:sign-up',
+      'auth:sign-in',
+      'auth:sign-in-google',
+      'auth:sign-out',
+      'auth:get-session',
+      'auth:get-user',
+      'auth:refresh-session',
+      'auth:update-profile',
+      'auth:verify-token',
+      'auth:resend-confirmation',
+      'auth:send-password-reset',
+      'auth:update-password',
+      // Subscription handlers
+      'subscription:get-plans',
+      'subscription:get-current',
+      'subscription:create-checkout',
+      'subscription:create-portal',
+      'subscription:use-credits',
+      'subscription:sync',
+      'subscription:has-credits',
+      'subscription:get-credits-remaining',
+      // Shell handlers
+      'shell:open-external',
+      // Deep link handlers
+      'deeplink:hide-tabs',
+      'deeplink:show-tabs',
+      'deeplink:navigate-tab',
+      // Autocomplete handlers
+      'autocomplete:get-suggestions',
+      'autocomplete:get-search-suggestions',
+      // Theme handlers
+      'theme:get',
+      'theme:set',
+      'theme:is-dark',
+      // Bookmark handlers
+      'bookmark:create',
+      'bookmark:create-folder',
+      'bookmark:get',
+      'bookmark:get-by-url',
+      'bookmark:is-bookmarked',
+      'bookmark:get-children',
+      'bookmark:get-tree',
+      'bookmark:get-bar',
+      'bookmark:update',
+      'bookmark:move',
+      'bookmark:delete',
+      'bookmark:search',
+      'bookmark:get-all',
+      'bookmark:get-recent',
+    ];
+
+    handlers.forEach(channel => {
+      ipcMain.removeHandler(channel);
+    });
+
     ipcMain.removeAllListeners();
   }
 }

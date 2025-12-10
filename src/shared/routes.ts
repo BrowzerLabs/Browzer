@@ -1,62 +1,106 @@
+import { Clock, type LucideIcon, Settings, Video, Bot, User, CreditCard, MailCheck, KeyRound, CheckCircle, XCircle, Loader2, Download, BookmarkIcon, Home } from "lucide-react";
+
 export interface RouteConfig {
   path: string;
   title: string;
+  favicon?: string;
   params?: string;
   fragment?: string;
 }
 
-/**
- * Internal routes - Load in tabs with browzer:// protocol
- */
 export const ROUTES: Record<string, RouteConfig> = {
   'auth/confirm-signup': {
     path: '/auth/confirm-signup',
     title: 'Confirm Email',
+    favicon: 'mail-check',
   },
   'auth/reset-password': {
     path: '/auth/reset-password',
     title: 'Reset Password',
+    favicon: 'key-round',
   },
   'auth/callback': {
     path: '/auth/callback',
     title: 'OAuth Callback',
+    favicon: 'loader',
   },
   'subscription/success': {
     path: '/subscription/success',
     title: 'Subscription Success',
+    favicon: 'check-circle',
   },
   'subscription/cancel': {
     path: '/subscription/cancel',
     title: 'Checkout Cancelled',
+    favicon: 'x-circle',
+  },
+  home: {
+    path: '/home',
+    title: 'Home',
+    favicon: 'home',
   },
   pricing: {
     path: '/pricing',
     title: 'Pricing',
+    favicon: 'credit-card',
   },
   settings: {
     path: '/settings',
     title: 'Settings',
+    favicon: 'settings',
   },
   history: {
     path: '/history',
     title: 'History',
+    favicon: 'clock',
   },
   recordings: {
     path: '/recordings',
     title: 'Recordings',
+    favicon: 'video',
+  },
+  downloads: {
+    path: '/downloads',
+    title: 'Downloads',
+    favicon: 'download',
   },
   automation: {
     path: '/automation',
     title: 'Automation',
+    favicon: 'bot',
   },
   profile: {
     path: '/profile',
     title: 'Profile',
+    favicon: 'user',
   },
   subscription: {
     path: '/subscription',
     title: 'Subscription',
+    favicon: 'credit-card',
   },
+  bookmarks: {
+    path: '/bookmarks',
+    title: 'Bookmarks',
+    favicon: 'star',
+  },
+};
+
+export const ICON_MAP: Record<string, LucideIcon> = {
+  'settings': Settings,
+  'clock': Clock,
+  'video': Video,
+  'bot': Bot,
+  'user': User,
+  'credit-card': CreditCard,
+  'mail-check': MailCheck,
+  'key-round': KeyRound,
+  'check-circle': CheckCircle,
+  'x-circle': XCircle,
+  'loader': Loader2,
+  'download': Download,
+  'star': BookmarkIcon,
+  'home': Home,
 };
 
 export function getRouteFromURL(url: string): RouteConfig | null {

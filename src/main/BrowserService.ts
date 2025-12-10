@@ -1,81 +1,105 @@
 import { BaseWindow, WebContentsView, dialog } from 'electron';
-import { RecordedAction, TabInfo } from '@/shared/types';
+import { AutocompleteSuggestion, RecordedAction } from '@/shared/types';
 import { RecordingStore } from '@/main/recording';
 import { HistoryService } from '@/main/history/HistoryService';
 import { PasswordManager } from '@/main/password/PasswordManager';
+import { BookmarkService } from '@/main/bookmark';
 import { BrowserAutomationExecutor } from './automation';
 import { SessionManager } from '@/main/llm/session/SessionManager';
 import {
-  TabManager,
+  TabService,
   RecordingManager,
   AutomationManager,
-  NavigationManager,
-  DebuggerManager,
+  NavigationService,
+  DebuggerService,
 } from './browser';
+import { SettingsService } from './settings/SettingsService';
+import { DownloadService } from './download/DownloadService';
+import { AdBlockerService } from './adblocker/AdBlockerService';
 
-export class BrowserManager {
+export class BrowserService {
   // Modular components
-  private tabManager: TabManager;
+  private tabService: TabService;
   private recordingManager: RecordingManager;
   private automationManager: AutomationManager;
-  private navigationManager: NavigationManager;
-  private debuggerManager: DebuggerManager;
+  private navigationService: NavigationService;
+  private debuggerService: DebuggerService;
+  private downloadService: DownloadService;
+  private adBlockerService: AdBlockerService;
 
   // Services (shared across managers)
+  private settingsService: SettingsService;
   private historyService: HistoryService;
   private passwordManager: PasswordManager;
+  private bookmarkService: BookmarkService;
   private recordingStore: RecordingStore;
   private sessionManager: SessionManager;
 
   constructor(
     private baseWindow: BaseWindow,
-    browserUIView?: WebContentsView
+    private browserView: WebContentsView
   ) {
     // Initialize services
+    this.settingsService = new SettingsService(this.browserView);
     this.recordingStore = new RecordingStore();
     this.historyService = new HistoryService();
     this.passwordManager = new PasswordManager();
+    this.bookmarkService = new BookmarkService(this.browserView);
     this.sessionManager = new SessionManager();
+    this.adBlockerService = new AdBlockerService();
 
     // Initialize managers
-    this.navigationManager = new NavigationManager();
-    this.debuggerManager = new DebuggerManager();
+    this.navigationService = new NavigationService(this.settingsService, this.historyService);
+    this.debuggerService = new DebuggerService();
+    this.downloadService = new DownloadService(this.baseWindow, this.browserView.webContents);
     
-    this.tabManager = new TabManager(
+    this.tabService = new TabService(
       baseWindow,
+      browserView,
       this.passwordManager,
+      this.settingsService,
       this.historyService,
-      this.navigationManager,
-      this.debuggerManager,
+      this.navigationService,
+      this.debuggerService,
+      this.bookmarkService
     );
     
     this.setupTabEventListeners();
+    this.setupAdBlocker();
 
     this.recordingManager = new RecordingManager(
       this.recordingStore,
-      browserUIView
+      this.browserView
     );
 
     this.automationManager = new AutomationManager(
       this.recordingStore,
       this.sessionManager,
-      browserUIView
+      this.browserView
     );
   }
 
   public initializeAfterAuth(): void {
-    const { tabs } = this.tabManager.getAllTabs();
+    const { tabs } = this.tabService.getAllTabs();
     if (tabs.length === 0) {
-      this.tabManager.createTab('https://www.google.com');
+      this.tabService.createTab();
     }
   }
 
-  public getTabManager(): TabManager {
-    return this.tabManager;
+  public getTabService(): TabService {
+    return this.tabService;
+  }
+
+  public async getSearchSuggestions(query: string): Promise<string[]> {
+    return this.navigationService.getSearchSuggestions(query);
+  }
+
+  public async getAutocompleteSuggestions(query: string): Promise<AutocompleteSuggestion[]> {
+    return this.navigationService.getAutocompleteSuggestions(query);
   }
 
   public async startRecording(): Promise<boolean> {
-    const activeTab = this.tabManager.getActiveTab();
+    const activeTab = this.tabService.getActiveTab();
     if (!activeTab) {
       dialog.showMessageBox({
         type: 'error',
@@ -89,7 +113,7 @@ export class BrowserManager {
   }
 
   public async stopRecording(): Promise<RecordedAction[]> {
-    return this.recordingManager.stopRecording(this.tabManager.getTabs());
+    return this.recordingManager.stopRecording(this.tabService.getTabs());
   }
 
   public async saveRecording(
@@ -101,7 +125,7 @@ export class BrowserManager {
       name,
       description,
       actions,
-      this.tabManager.getTabs()
+      this.tabService.getTabs()
     );
   }
 
@@ -129,7 +153,7 @@ export class BrowserManager {
     sessionId: string;
     message: string;
   }> {
-    const newTab = this.tabManager.createTab();
+    const newTab = this.tabService.createTab();
     return this.automationManager.executeAutomation(
       newTab,
       userGoal,
@@ -166,6 +190,9 @@ export class BrowserManager {
   }
 
   // Service Accessors (for IPCHandlers)
+  public getSettingsService(): SettingsService {
+    return this.settingsService;
+  }
 
   public getHistoryService(): HistoryService {
     return this.historyService;
@@ -175,59 +202,103 @@ export class BrowserManager {
     return this.passwordManager;
   }
 
+  public getBookmarkService(): BookmarkService {
+    return this.bookmarkService;
+  }
+
+  public getDownloadService(): DownloadService {
+    return this.downloadService;
+  }
+
   public getActiveAutomationExecutor(): BrowserAutomationExecutor | null {
-    const activeTab = this.tabManager.getActiveTab();
+    const activeTab = this.tabService.getActiveTab();
     return activeTab.automationExecutor;
   }
 
-  // Layout Management
-
   public updateLayout(_windowWidth: number, _windowHeight: number, sidebarWidth = 0): void {
-    this.tabManager.updateLayout(sidebarWidth);
+    this.tabService.updateLayout(sidebarWidth);
   }
 
-  /**
-   * Hide all tabs (for fullscreen routes like auth pages)
-   */
   public hideAllTabs(): void {
-    this.tabManager.hideAllTabs();
+    this.tabService.hideAllTabs();
   }
 
-  /**
-   * Show all tabs (restore normal browsing mode)
-   */
   public showAllTabs(): void {
-    this.tabManager.showAllTabs();
+    this.tabService.showAllTabs();
   }
 
-  /**
-   * Navigate active tab or create new tab with browzer:// URL
-   */
+  public bringBrowserViewToFront(): void {
+    if (this.browserView.webContents.isDestroyed()) {
+      return;
+    }
+
+    this.baseWindow.contentView.addChildView(this.browserView);
+  }
+
+  public bringBrowserViewToBottom(): void {
+    if (this.browserView.webContents.isDestroyed()) {
+      return;
+    }
+
+    this.baseWindow.contentView.addChildView(this.browserView, 0);
+  }
+
   public navigateToBrowzerURL(url: string): void {
-    const activeTab = this.tabManager.getActiveTab();
+    const activeTab = this.tabService.getActiveTab();
     if (activeTab) {
-      this.tabManager.navigate(activeTab.id, url);
+      this.tabService.navigate(activeTab.id, url);
     } else {
-      this.tabManager.createTab(url);
+      this.tabService.createTab(url);
     }
   }
 
   public destroy(): void {
-    this.tabManager.destroy();
+    this.tabService.destroy();
     this.recordingManager.destroy();
     this.automationManager.destroy();
+    this.downloadService.destroy();
     this.sessionManager.close();
   }
 
   private setupTabEventListeners(): void {
-    this.tabManager.on('tabs:changed', () => {
+    this.tabService.on('tabs:changed', () => {
       this.notifyTabsChanged();
     });
 
-    this.tabManager.on('tab:switched', (previousTabId, newTab) => {
+    this.tabService.on('tab:reordered', (data: { tabId: string; from: number; to: number }) => {
+      this.notifyTabReordered(data);
+    });
+
+    this.tabService.on('tab:switched', (previousTabId, newTab) => {
       if (this.recordingManager.isRecordingActive()) {
         this.recordingManager.handleTabSwitch(previousTabId, newTab);
       }
+    });
+
+    this.tabService.on('tab:created', () => {
+      this.requestAddressBarFocus();
+    });
+  }
+
+  private setupAdBlocker(): void {
+    const privacySettings = this.settingsService.getSetting('privacy');
+    if (privacySettings.enableAdBlocker) {
+      this.adBlockerService.enable();
+    }
+
+    this.settingsService.on('settings:privacy', (event) => {
+      if (event.key === 'enableAdBlocker') {
+        if (event.value as boolean) {
+          this.adBlockerService.enable();
+        } else {
+          this.adBlockerService.disable();
+        }
+      }
+    });
+
+    // Register WebContents for cosmetic filtering when tabs are created
+    this.tabService.on('tab:created', (tab) => {
+      this.adBlockerService.registerWebContents(tab.view.webContents);
     });
   }
 
@@ -238,7 +309,28 @@ export class BrowserManager {
     const allViews = this.baseWindow.contentView.children;
     allViews.forEach(view => {
       if (view instanceof WebContentsView) {
-        view.webContents.send('browser:tabs-updated', this.tabManager.getAllTabs());
+        view.webContents.send('browser:tabs-updated', this.tabService.getAllTabs());
+      }
+    });
+  }
+
+  public requestAddressBarFocus(): void {
+    if (this.browserView.webContents.isDestroyed()) {
+      return;
+    }
+    this.browserView.webContents.focus();
+    setTimeout(() => {
+      if (!this.browserView.webContents.isDestroyed()) {
+        this.browserView.webContents.send('request-address-bar-focus');
+      }
+    }, 10);
+  }
+
+  private notifyTabReordered(data: { tabId: string; from: number; to: number }): void {
+    const allViews = this.baseWindow.contentView.children;
+    allViews.forEach(view => {
+      if (view instanceof WebContentsView && !view.webContents.isDestroyed()) {
+        view.webContents.send('browser:tab-reordered', data);
       }
     });
   }

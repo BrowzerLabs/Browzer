@@ -1,12 +1,8 @@
 import { desktopCapturer } from 'electron';
 import type { BrowserAPI } from '@/preload/types/browser.types';
 import { invoke, createEventListener, createSimpleListener } from '@/preload/utils/ipc-helpers';
-import type { TabInfo, HistoryQuery, AppSettings } from '@/shared/types';
+import type { TabInfo, HistoryQuery, AppSettings, DownloadUpdatePayload, CreateBookmarkParams, CreateFolderParams, UpdateBookmarkParams, MoveBookmarkParams } from '@/shared/types';
 
-/**
- * Browser API implementation
- * Handles all browser-related operations including tabs, navigation, recording, passwords, settings, and history
- */
 export const createBrowserAPI = (): BrowserAPI => ({
   // Initialization
   initializeBrowser: () => invoke('browser:initialize'),
@@ -16,6 +12,7 @@ export const createBrowserAPI = (): BrowserAPI => ({
   closeTab: (tabId: string) => invoke('browser:close-tab', tabId),
   switchTab: (tabId: string) => invoke('browser:switch-tab', tabId),
   getTabs: () => invoke('browser:get-tabs'),
+  reorderTab: (tabId: string, newIndex: number) => invoke('browser:reorder-tab', tabId, newIndex),
 
   // Navigation
   navigate: (tabId: string, url: string) => invoke('browser:navigate', tabId, url),
@@ -29,11 +26,26 @@ export const createBrowserAPI = (): BrowserAPI => ({
   canGoForward: (tabId: string) => invoke('browser:can-go-forward', tabId),
 
   // Sidebar Management
-  setSidebarState: (visible: boolean, widthPercent: number) => 
-    invoke('browser:set-sidebar-state', visible, widthPercent),
+  setSidebarState: (visible: boolean) => 
+    invoke('browser:set-sidebar-state', visible),
 
   // Window Management
   toggleMaximize: () => invoke('window:toggle-maximize'),
+  isFullScreen: () => invoke('window:is-fullscreen'),
+  onFullScreenChanged: (callback) =>
+    createEventListener<boolean>('window:fullscreen-changed', callback),
+  bringBrowserViewToFront: () => invoke('browser:bring-view-front'),
+  bringBrowserViewToBottom: () => invoke('browser:bring-view-bottom'),
+
+
+  getDownloads: () => invoke('download:get-all'),
+  pauseDownload: (id: string) => invoke('download:pause', id),
+  resumeDownload: (id: string) => invoke('download:resume', id),
+  cancelDownload: (id: string) => invoke('download:cancel', id),
+  retryDownload: (id: string) => invoke('download:retry', id),
+  removeDownload: (id: string) => invoke('download:remove', id),
+  openDownload: (id: string) => invoke('download:open', id),
+  showDownloadInFolder: (id: string) => invoke('download:show-in-folder', id),
 
   // Recording Management
   startRecording: () => invoke('browser:start-recording'),
@@ -110,6 +122,10 @@ export const createBrowserAPI = (): BrowserAPI => ({
   getMostVisited: (limit?: number) => invoke('history:get-most-visited', limit),
   getRecentlyVisited: (limit?: number) => invoke('history:get-recently-visited', limit),
 
+  // Autocomplete API
+  getAutocompleteSuggestions: (query: string) => invoke('autocomplete:get-suggestions', query),
+  getSearchSuggestions: (query: string) => invoke('autocomplete:get-search-suggestions', query),
+
   // LLM Automation API
   executeLLMAutomation: (userGoal: string, recordedSessionId: string) =>
     invoke('automation:execute-llm', userGoal, recordedSessionId),
@@ -132,6 +148,11 @@ export const createBrowserAPI = (): BrowserAPI => ({
   onTabsUpdated: (callback) => 
     createEventListener<{ tabs: TabInfo[]; activeTabId: string | null }>(
       'browser:tabs-updated', 
+      callback
+    ),
+  onTabReordered: (callback) => 
+    createEventListener<{ tabId: string; from: number; to: number }>(
+      'browser:tab-reordered',
       callback
     ),
 
@@ -157,12 +178,51 @@ export const createBrowserAPI = (): BrowserAPI => ({
   onAutomationError: (callback) => 
     createEventListener('automation:error', callback),
 
+  // Event listeners - Download events
+  onDownloadsUpdated: (callback) =>
+    createEventListener<DownloadUpdatePayload>('downloads:updated', callback),
+
   // Event listeners - Deep Link events
   onDeepLink: (callback) => 
     createEventListener<string>('deeplink:navigate', callback),
+
+  // Event listeners - Address Bar focus
+  onRequestAddressBarFocus: (callback) => 
+    createSimpleListener('request-address-bar-focus', callback),
+
+  // Event listeners - Bookmark events
+  onBookmarkChanged: (callback) =>
+    createSimpleListener('bookmark:changed', callback),
+
+  // Event listeners - Settings events
+  onSettingsChanged: (callback) =>
+    createEventListener<{ category: string; key: string; value: unknown }>(
+      'settings:changed',
+      callback
+    ),
 
   // Deep Link actions
   hideAllTabs: () => invoke('deeplink:hide-tabs'),
   showAllTabs: () => invoke('deeplink:show-tabs'),
   navigateToTab: (url: string) => invoke('deeplink:navigate-tab', url),
+
+  getTheme: () => invoke('theme:get'),
+  setTheme: (theme: 'light' | 'dark' | 'system') => invoke('theme:set', theme),
+  isDarkMode: () => invoke('theme:is-dark'),
+
+  // Bookmark Management API
+  createBookmark: (params: CreateBookmarkParams) => invoke('bookmark:create', params),
+  createBookmarkFolder: (params: CreateFolderParams) => invoke('bookmark:create-folder', params),
+  getBookmark: (id: string) => invoke('bookmark:get', id),
+  getBookmarkByUrl: (url: string) => invoke('bookmark:get-by-url', url),
+  isBookmarked: (url: string) => invoke('bookmark:is-bookmarked', url),
+  getBookmarkChildren: (parentId: string) => invoke('bookmark:get-children', parentId),
+  getBookmarkTree: () => invoke('bookmark:get-tree'),
+  getBookmarkBar: () => invoke('bookmark:get-bar'),
+  updateBookmark: (params: UpdateBookmarkParams) => invoke('bookmark:update', params),
+  moveBookmark: (params: MoveBookmarkParams) => invoke('bookmark:move', params),
+  deleteBookmark: (id: string) => invoke('bookmark:delete', id),
+  searchBookmarks: (query: string, limit?: number) => invoke('bookmark:search', query, limit),
+  getAllBookmarks: () => invoke('bookmark:get-all'),
+  getRecentBookmarks: (limit?: number) => invoke('bookmark:get-recent', limit),
 });
