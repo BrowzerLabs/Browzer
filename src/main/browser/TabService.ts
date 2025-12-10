@@ -1,7 +1,7 @@
 import { BaseWindow, WebContentsView } from 'electron';
 import { EventEmitter } from 'events';
 import path from 'node:path';
-import { TabInfo, HistoryTransition, ToastPayload } from '@/shared/types';
+import { TabInfo, HistoryTransition, ToastPayload, NavigationError, isNetworkError, shouldIgnoreError } from '@/shared/types';
 import { VideoRecorder } from '@/main/recording';
 import { PasswordManager } from '@/main/password/PasswordManager';
 import { BrowserAutomationExecutor } from '@/main/automation';
@@ -13,6 +13,7 @@ import { DebuggerService } from './DebuggerService';
 import { PasswordAutomation } from '@/main/password';
 import { SettingsService, SettingsChangeEvent } from '@/main/settings/SettingsService';
 import { ContextMenuService } from './ContextMenuService';
+import { errorPageService } from './ErrorPageService';
 
 const TAB_HEIGHT = {
   WITHOUT_BOOKMARKS: 75 as number,
@@ -215,15 +216,36 @@ export class TabService extends EventEmitter {
 
   public goBack(tabId: string): boolean {
     const tab = this.tabs.get(tabId);
-    if (!tab?.view.webContents.navigationHistory.canGoBack()) return false;
-    tab.view.webContents.navigationHistory.goBack();
+    if (!tab) return false;
+    
+    const history = tab.view.webContents.navigationHistory;
+    if (!history.canGoBack()) return false;
+    
+    const currentUrl = tab.view.webContents.getURL();
+    if (currentUrl.startsWith('data:text/html') && tab.info.error) {
+      const currentIndex = history.getActiveIndex();
+      if (currentIndex >= 2) {
+        history.goToIndex(currentIndex - 2);
+        return true;
+      } else if (currentIndex >= 1) {
+        history.goToIndex(0);
+        return true;
+      }
+      return false;
+    }
+    
+    history.goBack();
     return true;
   }
 
   public goForward(tabId: string): boolean {
     const tab = this.tabs.get(tabId);
-    if (!tab?.view.webContents.navigationHistory.canGoForward()) return false;
-    tab.view.webContents.navigationHistory.goForward();
+    if (!tab) return false;
+    
+    const history = tab.view.webContents.navigationHistory;
+    if (!history.canGoForward()) return false;
+    
+    history.goForward();
     return true;
   }
 
@@ -242,13 +264,58 @@ export class TabService extends EventEmitter {
   }
 
   public canGoBack(tabId: string): boolean {
-    return this.tabs.get(tabId)?.view.webContents.navigationHistory.canGoBack() ?? false;
+    const tab = this.tabs.get(tabId);
+    if (!tab) return false;
+    
+    const history = tab.view.webContents.navigationHistory;
+    const currentUrl = tab.view.webContents.getURL();
+    
+    if (currentUrl.startsWith('data:text/html') && tab.info.error) {
+      return history.getActiveIndex() >= 2;
+    }
+    
+    return history.canGoBack();
   }
 
   public canGoForward(tabId: string): boolean {
     return this.tabs.get(tabId)?.view.webContents.navigationHistory.canGoForward() ?? false;
   }
 
+  public retryNavigation(tabId: string): boolean {
+    const tab = this.tabs.get(tabId);
+    if (!tab) return false;
+
+    const failedUrl = tab.info.failedUrl;
+    if (!failedUrl) {
+      tab.view.webContents.reload();
+      return true;
+    }
+
+    tab.info.error = null;
+    tab.info.failedUrl = undefined;
+    tab.view.webContents.loadURL(this.navigationService.normalizeURL(failedUrl));
+    this.emit('tabs:changed');
+    return true;
+  }
+
+  public getTabError(tabId: string): NavigationError | null {
+    const tab = this.tabs.get(tabId);
+    return tab?.info.error ?? null;
+  }
+
+  public hasError(tabId: string): boolean {
+    const tab = this.tabs.get(tabId);
+    return !!tab?.info.error;
+  }
+
+  public clearError(tabId: string): void {
+    const tab = this.tabs.get(tabId);
+    if (tab) {
+      tab.info.error = null;
+      tab.info.failedUrl = undefined;
+      this.emit('tabs:changed');
+    }
+  }
 
   public selectNextTab(): void {
     if (this.orderedTabIds.length === 0) return;
@@ -391,6 +458,8 @@ export class TabService extends EventEmitter {
 
     wc.on('did-start-loading', () => {
       info.isLoading = true;
+      info.error = null;
+      info.failedUrl = undefined;
       this.emit('tabs:changed');
     });
 
@@ -413,6 +482,25 @@ export class TabService extends EventEmitter {
       }
       
       this.emit('tabs:changed');
+    });
+
+    wc.on('will-navigate', (event, url) => {
+      if (url.startsWith('browzer-action://')) {
+        event.preventDefault();
+        const action = url.replace('browzer-action://', '');
+        
+        switch (action) {
+          case 'retry':
+            this.retryNavigation(tab.id);
+            break;
+          case 'home':
+            this.navigate(tab.id, 'browzer://home');
+            break;
+          case 'bypass-certificate':
+            this.bypassCertificateError(tab.id);
+            break;
+        }
+      }
     });
 
     wc.on('did-navigate', (_, url) => this.handleNavigation(info, wc, url));
@@ -441,11 +529,27 @@ export class TabService extends EventEmitter {
       }
     });
 
-    wc.on('did-fail-load', (_, errorCode, errorDescription, validatedURL) => {
-      if (errorCode !== -3) {
-        console.error(`Failed to load ${validatedURL}: ${errorDescription}`);
+    wc.on('did-fail-load', (_, errorCode, errorDescription, validatedURL, isMainFrame) => {
+      if (!isMainFrame || shouldIgnoreError(errorCode)) {
+        return;
       }
+
       info.isLoading = false;
+      const error = errorPageService.createNavigationError(errorCode, errorDescription, validatedURL);
+      
+      if (error) {
+        console.error(`[TabService] Navigation failed for ${validatedURL}: ${errorDescription} (code: ${errorCode})`);
+        
+        info.error = error;
+        info.failedUrl = validatedURL;
+        info.title = error.title;
+        info.url = validatedURL;
+        info.favicon = undefined;
+        
+        const errorPageHtml = errorPageService.generateErrorPage(error);
+        wc.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(errorPageHtml)}`);
+      }
+      
       this.emit('tabs:changed');
     });
 
@@ -454,9 +558,59 @@ export class TabService extends EventEmitter {
         this.contextMenuService.showContextMenu(wc, params);
       }
     });
+
+    wc.on('certificate-error', (event, url, error, certificate, callback) => {
+      const host = new URL(url).host;
+      if (tab.bypassedCertificateHosts?.has(host)) {
+        event.preventDefault();
+        callback(true);
+        return;
+      }
+
+      callback(false);
+    });
+  }
+
+  public bypassCertificateError(tabId: string): boolean {
+    const tab = this.tabs.get(tabId);
+    if (!tab || !tab.info.failedUrl) return false;
+
+    try {
+      const host = new URL(tab.info.failedUrl).host;
+      
+      if (!tab.bypassedCertificateHosts) {
+        tab.bypassedCertificateHosts = new Set();
+      }
+      
+      tab.bypassedCertificateHosts.add(host);
+      
+      console.warn(`[TabService] Certificate bypass enabled for: ${host}`);
+      
+      return this.retryNavigation(tabId);
+    } catch (error) {
+      console.error('[TabService] Failed to bypass certificate:', error);
+      return false;
+    }
+  }
+
+  public hasCertificateBypass(tabId: string): boolean {
+    const tab = this.tabs.get(tabId);
+    if (!tab || !tab.info.failedUrl) return false;
+
+    try {
+      const host = new URL(tab.info.failedUrl).host;
+      return tab.bypassedCertificateHosts?.has(host) ?? false;
+    } catch {
+      return false;
+    }
   }
 
   private handleNavigation(info: TabInfo, wc: Electron.WebContents, url: string): void {
+
+    if (url.startsWith('data:text/html')) {
+      return;
+    }   
+
     const internalPageInfo = this.navigationService.getInternalPageInfo(url);
     if (internalPageInfo) {
       info.url = internalPageInfo.url;
@@ -468,5 +622,15 @@ export class TabService extends EventEmitter {
     info.canGoBack = wc.navigationHistory.canGoBack();
     info.canGoForward = wc.navigationHistory.canGoForward();
     this.emit('tabs:changed');
+  }
+
+   public retryNetworkFailedTabs(): void {
+    const { tabs } = this.getAllTabs();
+    
+    for (const tabInfo of tabs) {
+      if (tabInfo.error && isNetworkError(tabInfo.error.code)) {
+        this.retryNavigation(tabInfo.id);
+      }
+    }
   }
 }

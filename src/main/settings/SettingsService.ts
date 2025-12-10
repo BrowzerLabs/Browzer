@@ -7,7 +7,7 @@ import { DEFAULT_SEARCH_ENGINE_ID } from '@/shared/searchEngines';
 const defaultSettings: AppSettings = {
   general: {
     searchEngineId: DEFAULT_SEARCH_ENGINE_ID,
-    newTabUrl: 'https://www.google.com',
+    newTabUrl: 'browzer://home',
   },
   privacy: {
     clearCacheOnExit: false,
