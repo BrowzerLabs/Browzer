@@ -17,6 +17,7 @@ export interface Tab {
   // Track selected credential for multi-step flows
   selectedCredentialId?: string;
   selectedCredentialUsername?: string;
+  bypassedCertificateHosts?: Set<string>;
 }
 
 export interface TabServiceEvents {
