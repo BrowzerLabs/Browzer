@@ -283,7 +283,7 @@ export class ErrorPageService {
   <div class="error-container">
     ${icon}
     
-    <div class="error-code">${error.code}</div>
+    <div class="error-code">${this.getErrorCodeLabel(error.code)}</div>
     <h1 class="error-title">${error.title}</h1>
     <p class="error-description">${error.description}</p>
     
