@@ -33,7 +33,7 @@ export class MainService {
       show: false,
       transparent: true,
       darkTheme: true,
-      fullscreenable: false,
+      fullscreenable: true,
       vibrancy: 'under-window',
       backgroundMaterial: 'mica',
     });
@@ -108,6 +108,14 @@ export class MainService {
 
     this.baseWindow.on('resize', () => {
       this.updateLayout();
+    });
+
+    this.baseWindow.on('enter-full-screen', () => {
+      this.browserView?.webContents.send('window:fullscreen-changed', true);
+    });
+
+    this.baseWindow.on('leave-full-screen', () => {
+      this.browserView?.webContents.send('window:fullscreen-changed', false);
     });
 
     this.ipcHandlers.on('sidebar-state-changed', (visible: boolean) => {

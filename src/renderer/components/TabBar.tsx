@@ -56,10 +56,33 @@ export function TabBar({
   const [tabWidth, setTabWidth] = useState<number>(LAYOUT.MAX_TAB_WIDTH);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [localTabs, setLocalTabs] = useState(tabs);
+  const [isFullScreen, setIsFullScreen] = useState(false);
   
   useEffect(() => {
     setLocalTabs(tabs);
   }, [tabs]);
+
+  useEffect(() => {
+    const initFullScreenState = async () => {
+      try {
+        const fullScreen = await window.browserAPI.isFullScreen?.();
+        if (typeof fullScreen === 'boolean') {
+          setIsFullScreen(fullScreen);
+        }
+      } catch (error) {
+        console.error('[TabBar] Failed to get fullscreen state', error);
+      }
+    };
+
+    const unsubscribe =
+      window.browserAPI.onFullScreenChanged?.((full: boolean) => {
+        setIsFullScreen(full);
+      }) ?? (() => {});
+
+    initFullScreenState();
+
+    return () => unsubscribe();
+  }, []);
   
   const gap = localTabs.length > LAYOUT.COMPACT_THRESHOLD ? LAYOUT.GAP_COMPACT : LAYOUT.GAP_NORMAL;
 
@@ -122,8 +145,9 @@ export function TabBar({
       const containerWidth = containerRef.current.offsetWidth;
       const currentGap = tabCount > LAYOUT.COMPACT_THRESHOLD ? LAYOUT.GAP_COMPACT : LAYOUT.GAP_NORMAL;
       const gapSpace = (tabCount - 1) * currentGap;
+      const paddingLeft = isFullScreen ? 2 : LAYOUT.PADDING_LEFT;
       
-      const availableSpace = containerWidth - LAYOUT.PADDING_LEFT - LAYOUT.PADDING_RIGHT - LAYOUT.NEW_TAB_BUTTON_SPACE - gapSpace;
+      const availableSpace = containerWidth - paddingLeft - LAYOUT.PADDING_RIGHT - LAYOUT.NEW_TAB_BUTTON_SPACE - gapSpace;
       const calculatedWidth = Math.floor(availableSpace / tabCount);
       
       setTabWidth(Math.max(LAYOUT.MIN_TAB_WIDTH, Math.min(LAYOUT.MAX_TAB_WIDTH, calculatedWidth)));
@@ -132,14 +156,17 @@ export function TabBar({
     calculateTabWidth();
     window.addEventListener('resize', calculateTabWidth);
     return () => window.removeEventListener('resize', calculateTabWidth);
-  }, [localTabs.length]);
+  }, [localTabs.length, isFullScreen]);
 
   const activeTab = activeId ? localTabs.find(t => t.id === activeId) : null;
 
   return (
     <div 
       ref={containerRef}
-      className="flex items-center h-9 pl-20 pr-2 tab-bar-draggable overflow-hidden bg-background"
+      className={cn(
+        'flex items-center h-9 pr-2 tab-bar-draggable overflow-hidden bg-background',
+        isFullScreen ? 'pl-2' : 'pl-20'
+      )}
       style={{ gap: `${gap}px` }}
       onDoubleClick={handleDoubleClick}
       onKeyDown={handleKeyDown}

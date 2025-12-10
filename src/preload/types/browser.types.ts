@@ -27,6 +27,8 @@ export interface BrowserAPI {
   
   // Window Management
   toggleMaximize: () => Promise<void>;
+  isFullScreen: () => Promise<boolean>;
+  onFullScreenChanged: (callback: (isFullScreen: boolean) => void) => () => void;
   bringBrowserViewToFront: () => Promise<boolean>;
   bringBrowserViewToBottom: () => Promise<boolean>;
   
