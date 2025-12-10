@@ -84,11 +84,6 @@ export const ROUTES: Record<string, RouteConfig> = {
     title: 'Bookmarks',
     favicon: 'star',
   },
-  'bypass-certificate': {
-    path: '/bypass-certificate',
-    title: 'Bypass Certificate',
-    favicon: 'shield',
-  },
 };
 
 export const ICON_MAP: Record<string, LucideIcon> = {

@@ -343,15 +343,15 @@ export class ErrorPageService {
     const failedUrl = ${JSON.stringify(error.url)};
     
     function retry() {
-      window.location.href = failedUrl;
+      window.location.href = 'browzer-action://retry';
     }
     
     function goHome() {
-      window.location.href = 'browzer://home';
+      window.location.href = 'browzer-action://home';
     }
     
     function bypassCertificate() {
-      window.location.href = 'browzer://bypass-certificate';
+      window.location.href = 'browzer-action://bypass-certificate';
     }
   </script>
 </body>

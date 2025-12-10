@@ -4,7 +4,6 @@ import { net } from 'electron';
 export interface NetworkMonitorEvents {
   'online': () => void;
   'offline': () => void;
-  'connectivity-changed': (isOnline: boolean) => void;
 }
 
 export class NetworkMonitor extends EventEmitter {

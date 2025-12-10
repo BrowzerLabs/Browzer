@@ -216,15 +216,36 @@ export class TabService extends EventEmitter {
 
   public goBack(tabId: string): boolean {
     const tab = this.tabs.get(tabId);
-    if (!tab?.view.webContents.navigationHistory.canGoBack()) return false;
-    tab.view.webContents.navigationHistory.goBack();
+    if (!tab) return false;
+    
+    const history = tab.view.webContents.navigationHistory;
+    if (!history.canGoBack()) return false;
+    
+    const currentUrl = tab.view.webContents.getURL();
+    if (currentUrl.startsWith('data:text/html') && tab.info.error) {
+      const currentIndex = history.getActiveIndex();
+      if (currentIndex >= 2) {
+        history.goToIndex(currentIndex - 2);
+        return true;
+      } else if (currentIndex >= 1) {
+        history.goToIndex(0);
+        return true;
+      }
+      return false;
+    }
+    
+    history.goBack();
     return true;
   }
 
   public goForward(tabId: string): boolean {
     const tab = this.tabs.get(tabId);
-    if (!tab?.view.webContents.navigationHistory.canGoForward()) return false;
-    tab.view.webContents.navigationHistory.goForward();
+    if (!tab) return false;
+    
+    const history = tab.view.webContents.navigationHistory;
+    if (!history.canGoForward()) return false;
+    
+    history.goForward();
     return true;
   }
 
@@ -243,7 +264,17 @@ export class TabService extends EventEmitter {
   }
 
   public canGoBack(tabId: string): boolean {
-    return this.tabs.get(tabId)?.view.webContents.navigationHistory.canGoBack() ?? false;
+    const tab = this.tabs.get(tabId);
+    if (!tab) return false;
+    
+    const history = tab.view.webContents.navigationHistory;
+    const currentUrl = tab.view.webContents.getURL();
+    
+    if (currentUrl.startsWith('data:text/html') && tab.info.error) {
+      return history.getActiveIndex() >= 2;
+    }
+    
+    return history.canGoBack();
   }
 
   public canGoForward(tabId: string): boolean {
@@ -454,9 +485,21 @@ export class TabService extends EventEmitter {
     });
 
     wc.on('will-navigate', (event, url) => {
-      if (url === 'browzer://bypass-certificate') {
+      if (url.startsWith('browzer-action://')) {
         event.preventDefault();
-        this.bypassCertificateError(tab.id);
+        const action = url.replace('browzer-action://', '');
+        
+        switch (action) {
+          case 'retry':
+            this.retryNavigation(tab.id);
+            break;
+          case 'home':
+            this.navigate(tab.id, 'browzer://home');
+            break;
+          case 'bypass-certificate':
+            this.bypassCertificateError(tab.id);
+            break;
+        }
       }
     });
 
