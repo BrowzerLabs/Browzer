@@ -84,6 +84,26 @@ export class IPCHandlers extends EventEmitter {
     ipcMain.handle('browser:reorder-tab', async (_, tabId: string, newIndex: number) => {
       return this.tabService.reorderTab(tabId, newIndex);
     });
+
+    ipcMain.handle('browser:create-tab-group', async (_event, name?: string, color?: string) => {
+      return this.tabService.createTabGroup(name, color);
+    });
+
+    ipcMain.handle('browser:assign-tab-group', async (_event, tabId: string, groupId: string | null) => {
+      return this.tabService.assignTabToGroup(tabId, groupId);
+    });
+
+    ipcMain.handle('browser:remove-tab-group', async (_event, groupId: string) => {
+      return this.tabService.removeTabGroup(groupId);
+    });
+
+    ipcMain.handle('browser:get-tab-groups', async (_event) => {
+      return this.tabService.getTabGroups();
+    });
+
+    ipcMain.handle('browser:toggle-tab-group-collapse', async (_event, groupId: string) => {
+      return this.tabService.toggleTabGroupCollapse(groupId);
+    });
   }
 
   private setupNavigationHandlers(): void {
