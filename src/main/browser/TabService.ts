@@ -52,6 +52,12 @@ export class TabService extends EventEmitter {
     this.initialize();
   }
 
+  public initializeAfterAuth(): void {
+    if (this.tabs.size === 0) {
+      this.createTab();
+    }
+  }
+
   private initialize(): void {
     this.newTabUrl = this.settingsService.getSetting('general', 'newTabUrl') || 'browzer://home';
     this.setupEventListeners();
