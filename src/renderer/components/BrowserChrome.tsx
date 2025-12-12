@@ -43,11 +43,17 @@ export function BrowserChrome() {
       <TabBar
         tabs={browserAPI.tabs}
         activeTabId={browserAPI.activeTabId}
+        tabGroups={browserAPI.tabGroups}
         onTabClick={browserAPI.switchTab}
         onTabClose={browserAPI.closeTab}
         onNewTab={() => browserAPI.createTab()}
         onMoveTabLeft={browserAPI.moveActiveTabLeft}
         onMoveTabRight={browserAPI.moveActiveTabRight}
+        onCreateGroup={browserAPI.createTabGroup}
+        onUpdateGroup={browserAPI.updateTabGroup}
+        onAssignGroup={browserAPI.assignTabToGroup}
+        onRemoveTabGroup={browserAPI.removeTabGroup}
+        onToggleGroupCollapse={browserAPI.toggleTabGroupCollapse}
       />
 
       <NavigationBar

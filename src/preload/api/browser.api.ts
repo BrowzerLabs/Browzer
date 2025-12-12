@@ -1,7 +1,7 @@
 import { desktopCapturer } from 'electron';
 import type { BrowserAPI } from '@/preload/types/browser.types';
 import { invoke, createEventListener, createSimpleListener } from '@/preload/utils/ipc-helpers';
-import type { TabInfo, HistoryQuery, AppSettings, DownloadUpdatePayload, CreateBookmarkParams, CreateFolderParams, UpdateBookmarkParams, MoveBookmarkParams } from '@/shared/types';
+import type { TabGroup, TabInfo, TabsSnapshot, HistoryQuery, AppSettings, DownloadUpdatePayload, CreateBookmarkParams, CreateFolderParams, UpdateBookmarkParams, MoveBookmarkParams } from '@/shared/types';
 
 export const createBrowserAPI = (): BrowserAPI => ({
   // Initialization
@@ -13,6 +13,12 @@ export const createBrowserAPI = (): BrowserAPI => ({
   switchTab: (tabId: string) => invoke('browser:switch-tab', tabId),
   getTabs: () => invoke('browser:get-tabs'),
   reorderTab: (tabId: string, newIndex: number) => invoke('browser:reorder-tab', tabId, newIndex),
+  createTabGroup: (name?: string, color?: string) => invoke('browser:create-tab-group', name, color),
+  updateTabGroup: (groupId: string, name?: string, color?: string) => invoke('browser:update-tab-group', groupId, name, color),
+  assignTabGroup: (tabId: string, groupId: string | null) => invoke('browser:assign-tab-group', tabId, groupId),
+  removeTabGroup: (groupId: string) => invoke('browser:remove-tab-group', groupId),
+  getTabGroups: () => invoke('browser:get-tab-groups'),
+  toggleTabGroupCollapse: (groupId: string) => invoke('browser:toggle-tab-group-collapse', groupId),
 
   // Navigation
   navigate: (tabId: string, url: string) => invoke('browser:navigate', tabId, url),
@@ -146,7 +152,7 @@ export const createBrowserAPI = (): BrowserAPI => ({
 
   // Event listeners - Tab events
   onTabsUpdated: (callback) => 
-    createEventListener<{ tabs: TabInfo[]; activeTabId: string | null }>(
+    createEventListener<TabsSnapshot>(
       'browser:tabs-updated', 
       callback
     ),
