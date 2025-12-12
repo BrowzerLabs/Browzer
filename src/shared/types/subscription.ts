@@ -93,3 +93,16 @@ export interface PlansResponse {
   plans: PlanDetails[];
   error?: string;
 }
+
+export interface CancelSubscriptionResponse {
+  success: boolean;
+  message?: string;
+  cancel_at?: string;
+  error?: string;
+}
+
+export interface ReactivateSubscriptionResponse {
+  success: boolean;
+  message?: string;
+  error?: string;
+}

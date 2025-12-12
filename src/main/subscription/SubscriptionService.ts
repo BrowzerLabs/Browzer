@@ -14,14 +14,13 @@ import {
   CreditUsageResponse,
   PlansResponse,
   UserSubscription,
+  CancelSubscriptionResponse,
+  ReactivateSubscriptionResponse,
 } from '@/shared/types/subscription';
 
 export class SubscriptionService {
   private currentSubscription: UserSubscription | null = null;
 
-  /**
-   * Get all available subscription plans
-   */
   async getPlans(): Promise<PlansResponse> {
     try {
       const response = await api.get<PlansResponse>('/subscription/plans');
@@ -45,9 +44,6 @@ export class SubscriptionService {
     }
   }
 
-  /**
-   * Get current user's subscription
-   */
   async getCurrentSubscription(): Promise<SubscriptionResponse> {
     try {
       const response = await api.get<SubscriptionResponse>('/subscription/current');
@@ -58,8 +54,6 @@ export class SubscriptionService {
           error: response.error || 'Failed to fetch subscription',
         };
       }
-
-      // Cache the subscription
       if (response.data.subscription) {
         this.currentSubscription = response.data.subscription;
       }
@@ -74,9 +68,6 @@ export class SubscriptionService {
     }
   }
 
-  /**
-   * Create Stripe checkout session for subscription upgrade
-   */
   async createCheckoutSession(
     request: CheckoutSessionRequest
   ): Promise<CheckoutSessionResponse> {
@@ -103,9 +94,6 @@ export class SubscriptionService {
     }
   }
 
-  /**
-   * Create Stripe customer portal session
-   */
   async createPortalSession(
     request: PortalSessionRequest
   ): Promise<PortalSessionResponse> {
@@ -132,9 +120,6 @@ export class SubscriptionService {
     }
   }
 
-  /**
-   * Use automation credits
-   */
   async useCredits(creditsToUse: number = 1): Promise<CreditUsageResponse> {
     try {
       const request: CreditUsageRequest = {
@@ -154,8 +139,6 @@ export class SubscriptionService {
           error: response.error || 'Failed to use credits',
         };
       }
-
-      // Update cached subscription credits
       if (this.currentSubscription) {
         this.currentSubscription.credits_remaining = response.data.credits_remaining;
         this.currentSubscription.credits_used = response.data.credits_used;
@@ -173,9 +156,6 @@ export class SubscriptionService {
     }
   }
 
-  /**
-   * Sync subscription with Stripe
-   */
   async syncSubscription(): Promise<SubscriptionResponse> {
     try {
       const response = await api.post<SubscriptionResponse>('/subscription/sync');
@@ -186,8 +166,6 @@ export class SubscriptionService {
           error: response.error || 'Failed to sync subscription',
         };
       }
-
-      // Update cached subscription
       if (response.data.subscription) {
         this.currentSubscription = response.data.subscription;
       }
@@ -202,22 +180,14 @@ export class SubscriptionService {
     }
   }
 
-  /**
-   * Get cached subscription (no API call)
-   */
   getCachedSubscription(): UserSubscription | null {
     return this.currentSubscription;
   }
 
-  /**
-   * Check if user has sufficient credits
-   */
   hasCredits(creditsNeeded: number = 1): boolean {
     if (!this.currentSubscription) {
       return false;
     }
-
-    // Unlimited credits
     if (this.currentSubscription.credits_limit === null) {
       return true;
     }
@@ -225,19 +195,62 @@ export class SubscriptionService {
     return this.currentSubscription.credits_remaining >= creditsNeeded;
   }
 
-  /**
-   * Get credits remaining
-   */
   getCreditsRemaining(): number {
     if (!this.currentSubscription) {
       return 0;
     }
-
-    // Unlimited credits
     if (this.currentSubscription.credits_limit === null) {
       return Infinity;
     }
 
     return this.currentSubscription.credits_remaining;
+  }
+
+  async cancelSubscription(): Promise<CancelSubscriptionResponse> {
+    try {
+      const response = await api.post<CancelSubscriptionResponse>(
+        '/subscription/cancel'
+      );
+      
+      if (!response.success || !response.data) {
+        return {
+          success: false,
+          error: response.error || 'Failed to cancel subscription',
+        };
+      }
+      this.currentSubscription = null;
+
+      return response.data;
+    } catch (error: any) {
+      console.error('[SubscriptionService] Failed to cancel subscription:', error);
+      return {
+        success: false,
+        error: error.message || 'Failed to cancel subscription',
+      };
+    }
+  }
+
+  async reactivateSubscription(): Promise<ReactivateSubscriptionResponse> {
+    try {
+      const response = await api.post<ReactivateSubscriptionResponse>(
+        '/subscription/reactivate'
+      );
+      
+      if (!response.success || !response.data) {
+        return {
+          success: false,
+          error: response.error || 'Failed to reactivate subscription',
+        };
+      }
+      this.currentSubscription = null;
+
+      return response.data;
+    } catch (error: any) {
+      console.error('[SubscriptionService] Failed to reactivate subscription:', error);
+      return {
+        success: false,
+        error: error.message || 'Failed to reactivate subscription',
+      };
+    }
   }
 }

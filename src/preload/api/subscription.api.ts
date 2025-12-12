@@ -17,6 +17,8 @@ export const createSubscriptionAPI = (): SubscriptionAPI => ({
   createPortalSession: (request: PortalSessionRequest) => 
     invoke('subscription:create-portal', request),
   syncSubscription: () => invoke('subscription:sync'),
+  cancelSubscription: () => invoke('subscription:cancel'),
+  reactivateSubscription: () => invoke('subscription:reactivate'),
   
   // Credit Management
   useCredits: (creditsToUse: number) => invoke('subscription:use-credits', creditsToUse),
