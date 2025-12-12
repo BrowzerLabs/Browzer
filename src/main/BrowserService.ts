@@ -79,13 +79,6 @@ export class BrowserService {
     );
   }
 
-  public initializeAfterAuth(): void {
-    const { tabs } = this.tabService.getAllTabs();
-    if (tabs.length === 0) {
-      this.tabService.createTab();
-    }
-  }
-
   public getTabService(): TabService {
     return this.tabService;
   }
