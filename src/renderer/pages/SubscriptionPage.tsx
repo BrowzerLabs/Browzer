@@ -20,14 +20,12 @@ import {
   Calendar,
   TrendingUp,
   AlertCircle,
-  ExternalLink,
   RefreshCw,
   Loader2Icon,
   XCircle,
   Sparkles,
   MessageCircle,
   ArrowRight,
-  Undo2,
 } from 'lucide-react';
 import {
   UserSubscription,
@@ -44,7 +42,6 @@ export function SubscriptionPage() {
   const [loading, setLoading] = useState(true);
   const [upgrading, setUpgrading] = useState(false);
   const [syncing, setSyncing] = useState(false);
-  const [portalLoading, setPortalLoading] = useState(false);
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [cancelStep, setCancelStep] = useState<'reasons' | 'confirm'>('reasons');
   const [cancelling, setCancelling] = useState(false);
@@ -60,6 +57,7 @@ export function SubscriptionPage() {
       const response = await window.subscriptionAPI.getCurrentSubscription();
       if (response.success && response.subscription) {
         setSubscription(response.subscription);
+        console.log("Subscription: ", response.subscription)
         setCurrentPlan(response.plan_details);
       }
     } catch (error) {
@@ -99,26 +97,6 @@ export function SubscriptionPage() {
       alert('Failed to start upgrade process');
     } finally {
       setUpgrading(false);
-    }
-  };
-
-  const handleManageSubscription = async () => {
-    try {
-      setPortalLoading(true);
-      const response = await window.subscriptionAPI.createPortalSession({
-        return_url: 'browzer://subscription',
-      });
-
-      if (response.success && response.portal_url) {
-        await window.browserAPI.createTab(response.portal_url);
-      } else {
-        alert(`Failed to open portal: ${response.error}`);
-      }
-    } catch (error) {
-      console.error('Failed to open portal:', error);
-      alert('Failed to open subscription portal');
-    } finally {
-      setPortalLoading(false);
     }
   };
 
@@ -384,21 +362,6 @@ export function SubscriptionPage() {
                   <span className="text-sm">Billing</span>
                 </div>
                 <div className="flex items-center gap-3">
-                  <Button
-                    size="lg"
-                    variant="outline"
-                    onClick={handleManageSubscription}
-                    className="gap-2"
-                    disabled={portalLoading}
-                  >
-                    {
-                      portalLoading ? (
-                        <Loader2Icon className="w-4 h-4 animate-spin" />
-                      ) : (
-                        <span className="flex items-center gap-2">Manage Billing <ExternalLink className="w-4 h-4" /></span>
-                      )
-                    }
-                  </Button>
                   {subscription.tier !== SubscriptionTier.FREE && !subscription.cancel_at_period_end && (
                     <Button
                       size="lg"
@@ -415,36 +378,28 @@ export function SubscriptionPage() {
           </div>
 
           {subscription.cancel_at_period_end && (
-            <Alert className="mt-6 bg-amber-50 dark:bg-amber-900/20 border-amber-300 dark:border-amber-700">
-              <div className="flex items-start justify-between w-full">
-                <div className="flex items-start gap-3">
-                  <AlertCircle className="h-5 w-5 text-amber-600 dark:text-amber-400 mt-0.5 flex-shrink-0" />
-                  <div>
-                    <p className="font-medium text-amber-900 dark:text-amber-100">
-                      Subscription Ending Soon
-                    </p>
-                    <p className="text-sm text-amber-700 dark:text-amber-300 mt-1">
-                      Your subscription will end on {formatDate(subscription.current_period_end)}. 
-                      You'll retain full access until then.
-                    </p>
-                  </div>
-                </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleReactivateSubscription}
-                  disabled={reactivating}
-                  className="ml-4 border-amber-400 text-amber-700 hover:bg-amber-100 dark:border-amber-600 dark:text-amber-300 dark:hover:bg-amber-900/40 flex-shrink-0"
-                >
-                  {reactivating ? (
-                    <Loader2Icon className="w-4 h-4 animate-spin mr-2" />
-                  ) : (
-                    <Undo2 className="w-4 h-4 mr-2" />
-                  )}
-                  Keep Subscription
-                </Button>
+            <section className='flex items-center justify-between bg-red-100 dark:bg-red-950 py-3 px-5 rounded-xl'>
+              <div>
+                <p className="font-medium text-red-700 dark:text-red-200">
+                  Subscription Ending Soon
+                </p>
+                <p className="text-sm text-red-700 dark:text-red-300 mt-1">
+                  Your subscription will end on {formatDate(subscription.current_period_end)}. 
+                  You'll retain full access until then.
+                </p>
               </div>
-            </Alert>
+              <Button
+                onClick={handleReactivateSubscription}
+                disabled={reactivating}
+                size='lg'
+              >
+                {reactivating ? (
+                  <Loader2Icon className="w-4 h-4 animate-spin mr-2" />
+                ) : (
+                  <p>Keep Subscription</p>
+                )}
+              </Button>
+            </section>
           )}
         </Card>
         {availableUpgrades.length > 0 && (
