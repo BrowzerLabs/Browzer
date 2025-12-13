@@ -12,6 +12,7 @@ export class AppMenu {
     newTab: this.isMac ? 'Cmd+T' : 'Ctrl+T',
     newWindow: this.isMac ? 'Cmd+N' : 'Ctrl+N',
     closeTab: this.isMac ? 'Cmd+W' : 'Ctrl+W',
+    restoreTab: this.isMac ? 'Cmd+Shift+T' : 'Ctrl+Shift+T',
     back: this.isMac ? 'Cmd+[' : 'Alt+Left',
     forward: this.isMac ? 'Cmd+]' : 'Alt+Right',
     reload: this.isMac ? 'Cmd+R' : 'Ctrl+R',
@@ -109,6 +110,15 @@ export class AppMenu {
               const { activeTabId } = this.tabService.getAllTabs();
               if (activeTabId) {
                 this.tabService.closeTab(activeTabId);
+              }
+            },
+          },
+          {
+            label: 'Reopen Closed Tab',
+            accelerator: this.keys.restoreTab,
+            click: () => {
+              if (this.ensureWindow()) {
+                this.tabService.restoreLastClosedTab();
               }
             },
           },
