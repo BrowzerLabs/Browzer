@@ -10,6 +10,7 @@ export const createBrowserAPI = (): BrowserAPI => ({
   // Tab Management
   createTab: (url?: string) => invoke('browser:create-tab', url),
   closeTab: (tabId: string) => invoke('browser:close-tab', tabId),
+  restoreClosedTab: () => invoke('browser:restore-closed-tab'),
   switchTab: (tabId: string) => invoke('browser:switch-tab', tabId),
   getTabs: () => invoke('browser:get-tabs'),
   reorderTab: (tabId: string, newIndex: number) => invoke('browser:reorder-tab', tabId, newIndex),

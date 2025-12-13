@@ -74,6 +74,10 @@ export class IPCHandlers extends EventEmitter {
       return this.tabService.closeTab(tabId);
     });
 
+    ipcMain.handle('browser:restore-closed-tab', async () => {
+      return this.tabService.restoreLastClosedTab();
+    });
+
     ipcMain.handle('browser:switch-tab', async (_, tabId: string) => {
       return this.tabService.switchToTab(tabId);
     });

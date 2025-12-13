@@ -34,6 +34,14 @@ interface StoredSession {
   timestamp: number;
 }
 
+interface ClosedTabInfo {
+  url: string;
+  title: string;
+  favicon?: string;
+  index: number;
+  groupId?: string;
+}
+
 export class TabService extends EventEmitter {
   public on<K extends keyof TabServiceEvents>(event: K, listener: TabServiceEvents[K]): this {
     return super.on(event, listener);
@@ -54,6 +62,7 @@ export class TabService extends EventEmitter {
   private readonly contextMenuService = new ContextMenuService();
   private tabGroups = new Map<string, TabGroup>();
   private sessionStore: Store<StoredSession>;
+  private closedTabs: ClosedTabInfo[] = [];
   private readonly tabGroupPalette = [
     '#6366F1', // indigo
     '#F59E0B', // amber
@@ -190,6 +199,22 @@ export class TabService extends EventEmitter {
     const wasActiveTab = this.activeTabId === tabId;
     const orderIndex = this.orderedTabIds.indexOf(tabId);
 
+    // Save closed tab info for restoration
+    if (tab.info.url) {
+      this.closedTabs.push({
+        url: tab.info.url,
+        title: tab.info.title,
+        favicon: tab.info.favicon,
+        index: orderIndex,
+        groupId: tab.info.group?.id
+      });
+      
+      // Limit history to 20 tabs
+      if (this.closedTabs.length > 20) {
+        this.closedTabs.shift();
+      }
+    }
+
     this.baseWindow.contentView.removeChildView(tab.view);
     tab.passwordAutomation?.stop().catch(console.error);
     this.debuggerService.cleanupDebugger(tab.view, tabId);
@@ -217,6 +242,26 @@ export class TabService extends EventEmitter {
       this.baseWindow.close();
     }
     
+    return true;
+  }
+
+  public restoreLastClosedTab(): boolean {
+    const lastClosedTab = this.closedTabs.pop();
+    if (!lastClosedTab) return false;
+
+    const tab = this.createTab(lastClosedTab.url);
+    
+    // Restore group if it exists
+    if (lastClosedTab.groupId && this.tabGroups.has(lastClosedTab.groupId)) {
+      this.assignTabToGroup(tab.id, lastClosedTab.groupId);
+    }
+    
+    // Attempt to restore position
+    // We can't guarantee exact position if tabs shifted, but we can try
+    if (lastClosedTab.index >= 0 && lastClosedTab.index < this.orderedTabIds.length) {
+      this.reorderTab(tab.id, lastClosedTab.index);
+    }
+
     return true;
   }
 

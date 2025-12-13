@@ -7,6 +7,7 @@ export interface BrowserAPI {
   // Tab Management
   createTab: (url?: string) => Promise<TabInfo>;
   closeTab: (tabId: string) => Promise<boolean>;
+  restoreClosedTab: () => Promise<boolean>;
   switchTab: (tabId: string) => Promise<boolean>;
   getTabs: () => Promise<TabsSnapshot>;
   reorderTab: (tabId: string, newIndex: number) => Promise<boolean>;
