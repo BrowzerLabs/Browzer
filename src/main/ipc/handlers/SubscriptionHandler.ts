@@ -36,5 +36,13 @@ export class SubscriptionHandler extends BaseHandler {
     this.handle('subscription:get-credits-remaining', async () => {
       return subscriptionService.getCreditsRemaining();
     });
+
+    this.handle('subscription:cancel', async () => {
+      return subscriptionService.cancelSubscription();
+    });
+
+    this.handle('subscription:reactivate', async () => {
+      return subscriptionService.reactivateSubscription();
+    });
   }
 }
