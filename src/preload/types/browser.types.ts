@@ -1,4 +1,4 @@
-import type { TabInfo, HistoryEntry, HistoryQuery, HistoryStats, AppSettings, AutocompleteSuggestion, DownloadItem, DownloadUpdatePayload, Bookmark, BookmarkFolder, BookmarkTreeNode, CreateBookmarkParams, CreateFolderParams, UpdateBookmarkParams, MoveBookmarkParams } from '@/shared/types';
+import type { TabGroup, TabInfo, TabsSnapshot, HistoryEntry, HistoryQuery, HistoryStats, AppSettings, AutocompleteSuggestion, DownloadItem, DownloadUpdatePayload, Bookmark, BookmarkFolder, BookmarkTreeNode, CreateBookmarkParams, CreateFolderParams, UpdateBookmarkParams, MoveBookmarkParams } from '@/shared/types';
 
 export interface BrowserAPI {
   // Initialization
@@ -7,9 +7,15 @@ export interface BrowserAPI {
   // Tab Management
   createTab: (url?: string) => Promise<TabInfo>;
   closeTab: (tabId: string) => Promise<boolean>;
+  restoreClosedTab: () => Promise<boolean>;
   switchTab: (tabId: string) => Promise<boolean>;
-  getTabs: () => Promise<{ tabs: TabInfo[]; activeTabId: string | null }>;
+  getTabs: () => Promise<TabsSnapshot>;
   reorderTab: (tabId: string, newIndex: number) => Promise<boolean>;
+  createTabGroup: (name?: string, color?: string) => Promise<TabGroup>;
+  assignTabGroup: (tabId: string, groupId: string | null) => Promise<boolean>;
+  removeTabGroup: (groupId: string) => Promise<boolean>;
+  getTabGroups: () => Promise<TabGroup[]>;
+  toggleTabGroupCollapse: (groupId: string) => Promise<boolean>;
 
   // Navigation
   navigate: (tabId: string, url: string) => Promise<boolean>;
@@ -93,6 +99,11 @@ export interface BrowserAPI {
   getAutocompleteSuggestions: (query: string) => Promise<AutocompleteSuggestion[]>;
   getSearchSuggestions: (query: string) => Promise<string[]>;
 
+  // Tab Session Restore
+  hasSavedSession: () => Promise<boolean>;
+  restoreSession: () => Promise<boolean>;
+  clearSavedSession: () => Promise<boolean>;
+
   // LLM Automation
   executeLLMAutomation: (userGoal: string, recordedSessionId: string) => Promise<{
     success: boolean;
@@ -110,7 +121,7 @@ export interface BrowserAPI {
   stopAutomation: (sessionId: string) => Promise<{ success: boolean }>;
 
   // Event listeners
-  onTabsUpdated: (callback: (data: { tabs: TabInfo[]; activeTabId: string | null }) => void) => () => void;
+  onTabsUpdated: (callback: (data: TabsSnapshot) => void) => () => void;
   onTabReordered: (callback: (data: { tabId: string; from: number; to: number }) => void) => () => void;
   onRecordingAction: (callback: (action: any) => void) => () => void;
   onRecordingStarted: (callback: () => void) => () => void;

@@ -1,7 +1,8 @@
 import { BaseWindow, WebContentsView } from 'electron';
 import { EventEmitter } from 'events';
 import path from 'node:path';
-import { TabInfo, HistoryTransition, ToastPayload, NavigationError, isNetworkError, shouldIgnoreError } from '@/shared/types';
+import Store from 'electron-store';
+import { TabInfo, HistoryTransition, ToastPayload, NavigationError, isNetworkError, shouldIgnoreError, TabGroup, TabsSnapshot } from '@/shared/types';
 import { VideoRecorder } from '@/main/recording';
 import { PasswordManager } from '@/main/password/PasswordManager';
 import { BrowserAutomationExecutor } from '@/main/automation';
@@ -20,6 +21,27 @@ const TAB_HEIGHT = {
   WITH_BOOKMARKS: 104 as number,
 };
 
+interface StoredTab {
+  url: string;
+  title: string;
+  favicon?: string;
+  groupId?: string;
+}
+
+interface StoredSession {
+  tabs: StoredTab[];
+  groups: TabGroup[];
+  timestamp: number;
+}
+
+interface ClosedTabInfo {
+  url: string;
+  title: string;
+  favicon?: string;
+  index: number;
+  groupId?: string;
+}
+
 export class TabService extends EventEmitter {
   public on<K extends keyof TabServiceEvents>(event: K, listener: TabServiceEvents[K]): this {
     return super.on(event, listener);
@@ -33,10 +55,23 @@ export class TabService extends EventEmitter {
   private orderedTabIds: string[] = [];
   private activeTabId: string | null = null;
   private tabCounter = 0;
+  private tabGroupCounter = 0;
   private currentSidebarWidth = 0;
   private webContentsViewHeight = TAB_HEIGHT.WITHOUT_BOOKMARKS;
   private newTabUrl = 'browzer://home';
   private readonly contextMenuService = new ContextMenuService();
+  private tabGroups = new Map<string, TabGroup>();
+  private sessionStore: Store<StoredSession>;
+  private closedTabs: ClosedTabInfo[] = [];
+  private readonly tabGroupPalette = [
+    '#6366F1', // indigo
+    '#F59E0B', // amber
+    '#10B981', // emerald
+    '#06B6D4', // cyan
+    '#EC4899', // pink
+    '#F97316', // orange
+    '#84CC16', // lime
+  ];
 
   constructor(
     private baseWindow: BaseWindow,
@@ -49,6 +84,14 @@ export class TabService extends EventEmitter {
     private bookmarkService: BookmarkService
   ) {
     super();
+    this.sessionStore = new Store<StoredSession>({
+      name: 'session-restore',
+      defaults: {
+        tabs: [],
+        groups: [],
+        timestamp: 0
+      }
+    });
     this.initialize();
   }
 
@@ -115,6 +158,7 @@ export class TabService extends EventEmitter {
       isLoading: false,
       canGoBack: false,
       canGoForward: false,
+      group: null,
     };
 
     const tab: Tab = {
@@ -155,6 +199,22 @@ export class TabService extends EventEmitter {
     const wasActiveTab = this.activeTabId === tabId;
     const orderIndex = this.orderedTabIds.indexOf(tabId);
 
+    // Save closed tab info for restoration
+    if (tab.info.url) {
+      this.closedTabs.push({
+        url: tab.info.url,
+        title: tab.info.title,
+        favicon: tab.info.favicon,
+        index: orderIndex,
+        groupId: tab.info.group?.id
+      });
+      
+      // Limit history to 20 tabs
+      if (this.closedTabs.length > 20) {
+        this.closedTabs.shift();
+      }
+    }
+
     this.baseWindow.contentView.removeChildView(tab.view);
     tab.passwordAutomation?.stop().catch(console.error);
     this.debuggerService.cleanupDebugger(tab.view, tabId);
@@ -174,6 +234,7 @@ export class TabService extends EventEmitter {
       this.activeTabId = null;
     }
 
+    this.cleanupEmptyGroups();
     this.emit('tabs:changed');
     this.emit('tab:closed', tabId, newActiveTabId, wasActiveTab);
     
@@ -181,6 +242,26 @@ export class TabService extends EventEmitter {
       this.baseWindow.close();
     }
     
+    return true;
+  }
+
+  public restoreLastClosedTab(): boolean {
+    const lastClosedTab = this.closedTabs.pop();
+    if (!lastClosedTab) return false;
+
+    const tab = this.createTab(lastClosedTab.url);
+    
+    // Restore group if it exists
+    if (lastClosedTab.groupId && this.tabGroups.has(lastClosedTab.groupId)) {
+      this.assignTabToGroup(tab.id, lastClosedTab.groupId);
+    }
+    
+    // Attempt to restore position
+    // We can't guarantee exact position if tabs shifted, but we can try
+    if (lastClosedTab.index >= 0 && lastClosedTab.index < this.orderedTabIds.length) {
+      this.reorderTab(tab.id, lastClosedTab.index);
+    }
+
     return true;
   }
 
@@ -352,6 +433,32 @@ export class TabService extends EventEmitter {
     this.reorderSingleTabView(tabId, clampedIndex);
     
     this.emit('tab:reordered', { tabId, from: currentIndex, to: clampedIndex });
+    
+    const movedTab = this.tabs.get(tabId);
+    if (movedTab && movedTab.info.group) {
+      const groupId = movedTab.info.group.id;
+      
+    const prevTabId = this.orderedTabIds[clampedIndex - 1];
+    const nextTabId = this.orderedTabIds[clampedIndex + 1];
+    
+    const prevTab = prevTabId ? this.tabs.get(prevTabId) : null;
+    const nextTab = nextTabId ? this.tabs.get(nextTabId) : null;
+    
+    const isNextToGroupMember = (prevTab?.info.group?.id === groupId) || (nextTab?.info.group?.id === groupId);
+    
+    if (!isNextToGroupMember) {
+       const hasOtherMembers = this.orderedTabIds.some(id => 
+         id !== tabId && this.tabs.get(id)?.info.group?.id === groupId
+       );
+       
+       if (hasOtherMembers) {
+         movedTab.info.group = null;
+         this.cleanupEmptyGroups();
+         this.emit('tabs:changed');
+       }
+    }
+    }
+
     return true;
   }
 
@@ -375,12 +482,16 @@ export class TabService extends EventEmitter {
     this.baseWindow.contentView.addChildView(tab.view, Math.min(insertIndex, children.length));
   }
 
-  public getAllTabs(): { tabs: TabInfo[]; activeTabId: string | null } {
+  public getAllTabs(): TabsSnapshot {
     const tabs = this.orderedTabIds
       .map(id => this.tabs.get(id))
       .filter((tab): tab is Tab => !!tab)
       .map(tab => tab.info);
-    return { tabs, activeTabId: this.activeTabId };
+    return { 
+      tabs, 
+      activeTabId: this.activeTabId,
+      groups: Array.from(this.tabGroups.values()),
+    };
   }
 
   public getActiveTab(): Tab | null {
@@ -425,6 +536,90 @@ export class TabService extends EventEmitter {
         tab.view.setVisible(true);
       }
     });
+  }
+
+  public saveCurrentSession(): void {
+    const tabsToSave: StoredTab[] = this.orderedTabIds
+      .map(id => this.tabs.get(id))
+      .filter((tab): tab is Tab => !!tab && !!tab.info.url && !tab.info.url.startsWith('data:'))
+      .map(tab => ({
+        url: tab.info.url,
+        title: tab.info.title,
+        favicon: tab.info.favicon,
+        groupId: tab.info.group?.id
+      }));
+
+    // Don't save if all tabs are new tabs (default home page)
+    const isAllNewTabs = tabsToSave.every(t => t.url === this.newTabUrl);
+    if (tabsToSave.length === 0 || isAllNewTabs) {
+      return;
+    }
+
+    const groupsToSave = Array.from(this.tabGroups.values());
+
+    if (tabsToSave.length > 0) {
+      this.sessionStore.set({
+        tabs: tabsToSave,
+        groups: groupsToSave,
+        timestamp: Date.now()
+      });
+    }
+  }
+
+  public hasSavedSession(): boolean {
+    const session = this.sessionStore.store;
+    return session.tabs.length > 0;
+  }
+
+  public restoreSession(): void {
+    const session = this.sessionStore.store;
+    if (session.tabs.length > 0) {
+      let tabToClose: string | null = null;
+      
+      if (this.orderedTabIds.length === 1) {
+         const currentTab = this.tabs.get(this.orderedTabIds[0]);
+         if (currentTab && currentTab.info.url === this.newTabUrl) {
+           tabToClose = currentTab.id;
+         }
+      }
+
+      if (session.groups && session.groups.length > 0) {
+        let maxGroupId = 0;
+        session.groups.forEach(group => {
+          this.tabGroups.set(group.id, group);
+          
+          const match = group.id.match(/^group-(\d+)$/);
+          if (match) {
+            const num = parseInt(match[1], 10);
+            if (!isNaN(num)) {
+              maxGroupId = Math.max(maxGroupId, num);
+            }
+          }
+        });
+        
+        if (maxGroupId > this.tabGroupCounter) {
+          this.tabGroupCounter = maxGroupId;
+        }
+      }
+
+      session.tabs.forEach(storedTab => {
+        const newTab = this.createTab(storedTab.url);
+        if (storedTab.groupId && this.tabGroups.has(storedTab.groupId)) {
+          this.assignTabToGroup(newTab.id, storedTab.groupId);
+        }
+      });
+
+      if (tabToClose) {
+        this.closeTab(tabToClose);
+      }
+
+      this.clearSavedSession();
+      this.emit('tabs:changed');
+    }
+  }
+
+  public clearSavedSession(): void {
+    this.sessionStore.clear();
   }
 
   public destroy(): void {
@@ -632,5 +827,109 @@ export class TabService extends EventEmitter {
         this.retryNavigation(tabInfo.id);
       }
     }
+  }
+
+  public createTabGroup(name?: string, color?: string): TabGroup {
+    const groupId = `group-${++this.tabGroupCounter}`;
+    const paletteColor = this.tabGroupPalette[(this.tabGroupCounter - 1) % this.tabGroupPalette.length];
+    const group: TabGroup = {
+      id: groupId,
+      name: name?.trim() || `Group ${this.tabGroupCounter}`,
+      color: color || paletteColor,
+      collapsed: false,
+    };
+    this.tabGroups.set(groupId, group);
+    this.emit('tabs:changed');
+    return group;
+  }
+
+  public toggleTabGroupCollapse(groupId: string): boolean {
+    const group = this.tabGroups.get(groupId);
+    if (!group) return false;
+    
+    group.collapsed = !group.collapsed;
+    this.emit('tabs:changed');
+    return true;
+  }
+
+  public assignTabToGroup(tabId: string, groupId: string | null): boolean {
+    const tab = this.tabs.get(tabId);
+    if (!tab) return false;
+
+    if (groupId === null) {
+      tab.info.group = null;
+      this.cleanupEmptyGroups();
+      this.emit('tabs:changed');
+      return true;
+    }
+
+    const group = this.tabGroups.get(groupId);
+    if (!group) {
+      console.warn('[TabService] assignTabToGroup: group not found', groupId);
+      return false;
+    }
+
+    tab.info.group = group;
+
+    // Move tab to be contiguous with other group members
+    const groupIndices = this.orderedTabIds
+      .map((id, index) => ({ id, index }))
+      .filter(({ id }) => this.tabs.get(id)?.info.group?.id === groupId && id !== tabId)
+      .map(x => x.index);
+
+    if (groupIndices.length > 0) {
+      const lastGroupIndex = Math.max(...groupIndices);
+      
+      const currentIndex = this.orderedTabIds.indexOf(tabId);
+      this.orderedTabIds.splice(currentIndex, 1);
+      
+      let insertIndex = lastGroupIndex;
+      if (currentIndex > lastGroupIndex) {
+         insertIndex = lastGroupIndex + 1;
+      } else {
+         insertIndex = lastGroupIndex;
+      }
+      
+      this.orderedTabIds.splice(insertIndex, 0, tabId);
+      this.reorderSingleTabView(tabId, insertIndex);
+    }
+
+    this.emit('tabs:changed');
+    return true;
+  }
+
+  public removeTabGroup(groupId: string): boolean {
+    if (!this.tabGroups.has(groupId)) return false;
+    this.tabGroups.delete(groupId);
+    
+    this.tabs.forEach(tab => {
+      if (tab.info.group?.id === groupId) {
+        tab.info.group = null;
+      }
+    });
+
+    this.cleanupEmptyGroups();
+    this.emit('tabs:changed');
+    return true;
+  }
+
+  public getTabGroups(): TabGroup[] {
+    return Array.from(this.tabGroups.values());
+  }
+
+  private cleanupEmptyGroups(): void {
+    const groupsInUse = new Set<string>();
+    this.tabs.forEach(tab => {
+      const groupId = tab.info.group?.id;
+      if (groupId) {
+        groupsInUse.add(groupId);
+      }
+    });
+
+    this.tabGroups.forEach((_, groupId) => {
+      if (!groupsInUse.has(groupId)) {
+        this.tabGroups.delete(groupId);
+      }
+    });
   }
 }

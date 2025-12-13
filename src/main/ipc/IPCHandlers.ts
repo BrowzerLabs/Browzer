@@ -56,6 +56,7 @@ export class IPCHandlers extends EventEmitter {
     this.setupDeepLinkHandlers();
     this.setupAutocompleteHandlers();
     this.setupThemeHandlers();
+    this.setupSessionHandlers();
   }
 
   private setupTabHandlers(): void {
@@ -73,6 +74,10 @@ export class IPCHandlers extends EventEmitter {
       return this.tabService.closeTab(tabId);
     });
 
+    ipcMain.handle('browser:restore-closed-tab', async () => {
+      return this.tabService.restoreLastClosedTab();
+    });
+
     ipcMain.handle('browser:switch-tab', async (_, tabId: string) => {
       return this.tabService.switchToTab(tabId);
     });
@@ -83,6 +88,26 @@ export class IPCHandlers extends EventEmitter {
 
     ipcMain.handle('browser:reorder-tab', async (_, tabId: string, newIndex: number) => {
       return this.tabService.reorderTab(tabId, newIndex);
+    });
+
+    ipcMain.handle('browser:create-tab-group', async (_event, name?: string, color?: string) => {
+      return this.tabService.createTabGroup(name, color);
+    });
+
+    ipcMain.handle('browser:assign-tab-group', async (_event, tabId: string, groupId: string | null) => {
+      return this.tabService.assignTabToGroup(tabId, groupId);
+    });
+
+    ipcMain.handle('browser:remove-tab-group', async (_event, groupId: string) => {
+      return this.tabService.removeTabGroup(groupId);
+    });
+
+    ipcMain.handle('browser:get-tab-groups', async (_event) => {
+      return this.tabService.getTabGroups();
+    });
+
+    ipcMain.handle('browser:toggle-tab-group-collapse', async (_event, groupId: string) => {
+      return this.tabService.toggleTabGroupCollapse(groupId);
     });
   }
 
@@ -589,6 +614,22 @@ export class IPCHandlers extends EventEmitter {
     });
   }
 
+  private setupSessionHandlers(): void {
+    ipcMain.handle('session:has-saved', async () => {
+      return this.tabService.hasSavedSession();
+    });
+
+    ipcMain.handle('session:restore', async () => {
+      this.tabService.restoreSession();
+      return true;
+    });
+
+    ipcMain.handle('session:clear', async () => {
+      this.tabService.clearSavedSession();
+      return true;
+    });
+  }
+
   public cleanup(): void {
     const handlers = [
       // Tab handlers
@@ -728,6 +769,10 @@ export class IPCHandlers extends EventEmitter {
       'bookmark:search',
       'bookmark:get-all',
       'bookmark:get-recent',
+      // Session handlers
+      'session:has-saved',
+      'session:restore',
+      'session:clear',
     ];
 
     handlers.forEach(channel => {

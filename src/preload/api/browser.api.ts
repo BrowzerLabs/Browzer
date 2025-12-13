@@ -1,7 +1,7 @@
 import { desktopCapturer } from 'electron';
 import type { BrowserAPI } from '@/preload/types/browser.types';
 import { invoke, createEventListener, createSimpleListener } from '@/preload/utils/ipc-helpers';
-import type { TabInfo, HistoryQuery, AppSettings, DownloadUpdatePayload, CreateBookmarkParams, CreateFolderParams, UpdateBookmarkParams, MoveBookmarkParams } from '@/shared/types';
+import type { TabGroup, TabInfo, TabsSnapshot, HistoryQuery, AppSettings, DownloadUpdatePayload, CreateBookmarkParams, CreateFolderParams, UpdateBookmarkParams, MoveBookmarkParams } from '@/shared/types';
 
 export const createBrowserAPI = (): BrowserAPI => ({
   // Initialization
@@ -10,9 +10,15 @@ export const createBrowserAPI = (): BrowserAPI => ({
   // Tab Management
   createTab: (url?: string) => invoke('browser:create-tab', url),
   closeTab: (tabId: string) => invoke('browser:close-tab', tabId),
+  restoreClosedTab: () => invoke('browser:restore-closed-tab'),
   switchTab: (tabId: string) => invoke('browser:switch-tab', tabId),
   getTabs: () => invoke('browser:get-tabs'),
   reorderTab: (tabId: string, newIndex: number) => invoke('browser:reorder-tab', tabId, newIndex),
+  createTabGroup: (name?: string, color?: string) => invoke('browser:create-tab-group', name, color),
+  assignTabGroup: (tabId: string, groupId: string | null) => invoke('browser:assign-tab-group', tabId, groupId),
+  removeTabGroup: (groupId: string) => invoke('browser:remove-tab-group', groupId),
+  getTabGroups: () => invoke('browser:get-tab-groups'),
+  toggleTabGroupCollapse: (groupId: string) => invoke('browser:toggle-tab-group-collapse', groupId),
 
   // Navigation
   navigate: (tabId: string, url: string) => invoke('browser:navigate', tabId, url),
@@ -126,6 +132,11 @@ export const createBrowserAPI = (): BrowserAPI => ({
   getAutocompleteSuggestions: (query: string) => invoke('autocomplete:get-suggestions', query),
   getSearchSuggestions: (query: string) => invoke('autocomplete:get-search-suggestions', query),
 
+  // Tab Session Restore
+  hasSavedSession: () => invoke('session:has-saved'),
+  restoreSession: () => invoke('session:restore'),
+  clearSavedSession: () => invoke('session:clear'),
+
   // LLM Automation API
   executeLLMAutomation: (userGoal: string, recordedSessionId: string) =>
     invoke('automation:execute-llm', userGoal, recordedSessionId),
@@ -146,7 +157,7 @@ export const createBrowserAPI = (): BrowserAPI => ({
 
   // Event listeners - Tab events
   onTabsUpdated: (callback) => 
-    createEventListener<{ tabs: TabInfo[]; activeTabId: string | null }>(
+    createEventListener<TabsSnapshot>(
       'browser:tabs-updated', 
       callback
     ),
