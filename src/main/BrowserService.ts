@@ -8,7 +8,7 @@ import { BrowserAutomationExecutor } from './automation';
 import { SessionManager } from '@/main/llm/session/SessionManager';
 import {
   TabService,
-  RecordingManager,
+  RecordingService,
   AutomationManager,
   NavigationService,
   DebuggerService,
@@ -20,7 +20,7 @@ import { AdBlockerService } from './adblocker/AdBlockerService';
 export class BrowserService {
   // Modular components
   private tabService: TabService;
-  private recordingManager: RecordingManager;
+  private recordingService: RecordingService;
   private automationManager: AutomationManager;
   private navigationService: NavigationService;
   private debuggerService: DebuggerService;
@@ -67,7 +67,7 @@ export class BrowserService {
     this.setupTabEventListeners();
     this.setupAdBlocker();
 
-    this.recordingManager = new RecordingManager(
+    this.recordingService = new RecordingService(
       this.recordingStore,
       this.browserView
     );
@@ -102,11 +102,11 @@ export class BrowserService {
       return false;
     }
 
-    return this.recordingManager.startRecording(activeTab);
+    return this.recordingService.startRecording(activeTab);
   }
 
   public async stopRecording(): Promise<RecordedAction[]> {
-    return this.recordingManager.stopRecording(this.tabService.getTabs());
+    return this.recordingService.stopRecording(this.tabService.getTabs());
   }
 
   public async saveRecording(
@@ -114,7 +114,7 @@ export class BrowserService {
     description: string,
     actions: RecordedAction[]
   ): Promise<string> {
-    return this.recordingManager.saveRecording(
+    return this.recordingService.saveRecording(
       name,
       description,
       actions,
@@ -123,19 +123,19 @@ export class BrowserService {
   }
 
   public isRecordingActive(): boolean {
-    return this.recordingManager.isRecordingActive();
+    return this.recordingService.isRecordingActive();
   }
 
   public getRecordedActions(): RecordedAction[] {
-    return this.recordingManager.getRecordedActions();
+    return this.recordingService.getRecordedActions();
   }
 
   public getRecordingStore(): RecordingStore {
-    return this.recordingManager.getRecordingStore();
+    return this.recordingService.getRecordingStore();
   }
 
   public async deleteRecording(id: string): Promise<boolean> {
-    return this.recordingManager.deleteRecording(id);
+    return this.recordingService.deleteRecording(id);
   }
 
   public async executeIterativeAutomation(
@@ -247,7 +247,7 @@ export class BrowserService {
 
   public destroy(): void {
     this.tabService.destroy();
-    this.recordingManager.destroy();
+    this.recordingService.destroy();
     this.automationManager.destroy();
     this.downloadService.destroy();
     this.sessionManager.close();
@@ -263,8 +263,8 @@ export class BrowserService {
     });
 
     this.tabService.on('tab:switched', (previousTabId, newTab) => {
-      if (this.recordingManager.isRecordingActive()) {
-        this.recordingManager.handleTabSwitch(previousTabId, newTab);
+      if (this.recordingService.isRecordingActive()) {
+        this.recordingService.handleTabSwitch(previousTabId, newTab);
       }
     });
 
