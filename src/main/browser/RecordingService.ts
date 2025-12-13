@@ -4,7 +4,7 @@ import { RecordedAction, RecordingSession, RecordingTabInfo } from '@/shared/typ
 import { stat } from 'fs/promises';
 import { Tab, RecordingState } from './types';
 
-export class RecordingManager {
+export class RecordingService {
   private recordingState: RecordingState = {
     isRecording: false,
     recordingId: null,
@@ -24,9 +24,6 @@ export class RecordingManager {
     this.centralRecorder = new ActionRecorder();
   }
 
-  /**
-   * Start recording on active tab
-   */
   public async startRecording(activeTab: Tab): Promise<boolean> {
     if (this.recordingState.isRecording) {
       console.error('Recording already in progress');
@@ -39,14 +36,10 @@ export class RecordingManager {
     }
 
     try {
-      // Generate unique recording ID
       this.recordingState.recordingId = `rec-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-      
-      // Initialize recording tabs map
       this.recordingTabs.clear();
       this.lastActiveTabId = activeTab.id;
       
-      // Add initial tab to recording tabs
       this.recordingTabs.set(activeTab.id, {
         tabId: activeTab.id,
         title: activeTab.info.title,
@@ -56,10 +49,8 @@ export class RecordingManager {
         actionCount: 0
       });
 
-      // Set up centralized recorder with current tab
       this.centralRecorder.setView(activeTab.view);
       this.centralRecorder.setActionCallback((action) => {
-        // Update action count for the tab
         const tabInfo = this.recordingTabs.get(action.tabId || activeTab.id || '');
         if (tabInfo) {
           tabInfo.actionCount++;
@@ -83,7 +74,6 @@ export class RecordingManager {
         });
       }); 
 
-      // Start action recording with tab context and recordingId for snapshots
       await this.centralRecorder.startRecording(
         activeTab.id,
         activeTab.info.url,
@@ -91,7 +81,6 @@ export class RecordingManager {
         this.recordingState.recordingId
       );
       
-      // Start video recording on active tab
       this.activeVideoRecorder = activeTab.videoRecorder;
       const videoStarted = await this.activeVideoRecorder.startRecording(this.recordingState.recordingId);
       
@@ -123,19 +112,14 @@ export class RecordingManager {
     }
   }
 
-  /**
-   * Stop recording and return actions
-   */
   public async stopRecording(tabs: Map<string, Tab>): Promise<RecordedAction[]> {
     if (!this.recordingState.isRecording) {
       console.warn('No recording in progress');
       return [];
     }
 
-    // Stop centralized action recording
     const actions = await this.centralRecorder.stopRecording();
-    
-    // Stop video recording from active video recorder
+
     let videoPath: string | null = null;
     if (this.activeVideoRecorder && this.activeVideoRecorder.isActive()) {
       videoPath = await this.activeVideoRecorder.stopRecording();
@@ -145,7 +129,6 @@ export class RecordingManager {
       console.warn('⚠️ No active video recorder to stop');
     }
     
-    // If no video path from active recorder, search all tabs
     if (!videoPath && this.recordingState.recordingId) {
       for (const tab of tabs.values()) {
         const tabVideoPath = tab.videoRecorder?.getVideoPath();
@@ -164,7 +147,6 @@ export class RecordingManager {
 
     const tabSwitchCount = this.countTabSwitchActions(actions);
     
-    // Notify renderer that recording stopped
     if (this.browserUIView && !this.browserUIView.webContents.isDestroyed()) {
       this.browserUIView.webContents.send('recording:stopped', {
         actions,
@@ -179,9 +161,6 @@ export class RecordingManager {
     return actions;
   }
 
-  /**
-   * Save recording session with metadata
-   */
   public async saveRecording(
     name: string,
     description: string,
@@ -190,7 +169,6 @@ export class RecordingManager {
   ): Promise<string> {
     let videoPath = this.activeVideoRecorder?.getVideoPath();
     
-    // Search for video path if not found
     if (!videoPath && this.recordingState.recordingId) {
       for (const tab of tabs.values()) {
         const tabVideoPath = tab.videoRecorder?.getVideoPath();
@@ -201,8 +179,7 @@ export class RecordingManager {
         }
       }
     }
-    
-    // Get video metadata if available
+
     let videoSize: number | undefined;
     let videoDuration: number | undefined;
     
@@ -216,9 +193,7 @@ export class RecordingManager {
       }
     }
 
-    // Get snapshot statistics
     const snapshotStats = await this.centralRecorder.getSnapshotStats();
-    
     const tabSwitchCount = this.countTabSwitchActions(actions);
     const firstTab = this.recordingTabs.values().next().value;
     
@@ -232,18 +207,15 @@ export class RecordingManager {
       actionCount: actions.length,
       url: this.recordingState.startUrl,
 
-      // Multi-tab metadata
       startTabId: firstTab?.tabId,
       tabs: Array.from(this.recordingTabs.values()),
       tabSwitchCount,
       
-      // Video metadata
       videoPath,
       videoSize,
       videoFormat: videoPath ? 'webm' : undefined,
       videoDuration,
       
-      // Snapshot metadata
       snapshotCount: snapshotStats.count,
       snapshotsDirectory: snapshotStats.directory,
       totalSnapshotSize: snapshotStats.totalSize
@@ -259,12 +231,10 @@ export class RecordingManager {
       console.log('📸 Snapshots captured:', snapshotStats.count, `(${(snapshotStats.totalSize / 1024 / 1024).toFixed(2)} MB)`);
     }
     
-    // Notify renderer
     if (this.browserUIView && !this.browserUIView.webContents.isDestroyed()) {
       this.browserUIView.webContents.send('recording:saved', session);
     }
     
-    // Reset recording state
     this.recordingState.recordingId = null;
     this.recordingTabs.clear();
     this.lastActiveTabId = null;
@@ -272,16 +242,12 @@ export class RecordingManager {
     return session.id;
   }
 
-  /**
-   * Handle tab switch during recording
-   */
   public async handleTabSwitch(previousTabId: string | null, newTab: Tab): Promise<void> {
     if (!this.recordingState.isRecording) return;
 
     try {
       console.log(`🔄 Tab switch detected during recording: ${previousTabId} -> ${newTab.id}`);
       
-      // Record tab-switch action
       const tabSwitchAction: RecordedAction = {
         type: 'tab-switch',
         timestamp: Date.now(),
@@ -293,16 +259,13 @@ export class RecordingManager {
         }
       };
       
-      // Add to actions through the recorder
       this.centralRecorder.addAction(tabSwitchAction);
       
-      // Notify renderer via the action callback
       const callback = this.centralRecorder['onActionCallback'];
       if (callback) {
         callback(tabSwitchAction);
       }
       
-      // Update or add tab to recording tabs
       const now = Date.now();
       if (!this.recordingTabs.has(newTab.id)) {
         this.recordingTabs.set(newTab.id, {
@@ -322,67 +285,42 @@ export class RecordingManager {
         }
       }
       
-      // Switch the centralized recorder to the new tab
       await this.centralRecorder.switchWebContents(
         newTab.view,
         newTab.id,
         newTab.info.url,
         newTab.info.title
       );
-      
-      this.lastActiveTabId = newTab.id;
-      
-      console.log('✅ Recording switched to new tab successfully');
-      
     } catch (error) {
       console.error('Failed to handle recording tab switch:', error);
     }
   }
 
-  /**
-   * Check if recording is active
-   */
   public isRecordingActive(): boolean {
     return this.recordingState.isRecording;
   }
 
-  /**
-   * Get recorded actions
-   */
   public getRecordedActions(): RecordedAction[] {
     return this.centralRecorder.getActions();
   }
 
-  /**
-   * Get recording store
-   */
   public getRecordingStore(): RecordingStore {
     return this.recordingStore;
   }
 
-  /**
-   * Delete recording
-   */
   public async deleteRecording(id: string): Promise<boolean> {
     const success = await this.recordingStore.deleteRecording(id);
     
     if (success && this.browserUIView && !this.browserUIView.webContents.isDestroyed()) {
       this.browserUIView.webContents.send('recording:deleted', id);
     }
-    
     return success;
   }
 
-  /**
-   * Count tab-switch actions
-   */
   private countTabSwitchActions(actions: RecordedAction[]): number {
     return actions.filter(action => action.type === 'tab-switch').length;
   }
 
-  /**
-   * Clean up
-   */
   public destroy(): void {
     this.recordingTabs.clear();
   }

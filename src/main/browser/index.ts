@@ -1,5 +1,5 @@
 export { TabService } from './TabService';
-export { RecordingManager } from './RecordingManager';
+export { RecordingService } from './RecordingService';
 export { AutomationManager } from './AutomationManager';
 export { NavigationService } from './NavigationService';
 export { DebuggerService } from './DebuggerService';
