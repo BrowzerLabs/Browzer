@@ -131,6 +131,11 @@ export const createBrowserAPI = (): BrowserAPI => ({
   getAutocompleteSuggestions: (query: string) => invoke('autocomplete:get-suggestions', query),
   getSearchSuggestions: (query: string) => invoke('autocomplete:get-search-suggestions', query),
 
+  // Tab Session Restore
+  hasSavedSession: () => invoke('session:has-saved'),
+  restoreSession: () => invoke('session:restore'),
+  clearSavedSession: () => invoke('session:clear'),
+
   // LLM Automation API
   executeLLMAutomation: (userGoal: string, recordedSessionId: string) =>
     invoke('automation:execute-llm', userGoal, recordedSessionId),

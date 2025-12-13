@@ -5,6 +5,7 @@ import { TabBar } from './TabBar';
 import { NavigationBar } from './NavigationBar';
 import { BookmarkBar } from './BookmarkBar';
 import { Sidebar } from './Sidebar';
+import { RestoreSessionPrompt } from '@/renderer/components/RestoreSessionPrompt';
 
 export function BrowserChrome() {
   const browserAPI = useBrowserAPI();
@@ -40,6 +41,7 @@ export function BrowserChrome() {
 
   return (
     <div className="h-full w-full flex flex-col select-none">
+      <RestoreSessionPrompt />
       <TabBar
         tabs={browserAPI.tabs}
         activeTabId={browserAPI.activeTabId}

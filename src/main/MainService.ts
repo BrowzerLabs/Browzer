@@ -150,6 +150,9 @@ export class MainService {
   }
 
   public destroy(): void {
+    if (this.baseWindow && !this.baseWindow.isDestroyed()) {
+      this.browserService.getTabService().saveCurrentSession();
+    }
     this.ipcHandlers.cleanup();
     this.browserService.destroy();
     this.baseWindow = null;

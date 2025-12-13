@@ -56,6 +56,7 @@ export class IPCHandlers extends EventEmitter {
     this.setupDeepLinkHandlers();
     this.setupAutocompleteHandlers();
     this.setupThemeHandlers();
+    this.setupSessionHandlers();
   }
 
   private setupTabHandlers(): void {
@@ -609,6 +610,22 @@ export class IPCHandlers extends EventEmitter {
     });
   }
 
+  private setupSessionHandlers(): void {
+    ipcMain.handle('session:has-saved', async () => {
+      return this.tabService.hasSavedSession();
+    });
+
+    ipcMain.handle('session:restore', async () => {
+      this.tabService.restoreSession();
+      return true;
+    });
+
+    ipcMain.handle('session:clear', async () => {
+      this.tabService.clearSavedSession();
+      return true;
+    });
+  }
+
   public cleanup(): void {
     const handlers = [
       // Tab handlers
@@ -748,6 +765,10 @@ export class IPCHandlers extends EventEmitter {
       'bookmark:search',
       'bookmark:get-all',
       'bookmark:get-recent',
+      // Session handlers
+      'session:has-saved',
+      'session:restore',
+      'session:clear',
     ];
 
     handlers.forEach(channel => {

@@ -98,6 +98,11 @@ export interface BrowserAPI {
   getAutocompleteSuggestions: (query: string) => Promise<AutocompleteSuggestion[]>;
   getSearchSuggestions: (query: string) => Promise<string[]>;
 
+  // Tab Session Restore
+  hasSavedSession: () => Promise<boolean>;
+  restoreSession: () => Promise<boolean>;
+  clearSavedSession: () => Promise<boolean>;
+
   // LLM Automation
   executeLLMAutomation: (userGoal: string, recordedSessionId: string) => Promise<{
     success: boolean;

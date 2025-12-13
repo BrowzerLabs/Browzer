@@ -1,6 +1,7 @@
 import { BaseWindow, WebContentsView } from 'electron';
 import { EventEmitter } from 'events';
 import path from 'node:path';
+import Store from 'electron-store';
 import { TabInfo, HistoryTransition, ToastPayload, NavigationError, isNetworkError, shouldIgnoreError, TabGroup, TabsSnapshot } from '@/shared/types';
 import { VideoRecorder } from '@/main/recording';
 import { PasswordManager } from '@/main/password/PasswordManager';
@@ -19,6 +20,19 @@ const TAB_HEIGHT = {
   WITHOUT_BOOKMARKS: 75 as number,
   WITH_BOOKMARKS: 104 as number,
 };
+
+interface StoredTab {
+  url: string;
+  title: string;
+  favicon?: string;
+  groupId?: string;
+}
+
+interface StoredSession {
+  tabs: StoredTab[];
+  groups: TabGroup[];
+  timestamp: number;
+}
 
 export class TabService extends EventEmitter {
   public on<K extends keyof TabServiceEvents>(event: K, listener: TabServiceEvents[K]): this {
@@ -39,6 +53,7 @@ export class TabService extends EventEmitter {
   private newTabUrl = 'browzer://home';
   private readonly contextMenuService = new ContextMenuService();
   private tabGroups = new Map<string, TabGroup>();
+  private sessionStore: Store<StoredSession>;
   private readonly tabGroupPalette = [
     '#6366F1', // indigo
     '#F59E0B', // amber
@@ -60,6 +75,14 @@ export class TabService extends EventEmitter {
     private bookmarkService: BookmarkService
   ) {
     super();
+    this.sessionStore = new Store<StoredSession>({
+      name: 'session-restore',
+      defaults: {
+        tabs: [],
+        groups: [],
+        timestamp: 0
+      }
+    });
     this.initialize();
   }
 
@@ -468,6 +491,90 @@ export class TabService extends EventEmitter {
         tab.view.setVisible(true);
       }
     });
+  }
+
+  public saveCurrentSession(): void {
+    const tabsToSave: StoredTab[] = this.orderedTabIds
+      .map(id => this.tabs.get(id))
+      .filter((tab): tab is Tab => !!tab && !!tab.info.url && !tab.info.url.startsWith('data:'))
+      .map(tab => ({
+        url: tab.info.url,
+        title: tab.info.title,
+        favicon: tab.info.favicon,
+        groupId: tab.info.group?.id
+      }));
+
+    // Don't save if all tabs are new tabs (default home page)
+    const isAllNewTabs = tabsToSave.every(t => t.url === this.newTabUrl);
+    if (tabsToSave.length === 0 || isAllNewTabs) {
+      return;
+    }
+
+    const groupsToSave = Array.from(this.tabGroups.values());
+
+    if (tabsToSave.length > 0) {
+      this.sessionStore.set({
+        tabs: tabsToSave,
+        groups: groupsToSave,
+        timestamp: Date.now()
+      });
+    }
+  }
+
+  public hasSavedSession(): boolean {
+    const session = this.sessionStore.store;
+    return session.tabs.length > 0;
+  }
+
+  public restoreSession(): void {
+    const session = this.sessionStore.store;
+    if (session.tabs.length > 0) {
+      let tabToClose: string | null = null;
+      
+      if (this.orderedTabIds.length === 1) {
+         const currentTab = this.tabs.get(this.orderedTabIds[0]);
+         if (currentTab && currentTab.info.url === this.newTabUrl) {
+           tabToClose = currentTab.id;
+         }
+      }
+
+      if (session.groups && session.groups.length > 0) {
+        let maxGroupId = 0;
+        session.groups.forEach(group => {
+          this.tabGroups.set(group.id, group);
+          
+          const match = group.id.match(/^group-(\d+)$/);
+          if (match) {
+            const num = parseInt(match[1], 10);
+            if (!isNaN(num)) {
+              maxGroupId = Math.max(maxGroupId, num);
+            }
+          }
+        });
+        
+        if (maxGroupId > this.tabGroupCounter) {
+          this.tabGroupCounter = maxGroupId;
+        }
+      }
+
+      session.tabs.forEach(storedTab => {
+        const newTab = this.createTab(storedTab.url);
+        if (storedTab.groupId && this.tabGroups.has(storedTab.groupId)) {
+          this.assignTabToGroup(newTab.id, storedTab.groupId);
+        }
+      });
+
+      if (tabToClose) {
+        this.closeTab(tabToClose);
+      }
+
+      this.clearSavedSession();
+      this.emit('tabs:changed');
+    }
+  }
+
+  public clearSavedSession(): void {
+    this.sessionStore.clear();
   }
 
   public destroy(): void {
