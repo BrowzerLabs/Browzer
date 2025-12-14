@@ -103,7 +103,10 @@ Remember: The automation has already completed ${successfullyExecutedSteps} step
       formatted += this.formatElementInline(action.target);
     }
 
-    if (action.value !== undefined && action.value !== null && !action.target?.value) {
+    const shouldOutputValue = action.value !== undefined && action.value !== null && 
+      (action.type === 'keypress' || action.type === 'context-menu' || !action.target?.value);
+    
+    if (shouldOutputValue) {
       formatted += `    <input_value>${this.escapeXml(String(action.value))}</input_value>\n`;
     }
 
@@ -145,7 +148,10 @@ private static formatElementInline(target: ElementTarget): string {
   }
   element += `\n`;
 
+  const IGNORE_KEYS = ['style', 'spellcheck', 'autocomplete', 'enterkeyhint', 'tabindex'];
+
   Object.entries(attrs).forEach(([key, value]) => {
+    if(IGNORE_KEYS.includes(key)) return;
     if (key.startsWith('_') || key.startsWith('js')) return;
     if (value === null || value === undefined) return;
     if (typeof value === 'string' && value.trim() === '') return;
