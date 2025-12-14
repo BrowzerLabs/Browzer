@@ -119,10 +119,14 @@ Remember: The automation has already completed ${successfullyExecutedSteps} step
 }
 
 private static formatElementInline(target: ElementTarget): string {
-  const bb = target.boundingBox;
   const attrs = target.attributes || {};
 
-  let element = `    <element tag="${this.escapeXml(target.tagName)}" x="${bb.x}" y="${bb.y}" width="${bb.width}" height="${bb.height}"`;
+  let element = `    <element tag="${this.escapeXml(target.tagName)}"`;
+
+  if (target.boundingBox !== undefined) {
+    const bb = target.boundingBox;
+    element += ` x="${bb.x}" y="${bb.y}" width="${bb.width}" height="${bb.height}"`;
+  }
 
   if (target.value !== undefined) {
     element += ` value="${this.escapeXml(target.value)}"`;
@@ -141,8 +145,10 @@ private static formatElementInline(target: ElementTarget): string {
   }
   element += `\n`;
  Object.entries(attrs).forEach(([key, value]) => {
+  if (key.startsWith('_') || key.startsWith('js')) return;
   if (value === null || value === undefined) return;
   if (typeof value === 'string' && value.trim() === '') return;
+  if (typeof value === 'string' && value.startsWith('data:image/')) return; // Skip image data URLs
 
   element += `      ${this.escapeXml(key)}="${this.escapeXml(String(value))}"\n`;
 });

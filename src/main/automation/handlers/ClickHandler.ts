@@ -494,7 +494,7 @@ export class ClickHandler extends BaseHandler {
               button: 0, buttons: 0
             })
           ];
-          clickEvents.forEach(event => element.dispatchEvent(event));
+          // clickEvents.forEach(event => element.dispatchEvent(event));
           element.click();
           
           console.log('[Click] ✅ Click events dispatched and native click() called');
