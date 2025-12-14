@@ -1,4 +1,4 @@
-import { RecordedAction, RecordingSession } from "@/shared/types";
+import { ElementTarget, RecordedAction, RecordingSession } from "@/shared/types";
 
 export class SystemPromptBuilder {
 
@@ -80,114 +80,70 @@ Remember: The automation has already completed ${successfullyExecutedSteps} step
   }
 
   public static formatRecordedSession(session: RecordingSession): string {
-    const actions = session.actions || [];
-    
-    let formatted = `<recorded_session>
-<metadata>
-  <name>${session.name}</name>
-  <description>${session.description || 'No description provided'}</description>
-  <duration_seconds>${Math.round(session.duration / 1000)}</duration_seconds>
-  <starting_url>${session.url || session.tabs?.[0]?.url || 'Unknown'}</starting_url>
-  <timing_guidance>
-    <important>The timestamps below show REAL USER TIMING. Use these gaps to determine realistic wait times between actions.</important>
-  </timing_guidance>
-</metadata>\n\n`;
-    
-    formatted += `<actions>\n`;
-    
-    let previousTimestamp: number | null = null;
-    
-    actions.forEach((action: RecordedAction, index: number) => {
-      const currentTimestamp = action.timestamp;
-      const timeSinceLastAction = previousTimestamp ? currentTimestamp - previousTimestamp : 0;
-      const timeSinceLastActionSec = (timeSinceLastAction / 1000).toFixed(1);
-      
-      formatted += `  <action id="${index + 1}" type="${action.type}" timestamp="${currentTimestamp}" time_gap_from_previous_sec="${timeSinceLastActionSec}">\n`;
-      
-      // Current page context
-      if (action.tabUrl) {
-        formatted += `    <page_url>${this.escapeXml(action.tabUrl)}</page_url>\n`;
-      }
-      
-      // Target element (if applicable)
-      if (action.target) {
-        formatted += `    <target_element>\n`;
-        formatted += `      <tag>${action.target.tagName}</tag>\n`;
-        
-        // Element text/value
-        if (action.target.text) {
-          const text = action.target.text.substring(0, 100);
-          formatted += `      <text>${this.escapeXml(text)}</text>\n`;
-        }
-        if (action.target.value) {
-          formatted += `      <value>${this.escapeXml(action.target.value)}</value>\n`;
-        }
-        
-        // Bounding box for visual context
-        if (action.target.boundingBox) {
-          const bb = action.target.boundingBox;
-          formatted += `      <position x="${bb.x}" y="${bb.y}" width="${bb.width}" height="${bb.height}" />\n`;
-        }
-        
-        // Element state
-        if (action.target.isDisabled) {
-          formatted += `      <disabled>true</disabled>\n`;
-        }
-        
-        // All element attributes (CRITICAL for selector generation)
-        if (action.target.attributes && Object.keys(action.target.attributes).length > 0) {
-          formatted += `      <attributes>\n`;
-          
-          // Prioritize important attributes first
-          const priorityAttrs = ['id', 'name', 'title', 'type', 'role', 'aria-label', 'data-testid', 'placeholder', 'data-test-id', 'href'];
-          const attrs = action.target.attributes;
-          
-          // Add priority attributes first
-          priorityAttrs.forEach(key => {
-            if (attrs[key]) {
-              formatted += `        <attr name="${key}">${this.escapeXml(attrs[key])}</attr>\n`;
-            }
-          });
-          
-          // Add remaining attributes (limit to most relevant)
-          const remainingAttrs = Object.keys(attrs)
-            .filter(key => !priorityAttrs.includes(key))
-            .filter(key => !key.startsWith('data-ved') && !key.startsWith('jsname')) // Filter noise
-            .slice(0, 10); // Limit to 10 additional attributes
-          
-          remainingAttrs.forEach(key => {
-            formatted += `        <attr name="${key}">${this.escapeXml(attrs[key])}</attr>\n`;
-          });
-          
-          formatted += `      </attributes>\n`;
-        }
-        
-        formatted += `    </target_element>\n`;
-      }
-      
-      // Action value (for input, select, etc.)
-      if (action.value !== undefined && action.value !== null && !action.target?.value) {
-        formatted += `    <input_value>${this.escapeXml(String(action.value))}</input_value>\n`;
-      }
-      
-      // Click position (for reference)
-      if (action.position) {
-        formatted += `    <click_position x="${action.position.x}" y="${action.position.y}" />\n`;
-      }
-      
-      formatted += `  </action>\n\n`;
-      previousTimestamp = currentTimestamp;
-    });
-    
-    formatted += `</actions>\n</recorded_session>`;
-    
-    return formatted;
+  const actions = session.actions || [];
+
+  let formatted =
+`<rec name="${this.escapeXml(session.name)}" desc="${this.escapeXml(session.description)}" dur="${Math.round(session.duration / 1000)}" start_url="${this.escapeXml(session.url || session.tabs?.[0]?.url || '')}">
+<actions>\n`;
+
+  let previousTimestamp: number | null = null;
+
+  actions.forEach((action: RecordedAction, index: number) => {
+    const gap =
+      previousTimestamp !== null
+        ? ((action.timestamp - previousTimestamp) / 1000).toFixed(1)
+        : '0.0';
+
+    previousTimestamp = action.timestamp;
+
+    formatted +=
+`  <action id="${index + 1}" type="${action.type}" url="${this.escapeXml(action.tabUrl || '')}" gap="${gap}">\n`;
+
+    if (action.target) {
+      formatted += this.formatElementInline(action.target);
+    }
+
+    if (action.value !== undefined && action.value !== null && !action.target?.value) {
+      formatted += `    <input_value>${this.escapeXml(String(action.value))}</input_value>\n`;
+    }
+
+    if (action.position) {
+      formatted += `    <click_pos x="${action.position.x}" y="${action.position.y}" />\n`;
+    }
+
+    formatted += `  </action>\n`;
+  });
+
+  formatted += `</actions>\n</rec>`;
+  return formatted;
+}
+
+private static formatElementInline(target: ElementTarget): string {
+  const bb = target.boundingBox;
+  const attrs = target.attributes || {};
+
+  let element = `    <element tag="${this.escapeXml(target.tagName)}" x="${bb.x}" y="${bb.y}" width="${bb.width}" height="${bb.height}"\n`;
+
+  if (target.value !== undefined) {
+    element += `      value="${this.escapeXml(target.value)}"\n`;
   }
 
+  if (target.text) {
+    element += `      text="${this.escapeXml(target.text.slice(0, 120))}"\n`;
+  }
 
-  /**
-   * Escape XML special characters
-   */
+  if (target.isDisabled) {
+    element += `      disabled="true"\n`;
+  }
+  Object.entries(attrs).forEach(([key, value]) => {
+    element += `      ${this.escapeXml(key)}="${this.escapeXml(value)}"\n`;
+  });
+
+  element += `    />\n`;
+  return element;
+}
+
+
   private static escapeXml(str: string): string {
     if (!str) return '';
     return str
