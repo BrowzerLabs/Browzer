@@ -449,7 +449,7 @@ export class TabService extends EventEmitter {
     this.saveSession();
     this.contextMenuService.destroy();
     this.tabs.forEach(tab => {
-      this.debuggerService.cleanupDebugger(tab.view, tab.id);
+      this.debuggerService.cleanupDebugger(tab.view);
       this.baseWindow.contentView.removeChildView(tab.view);
       tab.view.webContents.removeAllListeners();
       tab.view.webContents.close();
