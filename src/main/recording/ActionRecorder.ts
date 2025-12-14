@@ -2,8 +2,9 @@ import { WebContentsView } from "electron";
 import { RecordedAction } from '@/shared/types';
 import { MAX_RECORDING_ACTIONS } from '@/shared/constants/limits';
 import { SnapshotManager } from './SnapshotManager';
+import { EventEmitter } from 'events';
 
-export class ActionRecorder {
+export class ActionRecorder extends EventEmitter {
   private static readonly MAX_ACTIONS = MAX_RECORDING_ACTIONS;
   
   private view: WebContentsView | null = null;
@@ -16,23 +17,13 @@ export class ActionRecorder {
   private currentTabUrl: string | null = null;
   private currentTabTitle: string | null = null;
 
-  public onActionCallback?: (action: RecordedAction) => void;
-  public onMaxActionsReached?: () => void;
-
   constructor(view?: WebContentsView) {
+    super();
     if (view) {
       this.view = view;
       this.debugger = view.webContents.debugger;
     }
     this.snapshotManager = new SnapshotManager();
-  }
-
-  public setActionCallback(callback: (action: RecordedAction) => void): void {
-    this.onActionCallback = callback;
-  }
-
-  public setMaxActionsCallback(callback: () => void): void {
-    this.onMaxActionsReached = callback;
   }
 
   public setView(view: WebContentsView): void {
@@ -215,9 +206,7 @@ export class ActionRecorder {
   private async recordAction(actionData: RecordedAction): Promise<void> {
     if (this.actions.length >= ActionRecorder.MAX_ACTIONS) {
       console.warn(`⚠️ Max actions limit (${ActionRecorder.MAX_ACTIONS}) reached, stopping recording`);
-      if (this.onMaxActionsReached) {
-        this.onMaxActionsReached();
-      }
+      this.emit('maxActionsReached');
       return;
     }
 
@@ -239,19 +228,13 @@ export class ActionRecorder {
     }
     
     this.actions.push(enrichedAction);
-    console.log(`✅ Action recorded: ${actionData.type} (${this.actions.length}/${ActionRecorder.MAX_ACTIONS})`);
-    
-    if (this.onActionCallback) {
-      this.onActionCallback(enrichedAction);
-    }
+    this.emit('action', enrichedAction);
   }
 
   private recordNavigation(url: string, timestamp?: number): void {
     if (this.actions.length >= ActionRecorder.MAX_ACTIONS) {
       console.warn(`⚠️ Max actions limit (${ActionRecorder.MAX_ACTIONS}) reached, skipping navigation`);
-      if (this.onMaxActionsReached) {
-        this.onMaxActionsReached();
-      }
+      this.emit('maxActionsReached');
       return;
     }
     
@@ -265,9 +248,7 @@ export class ActionRecorder {
     };
 
     this.actions.push(action);
-    if (this.onActionCallback) {
-      this.onActionCallback(action);
-    }
+    this.emit('action', action);
   }
 
   private isSignificantNavigation(url: string): boolean {

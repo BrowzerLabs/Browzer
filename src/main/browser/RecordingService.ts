@@ -4,8 +4,9 @@ import { RecordedAction, RecordingSession, RecordingTabInfo } from '@/shared/typ
 import { stat } from 'fs/promises';
 import { Tab, RecordingState } from './types';
 import { ActionRecorder } from '@/main/recording/ActionRecorder';
+import { EventEmitter } from 'events';
 
-export class RecordingService {
+export class RecordingService extends EventEmitter {
   private recordingState: RecordingState = {
     isRecording: false,
     recordingId: null,
@@ -15,13 +16,13 @@ export class RecordingService {
 
   private centralRecorder: ActionRecorder;
   private recordingTabs: Map<string, RecordingTabInfo> = new Map();
-  private lastActiveTabId: string | null = null;
   private activeVideoRecorder: VideoRecorder | null = null;
 
   constructor(
     private recordingStore: RecordingStore,
     private browserUIView?: WebContentsView
   ) {
+    super();
     this.centralRecorder = new ActionRecorder();
   }
 
@@ -39,7 +40,6 @@ export class RecordingService {
     try {
       this.recordingState.recordingId = `rec-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
       this.recordingTabs.clear();
-      this.lastActiveTabId = activeTab.id;
       
       this.recordingTabs.set(activeTab.id, {
         tabId: activeTab.id,
@@ -51,29 +51,7 @@ export class RecordingService {
       });
 
       this.centralRecorder.setView(activeTab.view);
-      this.centralRecorder.setActionCallback((action) => {
-        const tabInfo = this.recordingTabs.get(action.tabId || activeTab.id || '');
-        if (tabInfo) {
-          tabInfo.actionCount++;
-        }
-        
-        if (this.browserUIView && !this.browserUIView.webContents.isDestroyed()) {
-          this.browserUIView.webContents.send('recording:action-captured', action);
-        }
-      });
-      
-      this.centralRecorder.setMaxActionsCallback(() => {
-        dialog.showMessageBox({
-          type: 'warning',
-          title: 'Recording Limit Reached',
-          message: 'Maximum actions limit reached. Recording will stop automatically.',
-          buttons: ['OK']
-        }).then(() => {
-          if (this.browserUIView && !this.browserUIView.webContents.isDestroyed()) {
-            this.browserUIView.webContents.send('recording:max-actions-reached');
-          }
-        });
-      }); 
+      this.setupRecorderEventListeners(activeTab.id); 
 
       await this.centralRecorder.startRecording(
         activeTab.id,
@@ -238,7 +216,6 @@ export class RecordingService {
     
     this.recordingState.recordingId = null;
     this.recordingTabs.clear();
-    this.lastActiveTabId = null;
     
     return session.id;
   }
@@ -261,11 +238,7 @@ export class RecordingService {
       };
       
       this.centralRecorder.addAction(tabSwitchAction);
-      
-      const callback = this.centralRecorder['onActionCallback'];
-      if (callback) {
-        callback(tabSwitchAction);
-      }
+      this.handleActionCaptured(tabSwitchAction);
       
       const now = Date.now();
       if (!this.recordingTabs.has(newTab.id)) {
@@ -322,7 +295,35 @@ export class RecordingService {
     return actions.filter(action => action.type === 'tab-switch').length;
   }
 
+  private setupRecorderEventListeners(defaultTabId: string): void {
+    this.centralRecorder.on('action', (action: RecordedAction) => {
+      this.handleActionCaptured(action, defaultTabId);
+    });
+    this.centralRecorder.on('maxActionsReached', () => {
+      this.handleMaxActionsReached();
+    });
+  }
+
+  private handleActionCaptured(action: RecordedAction, defaultTabId?: string): void {
+    const tabInfo = this.recordingTabs.get(action.tabId || defaultTabId || '');
+    if (tabInfo) {
+      tabInfo.actionCount++;
+    }
+    this.browserUIView?.webContents.send('recording:action-captured', action);
+  }
+  private handleMaxActionsReached(): void {
+    dialog.showMessageBox({
+      type: 'warning',
+      title: 'Recording Limit Reached',
+      message: 'Maximum actions limit reached. Recording will stop automatically.',
+      buttons: ['OK']
+    }).then(() => {
+     this.browserUIView?.webContents.send('recording:max-actions-reached');
+    });
+  }
+
   public destroy(): void {
+    this.centralRecorder.removeAllListeners();
     this.recordingTabs.clear();
   }
 }
