@@ -21,6 +21,7 @@ import { CSS } from '@dnd-kit/utilities';
 import type { TabGroup, TabInfo } from '@/shared/types';
 import { cn } from '@/renderer/lib/utils';
 import { Button } from '@/renderer/ui/button';
+import { GROUP_COLORS, LAYOUT } from '@/shared/constants/tabs';
 import { ICON_MAP } from '@/shared/routes';
 import {
   ContextMenu,
@@ -57,27 +58,6 @@ interface TabBarProps {
   onRemoveTabGroup?: (groupId: string) => Promise<boolean>;
   onToggleGroupCollapse?: (groupId: string) => Promise<boolean>;
 }
-
-const LAYOUT = {
-  PADDING_LEFT: 80,
-  PADDING_RIGHT: 8,
-  NEW_TAB_BUTTON_SPACE: 40,
-  MAX_TAB_WIDTH: 180,
-  MIN_TAB_WIDTH: 60,
-  GAP_NORMAL: 4,
-  GAP_COMPACT: 2,
-  COMPACT_THRESHOLD: 10,
-} as const;
-
-const GROUP_COLORS = [
-  '#6366F1',
-  '#F59E0B',
-  '#10B981',
-  '#06B6D4',
-  '#EC4899',
-  '#F97316',
-  '#84CC16',
-] as const;
 
 export function TabBar({ 
   tabs, 

@@ -2,6 +2,7 @@ import { BaseWindow, WebContentsView } from 'electron';
 import { EventEmitter } from 'events';
 import path from 'node:path';
 import { TabInfo, HistoryTransition, ToastPayload, NavigationError, isNetworkError, shouldIgnoreError, TabGroup, TabsSnapshot } from '@/shared/types';
+import { GROUP_COLORS } from '@/shared/constants/tabs';
 import { VideoRecorder } from '@/main/recording';
 import { PasswordManager } from '@/main/password/PasswordManager';
 import { BrowserAutomationExecutor } from '@/main/automation';
@@ -39,15 +40,6 @@ export class TabService extends EventEmitter {
   private newTabUrl = 'browzer://home';
   private readonly contextMenuService = new ContextMenuService();
   private tabGroups = new Map<string, TabGroup>();
-  private readonly tabGroupPalette = [
-    '#6366F1', // indigo
-    '#F59E0B', // amber
-    '#10B981', // emerald
-    '#06B6D4', // cyan
-    '#EC4899', // pink
-    '#F97316', // orange
-    '#84CC16', // lime
-  ];
 
   constructor(
     private baseWindow: BaseWindow,
@@ -711,7 +703,7 @@ export class TabService extends EventEmitter {
 
   public createTabGroup(name?: string, color?: string): TabGroup {
     const groupId = `group-${++this.tabGroupCounter}`;
-    const paletteColor = this.tabGroupPalette[(this.tabGroupCounter - 1) % this.tabGroupPalette.length];
+    const paletteColor = GROUP_COLORS[(this.tabGroupCounter - 1) % GROUP_COLORS.length];
     const group: TabGroup = {
       id: groupId,
       name: name?.trim() || `Group ${this.tabGroupCounter}`,
