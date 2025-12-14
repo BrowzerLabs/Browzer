@@ -271,6 +271,12 @@ export class BrowserService {
     this.tabService.on('tab:created', () => {
       this.requestAddressBarFocus();
     });
+
+    this.tabService.on('context-menu-action', (event: RecordedAction) => {
+      if (this.recordingService.isRecordingActive()) {
+        this.recordingService.handleContextMenuAction({...event, tabId: this.tabService.getActiveTabId()});
+      }
+    });
   }
 
   private setupAdBlocker(): void {

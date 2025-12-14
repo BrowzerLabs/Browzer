@@ -144,20 +144,25 @@ private static formatElementInline(target: ElementTarget): string {
     element += ` disabled="true"`;
   }
   element += `\n`;
- Object.entries(attrs).forEach(([key, value]) => {
-  if (key.startsWith('_') || key.startsWith('js')) return;
-  if (value === null || value === undefined) return;
-  if (typeof value === 'string' && value.trim() === '') return;
-  if (typeof value === 'string' && value.startsWith('data:image/')) return; // Skip image data URLs
 
-  element += `      ${this.escapeXml(key)}="${this.escapeXml(String(value))}"\n`;
-});
+  Object.entries(attrs).forEach(([key, value]) => {
+    if (key.startsWith('_') || key.startsWith('js')) return;
+    if (value === null || value === undefined) return;
+    if (typeof value === 'string' && value.trim() === '') return;
+    if (typeof value === 'string' && value.startsWith('data:image/')) return;
 
+    let finalValue = String(value);
+
+    if (key === 'url' || key === 'href') {
+      finalValue = this.normalizeGoogleSearchUrl(finalValue);
+    }
+
+    element += `      ${this.escapeXml(key)}="${this.escapeXml(finalValue)}"\n`;
+  });
 
   element += `    />\n`;
   return element;
 }
-
 
   private static escapeXml(str: string): string {
     if (!str) return '';
@@ -167,5 +172,23 @@ private static formatElementInline(target: ElementTarget): string {
       .replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;')
       .replace(/'/g, '&apos;');
+  }
+
+  private static normalizeGoogleSearchUrl(rawUrl: string): string {
+    try {
+      const url = new URL(rawUrl);
+      if (
+        (url.hostname === 'www.google.com' || url.hostname === 'google.com') &&
+        url.pathname === '/search'
+      ) {
+        const q = url.searchParams.get('q');
+        if (q) {
+          return `https://www.google.com/search?q=${encodeURIComponent(q)}`;
+        }
+      }
+      return rawUrl;
+    } catch {
+      return rawUrl;
+    }
   }
 }

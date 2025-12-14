@@ -320,7 +320,6 @@ export class ActionRecorder extends EventEmitter {
       isDisabled: element.disabled || element.getAttribute('aria-disabled') === 'true' || undefined,
       attributes: attributes,
       elementIndex: getElementIndex(element),
-      siblingCount: element.parentElement ? element.parentElement.children.length : 0
     };
   }
   

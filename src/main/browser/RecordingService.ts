@@ -295,6 +295,15 @@ export class RecordingService extends EventEmitter {
     return actions.filter(action => action.type === 'tab-switch').length;
   }
 
+  public handleContextMenuAction(
+   action: RecordedAction
+  ): void {
+    if (!this.recordingState.isRecording) return;
+
+    this.centralRecorder.addAction(action);
+    this.handleActionCaptured(action);
+  }
+
   private setupRecorderEventListeners(defaultTabId: string): void {
     this.centralRecorder.on('action', (action: RecordedAction) => {
       this.handleActionCaptured(action, defaultTabId);

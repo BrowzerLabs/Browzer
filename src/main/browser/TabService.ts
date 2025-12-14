@@ -81,6 +81,10 @@ export class TabService extends EventEmitter {
     this.contextMenuService.on('toast', (payload: ToastPayload) => {
       this.browserView.webContents.send('toast', payload);
     });
+    
+    this.contextMenuService.on('context-menu-action', (event) => {
+      this.emit('context-menu-action', event);
+    });
   }
 
   public recalculateBookmarkBarHeight(): void {
