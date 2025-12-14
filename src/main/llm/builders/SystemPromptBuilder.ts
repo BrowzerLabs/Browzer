@@ -122,22 +122,31 @@ private static formatElementInline(target: ElementTarget): string {
   const bb = target.boundingBox;
   const attrs = target.attributes || {};
 
-  let element = `    <element tag="${this.escapeXml(target.tagName)}" x="${bb.x}" y="${bb.y}" width="${bb.width}" height="${bb.height}"\n`;
+  let element = `    <element tag="${this.escapeXml(target.tagName)}" x="${bb.x}" y="${bb.y}" width="${bb.width}" height="${bb.height}"`;
 
   if (target.value !== undefined) {
-    element += `      value="${this.escapeXml(target.value)}"\n`;
+    element += ` value="${this.escapeXml(target.value)}"`;
   }
 
   if (target.text) {
-    element += `      text="${this.escapeXml(target.text.slice(0, 120))}"\n`;
+    element += ` text="${this.escapeXml(target.text.slice(0, 120))}"`;
+  }
+  
+  if(target.elementIndex){
+    element += ` elementIndex="${target.elementIndex}"`;
   }
 
   if (target.isDisabled) {
-    element += `      disabled="true"\n`;
+    element += ` disabled="true"`;
   }
-  Object.entries(attrs).forEach(([key, value]) => {
-    element += `      ${this.escapeXml(key)}="${this.escapeXml(value)}"\n`;
-  });
+  element += `\n`;
+ Object.entries(attrs).forEach(([key, value]) => {
+  if (value === null || value === undefined) return;
+  if (typeof value === 'string' && value.trim() === '') return;
+
+  element += `      ${this.escapeXml(key)}="${this.escapeXml(String(value))}"\n`;
+});
+
 
   element += `    />\n`;
   return element;
