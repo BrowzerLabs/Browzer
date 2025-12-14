@@ -626,16 +626,35 @@ export class ActionRecorder extends EventEmitter {
       'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight',
       'Home', 'End', 'PageUp', 'PageDown'
     ];
-    const isShortcut = (e.ctrlKey || e.metaKey || e.altKey) && e.key.length === 1;
+    const hasModifier = e.ctrlKey || e.metaKey || e.altKey;
+    const isShortcut = hasModifier && e.key.length === 1;
     const isImportantKey = importantKeys.includes(e.key);
     
     if (isShortcut || isImportantKey) {
       const focusedElement = document.activeElement;
       
+      const modifiers = [];
+      if (e.metaKey) modifiers.push('Cmd');
+      if (e.ctrlKey) modifiers.push('Ctrl');
+      if (e.altKey) modifiers.push('Alt');
+      if (e.shiftKey) modifiers.push('Shift');
+      
+      const keyValue = modifiers.length > 0 
+        ? modifiers.join('+') + '+' + e.key 
+        : e.key;
+      
       console.info('[BROWZER_ACTION]', JSON.stringify({
         type: 'keypress',
         timestamp: Date.now(),
-        value: e.key,
+        value: keyValue,
+        metadata: {
+          key: e.key,
+          code: e.code,
+          metaKey: e.metaKey || undefined,
+          ctrlKey: e.ctrlKey || undefined,
+          altKey: e.altKey || undefined,
+          shiftKey: e.shiftKey || undefined
+        },
         target: focusedElement ? extractElementTarget(focusedElement) : undefined
       }));
     }
