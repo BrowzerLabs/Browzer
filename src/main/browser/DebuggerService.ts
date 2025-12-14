@@ -25,7 +25,7 @@ export class DebuggerService {
     }
   }
 
-  public cleanupDebugger(view: WebContentsView, tabId: string): void {
+  public cleanupDebugger(view: WebContentsView): void {
     const cdpDebugger = view.webContents.debugger;
     
     if (cdpDebugger.isAttached()) {

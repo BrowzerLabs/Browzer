@@ -163,7 +163,7 @@ export class TabService extends EventEmitter {
 
     this.baseWindow.contentView.removeChildView(tab.view);
     tab.passwordAutomation?.stop().catch(console.error);
-    this.debuggerService.cleanupDebugger(tab.view, tabId);
+    this.debuggerService.cleanupDebugger(tab.view);
     tab.view.webContents.close();
     
     this.tabs.delete(tabId);
@@ -436,7 +436,7 @@ export class TabService extends EventEmitter {
   public destroy(): void {
     this.contextMenuService.destroy();
     this.tabs.forEach(tab => {
-      this.debuggerService.cleanupDebugger(tab.view, tab.id);
+      this.debuggerService.cleanupDebugger(tab.view);
       this.baseWindow.contentView.removeChildView(tab.view);
       tab.view.webContents.close();
     });
