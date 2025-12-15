@@ -110,8 +110,14 @@ export class ActionRecorder extends EventEmitter {
     try {
       console.log(`🔄 Switching recording to tab: ${tabId} (${tabTitle})`);
 
+      const previousDebugger = this.debugger;
       this.view = newView;
       this.debugger = newView.webContents.debugger;
+
+      if (previousDebugger && previousDebugger !== this.debugger) {
+        previousDebugger.removeAllListeners('message');
+        previousDebugger.removeAllListeners('detach');
+      }
       this.currentTabId = tabId;
       this.currentTabUrl = tabUrl;
       this.currentTabTitle = tabTitle;
