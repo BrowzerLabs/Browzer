@@ -119,7 +119,9 @@ jobs:
           echo "- **Tag Existed**: ${{ steps.check_tag.outputs.exists }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           if [ "${{ steps.check_tag.outputs.exists }}" = "false" ]; then
-            echo "✅ Tag created and pushed. Build workflow will be triggered automatically." >> $GITHUB_STEP_SUMMARY
+            echo "✅ Tag created and pushed. Build workflows will be triggered automatically:" >> $GITHUB_STEP_SUMMARY
+            echo "  - macOS (build-macos.yml)" >> $GITHUB_STEP_SUMMARY
+            echo "  - Windows (build-windows.yml)" >> $GITHUB_STEP_SUMMARY
           else
             echo "⏭️ Tag already existed. No new release created." >> $GITHUB_STEP_SUMMARY
           fi
