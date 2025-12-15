@@ -136,7 +136,7 @@ private static formatElementInline(target: ElementTarget): string {
     element += ` text="${this.escapeXml(target.text.slice(0, 120))}"`;
   }
   
-  if(target.elementIndex){
+  if(target.elementIndex !== undefined) {
     element += ` elementIndex="${target.elementIndex}"`;
   }
 
