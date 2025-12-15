@@ -1,9 +1,8 @@
 import { WebContentsView, dialog } from 'electron';
-import { VideoRecorder, RecordingStore } from '@/main/recording';
+import { ActionRecorder, VideoRecorder, RecordingStore } from '@/main/recording';
 import { RecordedAction, RecordingSession, RecordingTabInfo } from '@/shared/types';
 import { stat } from 'fs/promises';
 import { Tab, RecordingState } from './types';
-import { ActionRecorder } from '@/main/recording/ActionRecorder';
 import { EventEmitter } from 'events';
 
 export class RecordingService extends EventEmitter {
@@ -296,6 +295,9 @@ export class RecordingService extends EventEmitter {
   }
 
   private setupRecorderEventListeners(defaultTabId: string): void {
+    this.centralRecorder.removeAllListeners('action');
+    this.centralRecorder.removeAllListeners('maxActionsReached');
+
     this.centralRecorder.on('action', (action: RecordedAction) => {
       this.handleActionCaptured(action, defaultTabId);
     });
@@ -315,7 +317,7 @@ export class RecordingService extends EventEmitter {
     dialog.showMessageBox({
       type: 'warning',
       title: 'Recording Limit Reached',
-      message: 'Maximum actions limit reached. Recording will stop automatically.',
+      message: 'Maximum actions limit reached. Please stop the recording.',
       buttons: ['OK']
     }).then(() => {
      this.browserUIView?.webContents.send('recording:max-actions-reached');
