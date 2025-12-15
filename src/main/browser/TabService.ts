@@ -525,6 +525,9 @@ export class TabService extends EventEmitter {
       } else if (isDevToolsShortcut && input.key.toLowerCase() === 'c') {
         event.preventDefault();
         wc.openDevTools({ mode: 'right', activate: true });
+      } else if ((input.control || input.meta) && !input.shift && input.key.toLowerCase() === 'f') {
+        event.preventDefault();
+        this.browserView.webContents.send('browser:request-find');
       }
     });
 
@@ -548,6 +551,10 @@ export class TabService extends EventEmitter {
 
     wc.on('context-menu', (_, params) => {
       if (!this.navigationService.isInternalPage(info.url)) this.contextMenuService.showContextMenu(wc, params);
+    });
+
+    wc.on('found-in-page', (_, result) => {
+      this.emit('found-in-page', tab.id, result);
     });
 
     wc.on('certificate-error', (event, url, error, certificate, callback) => {
@@ -582,6 +589,18 @@ export class TabService extends EventEmitter {
     if (!tab || !tab.info.failedUrl) return false;
     try { return tab.bypassedCertificateHosts?.has(new URL(tab.info.failedUrl).host) ?? false; }
     catch { return false; }
+  }
+
+  public startFindInPage(tabId: string, text: string, options: Electron.FindInPageOptions = {}): void {
+    const tab = this.tabs.get(tabId);
+    if (!tab || tab.view.webContents.isDestroyed()) return;
+    tab.view.webContents.findInPage(text, options);
+  }
+
+  public stopFindInPage(tabId: string, action: 'clearSelection' | 'keepSelection' | 'activateSelection'): void {
+    const tab = this.tabs.get(tabId);
+    if (!tab || tab.view.webContents.isDestroyed()) return;
+    tab.view.webContents.stopFindInPage(action);
   }
 
   private handleNavigation(info: TabInfo, wc: Electron.WebContents, url: string): void {
