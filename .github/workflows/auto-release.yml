@@ -10,6 +10,7 @@ on:
       - 'docs/**'
       - '.gitignore'
       - 'LICENSE'
+      - '.github/workflows/**'
 
 # Prevent concurrent releases
 concurrency:
