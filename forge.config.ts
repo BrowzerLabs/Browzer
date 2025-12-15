@@ -45,7 +45,15 @@ const config: ForgeConfig = {
   },
   rebuildConfig: {},
   makers: [
-    new MakerSquirrel({}),
+    new MakerSquirrel({
+      name: 'Browzer',
+      authors: 'Browzer Labs, Inc.',
+      description: 'An Intelligent Agentic Browser',
+      setupIcon: './assets/icon.ico',
+      loadingGif: undefined,
+      certificateFile: process.env.WINDOWS_CERTIFICATE_FILE,
+      certificatePassword: process.env.WINDOWS_CERTIFICATE_PASSWORD,
+    }),
     new MakerDMG({
       icon: './assets/icon.icns',
       format: 'ULFO',
@@ -60,7 +68,7 @@ const config: ForgeConfig = {
         "background-color": "#fff",
       }
     }),
-    new MakerZIP({}, ['darwin']),
+    new MakerZIP({}, ['darwin', 'win32']),
     
     new MakerDeb({
       options: {
