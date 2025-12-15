@@ -23,13 +23,26 @@ export class MainService {
   
 
   constructor() {
+    const isMac = process.platform === 'darwin';
+    const isWindows = process.platform === 'win32';
+    
     this.baseWindow = new BaseWindow({
       width: 1400,
       height: 900,
       minWidth: 900,
       minHeight: 700,
-      titleBarStyle: 'hiddenInset',
-      trafficLightPosition: { x: 10, y: 10 },
+      ...(isMac && {
+        titleBarStyle: 'hiddenInset',
+        trafficLightPosition: { x: 10, y: 10 },
+      }),
+      ...(isWindows && {
+        titleBarStyle: 'hidden',
+        titleBarOverlay: {
+          color: '#00000000',
+          symbolColor: '#ffffff',
+          height: 32,
+        },
+      }),
       show: false,
       transparent: true,
       darkTheme: true,

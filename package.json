@@ -14,6 +14,8 @@
     "make:arm64": "NODE_ENV=production electron-forge make --platform darwin --arch arm64",
     "make:universal": "NODE_ENV=production electron-forge make --platform darwin --arch universal",
     "make:win": "electron-forge make --platform=win32",
+    "make:win-x64": "electron-forge make --platform=win32 --arch=x64",
+    "make:win-arm64": "electron-forge make --platform=win32 --arch=arm64",
     "make:linux": "electron-forge make --platform=linux",
     "lint": "eslint --ext .ts,.tsx ."
   },

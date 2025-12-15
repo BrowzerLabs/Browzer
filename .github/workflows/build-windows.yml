@@ -1,0 +1,371 @@
+name: Build and Release Windows
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to build (e.g., v1.0.0)'
+        required: false
+        default: ''
+
+env:
+  NODE_VERSION: '22'
+  PNPM_VERSION: '10.19.0'
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    
+    strategy:
+      matrix:
+        arch: [x64, arm64]
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ secrets.NODE_VERSION }}
+      
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ secrets.PNPM_VERSION }}
+      
+      - name: Get pnpm store directory
+        shell: pwsh
+        run: |
+          $storePath = pnpm store path --silent
+          "STORE_PATH=$storePath" | Out-File -FilePath $env:GITHUB_ENV -Append
+      
+      - name: Setup pnpm cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: ${{ runner.os }}-pnpm-
+      
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      
+      - name: Update version in package.json
+        shell: pwsh
+        run: |
+          if ("${{ github.event_name }}" -eq "workflow_dispatch") {
+            $VERSION = "${{ github.event.inputs.version }}"
+          } else {
+            $VERSION = "${{ github.ref_name }}"
+          }
+          
+          # Remove 'v' prefix if present
+          $VERSION_NUMBER = $VERSION -replace '^v', ''
+          
+          Write-Host "Updating package.json to version: $VERSION_NUMBER"
+          
+          # Update package.json version using Node.js for reliable JSON handling
+          node -e "const fs = require('fs'); const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8')); pkg.version = '$VERSION_NUMBER'; fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');"
+          
+          # Verify the update
+          Get-Content package.json | Select-String '"version"'
+      
+      - name: Setup Windows code signing certificate
+        if: secrets.WINDOWS_CERTIFICATE_BASE64 != ''
+        env:
+          WINDOWS_CERTIFICATE_BASE64: ${{ secrets.WINDOWS_CERTIFICATE_BASE64 }}
+          WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+        shell: pwsh
+        run: |
+          # Decode certificate from base64
+          $certBytes = [Convert]::FromBase64String($env:WINDOWS_CERTIFICATE_BASE64)
+          $certPath = Join-Path $env:RUNNER_TEMP "certificate.pfx"
+          [IO.File]::WriteAllBytes($certPath, $certBytes)
+          
+          Write-Host "Certificate saved to: $certPath"
+          
+          # Set environment variable for forge config
+          "WINDOWS_CERTIFICATE_FILE=$certPath" | Out-File -FilePath $env:GITHUB_ENV -Append
+          
+          # Verify certificate (without importing to store)
+          try {
+             $cert = New-Object System.Security.Cryptography.X509Certificates.X509Certificate2($certPath, $env:WINDOWS_CERTIFICATE_PASSWORD)
+             Write-Host "Certificate Subject: $($cert.Subject)"
+             Write-Host "Certificate Issuer: $($cert.Issuer)"
+             Write-Host "Certificate Valid Until: $($cert.NotAfter)"
+            if ($cert.NotAfter -lt (Get-Date)) {
+              throw "Certificate has expired on $($cert.NotAfter)"
+            }
+           } catch {
+            Write-Host "Error: Certificate verification failed - $($_.Exception.Message)"
++            exit 1
+           }
+      
+      - name: Build for Windows (${{ matrix.arch }})
+        env:
+          NODE_ENV: production
+          BACKEND_API_URL: ${{ secrets.BACKEND_API_URL }}
+          WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+        shell: pwsh
+        run: |
+          Write-Host "Building for ${{ matrix.arch }}..."
+          pnpm run make -- --arch=${{ matrix.arch }} --platform=win32
+      
+      - name: List build output
+        shell: pwsh
+        run: |
+          Write-Host "Build output:"
+          Get-ChildItem -Path out -Recurse -Include *.exe,*.nupkg,*.zip | ForEach-Object { $_.FullName }
+      
+      - name: Generate checksums
+        shell: pwsh
+        run: |
+          Write-Host "Generating checksums..."
+          $files = Get-ChildItem -Path out/make -Recurse -Include *.exe,*.zip
+          foreach ($file in $files) {
+            Write-Host "Processing: $($file.FullName)"
+            
+            $sha256 = (Get-FileHash -Path $file.FullName -Algorithm SHA256).Hash.ToLower()
+            $sha512 = (Get-FileHash -Path $file.FullName -Algorithm SHA512).Hash.ToLower()
+            
+            "$sha256  $($file.Name)" | Out-File -FilePath "$($file.FullName).sha256" -Encoding utf8
+            "$sha512  $($file.Name)" | Out-File -FilePath "$($file.FullName).sha512" -Encoding utf8
+          }
+      
+      - name: Verify code signing
+        if: env.WINDOWS_CERTIFICATE_FILE != ''
+        shell: pwsh
+        run: |
+          Write-Host "Verifying code signatures..."
+          $exeFiles = Get-ChildItem -Path out -Recurse -Include *.exe
+          foreach ($exe in $exeFiles) {
+            Write-Host "Checking: $($exe.FullName)"
+            $sig = Get-AuthenticodeSignature -FilePath $exe.FullName
+            Write-Host "  Status: $($sig.Status)"
+            if ($sig.SignerCertificate) {
+              Write-Host "  Signer: $($sig.SignerCertificate.Subject)"
+            }
+          }
+      
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: browzer-windows-${{ matrix.arch }}
+          path: |
+            out/make/**/*.exe
+            out/make/**/*.zip
+            out/make/**/*.nupkg
+            out/make/**/*.sha256
+            out/make/**/*.sha512
+          retention-days: 30
+          if-no-files-found: error
+      
+      - name: Cleanup certificate
+        if: always() && env.WINDOWS_CERTIFICATE_FILE != ''
+        shell: pwsh
+        run: |
+          if (Test-Path $env:WINDOWS_CERTIFICATE_FILE) {
+            Remove-Item -Path $env:WINDOWS_CERTIFICATE_FILE -Force
+            Write-Host "Certificate file cleaned up"
+          }
+
+  create-release:
+    needs: build-windows
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/') || (github.event_name == 'workflow_dispatch' && github.event.inputs.version != '')
+    
+    permissions:
+      contents: write
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+      
+      - name: Display structure of downloaded files
+        run: ls -R artifacts
+      
+      - name: Prepare release files
+        id: prepare
+        run: |
+          mkdir -p release-files
+          
+          # Copy all EXE, ZIP, and nupkg files
+          find artifacts -type f \( -name "*.exe" -o -name "*.zip" -o -name "*.nupkg" -o -name "*.sha256" -o -name "*.sha512" \) -exec cp {} release-files/ \;
+          
+          echo "Release files:"
+          ls -lh release-files/
+          
+          # Get version from tag or manual input
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+          else
+            VERSION=${GITHUB_REF#refs/tags/}
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+      
+      - name: Create latest.yml for auto-updater (Windows)
+        run: |
+          VERSION="${{ steps.prepare.outputs.version }}"
+          VERSION_NUMBER="${VERSION#v}"
+          
+          # Find the x64 setup EXE for auto-updates (most common)
+          SETUP_X64=$(find release-files -name "*x64*.exe" | head -1)
+          SETUP_ARM64=$(find release-files -name "*arm64*.exe" | head -1)
+          
+          if [ -z "$SETUP_X64" ]; then
+            SETUP_X64=$(find release-files -name "*Setup*.exe" -not -name "*arm64*" | head -1)
+          fi
+          
+          if [ -z "$SETUP_X64" ]; then
+            echo "Error: No EXE file found for auto-updates!"
+            echo "Available files:"
+            ls -la release-files/
+            exit 1
+          fi
+          
+          echo "Using EXE for auto-updates (x64): $SETUP_X64"
+          
+          # Get file info for x64
+          FILENAME_X64=$(basename "$SETUP_X64")
+          SIZE_X64=$(stat -c%s "$SETUP_X64" 2>/dev/null || stat -f%z "$SETUP_X64")
+          SHA512_X64=$(sha512sum "$SETUP_X64" | awk '{print $1}')
+          RELEASE_DATE=$(date -u +'%Y-%m-%dT%H:%M:%S.000Z')
+          
+          # Create latest.yml in electron-updater format
+          cat > release-files/latest.yml <<EOF
+          version: ${VERSION_NUMBER}
+          files:
+            - url: ${FILENAME_X64}
+              sha512: ${SHA512_X64}
+              size: ${SIZE_X64}
+          path: ${FILENAME_X64}
+          sha512: ${SHA512_X64}
+          releaseDate: '${RELEASE_DATE}'
+          EOF
+          
+          # If arm64 exists, add it to the files list
+          if [ -n "$SETUP_ARM64" ] && [ -f "$SETUP_ARM64" ]; then
+            FILENAME_ARM64=$(basename "$SETUP_ARM64")
+            SIZE_ARM64=$(stat -c%s "$SETUP_ARM64" 2>/dev/null || stat -f%z "$SETUP_ARM64")
+            SHA512_ARM64=$(sha512sum "$SETUP_ARM64" | awk '{print $1}')
+            
+            # Recreate with both architectures
+            cat > release-files/latest.yml <<EOF
+          version: ${VERSION_NUMBER}
+          files:
+            - url: ${FILENAME_X64}
+              sha512: ${SHA512_X64}
+              size: ${SIZE_X64}
+            - url: ${FILENAME_ARM64}
+              sha512: ${SHA512_ARM64}
+              size: ${SIZE_ARM64}
+          path: ${FILENAME_X64}
+          sha512: ${SHA512_X64}
+          releaseDate: '${RELEASE_DATE}'
+          EOF
+          fi
+          
+          echo "Generated latest.yml:"
+          cat release-files/latest.yml
+      
+      - name: Generate release notes
+        id: release_notes
+        run: |
+          VERSION="${{ steps.prepare.outputs.version }}"
+          
+          cat > release_notes.md <<EOF
+          # Browzer ${VERSION} - Windows
+          
+          ## 📦 Downloads
+          
+          ### Windows
+          
+          Choose the appropriate version for your system:
+          
+          - **64-bit (x64)**: Download \`Browzer-${VERSION}-x64-Setup.exe\`
+          - **ARM64**: Download \`Browzer-${VERSION}-arm64-Setup.exe\` (for Windows on ARM)
+          
+          ### ✅ Installation
+          
+          1. Download the appropriate installer (.exe) for your system
+          2. Run the installer
+          3. Follow the installation wizard
+          4. Launch Browzer from the Start Menu or Desktop shortcut
+          
+          > **Note**: Windows SmartScreen may show a warning for unsigned builds. Click "More info" → "Run anyway" to proceed.
+          
+          ### 🔐 Verification
+          
+          Verify the integrity of your download:
+          
+          \`\`\`powershell
+          Get-FileHash -Algorithm SHA256 Browzer-${VERSION}-x64-Setup.exe
+          \`\`\`
+          
+          Compare with the .sha256 file included in the release.
+          
+          ### 🔄 Auto-Updates
+          
+          Once installed, Browzer will automatically check for and install future updates.
+          
+          ### 📝 What's New
+          
+          <!-- Add your release notes here -->
+          
+          EOF
+          
+          cat release_notes.md
+      
+      - name: Upload to existing release or create new
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.prepare.outputs.version }}
+          files: release-files/*
+          body_path: release_notes.md
+          draft: false
+          prerelease: false
+          append_body: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Output release info
+        run: |
+          echo "✅ Windows release uploaded successfully!"
+          echo "Version: ${{ steps.prepare.outputs.version }}"
+          echo "Files released:"
+          ls -lh release-files/
+
+  notify-success:
+    needs: [build-windows, create-release]
+    runs-on: ubuntu-latest
+    if: success()
+    
+    steps:
+      - name: Success notification
+        run: |
+          echo "✅ Windows build and release completed successfully!"
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "Version: ${{ github.event.inputs.version }}"
+          else
+            echo "Version: ${GITHUB_REF#refs/tags/}"
+          fi
+
+  notify-failure:
+    needs: [build-windows, create-release]
+    runs-on: ubuntu-latest
+    if: failure()
+    
+    steps:
+      - name: Failure notification
+        run: |
+          echo "❌ Windows build or release failed!"
+          echo "Check the logs above for details."
+          exit 1
