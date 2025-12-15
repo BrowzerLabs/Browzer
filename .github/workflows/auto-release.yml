@@ -1,0 +1,125 @@
+name: Auto Release
+
+on:
+  push:
+    branches:
+      - main
+    # Only trigger on actual code changes, not workflow changes
+    paths-ignore:
+      - '*.md'
+      - 'docs/**'
+      - '.gitignore'
+      - 'LICENSE'
+      - '.github/workflows/**'
+
+# Prevent concurrent releases
+concurrency:
+  group: auto-release
+  cancel-in-progress: false
+
+jobs:
+  auto-release:
+    runs-on: ubuntu-latest
+    
+    permissions:
+      contents: write
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Get latest release version
+        id: get_version
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Get the latest release tag from GitHub
+          LATEST_TAG=$(gh release list --limit 1 --json tagName --jq '.[0].tagName' 2>/dev/null || echo "")
+          
+          if [ -z "$LATEST_TAG" ] || [ "$LATEST_TAG" = "null" ]; then
+            # No releases yet, check for tags
+            LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+          fi
+          
+          if [ -z "$LATEST_TAG" ]; then
+            # No tags exist, start from package.json version or default
+            CURRENT_VERSION=$(node -p "require('./package.json').version" 2>/dev/null || echo "0.0.0")
+            echo "No existing releases found. Starting from package.json version: $CURRENT_VERSION"
+          else
+            # Remove 'v' prefix if present
+            CURRENT_VERSION="${LATEST_TAG#v}"
+            echo "Latest release: $LATEST_TAG (version: $CURRENT_VERSION)"
+          fi
+          
+          echo "current_version=$CURRENT_VERSION" >> $GITHUB_OUTPUT
+      
+      - name: Calculate next version
+        id: next_version
+        run: |
+          CURRENT="${{ steps.get_version.outputs.current_version }}"
+          
+          # Parse semver (major.minor.patch)
+          IFS='.' read -r MAJOR MINOR PATCH <<< "$CURRENT"
+          
+          # Default to 0 if parsing fails
+          MAJOR=${MAJOR:-0}
+          MINOR=${MINOR:-0}
+          PATCH=${PATCH:-0}
+          
+          # Increment patch version
+          NEW_PATCH=$((PATCH + 1))
+          NEW_VERSION="${MAJOR}.${MINOR}.${NEW_PATCH}"
+          NEW_TAG="v${NEW_VERSION}"
+          
+          echo "Current: $CURRENT -> New: $NEW_VERSION"
+          echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
+          echo "new_tag=$NEW_TAG" >> $GITHUB_OUTPUT
+      
+      - name: Check if tag already exists
+        id: check_tag
+        run: |
+          NEW_TAG="${{ steps.next_version.outputs.new_tag }}"
+          
+          if git rev-parse "$NEW_TAG" >/dev/null 2>&1; then
+            echo "Tag $NEW_TAG already exists, skipping release"
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "Tag $NEW_TAG does not exist, proceeding with release"
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+      
+      - name: Create and push tag
+        if: steps.check_tag.outputs.exists == 'false'
+        run: |
+          NEW_TAG="${{ steps.next_version.outputs.new_tag }}"
+          NEW_VERSION="${{ steps.next_version.outputs.new_version }}"
+          
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          
+          # Create annotated tag
+          git tag -a "$NEW_TAG" -m "Release $NEW_VERSION"
+          
+          # Push the tag (this will trigger build-macos.yml)
+          git push origin "$NEW_TAG"
+          
+          echo "✅ Created and pushed tag: $NEW_TAG"
+          echo "This will trigger the build-macos.yml workflow"
+      
+      - name: Summary
+        run: |
+          echo "## Auto Release Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Previous Version**: ${{ steps.get_version.outputs.current_version }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **New Version**: ${{ steps.next_version.outputs.new_version }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **New Tag**: ${{ steps.next_version.outputs.new_tag }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Tag Existed**: ${{ steps.check_tag.outputs.exists }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ steps.check_tag.outputs.exists }}" = "false" ]; then
+            echo "✅ Tag created and pushed. Build workflow will be triggered automatically." >> $GITHUB_STEP_SUMMARY
+          else
+            echo "⏭️ Tag already existed. No new release created." >> $GITHUB_STEP_SUMMARY
+          fi
