@@ -12,6 +12,7 @@ import { cn } from '@/renderer/lib/utils';
 import type { Bookmark, BookmarkTreeNode } from '@/shared/types';
 import { BOOKMARK_BAR_ID } from '@/shared/types';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/renderer/ui/select';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/renderer/ui/tooltip';
 
 interface BookmarkButtonProps {
   url: string;
@@ -212,29 +213,26 @@ export function BookmarkButton({
 
   return (
     <Popover open={isOpen} onOpenChange={handleOpenChange}>
-      <PopoverTrigger asChild>
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={handleStarClick}
-          disabled={isLoading || !url}
-          title={isBookmarked ? 'Edit bookmark' : 'Bookmark this page'}
-          className="h-8 w-8"
-        >
-          {isLoading ? (
-            <Loader2 className="w-4 h-4 animate-spin" />
-          ) : (
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <PopoverTrigger 
+            onClick={handleStarClick}
+            disabled={isLoading || !url}
+          >
             <Star
               className={cn(
                 'w-4 h-4 transition-colors',
                 isBookmarked
-                  ? 'fill-yellow-400 text-yellow-400'
+                  ? 'fill-primary text-primary'
                   : 'text-muted-foreground hover:text-foreground'
               )}
             />
-          )}
-        </Button>
-      </PopoverTrigger>
+          </PopoverTrigger>
+        </TooltipTrigger>
+        <TooltipContent>
+          {isBookmarked ? 'Edit bookmark' : 'Bookmark this page'}
+        </TooltipContent>
+      </Tooltip>
       <PopoverContent className="w-72" align="end">
         <div className="space-y-3">
           <div>
