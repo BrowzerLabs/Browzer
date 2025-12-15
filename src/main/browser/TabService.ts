@@ -1,7 +1,8 @@
 import { BaseWindow, WebContentsView } from 'electron';
 import { EventEmitter } from 'events';
 import path from 'node:path';
-import { TabInfo, HistoryTransition, ToastPayload, NavigationError, isNetworkError, shouldIgnoreError } from '@/shared/types';
+import { TabInfo, HistoryTransition, ToastPayload, NavigationError, isNetworkError, shouldIgnoreError, TabGroup, TabsSnapshot } from '@/shared/types';
+import { GROUP_COLORS } from '@/shared/constants/tabs';
 import { VideoRecorder } from '@/main/recording';
 import { PasswordManager } from '@/main/password/PasswordManager';
 import { BrowserAutomationExecutor } from '@/main/automation';
@@ -15,10 +16,7 @@ import { SettingsService, SettingsChangeEvent } from '@/main/settings/SettingsSe
 import { ContextMenuService } from './ContextMenuService';
 import { errorPageService } from './ErrorPageService';
 
-const TAB_HEIGHT = {
-  WITHOUT_BOOKMARKS: 75 as number,
-  WITH_BOOKMARKS: 104 as number,
-};
+const TAB_HEIGHT = { WITHOUT_BOOKMARKS: 75 as number, WITH_BOOKMARKS: 104 as number };
 
 export class TabService extends EventEmitter {
   public on<K extends keyof TabServiceEvents>(event: K, listener: TabServiceEvents[K]): this {
@@ -33,10 +31,12 @@ export class TabService extends EventEmitter {
   private orderedTabIds: string[] = [];
   private activeTabId: string | null = null;
   private tabCounter = 0;
+  private tabGroupCounter = 0;
   private currentSidebarWidth = 0;
   private webContentsViewHeight = TAB_HEIGHT.WITHOUT_BOOKMARKS;
   private newTabUrl = 'browzer://home';
   private readonly contextMenuService = new ContextMenuService();
+  private tabGroups = new Map<string, TabGroup>();
 
   constructor(
     private baseWindow: BaseWindow,
@@ -53,9 +53,7 @@ export class TabService extends EventEmitter {
   }
 
   public initializeAfterAuth(): void {
-    if (this.tabs.size === 0) {
-      this.createTab();
-    }
+    if (this.tabs.size === 0) this.createTab();
   }
 
   private initialize(): void {
@@ -68,15 +66,10 @@ export class TabService extends EventEmitter {
     this.settingsService.on('settings:general', (event: SettingsChangeEvent<'general'>) => {
       this.newTabUrl = event.newValue.newTabUrl || 'browzer://home';
     });
-    
     this.settingsService.on('settings:appearance', (event: SettingsChangeEvent<'appearance'>) => {
-      if (event.key === 'showBookmarksBar') {
-        this.recalculateBookmarkBarHeight();
-      }
+      if (event.key === 'showBookmarksBar') this.recalculateBookmarkBarHeight();
     });
-
     this.bookmarkService.on('bookmark:changed', () => this.recalculateBookmarkBarHeight());
-
     this.contextMenuService.on('open-link-in-new-tab', (url: string) => this.createTab(url));
     this.contextMenuService.on('toast', (payload: ToastPayload) => {
       this.browserView.webContents.send('toast', payload);
@@ -86,14 +79,9 @@ export class TabService extends EventEmitter {
   public recalculateBookmarkBarHeight(): void {
     const showBookmarksBar = this.settingsService.getSetting('appearance', 'showBookmarksBar');
     const hasBookmarks = this.bookmarkService.hasBookmarksInBar();
-    
-    this.webContentsViewHeight = showBookmarksBar && hasBookmarks
-      ? TAB_HEIGHT.WITH_BOOKMARKS 
-      : TAB_HEIGHT.WITHOUT_BOOKMARKS;
-    
+    this.webContentsViewHeight = showBookmarksBar && hasBookmarks ? TAB_HEIGHT.WITH_BOOKMARKS : TAB_HEIGHT.WITHOUT_BOOKMARKS;
     this.updateLayout(this.currentSidebarWidth);
   }
-
 
   public createTab(url?: string): Tab {
     const previousActiveTabId = this.activeTabId;
@@ -112,7 +100,6 @@ export class TabService extends EventEmitter {
     });
 
     const internalPageInfo = this.navigationService.getInternalPageInfo(urlToLoad);
-    
     const tabInfo: TabInfo = {
       id: tabId,
       title: internalPageInfo?.title || 'New Tab',
@@ -121,6 +108,7 @@ export class TabService extends EventEmitter {
       isLoading: false,
       canGoBack: false,
       canGoForward: false,
+      group: undefined,
     };
 
     const tab: Tab = {
@@ -128,28 +116,20 @@ export class TabService extends EventEmitter {
       view,
       info: tabInfo,
       videoRecorder: new VideoRecorder(view),
-      passwordAutomation: new PasswordAutomation(
-        view, 
-        this.passwordManager, 
-        tabId,
-        this.handleCredentialSelected.bind(this)
-      ),
+      passwordAutomation: new PasswordAutomation(view, this.passwordManager, tabId, this.handleCredentialSelected.bind(this)),
       automationExecutor: new BrowserAutomationExecutor(view, tabId),
     };
 
     this.tabs.set(tabId, tab);
     this.orderedTabIds.push(tabId);
     this.setupTabWebContentsEvents(tab);
-
     this.debuggerService.initializeDebugger(view, tabId).catch(err => 
       console.error('[TabService] Failed to initialize debugger:', tabId, err)
     );
-
     this.baseWindow.contentView.addChildView(view);
     this.updateTabViewBounds(view, this.currentSidebarWidth);
     view.webContents.loadURL(this.navigationService.normalizeURL(urlToLoad));
     this.switchToTab(tabId);
-    
     this.emit('tab:created', tab, previousActiveTabId);
     return tab;
   }
@@ -165,28 +145,21 @@ export class TabService extends EventEmitter {
     tab.passwordAutomation?.stop().catch(console.error);
     this.debuggerService.cleanupDebugger(tab.view, tabId);
     tab.view.webContents.close();
-    
     this.tabs.delete(tabId);
-    if (orderIndex !== -1) {
-      this.orderedTabIds.splice(orderIndex, 1);
-    }
+    if (orderIndex !== -1) this.orderedTabIds.splice(orderIndex, 1);
 
     let newActiveTabId: string | null = null;
     if (wasActiveTab && this.orderedTabIds.length > 0) {
-      const targetIndex = Math.min(orderIndex, this.orderedTabIds.length - 1);
-      newActiveTabId = this.orderedTabIds[Math.max(0, targetIndex)];
+      newActiveTabId = this.orderedTabIds[Math.max(0, Math.min(orderIndex, this.orderedTabIds.length - 1))];
       this.switchToTab(newActiveTabId);
     } else if (wasActiveTab) {
       this.activeTabId = null;
     }
 
+    this.cleanupEmptyGroups();
     this.emit('tabs:changed');
     this.emit('tab:closed', tabId, newActiveTabId, wasActiveTab);
-    
-    if (this.tabs.size === 0) {
-      this.baseWindow.close();
-    }
-    
+    if (this.tabs.size === 0) this.baseWindow.close();
     return true;
   }
 
@@ -195,27 +168,18 @@ export class TabService extends EventEmitter {
     if (!tab) return false;
 
     const previousTabId = this.activeTabId;
-
     if (this.activeTabId && this.activeTabId !== tabId) {
       this.tabs.get(this.activeTabId)?.view.setVisible(false);
     }
-
     tab.view.setVisible(true);
     this.activeTabId = tabId;
     this.emit('tabs:changed');
-    
-    if (previousTabId && previousTabId !== tabId) {
-      this.emit('tab:switched', previousTabId, tab);
-    }
-    
+    if (previousTabId && previousTabId !== tabId) this.emit('tab:switched', previousTabId, tab);
     return true;
   }
 
   public navigate(tabId: string, url: string): boolean {
-    let tab = this.tabs.get(tabId);
-    if (!tab) {
-      tab = this.createTab(url);
-    }
+    const tab = this.tabs.get(tabId) ?? this.createTab(url);
     tab.view.webContents.loadURL(this.navigationService.normalizeURL(url));
     return true;
   }
@@ -230,28 +194,18 @@ export class TabService extends EventEmitter {
     const currentUrl = tab.view.webContents.getURL();
     if (currentUrl.startsWith('data:text/html') && tab.info.error) {
       const currentIndex = history.getActiveIndex();
-      if (currentIndex >= 2) {
-        history.goToIndex(currentIndex - 2);
-        return true;
-      } else if (currentIndex >= 1) {
-        history.goToIndex(0);
-        return true;
-      }
+      if (currentIndex >= 2) { history.goToIndex(currentIndex - 2); return true; }
+      if (currentIndex >= 1) { history.goToIndex(0); return true; }
       return false;
     }
-    
     history.goBack();
     return true;
   }
 
   public goForward(tabId: string): boolean {
     const tab = this.tabs.get(tabId);
-    if (!tab) return false;
-    
-    const history = tab.view.webContents.navigationHistory;
-    if (!history.canGoForward()) return false;
-    
-    history.goForward();
+    if (!tab || !tab.view.webContents.navigationHistory.canGoForward()) return false;
+    tab.view.webContents.navigationHistory.goForward();
     return true;
   }
 
@@ -272,14 +226,9 @@ export class TabService extends EventEmitter {
   public canGoBack(tabId: string): boolean {
     const tab = this.tabs.get(tabId);
     if (!tab) return false;
-    
     const history = tab.view.webContents.navigationHistory;
     const currentUrl = tab.view.webContents.getURL();
-    
-    if (currentUrl.startsWith('data:text/html') && tab.info.error) {
-      return history.getActiveIndex() >= 2;
-    }
-    
+    if (currentUrl.startsWith('data:text/html') && tab.info.error) return history.getActiveIndex() >= 2;
     return history.canGoBack();
   }
 
@@ -292,10 +241,7 @@ export class TabService extends EventEmitter {
     if (!tab) return false;
 
     const failedUrl = tab.info.failedUrl;
-    if (!failedUrl) {
-      tab.view.webContents.reload();
-      return true;
-    }
+    if (!failedUrl) { tab.view.webContents.reload(); return true; }
 
     tab.info.error = null;
     tab.info.failedUrl = undefined;
@@ -305,42 +251,35 @@ export class TabService extends EventEmitter {
   }
 
   public getTabError(tabId: string): NavigationError | null {
-    const tab = this.tabs.get(tabId);
-    return tab?.info.error ?? null;
+    return this.tabs.get(tabId)?.info.error ?? null;
   }
 
   public hasError(tabId: string): boolean {
-    const tab = this.tabs.get(tabId);
-    return !!tab?.info.error;
+    return !!this.tabs.get(tabId)?.info.error;
   }
 
   public clearError(tabId: string): void {
     const tab = this.tabs.get(tabId);
-    if (tab) {
-      tab.info.error = null;
-      tab.info.failedUrl = undefined;
-      this.emit('tabs:changed');
-    }
+    if (!tab) return;
+    tab.info.error = null;
+    tab.info.failedUrl = undefined;
+    this.emit('tabs:changed');
   }
 
   public selectNextTab(): void {
     if (this.orderedTabIds.length === 0) return;
     const currentIndex = this.orderedTabIds.indexOf(this.activeTabId || '');
-    const nextIndex = (currentIndex + 1) % this.orderedTabIds.length;
-    this.switchToTab(this.orderedTabIds[nextIndex]);
+    this.switchToTab(this.orderedTabIds[(currentIndex + 1) % this.orderedTabIds.length]);
   }
 
   public selectPreviousTab(): void {
     if (this.orderedTabIds.length === 0) return;
     const currentIndex = this.orderedTabIds.indexOf(this.activeTabId || '');
-    const prevIndex = currentIndex <= 0 ? this.orderedTabIds.length - 1 : currentIndex - 1;
-    this.switchToTab(this.orderedTabIds[prevIndex]);
+    this.switchToTab(this.orderedTabIds[currentIndex <= 0 ? this.orderedTabIds.length - 1 : currentIndex - 1]);
   }
 
   public selectTabByIndex(index: number): void {
-    if (index >= 0 && index < this.orderedTabIds.length) {
-      this.switchToTab(this.orderedTabIds[index]);
-    }
+    if (index >= 0 && index < this.orderedTabIds.length) this.switchToTab(this.orderedTabIds[index]);
   }
 
   public reorderTab(tabId: string, newIndex: number): boolean {
@@ -356,8 +295,45 @@ export class TabService extends EventEmitter {
     this.orderedTabIds.splice(currentIndex, 1);
     this.orderedTabIds.splice(clampedIndex, 0, tabId);
     this.reorderSingleTabView(tabId, clampedIndex);
-    
     this.emit('tab:reordered', { tabId, from: currentIndex, to: clampedIndex });
+    
+    const movedTab = this.tabs.get(tabId);
+    if (movedTab) {
+      const movedGroupId = movedTab.info.group?.id;
+      const prevTab = this.tabs.get(this.orderedTabIds[clampedIndex - 1]);
+      const nextTab = this.tabs.get(this.orderedTabIds[clampedIndex + 1]);
+      const prevGroupId = prevTab?.info.group?.id;
+      const nextGroupId = nextTab?.info.group?.id;
+
+      let targetGroupId: string | undefined;
+      if (prevGroupId && nextGroupId && prevGroupId === nextGroupId) targetGroupId = prevGroupId;
+      else if (nextGroupId) targetGroupId = nextGroupId;
+      else if (prevGroupId) targetGroupId = prevGroupId;
+
+      if (targetGroupId) {
+        if (movedGroupId !== targetGroupId) {
+          const group = this.tabGroups.get(targetGroupId);
+          if (group) {
+            movedTab.info.group = group;
+            this.cleanupEmptyGroups();
+            this.emit('tabs:changed');
+            return true;
+          }
+        }
+      } else if (movedGroupId) {
+        const isNextToOwnGroup = prevGroupId === movedGroupId || nextGroupId === movedGroupId;
+        if (!isNextToOwnGroup) {
+          const hasOtherMembers = this.orderedTabIds.some(id => 
+            id !== tabId && this.tabs.get(id)?.info.group?.id === movedGroupId
+          );
+          if (hasOtherMembers) {
+            movedTab.info.group = undefined;
+            this.cleanupEmptyGroups();
+            this.emit('tabs:changed');
+          }
+        }
+      }
+    }
     return true;
   }
 
@@ -366,7 +342,6 @@ export class TabService extends EventEmitter {
     if (!tab) return;
 
     this.baseWindow.contentView.removeChildView(tab.view);
-    
     const children = this.baseWindow.contentView.children;
     let insertIndex = children.length;
     
@@ -377,33 +352,24 @@ export class TabService extends EventEmitter {
         if (nextViewIndex !== -1) insertIndex = nextViewIndex;
       }
     }
-    
     this.baseWindow.contentView.addChildView(tab.view, Math.min(insertIndex, children.length));
   }
 
-  public getAllTabs(): { tabs: TabInfo[]; activeTabId: string | null } {
-    const tabs = this.orderedTabIds
-      .map(id => this.tabs.get(id))
-      .filter((tab): tab is Tab => !!tab)
-      .map(tab => tab.info);
-    return { tabs, activeTabId: this.activeTabId };
+  public getAllTabs(): TabsSnapshot {
+    return { 
+      tabs: this.orderedTabIds.map(id => this.tabs.get(id)).filter((t): t is Tab => !!t).map(t => t.info),
+      activeTabId: this.activeTabId,
+      groups: Array.from(this.tabGroups.values()),
+    };
   }
 
   public getActiveTab(): Tab | null {
     return this.activeTabId ? this.tabs.get(this.activeTabId) ?? null : null;
   }
 
-  public getTab(tabId: string): Tab | undefined {
-    return this.tabs.get(tabId);
-  }
-
-  public getTabs(): Map<string, Tab> {
-    return this.tabs;
-  }
-
-  public getActiveTabId(): string | null {
-    return this.activeTabId;
-  }
+  public getTab(tabId: string): Tab | undefined { return this.tabs.get(tabId); }
+  public getTabs(): Map<string, Tab> { return this.tabs; }
+  public getActiveTabId(): string | null { return this.activeTabId; }
 
   public updateLayout(sidebarWidth = 0): void {
     this.currentSidebarWidth = sidebarWidth;
@@ -420,17 +386,10 @@ export class TabService extends EventEmitter {
     });
   }
 
-
-  public hideAllTabs(): void {
-    this.tabs.forEach(tab => tab.view.setVisible(false));
-  }
+  public hideAllTabs(): void { this.tabs.forEach(tab => tab.view.setVisible(false)); }
 
   public showAllTabs(): void {
-    this.tabs.forEach(tab => {
-      if (tab.id === this.activeTabId) {
-        tab.view.setVisible(true);
-      }
-    });
+    this.tabs.forEach(tab => { if (tab.id === this.activeTabId) tab.view.setVisible(true); });
   }
 
   public destroy(): void {
@@ -480,33 +439,19 @@ export class TabService extends EventEmitter {
       }
       
       if (tab.passwordAutomation && !this.navigationService.isInternalPage(info.url)) {
-        try {
-          await tab.passwordAutomation.start();
-        } catch (error) {
-          console.error('[TabService] Failed to start password automation:', error);
-        }
+        try { await tab.passwordAutomation.start(); }
+        catch (error) { console.error('[TabService] Failed to start password automation:', error); }
       }
-      
       this.emit('tabs:changed');
     });
 
     wc.on('will-navigate', (event, url) => {
-      if (url.startsWith('browzer-action://')) {
-        event.preventDefault();
-        const action = url.replace('browzer-action://', '');
-        
-        switch (action) {
-          case 'retry':
-            this.retryNavigation(tab.id);
-            break;
-          case 'home':
-            this.navigate(tab.id, 'browzer://home');
-            break;
-          case 'bypass-certificate':
-            this.bypassCertificateError(tab.id);
-            break;
-        }
-      }
+      if (!url.startsWith('browzer-action://')) return;
+      event.preventDefault();
+      const action = url.replace('browzer-action://', '');
+      if (action === 'retry') this.retryNavigation(tab.id);
+      else if (action === 'home') this.navigate(tab.id, 'browzer://home');
+      else if (action === 'bypass-certificate') this.bypassCertificateError(tab.id);
     });
 
     wc.on('did-navigate', (_, url) => this.handleNavigation(info, wc, url));
@@ -519,10 +464,7 @@ export class TabService extends EventEmitter {
       }
     });
 
-    wc.setWindowOpenHandler(({ url }) => {
-      this.createTab(url);
-      return { action: 'deny' };
-    });
+    wc.setWindowOpenHandler(({ url }) => { this.createTab(url); return { action: 'deny' }; });
 
     wc.on('before-input-event', (event: any, input: any) => {
       const isDevToolsShortcut = (input.control || input.meta) && input.shift;
@@ -536,33 +478,25 @@ export class TabService extends EventEmitter {
     });
 
     wc.on('did-fail-load', (_, errorCode, errorDescription, validatedURL, isMainFrame) => {
-      if (!isMainFrame || shouldIgnoreError(errorCode)) {
-        return;
-      }
+      if (!isMainFrame || shouldIgnoreError(errorCode)) return;
 
       info.isLoading = false;
       const error = errorPageService.createNavigationError(errorCode, errorDescription, validatedURL);
       
       if (error) {
         console.error(`[TabService] Navigation failed for ${validatedURL}: ${errorDescription} (code: ${errorCode})`);
-        
         info.error = error;
         info.failedUrl = validatedURL;
         info.title = error.title;
         info.url = validatedURL;
         info.favicon = undefined;
-        
-        const errorPageHtml = errorPageService.generateErrorPage(error);
-        wc.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(errorPageHtml)}`);
+        wc.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(errorPageService.generateErrorPage(error))}`);
       }
-      
       this.emit('tabs:changed');
     });
 
     wc.on('context-menu', (_, params) => {
-      if (!this.navigationService.isInternalPage(info.url)) {
-        this.contextMenuService.showContextMenu(wc, params);
-      }
+      if (!this.navigationService.isInternalPage(info.url)) this.contextMenuService.showContextMenu(wc, params);
     });
 
     wc.on('certificate-error', (event, url, error, certificate, callback) => {
@@ -572,7 +506,6 @@ export class TabService extends EventEmitter {
         callback(true);
         return;
       }
-
       callback(false);
     });
   }
@@ -583,15 +516,9 @@ export class TabService extends EventEmitter {
 
     try {
       const host = new URL(tab.info.failedUrl).host;
-      
-      if (!tab.bypassedCertificateHosts) {
-        tab.bypassedCertificateHosts = new Set();
-      }
-      
+      if (!tab.bypassedCertificateHosts) tab.bypassedCertificateHosts = new Set();
       tab.bypassedCertificateHosts.add(host);
-      
       console.warn(`[TabService] Certificate bypass enabled for: ${host}`);
-      
       return this.retryNavigation(tabId);
     } catch (error) {
       console.error('[TabService] Failed to bypass certificate:', error);
@@ -602,20 +529,12 @@ export class TabService extends EventEmitter {
   public hasCertificateBypass(tabId: string): boolean {
     const tab = this.tabs.get(tabId);
     if (!tab || !tab.info.failedUrl) return false;
-
-    try {
-      const host = new URL(tab.info.failedUrl).host;
-      return tab.bypassedCertificateHosts?.has(host) ?? false;
-    } catch {
-      return false;
-    }
+    try { return tab.bypassedCertificateHosts?.has(new URL(tab.info.failedUrl).host) ?? false; }
+    catch { return false; }
   }
 
   private handleNavigation(info: TabInfo, wc: Electron.WebContents, url: string): void {
-
-    if (url.startsWith('data:text/html')) {
-      return;
-    }   
+    if (url.startsWith('data:text/html')) return;
 
     const internalPageInfo = this.navigationService.getInternalPageInfo(url);
     if (internalPageInfo) {
@@ -630,13 +549,94 @@ export class TabService extends EventEmitter {
     this.emit('tabs:changed');
   }
 
-   public retryNetworkFailedTabs(): void {
-    const { tabs } = this.getAllTabs();
-    
-    for (const tabInfo of tabs) {
-      if (tabInfo.error && isNetworkError(tabInfo.error.code)) {
-        this.retryNavigation(tabInfo.id);
-      }
+  public retryNetworkFailedTabs(): void {
+    for (const tabInfo of this.getAllTabs().tabs) {
+      if (tabInfo.error && isNetworkError(tabInfo.error.code)) this.retryNavigation(tabInfo.id);
     }
+  }
+
+  public createTabGroup(name?: string, color?: string): TabGroup {
+    const groupId = `group-${++this.tabGroupCounter}`;
+    const group: TabGroup = {
+      id: groupId,
+      name: name?.trim() || `Group ${this.tabGroupCounter}`,
+      color: color || GROUP_COLORS[(this.tabGroupCounter - 1) % GROUP_COLORS.length],
+      collapsed: false,
+    };
+    this.tabGroups.set(groupId, group);
+    this.emit('tabs:changed');
+    return group;
+  }
+
+  public updateTabGroup(groupId: string, name?: string, color?: string): boolean {
+    const group = this.tabGroups.get(groupId);
+    if (!group) return false;
+    if (name !== undefined) group.name = name.trim();
+    if (color !== undefined) group.color = color;
+    this.emit('tabs:changed');
+    return true;
+  }
+
+  public toggleTabGroupCollapse(groupId: string): boolean {
+    const group = this.tabGroups.get(groupId);
+    if (!group) return false;
+    group.collapsed = !group.collapsed;
+    this.emit('tabs:changed');
+    return true;
+  }
+
+  public assignTabToGroup(tabId: string, groupId: string | null): boolean {
+    const tab = this.tabs.get(tabId);
+    if (!tab) return false;
+
+    if (groupId === null) {
+      tab.info.group = undefined;
+      this.cleanupEmptyGroups();
+      this.emit('tabs:changed');
+      return true;
+    }
+
+    const group = this.tabGroups.get(groupId);
+    if (!group) {
+      console.warn('[TabService] assignTabToGroup: group not found', groupId);
+      return false;
+    }
+
+    tab.info.group = group;
+
+    // Move tab to be contiguous with other group members
+    const groupIndices = this.orderedTabIds
+      .map((id, index) => ({ id, index }))
+      .filter(({ id }) => this.tabs.get(id)?.info.group?.id === groupId && id !== tabId)
+      .map(x => x.index);
+
+    if (groupIndices.length > 0) {
+      const lastGroupIndex = Math.max(...groupIndices);
+      const currentIndex = this.orderedTabIds.indexOf(tabId);
+      this.orderedTabIds.splice(currentIndex, 1);
+      const insertIndex = currentIndex > lastGroupIndex ? lastGroupIndex + 1 : lastGroupIndex;
+      this.orderedTabIds.splice(insertIndex, 0, tabId);
+      this.reorderSingleTabView(tabId, insertIndex);
+    }
+
+    this.emit('tabs:changed');
+    return true;
+  }
+
+  public removeTabGroup(groupId: string): boolean {
+    if (!this.tabGroups.has(groupId)) return false;
+    this.tabGroups.delete(groupId);
+    this.tabs.forEach(tab => { if (tab.info.group?.id === groupId) tab.info.group = undefined; });
+    this.cleanupEmptyGroups();
+    this.emit('tabs:changed');
+    return true;
+  }
+
+  public getTabGroups(): TabGroup[] { return Array.from(this.tabGroups.values()); }
+
+  private cleanupEmptyGroups(): void {
+    const groupsInUse = new Set<string>();
+    this.tabs.forEach(tab => { if (tab.info.group?.id) groupsInUse.add(tab.info.group.id); });
+    this.tabGroups.forEach((_, groupId) => { if (!groupsInUse.has(groupId)) this.tabGroups.delete(groupId); });
   }
 }
