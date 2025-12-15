@@ -6,12 +6,46 @@ import { NavigationBar } from './NavigationBar';
 import { BookmarkBar } from './BookmarkBar';
 import { Sidebar } from './Sidebar';
 import { RestoreSessionPopup } from './RestoreSessionPopup';
+import { FindBar } from './FindBar';
+import { useFindStore } from '@/renderer/stores/findStore';
 
 export function BrowserChrome() {
   const browserAPI = useBrowserAPI();
   const { isVisible: isSidebarVisible, showSidebar } = useSidebarStore();
   const [showBookmarksBar, setShowBookmarksBar] = useState(false);
   const [showRestorePopup, setShowRestorePopup] = useState(false);
+  const { toggleFindBar, closeFindBar } = useFindStore();
+  const [tabCount, setTabCount] = useState(0);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'f') {
+        e.preventDefault();
+        toggleFindBar();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    const unsubscribeFindRequest = window.browserAPI.onRequestFind?.(() => {
+      toggleFindBar();
+    });
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      unsubscribeFindRequest?.();
+    };
+  }, [browserAPI.activeTabId, toggleFindBar]);
+
+  // When a new tab is opened (tab count increases),
+  // hide the FindBar but keep its last search text.
+  useEffect(() => {
+    const currentCount = browserAPI.tabs.length;
+    setTabCount((prev) => {
+      if (currentCount > prev) {
+        closeFindBar();
+      }
+      return currentCount;
+    });
+  }, [browserAPI.tabs.length, closeFindBar]);
 
   useEffect(() => {
     const checkRestore = async () => {
@@ -118,6 +152,7 @@ export function BrowserChrome() {
       )}
 
       <div className="flex-1 overflow-hidden relative flex">
+        <FindBar />
         {isSidebarVisible && (
           <div className="absolute top-0 right-0 bottom-0 w-[30%] min-w-[300px] max-w-[600px] pointer-events-auto">
             <Sidebar />

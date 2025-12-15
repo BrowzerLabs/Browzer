@@ -24,6 +24,7 @@ import {
   DeepLinkHandler,
   AutocompleteHandler,
   ThemeHandler,
+  FindHandler,
 } from './handlers';
 
 export class IPCHandlers extends EventEmitter {
@@ -71,6 +72,7 @@ export class IPCHandlers extends EventEmitter {
       new DeepLinkHandler(this.context),
       new AutocompleteHandler(this.context),
       new ThemeHandler(this.context),
+      new FindHandler(this.context),
     ];
     this.handlers.forEach(handler => handler.register());
   }

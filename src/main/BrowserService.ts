@@ -83,6 +83,10 @@ export class BrowserService {
     return this.tabService;
   }
 
+  public getRendererWebContents(): Electron.WebContents {
+    return this.browserView.webContents;
+  }
+
   public async getSearchSuggestions(query: string): Promise<string[]> {
     return this.navigationService.getSearchSuggestions(query);
   }
