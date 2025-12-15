@@ -21,8 +21,6 @@ export class AppMenu {
     history: this.isMac ? 'Cmd+Y' : 'Ctrl+H',
     settings: this.isMac ? 'Cmd+,': 'Ctrl+,',
     downloads: this.isMac ? 'Cmd+Shift+J' : 'Ctrl+J',
-    enterFullscreen: this.isMac ? 'Fn+F' : 'F11',
-    exitFullscreen: this.isMac ? 'Fn+F' : 'F11',
   };
 
   constructor(
@@ -222,11 +220,6 @@ export class AppMenu {
           { role: 'zoomIn' as const },
           { role: 'zoomOut' as const },
           { type: 'separator' as const },
-          {
-            label: 'Toggle Full Screen',
-            accelerator: this.keys.enterFullscreen,
-            click: () => this.toggleFullscreen(),
-          },
           { role: 'togglefullscreen' as const },
         ],
       },
@@ -312,19 +305,5 @@ export class AppMenu {
 
   private async handleCheckForUpdates(): Promise<void> {
     await this.updateService.checkForUpdates(true);
-  }
-
-  private setFullscreen(shouldBeFull: boolean): void {
-    const focused = BrowserWindow.getFocusedWindow();
-    if (focused) {
-      focused.setFullScreen(shouldBeFull);
-    }
-  }
-
-  private toggleFullscreen(): void {
-    const focused = BrowserWindow.getFocusedWindow();
-    if (focused) {
-      focused.setFullScreen(!focused.isFullScreen());
-    }
   }
 }
