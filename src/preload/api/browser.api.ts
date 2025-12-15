@@ -1,6 +1,6 @@
 import { desktopCapturer } from 'electron';
 import type { BrowserAPI } from '@/preload/types/browser.types';
-import { invoke, createEventListener, createSimpleListener } from '@/preload/utils/ipc-helpers';
+import { invoke, createEventListener, createSimpleListener, createMultiArgListener } from '@/preload/utils/ipc-helpers';
 import type { TabGroup, TabInfo, TabsSnapshot, HistoryQuery, AppSettings, DownloadUpdatePayload, CreateBookmarkParams, CreateFolderParams, UpdateBookmarkParams, MoveBookmarkParams } from '@/shared/types';
 
 export const createBrowserAPI = (): BrowserAPI => ({
@@ -132,6 +132,12 @@ export const createBrowserAPI = (): BrowserAPI => ({
   // Autocomplete API
   getAutocompleteSuggestions: (query: string) => invoke('autocomplete:get-suggestions', query),
   getSearchSuggestions: (query: string) => invoke('autocomplete:get-search-suggestions', query),
+
+  // Find in Page
+  findInPage: (tabId: string, text: string, options?: any) => invoke('browser:find-in-page', tabId, text, options),
+  stopFindInPage: (tabId: string, action: 'clearSelection' | 'keepSelection' | 'activateSelection') => invoke('browser:stop-find-in-page', tabId, action),
+  onFoundInPage: (callback) => createMultiArgListener('browser:found-in-page', callback),
+  onRequestFind: (callback) => createSimpleListener('browser:request-find', callback),
 
   // LLM Automation API
   executeLLMAutomation: (userGoal: string, recordedSessionId: string) =>

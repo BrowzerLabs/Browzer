@@ -23,6 +23,21 @@ export const createEventListener = <T = any>(
 };
 
 /**
+ * Creates an event listener that accepts multiple arguments
+ * @param channel - IPC channel to listen to
+ * @param callback - Callback function to execute with all arguments
+ * @returns Cleanup function to remove the listener
+ */
+export const createMultiArgListener = (
+  channel: string,
+  callback: (...args: any[]) => void
+): (() => void) => {
+  const subscription = (_event: Electron.IpcRendererEvent, ...args: any[]) => callback(...args);
+  ipcRenderer.on(channel, subscription);
+  return () => ipcRenderer.removeListener(channel, subscription);
+};
+
+/**
  * Creates a simple event listener without data payload
  * @param channel - IPC channel to listen to
  * @param callback - Callback function to execute

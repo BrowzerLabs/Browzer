@@ -14,3 +14,4 @@ export * from './update';
 export * from './download';
 export * from './bookmark';
 export * from './navigation-error';
+export * from './find';
