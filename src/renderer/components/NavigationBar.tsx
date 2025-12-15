@@ -107,32 +107,36 @@ export function NavigationBar({
 
       <DownloadsDropdown onNavigate={onNavigate} />
       
-      <Button 
-        variant="outline" 
-        size="icon" 
-        onClick={toggleRecording}
-        disabled={isLoading}
-        title={isLoading ? 'Processing...' : isRecording ? 'Stop Recording' : 'Start Recording'}
-        className={cn(
-          isRecording && 'border-red-500 bg-red-50 dark:bg-red-950',
-          isLoading && 'opacity-70'
-        )}
-      >
-        {isLoading ? (
-          <Loader2 className="w-4 h-4 animate-spin text-red-500" />
-        ) : isRecording ? (
-          <Square className="w-4 h-4 fill-red-600 animate-pulse" />
-        ) : (
-          <Circle className="w-4 h-4 text-red-500" />
-        )}
-      </Button>
+      <Tooltip>
+        <TooltipTrigger
+          onClick={toggleRecording}
+          disabled={isLoading}
+          title={isLoading ? 'Processing...' : isRecording ? 'Stop Recording' : 'Start Recording'}
+          className={cn(
+            'bg-red-50 dark:bg-red-950 p-2 rounded-full',
+            isRecording && 'border-red-500',
+            isLoading && 'opacity-70'
+          )}
+        >
+          {isLoading ? (
+            <Loader2 className="w-4 h-4 animate-spin text-red-500" />
+          ) : isRecording ? (
+            <Circle className="w-4 h-4 fill-red-600 animate-pulse" />
+          ) : (
+            <Circle className="w-4 h-4 text-red-500" />
+          )}
+        </TooltipTrigger>
+      <TooltipContent>
+          {isRecording ? 'Stop Recording' : 'Start Recording'}
+      </TooltipContent>
+      </Tooltip>
 
-      <ThemeToggle />
+      <ThemeToggle className="bg-blue-50 dark:bg-blue-950 p-2 rounded-full" />
 
-      <Button 
-        variant="outline" 
-        size="icon" 
+      <Tooltip>
+        <TooltipTrigger
         onClick={toggleSidebar} 
+        className='bg-blue-50 dark:bg-blue-950 p-2 rounded-full'
         title={isSidebarVisible ? 'Hide Agent Panel' : 'Show Agent Panel'}
       >
         {isSidebarVisible ? (
@@ -140,8 +144,11 @@ export function NavigationBar({
         ) : (
           <ChevronLeft className="w-4 h-4" />
         )}
-      </Button>
-
+        </TooltipTrigger>
+      <TooltipContent>
+          {isSidebarVisible ? 'Hide Agent Panel' : 'Show Agent Panel'}
+      </TooltipContent>
+      </Tooltip>
       <DropdownMenu
         onOpenChange={(open) => {
           if (open) {
@@ -151,11 +158,19 @@ export function NavigationBar({
           }
         }}
       >
-        <DropdownMenuTrigger asChild>
-          <Button variant="outline" size="icon" title="More options">
-            <MoreVertical className="w-4 h-4" />
-          </Button>
-        </DropdownMenuTrigger>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <DropdownMenuTrigger 
+                className='bg-blue-50 dark:bg-blue-950 p-2 rounded-full size-8'
+                asChild
+              >
+                <MoreVertical />
+              </DropdownMenuTrigger>
+            </TooltipTrigger>
+            <TooltipContent>
+              More options
+            </TooltipContent>
+          </Tooltip>
         <DropdownMenuContent align="end" className="w-56">
           <DropdownMenuItem onClick={() => onNavigate('browzer://profile')}>
             <Avatar className="size-7">
