@@ -43,7 +43,7 @@ export function SubscriptionSuccessPage() {
 
     const fallbackTimer = setTimeout(() => {
       syncSubscriptionFallback();
-    }, 15000);
+    }, 10000);
 
     return () => {
       unsubscribe();

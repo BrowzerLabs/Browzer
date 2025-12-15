@@ -6,6 +6,8 @@ import type {
   PortalSessionRequest,
   PortalSessionResponse,
   CreditUsageResponse,
+  CancelSubscriptionResponse,
+  ReactivateSubscriptionResponse,
 } from '@/shared/types/subscription';
 
 /**
@@ -20,6 +22,8 @@ export interface SubscriptionAPI {
   createCheckoutSession: (request: CheckoutSessionRequest) => Promise<CheckoutSessionResponse>;
   createPortalSession: (request: PortalSessionRequest) => Promise<PortalSessionResponse>;
   syncSubscription: () => Promise<SubscriptionResponse>;
+  cancelSubscription: () => Promise<CancelSubscriptionResponse>;
+  reactivateSubscription: () => Promise<ReactivateSubscriptionResponse>;
   
   // Credit Management
   useCredits: (creditsToUse: number) => Promise<CreditUsageResponse>;

@@ -6,15 +6,26 @@ import { Progress } from '@/renderer/ui/progress';
 import { Separator } from '@/renderer/ui/separator';
 import { Alert } from '@/renderer/ui/alert';
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/renderer/ui/dialog';
+import {
   Check,
   Crown,
   CreditCard,
   Calendar,
   TrendingUp,
   AlertCircle,
-  ExternalLink,
   RefreshCw,
   Loader2Icon,
+  XCircle,
+  Sparkles,
+  MessageCircle,
+  ArrowRight,
 } from 'lucide-react';
 import {
   UserSubscription,
@@ -31,7 +42,10 @@ export function SubscriptionPage() {
   const [loading, setLoading] = useState(true);
   const [upgrading, setUpgrading] = useState(false);
   const [syncing, setSyncing] = useState(false);
-  const [portalLoading, setPortalLoading] = useState(false);
+  const [showCancelModal, setShowCancelModal] = useState(false);
+  const [cancelStep, setCancelStep] = useState<'reasons' | 'confirm'>('reasons');
+  const [cancelling, setCancelling] = useState(false);
+  const [reactivating, setReactivating] = useState(false);
 
   useEffect(() => {
     loadSubscription();
@@ -43,6 +57,7 @@ export function SubscriptionPage() {
       const response = await window.subscriptionAPI.getCurrentSubscription();
       if (response.success && response.subscription) {
         setSubscription(response.subscription);
+        console.log("Subscription: ", response.subscription)
         setCurrentPlan(response.plan_details);
       }
     } catch (error) {
@@ -85,26 +100,6 @@ export function SubscriptionPage() {
     }
   };
 
-  const handleManageSubscription = async () => {
-    try {
-      setPortalLoading(true);
-      const response = await window.subscriptionAPI.createPortalSession({
-        return_url: 'browzer://subscription',
-      });
-
-      if (response.success && response.portal_url) {
-        await window.browserAPI.createTab(response.portal_url);
-      } else {
-        alert(`Failed to open portal: ${response.error}`);
-      }
-    } catch (error) {
-      console.error('Failed to open portal:', error);
-      alert('Failed to open subscription portal');
-    } finally {
-      setPortalLoading(false);
-    }
-  };
-
   const handleSync = async () => {
     setSyncing(true);
     try {
@@ -119,6 +114,90 @@ export function SubscriptionPage() {
       toast.error('Failed to sync subscription');
     } finally {
       setSyncing(false);
+    }
+  };
+
+  const handleOpenCancelModal = () => {
+    setCancelStep('reasons');
+    setShowCancelModal(true);
+  };
+
+  const handleCloseCancelModal = () => {
+    setShowCancelModal(false);
+    setCancelStep('reasons');
+  };
+
+  const handleCancelSubscription = async () => {
+    setCancelling(true);
+    try {
+      const response = await window.subscriptionAPI.cancelSubscription();
+      if (response.success) {
+        toast.success('Subscription cancelled', {
+          description: 'You will retain access until the end of your billing period.',
+        });
+        setShowCancelModal(false);
+        setCancelStep('reasons');
+        // Sync with backend to get the latest subscription state
+        const syncResponse = await window.subscriptionAPI.syncSubscription();
+        if (syncResponse.success && syncResponse.subscription) {
+          setSubscription(syncResponse.subscription);
+          setCurrentPlan(syncResponse.plan_details || null);
+        } else {
+          // Fallback to regular load if sync fails
+          await loadSubscription();
+        }
+      } else {
+        toast.error('Failed to cancel subscription', {
+          description: response.error || 'Please try again or contact support.',
+        });
+      }
+    } catch (error) {
+      console.error('Failed to cancel subscription:', error);
+      toast.error('Failed to cancel subscription');
+    } finally {
+      setCancelling(false);
+    }
+  };
+
+  const handleReactivateSubscription = async () => {
+    setReactivating(true);
+    try {
+      const response = await window.subscriptionAPI.reactivateSubscription();
+      if (response.success) {
+        toast.success('Subscription reactivated!', {
+          description: 'Your subscription will continue renewing automatically.',
+        });
+        // Sync with backend to get the latest subscription state
+        const syncResponse = await window.subscriptionAPI.syncSubscription();
+        if (syncResponse.success && syncResponse.subscription) {
+          setSubscription(syncResponse.subscription);
+          setCurrentPlan(syncResponse.plan_details || null);
+        } else {
+          // Fallback to regular load if sync fails
+          await loadSubscription();
+        }
+      } else {
+        toast.error('Failed to reactivate subscription', {
+          description: response.error || 'Please try again or contact support.',
+        });
+      }
+    } catch (error) {
+      console.error('Failed to reactivate subscription:', error);
+      toast.error('Failed to reactivate subscription');
+    } finally {
+      setReactivating(false);
+    }
+  };
+
+  const handleContactSupport = () => {
+    window.subscriptionAPI.openExternal('mailto:support@browzer.app?subject=Subscription%20Help');
+  };
+
+  const handleChangePlan = () => {
+    setShowCancelModal(false);
+    const plansSection = document.getElementById('available-plans');
+    if (plansSection) {
+      plansSection.scrollIntoView({ behavior: 'smooth' });
     }
   };
 
@@ -282,37 +361,49 @@ export function SubscriptionPage() {
                   <CreditCard className="w-4 h-4" />
                   <span className="text-sm">Billing</span>
                 </div>
-                <Button
-                  size="lg"
-                  variant="outline"
-                  onClick={handleManageSubscription}
-                  className="gap-2"
-                  disabled={portalLoading}
-                >
-                  {
-                    portalLoading ? (
-                      <Loader2Icon className="w-4 h-4 animate-spin" />
-                    ) : (
-                      <span className="flex items-center gap-2">Manage Billing <ExternalLink className="w-4 h-4" /></span>
-                    )
-                  }
-                </Button>
+                <div className="flex items-center gap-3">
+                  {subscription.tier !== SubscriptionTier.FREE && !subscription.cancel_at_period_end && (
+                    <Button
+                      size="lg"
+                      variant="ghost"
+                      onClick={handleOpenCancelModal}
+                      className="text-gray-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
+                    >
+                      Cancel Plan
+                    </Button>
+                  )}
+                </div>
               </div>
             )}
           </div>
 
           {subscription.cancel_at_period_end && (
-            <Alert className="mt-6 bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200">
-              <AlertCircle className="h-4 w-4 text-yellow-600" />
-              <p className="text-yellow-900 dark:text-yellow-100">
-                Your subscription will be canceled at the end of the current period
-                ({formatDate(subscription.current_period_end)})
-              </p>
-            </Alert>
+            <section className='flex items-center justify-between bg-red-100 dark:bg-red-950 py-3 px-5 rounded-xl'>
+              <div>
+                <p className="font-medium text-red-700 dark:text-red-200">
+                  Subscription Ending Soon
+                </p>
+                <p className="text-sm text-red-700 dark:text-red-300 mt-1">
+                  Your subscription will end on {formatDate(subscription.current_period_end)}. 
+                  You'll retain full access until then.
+                </p>
+              </div>
+              <Button
+                onClick={handleReactivateSubscription}
+                disabled={reactivating}
+                size='lg'
+              >
+                {reactivating ? (
+                  <Loader2Icon className="w-4 h-4 animate-spin mr-2" />
+                ) : (
+                  <p>Keep Subscription</p>
+                )}
+              </Button>
+            </section>
           )}
         </Card>
         {availableUpgrades.length > 0 && (
-          <div>
+          <div id="available-plans">
             <h2 className="text-2xl font-semibold mb-4 ml-2">
               {subscription.tier !== SubscriptionTier.BUSINESS
                 ? 'Upgrade Your Plan'
@@ -389,6 +480,169 @@ export function SubscriptionPage() {
           </div>
         </Card>
        </div>
+
+      {/* Cancellation Modal */}
+      <Dialog open={showCancelModal} onOpenChange={setShowCancelModal}>
+        <DialogContent className="sm:max-w-lg">
+          {cancelStep === 'reasons' ? (
+            <>
+              <DialogHeader>
+                <DialogTitle className="text-xl">Before you go...</DialogTitle>
+                <DialogDescription className="text-base mt-2">
+                  We'd hate to see you leave! Is there something we can help with?
+                </DialogDescription>
+              </DialogHeader>
+
+              <div className="space-y-3 py-4">
+                <button
+                  onClick={handleChangePlan}
+                  className="w-full p-4 rounded-lg border border-gray-200 dark:border-gray-700 hover:border-teal-500 dark:hover:border-teal-500 hover:bg-teal-50 dark:hover:bg-teal-900/20 transition-all text-left group"
+                >
+                  <div className="flex items-start gap-3">
+                    <div className="p-2 rounded-lg bg-teal-100 dark:bg-teal-900/40 text-teal-600 dark:text-teal-400">
+                      <Sparkles className="w-5 h-5" />
+                    </div>
+                    <div className="flex-1">
+                      <p className="font-medium text-gray-900 dark:text-gray-100">
+                        Switch to a different plan
+                      </p>
+                      <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
+                        Find a plan that better fits your needs
+                      </p>
+                    </div>
+                    <ArrowRight className="w-5 h-5 text-gray-400 group-hover:text-teal-500 transition-colors mt-1" />
+                  </div>
+                </button>
+
+                <button
+                  onClick={handleContactSupport}
+                  className="w-full p-4 rounded-lg border border-gray-200 dark:border-gray-700 hover:border-blue-500 dark:hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all text-left group"
+                >
+                  <div className="flex items-start gap-3">
+                    <div className="p-2 rounded-lg bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400">
+                      <MessageCircle className="w-5 h-5" />
+                    </div>
+                    <div className="flex-1">
+                      <p className="font-medium text-gray-900 dark:text-gray-100">
+                        Talk to our team
+                      </p>
+                      <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
+                        We're here to help resolve any issues
+                      </p>
+                    </div>
+                    <ArrowRight className="w-5 h-5 text-gray-400 group-hover:text-blue-500 transition-colors mt-1" />
+                  </div>
+                </button>
+
+                <button
+                  onClick={() => setCancelStep('confirm')}
+                  className="w-full p-4 rounded-lg border border-gray-200 dark:border-gray-700 hover:border-red-300 dark:hover:border-red-700 hover:bg-red-50 dark:hover:bg-red-900/20 transition-all text-left group"
+                >
+                  <div className="flex items-start gap-3">
+                    <div className="p-2 rounded-lg bg-red-100 dark:bg-red-900/40 text-red-600 dark:text-red-400">
+                      <XCircle className="w-5 h-5" />
+                    </div>
+                    <div className="flex-1">
+                      <p className="font-medium text-gray-900 dark:text-gray-100">
+                        I still want to cancel
+                      </p>
+                      <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
+                        Continue to cancellation
+                      </p>
+                    </div>
+                    <ArrowRight className="w-5 h-5 text-gray-400 group-hover:text-red-500 transition-colors mt-1" />
+                  </div>
+                </button>
+              </div>
+
+              <DialogFooter>
+                <Button variant="outline" onClick={handleCloseCancelModal}>
+                  Never mind, keep my plan
+                </Button>
+              </DialogFooter>
+            </>
+          ) : (
+            <>
+              <DialogHeader>
+                <DialogTitle className="text-xl flex items-center gap-2">
+                  <AlertCircle className="w-5 h-5 text-amber-500" />
+                  Confirm Cancellation
+                </DialogTitle>
+                <DialogDescription className="text-base mt-2">
+                  Are you sure you want to cancel your {currentPlan?.name} subscription?
+                </DialogDescription>
+              </DialogHeader>
+
+              <div className="py-4 space-y-4">
+                <div className="p-4 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
+                  <p className="text-sm text-amber-800 dark:text-amber-200">
+                    <strong>What happens when you cancel:</strong>
+                  </p>
+                  <ul className="mt-2 space-y-1.5 text-sm text-amber-700 dark:text-amber-300">
+                    <li className="flex items-start gap-2">
+                      <Check className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                      <span>You'll keep full access until <strong>{formatDate(subscription?.current_period_end)}</strong></span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <Check className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                      <span>No charges after your current period ends</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <Check className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                      <span>You can reactivate anytime before the period ends</span>
+                    </li>
+                  </ul>
+                </div>
+
+                <div className="p-4 rounded-lg bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700">
+                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                    <strong className="text-gray-900 dark:text-gray-100">After cancellation:</strong>
+                  </p>
+                  <ul className="mt-2 space-y-1.5 text-sm text-gray-600 dark:text-gray-400">
+                    <li className="flex items-start gap-2">
+                      <XCircle className="w-4 h-4 mt-0.5 flex-shrink-0 text-gray-400" />
+                      <span>Your plan will downgrade to Free</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <XCircle className="w-4 h-4 mt-0.5 flex-shrink-0 text-gray-400" />
+                      <span>You'll lose access to {currentPlan?.credits_per_month === null ? 'unlimited' : currentPlan?.credits_per_month} monthly credits</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <XCircle className="w-4 h-4 mt-0.5 flex-shrink-0 text-gray-400" />
+                      <span>Premium features will no longer be available</span>
+                    </li>
+                  </ul>
+                </div>
+              </div>
+
+              <DialogFooter className="flex-col sm:flex-row gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => setCancelStep('reasons')}
+                  className="sm:flex-1"
+                >
+                  Go Back
+                </Button>
+                <Button
+                  variant="destructive"
+                  onClick={handleCancelSubscription}
+                  disabled={cancelling}
+                  className="sm:flex-1"
+                >
+                  {cancelling ? (
+                    <>
+                      <Loader2Icon className="w-4 h-4 animate-spin mr-2" />
+                      Cancelling...
+                    </>
+                  ) : (
+                    'Cancel Subscription'
+                  )}
+                </Button>
+              </DialogFooter>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
