@@ -48,12 +48,7 @@ export class RecordingHandler extends BaseHandler {
     });
 
     this.handle('video:get-file-url', async (_, videoPath: string) => {
-      try {
-        return `video-file://${encodeURIComponent(videoPath)}`;
-      } catch (error) {
-        console.error('Failed to get video file URL:', error);
-        return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
-      }
+      return `video-file://${encodeURIComponent(videoPath)}`;
     });
   }
 }
