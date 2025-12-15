@@ -29,5 +29,29 @@ export class TabHandler extends BaseHandler {
     this.handle('browser:reorder-tab', async (_, tabId: string, newIndex: number) => {
       return tabService.reorderTab(tabId, newIndex);
     });
+
+    this.handle('browser:create-tab-group', async (_event, name?: string, color?: string) => {
+      return tabService.createTabGroup(name, color);
+    });
+
+    this.handle('browser:update-tab-group', async (_event, groupId: string, name?: string, color?: string) => {
+      return tabService.updateTabGroup(groupId, name, color);
+    });
+
+    this.handle('browser:assign-tab-group', async (_event, tabId: string, groupId: string | null) => {
+      return tabService.assignTabToGroup(tabId, groupId);
+    });
+
+    this.handle('browser:remove-tab-group', async (_event, groupId: string) => {
+      return tabService.removeTabGroup(groupId);
+    });
+
+    this.handle('browser:get-tab-groups', async () => {
+      return tabService.getTabGroups();
+    });
+
+    this.handle('browser:toggle-tab-group-collapse', async (_event, groupId: string) => {
+      return tabService.toggleTabGroupCollapse(groupId);
+    });
   }
 }
