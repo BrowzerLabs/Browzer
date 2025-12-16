@@ -230,6 +230,8 @@ export const createBrowserAPI = (): BrowserAPI => ({
   setTheme: (theme: 'light' | 'dark' | 'system') => invoke('theme:set', theme),
   isDarkMode: () => invoke('theme:is-dark'),
 
+  getPlatform: () => process.platform as 'darwin' | 'win32' | 'linux',
+
   // Bookmark Management API
   createBookmark: (params: CreateBookmarkParams) => invoke('bookmark:create', params),
   createBookmarkFolder: (params: CreateFolderParams) => invoke('bookmark:create-folder', params),
