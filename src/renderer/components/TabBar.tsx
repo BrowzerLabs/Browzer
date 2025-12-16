@@ -322,7 +322,6 @@ export function TabBar({
                   onClose={() => onTabClose(tab.id)}
                   width={tabWidth}
                   tabGroups={tabGroups}
-                  isGroupStart={false}
                   isGroupCollapsed={tab.group?.collapsed && tab.id !== activeTabId}
                   isAnyDragging={activeId !== null}
                   onAssignGroup={(groupId) => onAssignGroup?.(tab.id, groupId)}
@@ -431,7 +430,6 @@ interface SortableTabProps {
   onRemoveGroup?: () => void;
   onDeleteGroup?: () => void;
   onToggleCollapse?: () => void;
-  isGroupStart?: boolean;
   isGroupCollapsed?: boolean;
   isAnyDragging?: boolean;
 }
@@ -493,7 +491,7 @@ function GroupLabel({ group, isCollapsed, onToggleCollapse, onEditGroup, onDelet
   );
 }
 
-function SortableTab({ tab, isActive, isDragging, onClick, onClose, width, tabGroups, onAssignGroup, onCreateGroupRequested, onEditGroupRequested, onMenuOpenChange, onRemoveGroup, onDeleteGroup, onToggleCollapse, isGroupStart, isGroupCollapsed, isAnyDragging }: SortableTabProps) {
+function SortableTab({ tab, isActive, isDragging, onClick, onClose, width, tabGroups, onAssignGroup, onCreateGroupRequested, onEditGroupRequested, onMenuOpenChange, onRemoveGroup, onDeleteGroup, onToggleCollapse, isGroupCollapsed, isAnyDragging }: SortableTabProps) {
   const {
     attributes,
     listeners,
@@ -507,21 +505,6 @@ function SortableTab({ tab, isActive, isDragging, onClick, onClose, width, tabGr
     transition,
     width: isGroupCollapsed ? 'auto' : `${width}px`,
   };
-
-  const groupContextMenu = (
-    <ContextMenuContent className="w-48">
-      <ContextMenuItem onSelect={() => onToggleCollapse?.()}>
-        {isGroupCollapsed ? 'Expand group' : 'Collapse group'}
-      </ContextMenuItem>
-      <ContextMenuItem onSelect={() => onEditGroupRequested?.()}>
-        Edit group name
-      </ContextMenuItem>
-      <ContextMenuSeparator />
-      <ContextMenuItem variant="destructive" onSelect={() => onDeleteGroup?.()}>
-        Delete group
-      </ContextMenuItem>
-    </ContextMenuContent>
-  );
 
   const tabContextMenu = (
     <ContextMenuContent className="w-48">
