@@ -91,6 +91,14 @@ export function TabBar({
     return localTabs[firstGroupIndex].id === tab.id;
   });
 
+  // Calculate group labels separately - find first visible tab for each group
+  const groupLabels = new Map<string, { group: TabGroup; firstTabId: string }>();
+  visibleTabs.forEach((tab) => {
+    if (tab.group && !groupLabels.has(tab.group.id)) {
+      groupLabels.set(tab.group.id, { group: tab.group, firstTabId: tab.id });
+    }
+  });
+
   const [isFullScreen, setIsFullScreen] = useState(false);
   const [pendingGroupTabId, setPendingGroupTabId] = useState<string | null>(null);
   const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
@@ -286,12 +294,23 @@ export function TabBar({
           onDragEnd={handleDragEnd}
         >
           <SortableContext items={visibleTabs.map(t => t.id)} strategy={horizontalListSortingStrategy}>
-            {visibleTabs.map((tab) => {
-              const index = visibleTabs.indexOf(tab);
+            {visibleTabs.flatMap((tab, index) => {
               const prevTab = index > 0 ? visibleTabs[index - 1] : null;
               const isGroupStart = tab.group && (!prevTab || prevTab.group?.id !== tab.group.id);
+              const groupLabel = isGroupStart && tab.group ? groupLabels.get(tab.group.id) : null;
               
-              return (
+              return [
+                groupLabel && (
+                  <GroupLabel
+                    key={`group-label-${groupLabel.group.id}`}
+                    group={groupLabel.group}
+                    isCollapsed={tab.group?.collapsed && tab.id !== activeTabId}
+                    onToggleCollapse={() => tab.group?.id ? onToggleGroupCollapse?.(tab.group.id) : undefined}
+                    onEditGroup={() => tab.group ? startEditGroup(tab.group) : undefined}
+                    onDeleteGroup={() => tab.group?.id ? onRemoveTabGroup?.(tab.group.id) : undefined}
+                    onMenuOpenChange={(open) => handleMenuOpenChange(open)}
+                  />
+                ),
                 <SortableTab
                   key={tab.id}
                   tab={tab}
@@ -301,7 +320,7 @@ export function TabBar({
                   onClose={() => onTabClose(tab.id)}
                   width={tabWidth}
                   tabGroups={tabGroups}
-                  isGroupStart={!!isGroupStart}
+                  isGroupStart={false}
                   isGroupCollapsed={tab.group?.collapsed && tab.id !== activeTabId}
                   isAnyDragging={activeId !== null}
                   onAssignGroup={(groupId) => onAssignGroup?.(tab.id, groupId)}
@@ -312,7 +331,7 @@ export function TabBar({
                   onDeleteGroup={() => tab.group?.id ? onRemoveTabGroup?.(tab.group.id) : undefined}
                   onToggleCollapse={() => tab.group?.id ? onToggleGroupCollapse?.(tab.group.id) : undefined}
                 />
-              );
+              ].filter(Boolean);
             })}
           </SortableContext>
 
@@ -415,6 +434,60 @@ interface SortableTabProps {
   isAnyDragging?: boolean;
 }
 
+interface GroupLabelProps {
+  group: TabGroup;
+  isCollapsed: boolean;
+  onToggleCollapse?: () => void;
+  onEditGroup?: () => void;
+  onDeleteGroup?: () => void;
+  onMenuOpenChange?: (open: boolean) => void;
+}
+
+function GroupLabel({ group, isCollapsed, onToggleCollapse, onEditGroup, onDeleteGroup, onMenuOpenChange }: GroupLabelProps) {
+  const groupContextMenu = (
+    <ContextMenuContent className="w-48">
+      <ContextMenuItem onSelect={() => onToggleCollapse?.()}>
+        {isCollapsed ? 'Expand group' : 'Collapse group'}
+      </ContextMenuItem>
+      <ContextMenuItem onSelect={() => onEditGroup?.()}>
+        Edit group name
+      </ContextMenuItem>
+      <ContextMenuSeparator />
+      <ContextMenuItem variant="destructive" onSelect={() => onDeleteGroup?.()}>
+        Delete group
+      </ContextMenuItem>
+    </ContextMenuContent>
+  );
+
+  return (
+    <motion.div
+      key={`group-label-${group.id}`}
+      layout="position"
+      initial={false}
+    >
+      <ContextMenu onOpenChange={onMenuOpenChange}>
+        <ContextMenuTrigger asChild>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggleCollapse?.();
+            }}
+            className={cn(
+              "flex items-center px-2 h-7 rounded-sm mr-0.5 whitespace-nowrap text-xs font-medium text-white shadow-sm transition-opacity hover:opacity-90",
+              "interactive focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-blue-500"
+            )}
+            style={{ backgroundColor: group.color }}
+            title={isCollapsed ? "Expand group" : "Collapse group"}
+          >
+            {group.name}
+          </button>
+        </ContextMenuTrigger>
+        {groupContextMenu}
+      </ContextMenu>
+    </motion.div>
+  );
+}
+
 function SortableTab({ tab, isActive, isDragging, onClick, onClose, width, tabGroups, onAssignGroup, onCreateGroupRequested, onEditGroupRequested, onMenuOpenChange, onRemoveGroup, onDeleteGroup, onToggleCollapse, isGroupStart, isGroupCollapsed, isAnyDragging }: SortableTabProps) {
   const {
     attributes,
@@ -510,29 +583,6 @@ function SortableTab({ tab, isActive, isDragging, onClick, onClose, width, tabGr
         layout: { duration: 0.2, ease: "easeInOut" }
       }}
     >
-      {isGroupStart && tab.group && (
-        <ContextMenu onOpenChange={onMenuOpenChange}>
-          <ContextMenuTrigger asChild>
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                onToggleCollapse?.();
-              }}
-              {...(isGroupCollapsed ? { ref: setNodeRef, ...attributes, ...listeners } : {})}
-              className={cn(
-                "flex items-center px-2 h-7 rounded-sm mr-0.5 whitespace-nowrap text-xs font-medium text-white shadow-sm transition-opacity hover:opacity-90",
-                "interactive focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-blue-500"
-              )}
-              style={{ backgroundColor: tab.group.color }}
-              title={isGroupCollapsed ? "Expand group" : "Collapse group"}
-            >
-              {tab.group.name}
-            </button>
-          </ContextMenuTrigger>
-          {groupContextMenu}
-        </ContextMenu>
-      )}
-
       {!isGroupCollapsed && (
         <ContextMenu onOpenChange={onMenuOpenChange}>
           <ContextMenuTrigger asChild>
