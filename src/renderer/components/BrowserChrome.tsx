@@ -97,7 +97,11 @@ export function BrowserChrome() {
       />
 
       {showBookmarksBar && (
-        <BookmarkBar onNavigate={(url) => {browserAPI.createTab(url)}} />
+        <BookmarkBar onNavigate={(url) => {
+          if (browserAPI.activeTabId) {
+            browserAPI.navigate(browserAPI.activeTabId, url);
+          }
+        }} />
       )}
 
       {showRestorePopup && (
