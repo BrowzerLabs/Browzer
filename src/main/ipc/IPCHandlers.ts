@@ -31,21 +31,22 @@ export class IPCHandlers extends EventEmitter {
   private handlers: IIPCHandler[] = [];
 
   constructor(
-    baseWindow: BaseWindow,
+    private baseWindow: BaseWindow,
     private browserService: BrowserService,
-    authService: AuthService,
+    private authService: AuthService,
+    private themeService: ThemeService,
   ) {
     super();
     this.context = {
-      baseWindow,
-      browserService,
-      authService,
+      baseWindow: this.baseWindow,
+      browserService: this.browserService,
+      authService: this.authService,
       subscriptionService: new SubscriptionService(),
-      themeService: ThemeService.getInstance(),
-      passwordManager: browserService.getPasswordManager(),
-      bookmarkService: browserService.getBookmarkService(),
-      tabService: browserService.getTabService(),
-      settingsService: browserService.getSettingsService(),
+      themeService: this.themeService,
+      passwordManager: this.browserService.getPasswordManager(),
+      bookmarkService: this.browserService.getBookmarkService(),
+      tabService: this.browserService.getTabService(),
+      settingsService: this.browserService.getSettingsService(),
       eventEmitter: this,
     };
 
