@@ -1,5 +1,5 @@
 import { WebContentsView } from 'electron';
-import { TabInfo, FoundInPageResult } from '@/shared/types';
+import { TabInfo } from '@/shared/types';
 import { VideoRecorder } from '@/main/recording';
 import { BrowserAutomationExecutor } from '@/main/automation';
 import { PasswordAutomation } from '@/main/password';
@@ -26,7 +26,6 @@ export interface TabServiceEvents {
   'tab:switched': (previousTabId: string, newTab: Tab) => void;
   'tab:reordered': (data: { tabId: string; from: number; to: number }) => void;
   'tabs:changed': () => void;
-  'found-in-page': (tabId: string, result: FoundInPageResult) => void;
 }
 
 export interface RecordingState {

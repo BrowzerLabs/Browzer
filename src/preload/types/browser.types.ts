@@ -1,4 +1,4 @@
-import type { TabGroup, TabInfo, TabsSnapshot, HistoryEntry, HistoryQuery, HistoryStats, AppSettings, AutocompleteSuggestion, DownloadItem, DownloadUpdatePayload, Bookmark, BookmarkFolder, BookmarkTreeNode, CreateBookmarkParams, CreateFolderParams, UpdateBookmarkParams, MoveBookmarkParams, FoundInPageResult } from '@/shared/types';
+import type { TabGroup, TabInfo, TabsSnapshot, HistoryEntry, HistoryQuery, HistoryStats, AppSettings, AutocompleteSuggestion, DownloadItem, DownloadUpdatePayload, Bookmark, BookmarkFolder, BookmarkTreeNode, CreateBookmarkParams, CreateFolderParams, UpdateBookmarkParams, MoveBookmarkParams } from '@/shared/types';
 
 export interface BrowserAPI {
   // Initialization
@@ -38,6 +38,7 @@ export interface BrowserAPI {
   onFullScreenChanged: (callback: (isFullScreen: boolean) => void) => () => void;
   bringBrowserViewToFront: () => Promise<boolean>;
   bringBrowserViewToBottom: () => Promise<boolean>;
+  sendScrollEvent: (deltaX: number, deltaY: number, x: number, y: number) => Promise<boolean>;
   
   // Desktop Capturer (for video recording)
   getDesktopSources: () => Promise<Array<{ id: string; name: string; thumbnail: any }>>;
@@ -101,9 +102,9 @@ export interface BrowserAPI {
   getSearchSuggestions: (query: string) => Promise<string[]>;
 
   // Find in Page
-  findInPage: (tabId: string, text: string, options?: Electron.FindInPageOptions) => Promise<void>;
-  stopFindInPage: (tabId: string, action: 'clearSelection' | 'keepSelection' | 'activateSelection') => Promise<void>;
-  onFoundInPage: (callback: (tabId: string, result: FoundInPageResult) => void) => () => void;
+  findInPage: (tabId: string, text: string, options?: Electron.FindInPageOptions) => Promise<boolean>;
+  stopFindInPage: (tabId: string, action: 'clearSelection' | 'keepSelection' | 'activateSelection') => Promise<boolean>;
+  onFoundInPage: (callback: (tabId: string, result: Electron.Result) => void) => () => void;
   onRequestFind: (callback: () => void) => () => void;
 
   // LLM Automation
