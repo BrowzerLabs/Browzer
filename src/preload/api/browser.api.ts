@@ -43,6 +43,8 @@ export const createBrowserAPI = (): BrowserAPI => ({
     createEventListener<boolean>('window:fullscreen-changed', callback),
   bringBrowserViewToFront: () => invoke('browser:bring-view-front'),
   bringBrowserViewToBottom: () => invoke('browser:bring-view-bottom'),
+  sendScrollEvent: (deltaX: number, deltaY: number, x: number, y: number) => 
+    invoke('browser:scroll', deltaX, deltaY, x, y),
 
 
   getDownloads: () => invoke('download:get-all'),

@@ -1,3 +1,4 @@
+import { FindInPageOptions } from 'electron';
 import { BaseHandler } from './base';
 
 export class TabHandler extends BaseHandler {
@@ -68,6 +69,14 @@ export class TabHandler extends BaseHandler {
 
     this.handle('browser:discard-session', async () => {
       return tabService.discardSession();
+    });
+
+    this.handle('browser:find-in-page', async (_, tabId: string, text: string, options: FindInPageOptions) => {
+      return tabService.startFindInPage(tabId, text, options);
+    });
+
+    this.handle('browser:stop-find-in-page', async (_, tabId: string, action: 'clearSelection' | 'keepSelection' | 'activateSelection') => {
+      return tabService.stopFindInPage(tabId, action);
     });
   }
 }
