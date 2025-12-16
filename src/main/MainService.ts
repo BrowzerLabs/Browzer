@@ -5,6 +5,7 @@ import { ConnectionService } from './api';
 import { AuthService } from '@/main/auth/AuthService';
 import { AppMenu } from '@/main/menu/AppMenu';
 import { UpdateService } from './UpdateService';
+import { ThemeService } from '@/main/theme/ThemeService';
 import { BaseWindow, WebContentsView, dialog } from 'electron';
 import path from 'node:path';
 
@@ -20,6 +21,7 @@ export class MainService {
   private browserView: WebContentsView | null = null;
   private sidebarVisible = true;
   private sidebarWidthPercent = 30;
+  private themeService: ThemeService;
   
 
   constructor() {
@@ -73,6 +75,8 @@ export class MainService {
 
     this.connectionService = new ConnectionService(this.browserView.webContents);
 
+    this.themeService = new ThemeService(this.baseWindow);
+
     this.authService = new AuthService(this.browserService, this.connectionService);
     
     this.connectionService.setRefreshCallback(() => this.authService.refreshSession());
@@ -80,7 +84,8 @@ export class MainService {
     this.ipcHandlers = new IPCHandlers(
       this.baseWindow,
       this.browserService,
-      this.authService
+      this.authService,
+      this.themeService
     );
 
     this.appMenu = new AppMenu(this.browserService.getTabService(), this.updateService);
@@ -164,6 +169,7 @@ export class MainService {
 
   public destroy(): void {
     this.ipcHandlers.cleanup();
+    this.themeService.destroy();
     this.browserService.destroy();
     this.baseWindow = null;
     this.browserView = null;
