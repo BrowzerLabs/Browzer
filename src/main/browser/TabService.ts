@@ -1,7 +1,8 @@
 import { BaseWindow, WebContentsView } from 'electron';
 import { EventEmitter } from 'events';
 import path from 'node:path';
-import { TabInfo, HistoryTransition, ToastPayload, NavigationError, isNetworkError, shouldIgnoreError, TabGroup, TabsSnapshot } from '@/shared/types';
+import Store from 'electron-store';
+import { TabInfo, HistoryTransition, ToastPayload, NavigationError, isNetworkError, shouldIgnoreError, TabGroup, TabsSnapshot, ClosedTabInfo } from '@/shared/types';
 import { GROUP_COLORS } from '@/shared/constants/tabs';
 import { VideoRecorder } from '@/main/recording';
 import { PasswordManager } from '@/main/password/PasswordManager';
@@ -37,6 +38,10 @@ export class TabService extends EventEmitter {
   private newTabUrl = 'browzer://home';
   private readonly contextMenuService = new ContextMenuService();
   private tabGroups = new Map<string, TabGroup>();
+  private closedTabs: ClosedTabInfo[] = [];
+  private sessionStore: Store<{ lastSession: TabsSnapshot | null }>;
+  private saveTimeout: NodeJS.Timeout | null = null;
+  private isRestorePending = false;
 
   constructor(
     private baseWindow: BaseWindow,
@@ -49,6 +54,18 @@ export class TabService extends EventEmitter {
     private bookmarkService: BookmarkService
   ) {
     super();
+    this.sessionStore = new Store<{ lastSession: TabsSnapshot | null }>({
+      name: 'session-tabs',
+      defaults: { lastSession: null }
+    });
+    
+    const savedSession = this.sessionStore.get('lastSession');
+    if (savedSession?.tabs && savedSession.tabs.length > 0) {
+      if (!(savedSession.tabs.length === 1 && savedSession.tabs[0].url.startsWith('browzer://home'))) {
+        this.isRestorePending = true;
+      }
+    }
+    
     this.initialize();
   }
 
@@ -74,6 +91,10 @@ export class TabService extends EventEmitter {
     this.contextMenuService.on('toast', (payload: ToastPayload) => {
       this.browserView.webContents.send('toast', payload);
     });
+    this.on('tabs:changed', () => this.triggerSaveSession());
+    this.on('tab:created', () => this.triggerSaveSession());
+    this.on('tab:closed', () => this.triggerSaveSession());
+    this.on('tab:reordered', () => this.triggerSaveSession());
   }
 
   public recalculateBookmarkBarHeight(): void {
@@ -141,6 +162,20 @@ export class TabService extends EventEmitter {
     const wasActiveTab = this.activeTabId === tabId;
     const orderIndex = this.orderedTabIds.indexOf(tabId);
 
+    if (tab.info.url) {
+      this.closedTabs.push({
+        url: tab.info.url,
+        title: tab.info.title,
+        favicon: tab.info.favicon,
+        index: orderIndex,
+        groupId: tab.info.group?.id
+      });
+      
+      if (this.closedTabs.length > 20) {
+        this.closedTabs.shift();
+      }
+    }
+
     this.baseWindow.contentView.removeChildView(tab.view);
     tab.passwordAutomation?.stop().catch(console.error);
     this.debuggerService.cleanupDebugger(tab.view, tabId);
@@ -160,6 +195,25 @@ export class TabService extends EventEmitter {
     this.emit('tabs:changed');
     this.emit('tab:closed', tabId, newActiveTabId, wasActiveTab);
     if (this.tabs.size === 0) this.baseWindow.close();
+    return true;
+  }
+
+  public restoreLastClosedTab(): boolean {
+    const lastClosedTab = this.closedTabs.pop();
+    if (!lastClosedTab) return false;
+
+    const tab = this.createTab(lastClosedTab.url);
+    
+    if (lastClosedTab.groupId && this.tabGroups.has(lastClosedTab.groupId)) {
+      this.assignTabToGroup(tab.id, lastClosedTab.groupId);
+    }
+    
+    // Attempt to restore position
+    // We can't guarantee exact position if tabs shifted, but we can try
+    if (lastClosedTab.index >= 0 && lastClosedTab.index < this.orderedTabIds.length) {
+      this.reorderTab(tab.id, lastClosedTab.index);
+    }
+
     return true;
   }
 
@@ -323,14 +377,9 @@ export class TabService extends EventEmitter {
       } else if (movedGroupId) {
         const isNextToOwnGroup = prevGroupId === movedGroupId || nextGroupId === movedGroupId;
         if (!isNextToOwnGroup) {
-          const hasOtherMembers = this.orderedTabIds.some(id => 
-            id !== tabId && this.tabs.get(id)?.info.group?.id === movedGroupId
-          );
-          if (hasOtherMembers) {
-            movedTab.info.group = undefined;
-            this.cleanupEmptyGroups();
-            this.emit('tabs:changed');
-          }
+          movedTab.info.group = undefined;
+          this.cleanupEmptyGroups();
+          this.emit('tabs:changed');
         }
       }
     }
@@ -393,6 +442,8 @@ export class TabService extends EventEmitter {
   }
 
   public destroy(): void {
+    this.isRestorePending = false;
+    this.saveSession();
     this.contextMenuService.destroy();
     this.tabs.forEach(tab => {
       this.debuggerService.cleanupDebugger(tab.view, tab.id);
@@ -633,6 +684,102 @@ export class TabService extends EventEmitter {
   }
 
   public getTabGroups(): TabGroup[] { return Array.from(this.tabGroups.values()); }
+
+  private triggerSaveSession(): void {
+    if (this.saveTimeout) clearTimeout(this.saveTimeout);
+    this.saveTimeout = setTimeout(() => this.saveSession(), 1000);
+  }
+
+  private saveSession(): void {
+    if (this.isRestorePending) return;
+    
+    const snapshot = this.getAllTabs();
+    try {
+      this.sessionStore.set('lastSession', snapshot);
+    } catch (err) {
+      console.error('[TabService] Failed to save session:', err);
+    }
+  }
+
+  public async checkRestoreSession(): Promise<boolean> {
+    try {
+      const snapshot = this.sessionStore.get('lastSession');
+      
+      if (!snapshot || !snapshot.tabs || snapshot.tabs.length === 0) return false;
+      if (snapshot.tabs.length === 1 && snapshot.tabs[0].url.startsWith('browzer://home')) return false;
+      
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  public async restoreSession(): Promise<boolean> {
+    try {
+      this.isRestorePending = true;
+      const snapshot = this.sessionStore.get('lastSession');
+      console.log('[TabService] Attempting to restore session:', snapshot ? `${snapshot.tabs.length} tabs` : 'null');
+      
+      if (!snapshot || !snapshot.tabs || snapshot.tabs.length === 0) {
+        this.isRestorePending = false;
+        return false;
+      }
+
+      const oldTabIds = [...this.orderedTabIds];
+      
+      this.tabGroups.clear();
+      snapshot.groups.forEach(g => this.tabGroups.set(g.id, g));
+      
+      const restoredTabIds: string[] = [];
+      let newActiveTabId: string | null = null;
+
+      for (const tabInfo of snapshot.tabs) {
+         console.log('[TabService] Restoring tab:', tabInfo.url);
+         const tab = this.createTab(tabInfo.url);
+         
+         if (snapshot.activeTabId === tabInfo.id) {
+           newActiveTabId = tab.id;
+         }
+
+         if (tabInfo.group) {
+            const group = this.tabGroups.get(tabInfo.group.id);
+            if (group) {
+                tab.info.group = group;
+            }
+         }
+         restoredTabIds.push(tab.id);
+      }
+
+      if (newActiveTabId && this.tabs.has(newActiveTabId)) {
+        this.switchToTab(newActiveTabId);
+      }
+
+      this.orderedTabIds = restoredTabIds;
+      
+      for (const id of oldTabIds) {
+         this.closeTab(id);
+      }
+      
+      this.isRestorePending = false;
+      this.emit('tabs:changed');
+      console.log('[TabService] Session restore complete');
+      return true;
+    } catch (err) {
+      console.error('[TabService] Failed to restore session:', err);
+      this.isRestorePending = false;
+      return false;
+    }
+  }
+
+  public async discardSession(): Promise<boolean> {
+      try {
+          this.isRestorePending = false;
+          this.saveSession();
+          return true;
+      } catch {
+          return false;
+      }
+  }
 
   private cleanupEmptyGroups(): void {
     const groupsInUse = new Set<string>();

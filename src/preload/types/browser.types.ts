@@ -7,6 +7,7 @@ export interface BrowserAPI {
   // Tab Management
   createTab: (url?: string) => Promise<TabInfo>;
   closeTab: (tabId: string) => Promise<boolean>;
+  restoreClosedTab: () => Promise<boolean>;
   switchTab: (tabId: string) => Promise<boolean>;
   getTabs: () => Promise<TabsSnapshot>;
   reorderTab: (tabId: string, newIndex: number) => Promise<boolean>;
@@ -108,6 +109,12 @@ export interface BrowserAPI {
   
   // Session Management
   loadAutomationSession: (sessionId: string) => Promise<any>;
+  
+  // Session Persistence
+  checkRestoreSession: () => Promise<boolean>;
+  restoreSession: () => Promise<boolean>;
+  discardSession: () => Promise<boolean>;
+
   getAutomationSessionHistory: (limit?: number) => Promise<any[]>;
   getAutomationSessions: () => Promise<any[]>;
   getAutomationSessionDetails: (sessionId: string) => Promise<any>;

@@ -26,3 +26,11 @@ export interface TabsSnapshot {
   activeTabId: string | null;
   groups: TabGroup[];
 }
+
+export interface ClosedTabInfo {
+  url: string;
+  title: string;
+  favicon?: string;
+  index: number;
+  groupId?: string;
+}

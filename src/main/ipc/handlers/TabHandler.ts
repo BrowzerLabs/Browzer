@@ -18,6 +18,10 @@ export class TabHandler extends BaseHandler {
       return tabService.closeTab(tabId);
     });
 
+    this.handle('browser:restore-closed-tab', async () => {
+      return tabService.restoreLastClosedTab();
+    });
+
     this.handle('browser:switch-tab', async (_, tabId: string) => {
       return tabService.switchToTab(tabId);
     });
@@ -52,6 +56,18 @@ export class TabHandler extends BaseHandler {
 
     this.handle('browser:toggle-tab-group-collapse', async (_event, groupId: string) => {
       return tabService.toggleTabGroupCollapse(groupId);
+    });
+
+    this.handle('browser:check-restore-session', async () => {
+      return tabService.checkRestoreSession();
+    });
+
+    this.handle('browser:restore-session', async () => {
+      return tabService.restoreSession();
+    });
+
+    this.handle('browser:discard-session', async () => {
+      return tabService.discardSession();
     });
   }
 }

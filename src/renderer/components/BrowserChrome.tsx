@@ -5,13 +5,24 @@ import { TabBar } from './TabBar';
 import { NavigationBar } from './NavigationBar';
 import { BookmarkBar } from './BookmarkBar';
 import { Sidebar } from './Sidebar';
+import { RestoreSessionPopup } from './RestoreSessionPopup';
 
 export function BrowserChrome() {
   const browserAPI = useBrowserAPI();
   const { isVisible: isSidebarVisible, showSidebar } = useSidebarStore();
   const [showBookmarksBar, setShowBookmarksBar] = useState(false);
+  const [showRestorePopup, setShowRestorePopup] = useState(false);
 
   useEffect(() => {
+    const checkRestore = async () => {
+      const canRestore = await window.browserAPI.checkRestoreSession();
+      if (canRestore) {
+        await window.browserAPI.bringBrowserViewToFront();
+        setShowRestorePopup(true);
+      }
+    };
+    checkRestore();
+
     const loadSetting = async () => {
       const settings = await window.browserAPI.getAllSettings();
       setShowBookmarksBar(settings.appearance.showBookmarksBar as boolean);
@@ -87,6 +98,19 @@ export function BrowserChrome() {
 
       {showBookmarksBar && (
         <BookmarkBar onNavigate={(url) => {browserAPI.createTab(url)}} />
+      )}
+
+      {showRestorePopup && (
+        <RestoreSessionPopup
+          onRestore={async () => {
+            await window.browserAPI.restoreSession();
+            setShowRestorePopup(false);
+          }}
+          onClose={async () => {
+            await window.browserAPI.discardSession();
+            setShowRestorePopup(false);
+          }}
+        />
       )}
 
       <div className="flex-1 overflow-hidden relative flex">

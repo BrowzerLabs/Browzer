@@ -10,6 +10,7 @@ export const createBrowserAPI = (): BrowserAPI => ({
   // Tab Management
   createTab: (url?: string) => invoke('browser:create-tab', url),
   closeTab: (tabId: string) => invoke('browser:close-tab', tabId),
+  restoreClosedTab: () => invoke('browser:restore-closed-tab'),
   switchTab: (tabId: string) => invoke('browser:switch-tab', tabId),
   getTabs: () => invoke('browser:get-tabs'),
   reorderTab: (tabId: string, newIndex: number) => invoke('browser:reorder-tab', tabId, newIndex),
@@ -138,7 +139,12 @@ export const createBrowserAPI = (): BrowserAPI => ({
   
   // Session Management API
   loadAutomationSession: (sessionId: string) => invoke('automation:load-session', sessionId),
-  getAutomationSessionHistory: (limit?: number) => 
+  
+  checkRestoreSession: () => invoke('browser:check-restore-session'),
+  restoreSession: () => invoke('browser:restore-session'),
+  discardSession: () => invoke('browser:discard-session'),
+
+  getAutomationSessionHistory: (limit?: number) =>  
     invoke('automation:get-session-history', limit),
   getAutomationSessions: () => invoke('automation:get-sessions'),
   getAutomationSessionDetails: (sessionId: string) => 
