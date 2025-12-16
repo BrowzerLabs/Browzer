@@ -143,8 +143,15 @@ export class AuthService {
           },
           title: 'Sign in with Google',
           modal: true,
-          show: false,
+          resizable: false,
+          minimizable: false,
+          maximizable: false,
+          fullscreenable: false,
+          closable: true,
+          autoHideMenuBar: true,
         });
+
+        this.authWindow.setMenu(null);
 
         this.authWindow.once('ready-to-show', () => {
           this.authWindow?.show();
