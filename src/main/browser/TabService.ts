@@ -553,8 +553,8 @@ export class TabService extends EventEmitter {
       if (!this.navigationService.isInternalPage(info.url)) this.contextMenuService.showContextMenu(wc, params);
     });
 
-    wc.on('found-in-page', (_, result) => {
-      this.emit('found-in-page', tab.id, result);
+    wc.on('found-in-page', (_, result: Electron.Result) => {
+      this.browserView.webContents.send('browser:found-in-page', tab.id, result);
     });
 
     wc.on('certificate-error', (event, url, error, certificate, callback) => {
@@ -591,16 +591,18 @@ export class TabService extends EventEmitter {
     catch { return false; }
   }
 
-  public startFindInPage(tabId: string, text: string, options: Electron.FindInPageOptions = {}): void {
+  public startFindInPage(tabId: string, text: string, options: Electron.FindInPageOptions = {}): boolean {
     const tab = this.tabs.get(tabId);
-    if (!tab || tab.view.webContents.isDestroyed()) return;
+    if (!tab || tab.view.webContents.isDestroyed()) return false;
     tab.view.webContents.findInPage(text, options);
+    return true;
   }
 
-  public stopFindInPage(tabId: string, action: 'clearSelection' | 'keepSelection' | 'activateSelection'): void {
+  public stopFindInPage(tabId: string, action: 'clearSelection' | 'keepSelection' | 'activateSelection'): boolean {
     const tab = this.tabs.get(tabId);
-    if (!tab || tab.view.webContents.isDestroyed()) return;
+    if (!tab || tab.view.webContents.isDestroyed()) return false;
     tab.view.webContents.stopFindInPage(action);
+    return true;
   }
 
   private handleNavigation(info: TabInfo, wc: Electron.WebContents, url: string): void {
@@ -798,6 +800,22 @@ export class TabService extends EventEmitter {
       } catch {
           return false;
       }
+  }
+
+  public handleScroll(deltaX: number, deltaY: number, x: number, y: number): boolean {
+    const activeTab = this.getActiveTab();
+    if (!activeTab || activeTab.view.webContents.isDestroyed()) return false;
+
+    const adjustedY = y - this.webContentsViewHeight;
+    activeTab.view.webContents.sendInputEvent({
+      type: 'mouseWheel',
+      x: x,
+      y: adjustedY,
+      deltaX: -deltaX,
+      deltaY: -deltaY,
+      canScroll: true
+    });
+    return true;
   }
 
   private cleanupEmptyGroups(): void {

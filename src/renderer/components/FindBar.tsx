@@ -39,17 +39,13 @@ export const FindBar = () => {
     const prevTabId = previousTabIdRef.current;
     previousTabIdRef.current = activeTabId ?? null;
 
+    if (!prevTabId || prevTabId === activeTabId) return;
     if (!state.isVisible || !state.searchText) return;
-    if (prevTabId && prevTabId !== activeTabId) {
-      window.browserAPI.stopFindInPage(prevTabId, 'clearSelection').catch((error: unknown) => {
-        console.error('[FindBar] Failed to clear previous tab find state:', error);
-      });
-    }
+
+    window.browserAPI.stopFindInPage(prevTabId, 'clearSelection');
     if (activeTabId) {
       setState({ matchCount: 0, activeMatch: 0 });
-      window.browserAPI.findInPage(activeTabId, state.searchText).catch((error: unknown) => {
-        console.error('[FindBar] Failed to apply find to active tab:', error);
-      });
+      window.browserAPI.findInPage(activeTabId, state.searchText);
     }
   }, [activeTabId, state.searchText, state.isVisible, setState]);
 
@@ -57,57 +53,35 @@ export const FindBar = () => {
     setState({ searchText: text });
     if (!activeTabId) return;
     if (text) {
-      try {
-        await window.browserAPI.findInPage(activeTabId, text);
-      } catch (error) {
-        console.error('[FindBar] Failed to start findInPage:', error);
-      }
+      await window.browserAPI.findInPage(activeTabId, text);
     } else {
-      try {
-        await window.browserAPI.stopFindInPage(activeTabId, 'clearSelection');
-        setState({ matchCount: 0, activeMatch: 0 });
-      } catch (error) {
-        console.error('[FindBar] Failed to stop findInPage:', error);
-      }
+      await window.browserAPI.stopFindInPage(activeTabId, 'clearSelection');
+      setState({ matchCount: 0, activeMatch: 0 });
     }
   };
 
-  const handleNext = async () => {
+  const handleNext = async() => {
     if (!state.searchText || !activeTabId) return;
-    try {
-      const shouldWrap = state.matchCount > 0 && state.activeMatch >= state.matchCount;
-      if (shouldWrap) {
-        await window.browserAPI.findInPage(activeTabId, state.searchText, { findNext: false, forward: true });
-      } else {
-        await window.browserAPI.findInPage(activeTabId, state.searchText, { findNext: true, forward: true });
-      }
-    } catch (error) {
-      console.error('[FindBar] Failed to go to next match:', error);
+    const shouldWrap = state.matchCount > 0 && state.activeMatch >= state.matchCount;
+    if (shouldWrap) {
+      await window.browserAPI.findInPage(activeTabId, state.searchText, { findNext: false, forward: true });
+    } else {
+      await window.browserAPI.findInPage(activeTabId, state.searchText, { findNext: true, forward: true });
     }
   };
 
   const handlePrev = async () => {
     if (!state.searchText || !activeTabId) return;
-    try {
-      const shouldWrap = state.matchCount > 0 && state.activeMatch <= 1;
+    const shouldWrap = state.matchCount > 0 && state.activeMatch <= 1;
       if (shouldWrap) {
         await window.browserAPI.findInPage(activeTabId, state.searchText, { findNext: false, forward: false });
       } else {
         await window.browserAPI.findInPage(activeTabId, state.searchText, { findNext: true, forward: false });
       }
-    } catch (error) {
-      console.error('[FindBar] Failed to go to previous match:', error);
-    }
   };
 
   const handleClose = async () => {
-    if (activeTabId) {
-    try {
-        await window.browserAPI.stopFindInPage(activeTabId, 'clearSelection');
-    } catch (error) {
-      console.error('[FindBar] Failed to stop findInPage on close:', error);
-    }
-    }
+    if (activeTabId) await window.browserAPI.stopFindInPage(activeTabId, 'clearSelection');
     closeFindBar();
   };
 
@@ -125,7 +99,7 @@ export const FindBar = () => {
   if (!state.isVisible) return null;
 
   return (
-    <div className="absolute top-2 right-5 z-50 w-[340px] bg-white dark:bg-zinc-800 border dark:border-zinc-700 rounded-md shadow-xl flex items-center p-1.5 gap-2 animate-in fade-in slide-in-from-top-2 duration-200">
+    <div className="interactive-ui absolute top-2 right-5 z-50 w-[340px] bg-white dark:bg-zinc-800 border dark:border-zinc-700 rounded-md shadow-xl flex items-center p-1.5 gap-2 animate-in fade-in slide-in-from-top-2 duration-200">
       <div className="flex-1 flex items-center bg-zinc-100 dark:bg-zinc-900 rounded-sm px-2 h-8 border dark:border-zinc-700 focus-within:ring-1 focus-within:ring-blue-500">
         <input
             ref={inputRef}

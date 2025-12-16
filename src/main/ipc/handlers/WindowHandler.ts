@@ -2,7 +2,7 @@ import { BaseHandler } from './base';
 
 export class WindowHandler extends BaseHandler {
   register(): void {
-    const { baseWindow, browserService } = this.context;
+    const { baseWindow, browserService, tabService } = this.context;
 
     this.handle('window:toggle-maximize', async () => {
       if (baseWindow.isMaximized()) {
@@ -24,6 +24,10 @@ export class WindowHandler extends BaseHandler {
     this.handle('browser:bring-view-bottom', async () => {
       browserService.bringBrowserViewToBottom();
       return true;
+    });
+
+    this.handle('browser:scroll', async (_event, deltaX: number, deltaY: number, x: number, y: number) => {
+      return tabService.handleScroll(deltaX, deltaY, x, y);
     });
   }
 }
