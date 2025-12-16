@@ -297,13 +297,15 @@ export function TabBar({
             {visibleTabs.flatMap((tab, index) => {
               const prevTab = index > 0 ? visibleTabs[index - 1] : null;
               const isGroupStart = tab.group && (!prevTab || prevTab.group?.id !== tab.group.id);
-              const groupLabel = isGroupStart && tab.group ? groupLabels.get(tab.group.id) : null;
+              const groupLabelInfo = isGroupStart && tab.group ? groupLabels.get(tab.group.id) : null;
+              // Only show group label if this tab is actually the first tab of this group
+              const shouldShowGroupLabel = groupLabelInfo && groupLabelInfo.firstTabId === tab.id;
               
               return [
-                groupLabel && (
+                shouldShowGroupLabel && (
                   <GroupLabel
-                    key={`group-label-${groupLabel.group.id}`}
-                    group={groupLabel.group}
+                    key={`group-label-${groupLabelInfo.group.id}`}
+                    group={groupLabelInfo.group}
                     isCollapsed={tab.group?.collapsed && tab.id !== activeTabId}
                     onToggleCollapse={() => tab.group?.id ? onToggleGroupCollapse?.(tab.group.id) : undefined}
                     onEditGroup={() => tab.group ? startEditGroup(tab.group) : undefined}
@@ -464,6 +466,9 @@ function GroupLabel({ group, isCollapsed, onToggleCollapse, onEditGroup, onDelet
       key={`group-label-${group.id}`}
       layout="position"
       initial={false}
+      transition={{
+        layout: { duration: 0.2, ease: "easeInOut" }
+      }}
     >
       <ContextMenu onOpenChange={onMenuOpenChange}>
         <ContextMenuTrigger asChild>
