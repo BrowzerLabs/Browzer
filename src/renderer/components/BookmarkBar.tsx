@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Folder, ChevronDown, ChevronRight, Edit2, Trash2, ExternalLink } from 'lucide-react';
+import { Folder, ChevronDown, ChevronRight, Edit2, Trash2, ExternalLink, ArrowRight } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/renderer/ui/button';
 import {
@@ -194,6 +194,10 @@ export function BookmarkBar({ onNavigate }: BookmarkBarProps) {
     onNavigate(url);
   }, [onNavigate]);
 
+  const handleOpenNewTab = async (url: string) => {
+    await window.browserAPI.createTab(url);
+  };
+
   const openEditDialog = useCallback((item: BookmarkTreeNode) => {
     registerOverlay(dialogOverlayId);
     setEditDialog({
@@ -318,6 +322,10 @@ export function BookmarkBar({ onNavigate }: BookmarkBarProps) {
       {!item.isFolder && (
         <>
           <ContextMenuItem onClick={() => item.url && handleNavigate(item.url)}>
+            <ArrowRight className="mr-2" />
+            Open in Current Tab
+          </ContextMenuItem>
+          <ContextMenuItem onClick={() => item.url && handleOpenNewTab(item.url)}>
             <ExternalLink className="mr-2" />
             Open in New Tab
           </ContextMenuItem>
