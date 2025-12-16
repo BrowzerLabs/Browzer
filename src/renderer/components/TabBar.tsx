@@ -101,6 +101,7 @@ export function TabBar({
   });
 
   const [isFullScreen, setIsFullScreen] = useState(false);
+  const [platform, setPlatform] = useState<'darwin' | 'win32' | 'linux'>('darwin');
   const [pendingGroupTabId, setPendingGroupTabId] = useState<string | null>(null);
   const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
   const [isGroupDialogOpen, setIsGroupDialogOpen] = useState(false);
@@ -158,6 +159,9 @@ export function TabBar({
   }, [tabs]);
 
   useEffect(() => {
+    const detectedPlatform = window.browserAPI.getPlatform();
+    setPlatform(detectedPlatform);
+
     const initFullScreenState = async () => {
       try {
         const fullScreen = await window.browserAPI.isFullScreen?.();
@@ -240,9 +244,13 @@ export function TabBar({
       const containerWidth = containerRef.current.offsetWidth;
       const currentGap = tabCount > LAYOUT.COMPACT_THRESHOLD ? LAYOUT.GAP_COMPACT : LAYOUT.GAP_NORMAL;
       const gapSpace = (tabCount - 1) * currentGap;
-      const paddingLeft = isFullScreen ? 2 : LAYOUT.PADDING_LEFT;
       
-      const availableSpace = containerWidth - paddingLeft - LAYOUT.PADDING_RIGHT - LAYOUT.NEW_TAB_BUTTON_SPACE - gapSpace;
+      const isMac = platform === 'darwin';
+      const isWindows = platform === 'win32';
+      const paddingLeft = isFullScreen ? 2 : (isMac ? LAYOUT.PADDING_LEFT : 8);
+      const paddingRight = isWindows ? LAYOUT.WINDOWS_CONTROLS_WIDTH : LAYOUT.PADDING_RIGHT;
+      
+      const availableSpace = containerWidth - paddingLeft - paddingRight - LAYOUT.NEW_TAB_BUTTON_SPACE - gapSpace;
       const calculatedWidth = Math.floor(availableSpace / tabCount);
       
       setTabWidth(Math.max(LAYOUT.MIN_TAB_WIDTH, Math.min(LAYOUT.MAX_TAB_WIDTH, calculatedWidth)));
@@ -251,7 +259,7 @@ export function TabBar({
     calculateTabWidth();
     window.addEventListener('resize', calculateTabWidth);
     return () => window.removeEventListener('resize', calculateTabWidth);
-  }, [visibleTabs.length, isFullScreen]);
+  }, [visibleTabs.length, isFullScreen, platform]);
 
   const activeTab = activeId ? localTabs.find(t => t.id === activeId) : null;
 
@@ -260,8 +268,10 @@ export function TabBar({
       <div 
         ref={containerRef}
         className={cn(
-          'flex items-center h-9 pr-2 tab-bar-draggable overflow-hidden bg-background',
-          isFullScreen ? 'pl-2' : 'pl-20'
+          'flex items-center h-9 tab-bar-draggable overflow-hidden bg-background',
+          isFullScreen ? 'pl-2 pr-2' : (
+            platform === 'darwin' ? 'pl-20 pr-2' : 'pl-2 pr-36'
+          )
         )}
         style={{ gap: `${gap}px` }}
         onDoubleClick={handleDoubleClick}
