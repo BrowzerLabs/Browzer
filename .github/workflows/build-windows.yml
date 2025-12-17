@@ -30,12 +30,12 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: ${{ secrets.NODE_VERSION }}
+          node-version: ${{ env.NODE_VERSION }}
       
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
-          version: ${{ secrets.PNPM_VERSION }}
+          version: ${{ env.PNPM_VERSION }}
       
       - name: Get pnpm store directory
         shell: pwsh
@@ -74,7 +74,7 @@ jobs:
           Get-Content package.json | Select-String '"version"'
       
       - name: Setup Windows code signing certificate
-        if: secrets.WINDOWS_CERTIFICATE_BASE64 != ''
+        if: ${{ secrets.WINDOWS_CERTIFICATE_BASE64 != '' }}
         env:
           WINDOWS_CERTIFICATE_BASE64: ${{ secrets.WINDOWS_CERTIFICATE_BASE64 }}
           WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
@@ -241,15 +241,15 @@ jobs:
           
           # Create latest.yml in electron-updater format
           cat > release-files/latest.yml <<EOF
-          version: ${VERSION_NUMBER}
-          files:
-            - url: ${FILENAME_X64}
-              sha512: ${SHA512_X64}
-              size: ${SIZE_X64}
-          path: ${FILENAME_X64}
-          sha512: ${SHA512_X64}
-          releaseDate: '${RELEASE_DATE}'
-          EOF
+version: ${VERSION_NUMBER}
+files:
+  - url: ${FILENAME_X64}
+    sha512: ${SHA512_X64}
+    size: ${SIZE_X64}
+path: ${FILENAME_X64}
+sha512: ${SHA512_X64}
+releaseDate: '${RELEASE_DATE}'
+EOF
           
           # If arm64 exists, add it to the files list
           if [ -n "$SETUP_ARM64" ] && [ -f "$SETUP_ARM64" ]; then
@@ -259,18 +259,18 @@ jobs:
             
             # Recreate with both architectures
             cat > release-files/latest.yml <<EOF
-          version: ${VERSION_NUMBER}
-          files:
-            - url: ${FILENAME_X64}
-              sha512: ${SHA512_X64}
-              size: ${SIZE_X64}
-            - url: ${FILENAME_ARM64}
-              sha512: ${SHA512_ARM64}
-              size: ${SIZE_ARM64}
-          path: ${FILENAME_X64}
-          sha512: ${SHA512_X64}
-          releaseDate: '${RELEASE_DATE}'
-          EOF
+version: ${VERSION_NUMBER}
+files:
+  - url: ${FILENAME_X64}
+    sha512: ${SHA512_X64}
+    size: ${SIZE_X64}
+  - url: ${FILENAME_ARM64}
+    sha512: ${SHA512_ARM64}
+    size: ${SIZE_ARM64}
+path: ${FILENAME_X64}
+sha512: ${SHA512_X64}
+releaseDate: '${RELEASE_DATE}'
+EOF
           fi
           
           echo "Generated latest.yml:"
