@@ -14,6 +14,7 @@ export const createBrowserAPI = (): BrowserAPI => ({
   switchTab: (tabId: string) => invoke('browser:switch-tab', tabId),
   getTabs: () => invoke('browser:get-tabs'),
   reorderTab: (tabId: string, newIndex: number) => invoke('browser:reorder-tab', tabId, newIndex),
+  reorderTabGroup: (groupId: string, newIndex: number) => invoke('browser:reorder-tab-group', groupId, newIndex),
   createTabGroup: (name?: string, color?: string) => invoke('browser:create-tab-group', name, color),
   updateTabGroup: (groupId: string, name?: string, color?: string) => invoke('browser:update-tab-group', groupId, name, color),
   assignTabGroup: (tabId: string, groupId: string | null) => invoke('browser:assign-tab-group', tabId, groupId),

@@ -35,6 +35,10 @@ export class TabHandler extends BaseHandler {
       return tabService.reorderTab(tabId, newIndex);
     });
 
+    this.handle('browser:reorder-tab-group', async (_, groupId: string, newIndex: number) => {
+      return tabService.reorderTabGroup(groupId, newIndex);
+    });
+
     this.handle('browser:create-tab-group', async (_event, name?: string, color?: string) => {
       return tabService.createTabGroup(name, color);
     });

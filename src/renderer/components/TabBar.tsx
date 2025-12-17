@@ -1,5 +1,5 @@
 import { X, Plus, Loader2, Globe } from 'lucide-react';
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   DndContext,
@@ -98,6 +98,17 @@ export function TabBar({
       groupLabels.set(tab.group.id, { group: tab.group, firstTabId: tab.id });
     }
   });
+
+  const sortableItems = useMemo(() => {
+    const items: string[] = [];
+    visibleTabs.forEach((tab) => {
+      if (tab.group && groupLabels.has(tab.group.id) && groupLabels.get(tab.group.id)?.firstTabId === tab.id) {
+         items.push(tab.group.id);
+      }
+      items.push(tab.id);
+    });
+    return items;
+  }, [visibleTabs, groupLabels]);
 
   const [isFullScreen, setIsFullScreen] = useState(false);
   const [pendingGroupTabId, setPendingGroupTabId] = useState<string | null>(null);
@@ -221,9 +232,55 @@ export function TabBar({
     
     if (!over || active.id === over.id) return;
 
+    if (active.id.toString().startsWith('group-')) {
+        const activeGroupId = active.id as string;
+        
+        const oldIndex = sortableItems.indexOf(active.id as string);
+        const newIndex = sortableItems.indexOf(over.id as string);
+        
+        if (oldIndex === -1 || newIndex === -1) return;
+        let targetTabIndex = -1;
+        const overId = over.id as string;
+
+        if (overId.startsWith('group-')) {
+             targetTabIndex = localTabs.findIndex(t => t.group?.id === overId);
+        } else {
+             targetTabIndex = localTabs.findIndex(t => t.id === overId);
+        }
+
+        if (targetTabIndex === -1) return;
+        const newSortableItems = arrayMove(sortableItems, oldIndex, newIndex);
+        const myIndexInNewList = newSortableItems.indexOf(activeGroupId);
+        const nextItem = newSortableItems[myIndexInNewList + 1];
+
+        let realTargetIndex = localTabs.length;
+
+        if (nextItem) {
+            if (nextItem.startsWith('group-')) {
+                realTargetIndex = localTabs.findIndex(t => t.group?.id === nextItem);
+            } else {
+                realTargetIndex = localTabs.findIndex(t => t.id === nextItem);
+            }
+        }
+        
+        if (realTargetIndex === -1) realTargetIndex = localTabs.length;
+
+        try {
+            await window.browserAPI.reorderTabGroup(activeGroupId, realTargetIndex);
+        } catch (error) {
+             console.error('[TabBar] Failed to reorder group:', error);
+        }
+        return;
+    }
+
     const realOldIndex = localTabs.findIndex(t => t.id === active.id);
-    const realNewIndex = localTabs.findIndex(t => t.id === over.id);
-    
+    let realNewIndex = -1;
+    if (over.id.toString().startsWith('group-')) {
+         realNewIndex = localTabs.findIndex(t => t.group?.id === over.id);
+    } else {
+         realNewIndex = localTabs.findIndex(t => t.id === over.id);
+    }
+
     if (realOldIndex === -1 || realNewIndex === -1 || realOldIndex === realNewIndex) return;
     
     setLocalTabs(prev => arrayMove(prev, realOldIndex, realNewIndex));
@@ -271,7 +328,8 @@ export function TabBar({
     return () => window.removeEventListener('resize', calculateTabWidth);
   }, [visibleTabs.length, isFullScreen]);
 
-  const activeTab = activeId ? localTabs.find(t => t.id === activeId) : null;
+  const activeTab = activeId && !activeId.startsWith('group-') ? localTabs.find(t => t.id === activeId) : null;
+  const activeGroup = activeId && activeId.startsWith('group-') ? tabGroups.find(g => g.id === activeId) : null;
 
   return (
     <>
@@ -293,7 +351,7 @@ export function TabBar({
           onDragStart={handleDragStart}
           onDragEnd={handleDragEnd}
         >
-          <SortableContext items={visibleTabs.map(t => t.id)} strategy={horizontalListSortingStrategy}>
+          <SortableContext items={sortableItems} strategy={horizontalListSortingStrategy}>
             {visibleTabs.flatMap((tab, index) => {
               const prevTab = index > 0 ? visibleTabs[index - 1] : null;
               const isGroupStart = tab.group && (!prevTab || prevTab.group?.id !== tab.group.id);
@@ -303,7 +361,7 @@ export function TabBar({
               
               return [
                 shouldShowGroupLabel && (
-                  <GroupLabel
+                  <SortableGroupLabel
                     key={`group-label-${groupLabelInfo.group.id}`}
                     group={groupLabelInfo.group}
                     isCollapsed={tab.group?.collapsed && tab.id !== activeTabId}
@@ -344,6 +402,11 @@ export function TabBar({
                 width={tabWidth}
                 isOverlay
               />
+            ) : activeGroup ? (
+                <GroupLabel
+                    group={activeGroup}
+                    isCollapsed={activeGroup.collapsed}
+                />
             ) : null}
           </DragOverlay>
         </DndContext>
@@ -441,6 +504,29 @@ interface GroupLabelProps {
   onEditGroup?: () => void;
   onDeleteGroup?: () => void;
   onMenuOpenChange?: (open: boolean) => void;
+}
+
+function SortableGroupLabel(props: GroupLabelProps) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: props.group.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.4 : 1,
+  };
+
+  return (
+    <div ref={setNodeRef} style={style} {...attributes} {...listeners}>
+      <GroupLabel {...props} />
+    </div>
+  );
 }
 
 function GroupLabel({ group, isCollapsed, onToggleCollapse, onEditGroup, onDeleteGroup, onMenuOpenChange }: GroupLabelProps) {

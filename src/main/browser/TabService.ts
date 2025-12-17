@@ -386,6 +386,25 @@ export class TabService extends EventEmitter {
     return true;
   }
 
+  public reorderTabGroup(groupId: string, targetIndex: number): boolean {
+    const group = this.tabGroups.get(groupId);
+    if (!group) return false;
+    const groupTabIds = this.orderedTabIds.filter(id => this.tabs.get(id)?.info.group?.id === groupId);
+    if (groupTabIds.length === 0) return false;
+    const newOrderedIds = this.orderedTabIds.filter(id => this.tabs.get(id)?.info.group?.id !== groupId);
+    const clampedIndex = Math.max(0, Math.min(targetIndex, newOrderedIds.length));
+    newOrderedIds.splice(clampedIndex, 0, ...groupTabIds);
+    this.orderedTabIds = newOrderedIds;
+
+    this.updateLayout(this.currentSidebarWidth);
+    this.orderedTabIds.forEach((id, index) => {
+        this.reorderSingleTabView(id, index);
+    });
+
+    this.emit('tabs:changed');
+    return true;
+  }
+
   private reorderSingleTabView(tabId: string, newOrderIndex: number): void {
     const tab = this.tabs.get(tabId);
     if (!tab) return;
