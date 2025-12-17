@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { useFindStore } from '@/renderer/stores/findStore';
 import { useBrowserAPI } from '@/renderer/hooks/useBrowserAPI';
+import { useOverlayVisibility } from '@/renderer/hooks/useBrowserViewLayer';
 import { ChevronUp, ChevronDown, X } from 'lucide-react';
 
 export const FindBar = () => {
@@ -10,17 +11,14 @@ export const FindBar = () => {
   const inputRef = useRef<HTMLInputElement>(null);
   const previousTabIdRef = useRef<string | null>(null);
 
+  useOverlayVisibility('find-bar', state.isVisible);
+
   useEffect(() => {
     if (!state.isVisible) return;
-    void window.browserAPI.bringBrowserViewToFront();
     if (inputRef.current) {
       inputRef.current.focus();
       inputRef.current.select();
     }
-
-    return () => {
-      void window.browserAPI.bringBrowserViewToBottom();
-    };
   }, [state.isVisible]);
 
   // Listen for search results
