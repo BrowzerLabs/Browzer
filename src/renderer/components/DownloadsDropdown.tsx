@@ -2,6 +2,7 @@ import { useState, useCallback } from 'react';
 import { Download, Pause, Play, XCircle } from 'lucide-react';
 import { formatBytes, formatSpeed, formatRemainingTime } from '@/renderer/lib/utils';
 import { useDownloads } from '@/renderer/hooks/useDownloads';
+import { useBrowserViewLayer } from '@/renderer/hooks/useBrowserViewLayer';
 import { Progress } from '@/renderer/ui/progress';
 import { Button } from '@/renderer/ui/button';
 import {
@@ -17,11 +18,13 @@ interface DownloadsDropdownProps {
 
 export function DownloadsDropdown({ onNavigate }: DownloadsDropdownProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const { createOverlayHandler } = useBrowserViewLayer();
+  const handleOverlayChange = createOverlayHandler('downloads-dropdown');
 
   const openMenu = useCallback(() => {
-    window.browserAPI.bringBrowserViewToFront();
     setIsOpen(true);
-  }, []);
+    handleOverlayChange(true);
+  }, [handleOverlayChange]);
 
   const { downloads, activeCount, pauseDownload, resumeDownload, cancelDownload } = useDownloads({
     notify: true,
@@ -30,18 +33,14 @@ export function DownloadsDropdown({ onNavigate }: DownloadsDropdownProps) {
 
   const handleOpenChange = useCallback((open: boolean) => {
     setIsOpen(open);
-    if (open) {
-      window.browserAPI.bringBrowserViewToFront();
-    } else {
-      window.browserAPI.bringBrowserViewToBottom();
-    }
-  }, []);
+    handleOverlayChange(open);
+  }, [handleOverlayChange]);
 
   const handleViewAll = useCallback(() => {
     setIsOpen(false);
-    window.browserAPI.bringBrowserViewToBottom();
+    handleOverlayChange(false);
     setTimeout(() => onNavigate('browzer://downloads'), 0);
-  }, [onNavigate]);
+  }, [onNavigate, handleOverlayChange]);
 
   if (downloads.length === 0) {
     return null;

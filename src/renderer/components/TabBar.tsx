@@ -23,6 +23,7 @@ import { cn } from '@/renderer/lib/utils';
 import { Button } from '@/renderer/ui/button';
 import { GROUP_COLORS, LAYOUT } from '@/shared/constants/tabs';
 import { ICON_MAP } from '@/shared/routes';
+import { useBrowserViewLayer } from '@/renderer/hooks/useBrowserViewLayer';
 import {
   ContextMenu,
   ContextMenuContent,
@@ -105,39 +106,20 @@ export function TabBar({
   const [isGroupDialogOpen, setIsGroupDialogOpen] = useState(false);
   const [newGroupName, setNewGroupName] = useState('');
   const [newGroupColor, setNewGroupColor] = useState<string>(GROUP_COLORS[0]);
-  const overlayRefs = useRef(new Set<string>());
+  const { createOverlayHandler } = useBrowserViewLayer();
 
-  const updateOverlayLayer = useCallback(() => {
-    const hasOverlay = overlayRefs.current.size > 0;
-    if (hasOverlay) {
-      void window.browserAPI.bringBrowserViewToFront();
-    } else {
-      void window.browserAPI.bringBrowserViewToBottom();
-    }
-  }, []);
-
-  const toggleOverlay = useCallback((id: string, open: boolean) => {
-    if (open) {
-      overlayRefs.current.add(id);
-    } else {
-      overlayRefs.current.delete(id);
-    }
-    updateOverlayLayer();
-  }, [updateOverlayLayer]);
-
-  const handleMenuOpenChange = useCallback((open: boolean) => {
-    toggleOverlay('tab-menu', open);
-  }, [toggleOverlay]);
+  const handleMenuOpenChange = createOverlayHandler('tab-menu');
+  const handleGroupDialogChange = createOverlayHandler('tab-group-dialog');
 
   const handleGroupDialogOpenChange = useCallback((open: boolean) => {
     setIsGroupDialogOpen(open);
-    toggleOverlay('group-dialog', open);
+    handleGroupDialogChange(open);
     if (!open) {
       setPendingGroupTabId(null);
       setEditingGroupId(null);
       setNewGroupName('');
     }
-  }, [toggleOverlay]);
+  }, [handleGroupDialogChange]);
 
   const startCreateGroup = useCallback((tabId: string) => {
     setPendingGroupTabId(tabId);

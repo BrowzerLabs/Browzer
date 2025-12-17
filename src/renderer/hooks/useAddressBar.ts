@@ -1,6 +1,7 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import type { AutocompleteSuggestion } from '@/shared/types';
 import { isLikelyUrl } from '@/shared/utils';
+import { useBrowserViewLayerStore } from '@/renderer/stores/browserViewLayerStore';
 
 interface UseAddressBarOptions {
   debounceMs?: number;
@@ -42,23 +43,20 @@ export function useAddressBar(options: UseAddressBarOptions = {}): UseAddressBar
 
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
-  const lastTabVisibilityRef = useRef<boolean | null>(null);
+  const { registerOverlay, unregisterOverlay } = useBrowserViewLayerStore();
 
   const showDropdown = isOpen && (suggestions.length > 0 || searchSuggestions.length > 0);
 
   useEffect(() => {
-    // Only call API when visibility actually changes
-    if (lastTabVisibilityRef.current === showDropdown) {
-      return;
-    }
-    lastTabVisibilityRef.current = showDropdown;
-
     if (showDropdown) {
-      window.browserAPI.bringBrowserViewToFront();
+      registerOverlay('address-bar-dropdown');
     } else {
-      window.browserAPI.bringBrowserViewToBottom();
+      unregisterOverlay('address-bar-dropdown');
     }
-  }, [showDropdown]);
+    return () => {
+      unregisterOverlay('address-bar-dropdown');
+    };
+  }, [showDropdown, registerOverlay, unregisterOverlay]);
 
   const totalSuggestions = suggestions.length + searchSuggestions.length;
 

@@ -1,6 +1,7 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState } from 'react';
 import { useBrowserAPI } from '@/renderer/hooks/useBrowserAPI';
 import { useSidebarStore } from '@/renderer/store/useSidebarStore';
+import { useOverlayVisibility } from '@/renderer/hooks/useBrowserViewLayer';
 import { TabBar } from './TabBar';
 import { NavigationBar } from './NavigationBar';
 import { BookmarkBar } from './BookmarkBar';
@@ -16,9 +17,9 @@ export function BrowserChrome() {
   const { isVisible: isSidebarVisible, showSidebar } = useSidebarStore();
   const [showBookmarksBar, setShowBookmarksBar] = useState(false);
   const [showRestorePopup, setShowRestorePopup] = useState(false);
-  const { toggleFindBar, closeFindBar } = useFindStore();
-  const [tabCount, setTabCount] = useState(0);
-  const lastRestorePopupState = useRef<boolean | null>(null);
+  const { toggleFindBar } = useFindStore();
+
+  useOverlayVisibility('restore-session-popup', showRestorePopup);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -37,18 +38,6 @@ export function BrowserChrome() {
       unsubscribeFindRequest?.();
     };
   }, [browserAPI.activeTabId, toggleFindBar]);
-
-  // When a new tab is opened (tab count increases),
-  // hide the FindBar but keep its last search text.
-  useEffect(() => {
-    const currentCount = browserAPI.tabs.length;
-    setTabCount((prev) => {
-      if (currentCount > prev) {
-        closeFindBar();
-      }
-      return currentCount;
-    });
-  }, [browserAPI.tabs.length, closeFindBar]);
 
   useEffect(() => {
     const checkRestore = async () => {
@@ -78,19 +67,6 @@ export function BrowserChrome() {
   }, []);
 
   useEffect(() => {
-    if (lastRestorePopupState.current === showRestorePopup) {
-      return;
-    }
-    lastRestorePopupState.current = showRestorePopup;
-
-    if (showRestorePopup) {
-      void window.browserAPI.bringBrowserViewToFront();
-    } else {
-      void window.browserAPI.bringBrowserViewToBottom();
-    }
-  }, [showRestorePopup]);
-
-  useEffect(() => {
     const unsubStart = window.browserAPI.onRecordingStarted(() => {
       showSidebar();
     });
@@ -99,7 +75,7 @@ export function BrowserChrome() {
   }, [showSidebar]);
 
   return (
-    <div className="h-full w-full flex flex-col select-none">
+    <div className="h-full w-full flex flex-col select-none bg-teal-500/50">
       <div className="interactive-ui">
         <TabBar
           tabs={browserAPI.tabs}
