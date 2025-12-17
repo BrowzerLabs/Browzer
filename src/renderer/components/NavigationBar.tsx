@@ -5,8 +5,8 @@ import { useSidebarStore } from '@/renderer/store/useSidebarStore';
 import { useRecording } from '@/renderer/hooks/useRecording';
 import { useAuth } from '@/renderer/hooks/useAuth';
 import { useUpdateProgress } from '@/renderer/hooks/useUpdateProgress';
+import { useBrowserViewLayer } from '@/renderer/hooks/useBrowserViewLayer';
 import ThemeToggle from '@/renderer/ui/theme-toggle';
-import { Button } from '@/renderer/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/renderer/ui/avatar';
 import {
   DropdownMenu,
@@ -41,6 +41,7 @@ export function NavigationBar({
   const { isRecording, isLoading, toggleRecording } = useRecording();
   const { user, signOut, loading } = useAuth();
   const { isDownloading, progress, version } = useUpdateProgress();
+  const { createOverlayHandler } = useBrowserViewLayer();
 
   const handleSignOut = async () => {
     await signOut();
@@ -149,15 +150,7 @@ export function NavigationBar({
           {isSidebarVisible ? 'Hide Agent Panel' : 'Show Agent Panel'}
       </TooltipContent>
       </Tooltip>
-      <DropdownMenu
-        onOpenChange={(open) => {
-          if (open) {
-            void window.browserAPI.bringBrowserViewToFront();
-          } else {
-            void window.browserAPI.bringBrowserViewToBottom();
-          }
-        }}
-      >
+      <DropdownMenu onOpenChange={createOverlayHandler('nav-more-menu')}>
           <Tooltip>
             <TooltipTrigger asChild>
               <DropdownMenuTrigger 

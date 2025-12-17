@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { Folder, ChevronDown, ChevronRight, Edit2, Trash2, ExternalLink, ArrowRight } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/renderer/ui/button';
+import { useBrowserViewLayer } from '@/renderer/hooks/useBrowserViewLayer';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -41,40 +42,6 @@ interface EditDialogState {
   url: string;
 }
 
-function useBrowserViewLayer() {
-  const openOverlaysRef = useRef(new Set<string>());
-
-  const updateBrowserViewLayer = useCallback(() => {
-    const hasOpenOverlays = openOverlaysRef.current.size > 0;
-    if (hasOpenOverlays) {
-      void window.browserAPI.bringBrowserViewToFront();
-    } else {
-      void window.browserAPI.bringBrowserViewToBottom();
-    }
-  }, []);
-
-  const registerOverlay = useCallback((id: string) => {
-    openOverlaysRef.current.add(id);
-    updateBrowserViewLayer();
-  }, [updateBrowserViewLayer]);
-
-  const unregisterOverlay = useCallback((id: string) => {
-    openOverlaysRef.current.delete(id);
-    updateBrowserViewLayer();
-  }, [updateBrowserViewLayer]);
-
-  const createOverlayHandler = useCallback((id: string) => {
-    return (open: boolean) => {
-      if (open) {
-        registerOverlay(id);
-      } else {
-        unregisterOverlay(id);
-      }
-    };
-  }, [registerOverlay, unregisterOverlay]);
-
-  return { registerOverlay, unregisterOverlay, createOverlayHandler };
-}
 
 function useBookmarkBarData() {
   const [items, setItems] = useState<BookmarkTreeNode[]>([]);
