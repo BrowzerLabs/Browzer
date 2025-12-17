@@ -179,6 +179,9 @@ export class TabService extends EventEmitter {
     this.baseWindow.contentView.removeChildView(tab.view);
     tab.passwordAutomation?.stop().catch(console.error);
     this.debuggerService.cleanupDebugger(tab.view, tabId);
+    
+    // Remove all event listeners before closing to prevent memory leaks
+    tab.view.webContents.removeAllListeners();
     tab.view.webContents.close();
     this.tabs.delete(tabId);
     if (orderIndex !== -1) this.orderedTabIds.splice(orderIndex, 1);
@@ -448,6 +451,7 @@ export class TabService extends EventEmitter {
     this.tabs.forEach(tab => {
       this.debuggerService.cleanupDebugger(tab.view, tab.id);
       this.baseWindow.contentView.removeChildView(tab.view);
+      tab.view.webContents.removeAllListeners();
       tab.view.webContents.close();
     });
     this.tabs.clear();
