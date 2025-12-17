@@ -40,14 +40,14 @@ export function BrowserChrome() {
   }, [browserAPI.activeTabId, toggleFindBar]);
 
   useEffect(() => {
-    const checkRestore = async () => {
-      const canRestore = await window.browserAPI.checkRestoreSession();
-      if (canRestore) {
-        setShowRestorePopup(true);
-      }
-    };
-    checkRestore();
+    const unsubRestore = window.browserAPI.onShowRestoreSession(() => {
+      setShowRestorePopup(true);
+    });
 
+    return () => unsubRestore();
+  }, []);
+
+  useEffect(() => {
     const loadSetting = async () => {
       const settings = await window.browserAPI.getAllSettings();
       setShowBookmarksBar(settings.appearance.showBookmarksBar as boolean);

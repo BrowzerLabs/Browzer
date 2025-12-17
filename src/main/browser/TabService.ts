@@ -42,6 +42,7 @@ export class TabService extends EventEmitter {
   private sessionStore: Store<{ lastSession: TabsSnapshot | null }>;
   private saveTimeout: NodeJS.Timeout | null = null;
   private isRestorePending = false;
+  private restoreCheckFired = false;
 
   constructor(
     private baseWindow: BaseWindow,
@@ -71,6 +72,20 @@ export class TabService extends EventEmitter {
 
   public initializeAfterAuth(): void {
     if (this.tabs.size === 0) this.createTab();
+    
+    if (this.restoreCheckFired) return;
+    this.restoreCheckFired = true;
+    
+    setTimeout(() => {
+      this.checkAndNotifyRestoreSession();
+    }, 2000);
+  }
+
+  private checkAndNotifyRestoreSession(): void {
+    if (this.tabs.size === 0) return;
+    if (!this.isRestorePending) return;
+    
+    this.browserView.webContents.send('browser:show-restore-session');
   }
 
   private initialize(): void {
@@ -719,19 +734,6 @@ export class TabService extends EventEmitter {
       this.sessionStore.set('lastSession', snapshot);
     } catch (err) {
       console.error('[TabService] Failed to save session:', err);
-    }
-  }
-
-  public async checkRestoreSession(): Promise<boolean> {
-    try {
-      const snapshot = this.sessionStore.get('lastSession');
-      
-      if (!snapshot || !snapshot.tabs || snapshot.tabs.length === 0) return false;
-      if (snapshot.tabs.length === 1 && snapshot.tabs[0].url.startsWith('browzer://home')) return false;
-      
-      return true;
-    } catch {
-      return false;
     }
   }
 
