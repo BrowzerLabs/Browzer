@@ -11,6 +11,7 @@ export interface BrowserAPI {
   switchTab: (tabId: string) => Promise<boolean>;
   getTabs: () => Promise<TabsSnapshot>;
   reorderTab: (tabId: string, newIndex: number) => Promise<boolean>;
+  reorderTabGroup: (groupId: string, newIndex: number) => Promise<boolean>;
   createTabGroup: (name?: string, color?: string) => Promise<TabGroup>;
   updateTabGroup: (groupId: string, name?: string, color?: string) => Promise<boolean>;
   assignTabGroup: (tabId: string, groupId: string | null) => Promise<boolean>;
