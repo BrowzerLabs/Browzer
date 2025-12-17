@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useBrowserAPI } from '@/renderer/hooks/useBrowserAPI';
 import { useSidebarStore } from '@/renderer/store/useSidebarStore';
 import { TabBar } from './TabBar';
@@ -18,6 +18,7 @@ export function BrowserChrome() {
   const [showRestorePopup, setShowRestorePopup] = useState(false);
   const { toggleFindBar, closeFindBar } = useFindStore();
   const [tabCount, setTabCount] = useState(0);
+  const lastRestorePopupState = useRef<boolean | null>(null);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -53,7 +54,6 @@ export function BrowserChrome() {
     const checkRestore = async () => {
       const canRestore = await window.browserAPI.checkRestoreSession();
       if (canRestore) {
-        await window.browserAPI.bringBrowserViewToFront();
         setShowRestorePopup(true);
       }
     };
@@ -76,6 +76,19 @@ export function BrowserChrome() {
       unsubSettings();
     };
   }, []);
+
+  useEffect(() => {
+    if (lastRestorePopupState.current === showRestorePopup) {
+      return;
+    }
+    lastRestorePopupState.current = showRestorePopup;
+
+    if (showRestorePopup) {
+      void window.browserAPI.bringBrowserViewToFront();
+    } else {
+      void window.browserAPI.bringBrowserViewToBottom();
+    }
+  }, [showRestorePopup]);
 
   useEffect(() => {
     const unsubStart = window.browserAPI.onRecordingStarted(() => {
