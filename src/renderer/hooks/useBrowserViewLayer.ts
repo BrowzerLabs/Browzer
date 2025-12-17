@@ -53,8 +53,6 @@ export function useOverlayVisibility(id: string, isVisible: boolean) {
   useEffect(() => {
     if (isVisible) {
       registerOverlay(id);
-    } else {
-      unregisterOverlay(id);
     }
     return () => {
       unregisterOverlay(id);

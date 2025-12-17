@@ -23,8 +23,7 @@ export function DownloadsDropdown({ onNavigate }: DownloadsDropdownProps) {
 
   const openMenu = useCallback(() => {
     setIsOpen(true);
-    handleOverlayChange(true);
-  }, [handleOverlayChange]);
+  }, []);
 
   const { downloads, activeCount, pauseDownload, resumeDownload, cancelDownload } = useDownloads({
     notify: true,

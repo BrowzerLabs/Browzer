@@ -117,10 +117,9 @@ export interface BrowserAPI {
   // Session Management
   loadAutomationSession: (sessionId: string) => Promise<any>;
   
-  // Session Persistence
-  checkRestoreSession: () => Promise<boolean>;
   restoreSession: () => Promise<boolean>;
   discardSession: () => Promise<boolean>;
+  onShowRestoreSession: (callback: () => void) => () => void;
 
   getAutomationSessionHistory: (limit?: number) => Promise<any[]>;
   getAutomationSessions: () => Promise<any[]>;
