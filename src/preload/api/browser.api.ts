@@ -148,9 +148,9 @@ export const createBrowserAPI = (): BrowserAPI => ({
   // Session Management API
   loadAutomationSession: (sessionId: string) => invoke('automation:load-session', sessionId),
   
-  checkRestoreSession: () => invoke('browser:check-restore-session'),
   restoreSession: () => invoke('browser:restore-session'),
   discardSession: () => invoke('browser:discard-session'),
+  onShowRestoreSession: (callback) => createSimpleListener('browser:show-restore-session', callback),
 
   getAutomationSessionHistory: (limit?: number) =>  
     invoke('automation:get-session-history', limit),
