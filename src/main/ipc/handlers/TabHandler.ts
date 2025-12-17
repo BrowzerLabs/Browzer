@@ -59,10 +59,6 @@ export class TabHandler extends BaseHandler {
       return tabService.toggleTabGroupCollapse(groupId);
     });
 
-    this.handle('browser:check-restore-session', async () => {
-      return tabService.checkRestoreSession();
-    });
-
     this.handle('browser:restore-session', async () => {
       return tabService.restoreSession();
     });
