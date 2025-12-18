@@ -1,24 +1,32 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
-import type { TabInfo } from '@/shared/types';
+import type { TabGroup, TabInfo, TabsSnapshot } from '@/shared/types';
 
 export function useBrowserAPI() {
   const [tabs, setTabs] = useState<TabInfo[]>([]);
   const [activeTabId, setActiveTabId] = useState<string | null>(null);
+  const [tabGroups, setTabGroups] = useState<TabGroup[]>([]);
   
   const updateSequenceRef = useRef(0);
   const lastReorderTimeRef = useRef(0);
 
   useEffect(() => {
-    const unsubscribeTabsUpdated = window.browserAPI.onTabsUpdated((data: { tabs: TabInfo[]; activeTabId: string | null }) => {
+    const unsubscribeTabsUpdated = window.browserAPI.onTabsUpdated((data: TabsSnapshot) => {
       const now = Date.now();
       if (now - lastReorderTimeRef.current < 100) {
         setActiveTabId(data.activeTabId);
+        setTabGroups(data.groups || []);
+        setTabs(currentTabs => {
+          const incomingTabsMap = new Map(data.tabs.map(t => [t.id, t]));
+          return currentTabs.map(t => incomingTabsMap.get(t.id) || t);
+        });
+        
         return;
       }
       
       updateSequenceRef.current++;
       setTabs(data.tabs);
       setActiveTabId(data.activeTabId);
+      setTabGroups(data.groups || []);
     });
 
     const unsubscribeTabReordered = window.browserAPI.onTabReordered((data: { tabId: string; from: number; to: number }) => {
@@ -36,9 +44,10 @@ export function useBrowserAPI() {
         
         if (prevTabs[data.from]?.id !== data.tabId) {
           console.warn('[useBrowserAPI] Tab mismatch at from index, refreshing tabs');
-          window.browserAPI.getTabs().then((freshData: { tabs: TabInfo[]; activeTabId: string | null }) => {
+          window.browserAPI.getTabs().then((freshData: TabsSnapshot) => {
             setTabs(freshData.tabs);
             setActiveTabId(freshData.activeTabId);
+            setTabGroups(freshData.groups || []);
           });
           return prevTabs;
         }
@@ -52,9 +61,10 @@ export function useBrowserAPI() {
       });
     });
 
-    window.browserAPI.getTabs().then((data: { tabs: TabInfo[]; activeTabId: string | null }) => {
+    window.browserAPI.getTabs().then((data: TabsSnapshot) => {
       setTabs(data.tabs);
       setActiveTabId(data.activeTabId);
+      setTabGroups(data.groups || []);
     });
 
     return () => {
@@ -122,11 +132,46 @@ export function useBrowserAPI() {
   }, [activeTabId, tabs, reorderTab]);
 
   const activeTab = tabs.find(tab => tab.id === activeTabId) || null;
+  const createTabGroup = useCallback(async (name?: string, color?: string) => {
+    return await window.browserAPI.createTabGroup(name, color);
+  }, []);
+
+  const updateTabGroup = useCallback(async (groupId: string, name?: string, color?: string) => {
+    return await window.browserAPI.updateTabGroup(groupId, name, color);
+  }, []);
+
+  const assignTabToGroup = useCallback(async (tabId: string, groupId: string | null) => {
+    try {
+      return await window.browserAPI.assignTabGroup(tabId, groupId);
+    } catch (error) {
+      console.error('[useBrowserAPI] Failed to assign tab group:', error);
+      return false;
+    }
+  }, []);
+
+  const removeTabGroup = useCallback(async (groupId: string) => {
+    try {
+      return await window.browserAPI.removeTabGroup(groupId);
+    } catch (error) {
+      console.error('[useBrowserAPI] Failed to remove tab group:', error);
+      return false;
+    }
+  }, []);
+
+  const toggleTabGroupCollapse = useCallback(async (groupId: string) => {
+    try {
+      return await window.browserAPI.toggleTabGroupCollapse(groupId);
+    } catch (error) {
+      console.error('[useBrowserAPI] Failed to toggle tab group collapse:', error);
+      return false;
+    }
+  }, []);
 
   return {
     tabs,
     activeTabId,
     activeTab,
+    tabGroups,
     createTab,
     closeTab,
     switchTab,
@@ -138,5 +183,10 @@ export function useBrowserAPI() {
     reorderTab,
     moveActiveTabLeft,
     moveActiveTabRight,
+    createTabGroup,
+    updateTabGroup,
+    assignTabToGroup,
+    removeTabGroup,
+    toggleTabGroupCollapse,
   };
 }

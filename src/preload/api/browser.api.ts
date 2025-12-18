@@ -1,7 +1,7 @@
 import { desktopCapturer } from 'electron';
 import type { BrowserAPI } from '@/preload/types/browser.types';
-import { invoke, createEventListener, createSimpleListener } from '@/preload/utils/ipc-helpers';
-import type { TabInfo, HistoryQuery, AppSettings, DownloadUpdatePayload, CreateBookmarkParams, CreateFolderParams, UpdateBookmarkParams, MoveBookmarkParams } from '@/shared/types';
+import { invoke, createEventListener, createSimpleListener, createMultiArgListener } from '@/preload/utils/ipc-helpers';
+import type { TabGroup, TabInfo, TabsSnapshot, HistoryQuery, AppSettings, DownloadUpdatePayload, CreateBookmarkParams, CreateFolderParams, UpdateBookmarkParams, MoveBookmarkParams } from '@/shared/types';
 
 export const createBrowserAPI = (): BrowserAPI => ({
   // Initialization
@@ -10,9 +10,16 @@ export const createBrowserAPI = (): BrowserAPI => ({
   // Tab Management
   createTab: (url?: string) => invoke('browser:create-tab', url),
   closeTab: (tabId: string) => invoke('browser:close-tab', tabId),
+  restoreClosedTab: () => invoke('browser:restore-closed-tab'),
   switchTab: (tabId: string) => invoke('browser:switch-tab', tabId),
   getTabs: () => invoke('browser:get-tabs'),
   reorderTab: (tabId: string, newIndex: number) => invoke('browser:reorder-tab', tabId, newIndex),
+  createTabGroup: (name?: string, color?: string) => invoke('browser:create-tab-group', name, color),
+  updateTabGroup: (groupId: string, name?: string, color?: string) => invoke('browser:update-tab-group', groupId, name, color),
+  assignTabGroup: (tabId: string, groupId: string | null) => invoke('browser:assign-tab-group', tabId, groupId),
+  removeTabGroup: (groupId: string) => invoke('browser:remove-tab-group', groupId),
+  getTabGroups: () => invoke('browser:get-tab-groups'),
+  toggleTabGroupCollapse: (groupId: string) => invoke('browser:toggle-tab-group-collapse', groupId),
 
   // Navigation
   navigate: (tabId: string, url: string) => invoke('browser:navigate', tabId, url),
@@ -36,6 +43,8 @@ export const createBrowserAPI = (): BrowserAPI => ({
     createEventListener<boolean>('window:fullscreen-changed', callback),
   bringBrowserViewToFront: () => invoke('browser:bring-view-front'),
   bringBrowserViewToBottom: () => invoke('browser:bring-view-bottom'),
+  sendScrollEvent: (deltaX: number, deltaY: number, x: number, y: number) => 
+    invoke('browser:scroll', deltaX, deltaY, x, y),
 
 
   getDownloads: () => invoke('download:get-all'),
@@ -126,13 +135,24 @@ export const createBrowserAPI = (): BrowserAPI => ({
   getAutocompleteSuggestions: (query: string) => invoke('autocomplete:get-suggestions', query),
   getSearchSuggestions: (query: string) => invoke('autocomplete:get-search-suggestions', query),
 
+  // Find in Page
+  findInPage: (tabId: string, text: string, options?: any) => invoke('browser:find-in-page', tabId, text, options),
+  stopFindInPage: (tabId: string, action: 'clearSelection' | 'keepSelection' | 'activateSelection') => invoke('browser:stop-find-in-page', tabId, action),
+  onFoundInPage: (callback) => createMultiArgListener('browser:found-in-page', callback),
+  onRequestFind: (callback) => createSimpleListener('browser:request-find', callback),
+
   // LLM Automation API
   executeLLMAutomation: (userGoal: string, recordedSessionId: string) =>
     invoke('automation:execute-llm', userGoal, recordedSessionId),
   
   // Session Management API
   loadAutomationSession: (sessionId: string) => invoke('automation:load-session', sessionId),
-  getAutomationSessionHistory: (limit?: number) => 
+  
+  checkRestoreSession: () => invoke('browser:check-restore-session'),
+  restoreSession: () => invoke('browser:restore-session'),
+  discardSession: () => invoke('browser:discard-session'),
+
+  getAutomationSessionHistory: (limit?: number) =>  
     invoke('automation:get-session-history', limit),
   getAutomationSessions: () => invoke('automation:get-sessions'),
   getAutomationSessionDetails: (sessionId: string) => 
@@ -146,7 +166,7 @@ export const createBrowserAPI = (): BrowserAPI => ({
 
   // Event listeners - Tab events
   onTabsUpdated: (callback) => 
-    createEventListener<{ tabs: TabInfo[]; activeTabId: string | null }>(
+    createEventListener<TabsSnapshot>(
       'browser:tabs-updated', 
       callback
     ),

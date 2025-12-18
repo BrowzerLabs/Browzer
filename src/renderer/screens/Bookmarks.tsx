@@ -1,10 +1,11 @@
 import { useEffect, useState, useCallback } from 'react';
-import { Search, Trash2, Star, Folder, ExternalLink, Edit2, MoreVertical, Loader2, FolderPlus, ChevronRight, ChevronDown, FolderInput } from 'lucide-react';
+import { Search, Trash2, Star, Folder, ExternalLink, Edit2, MoreVertical, Loader2, FolderPlus, ChevronRight, ChevronDown, FolderInput, ArrowRight } from 'lucide-react';
 import type { Bookmark, BookmarkTreeNode } from '../../shared/types';
 import { BOOKMARK_BAR_ID, OTHER_BOOKMARKS_ID } from '../../shared/types';
 import { Button } from '@/renderer/ui/button';
 import { Input } from '@/renderer/ui/input';
 import { toast } from 'sonner';
+import { useBrowserAPI } from '@/renderer/hooks/useBrowserAPI';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -40,6 +41,7 @@ import {
 } from '@/renderer/ui/select';
 
 export function Bookmarks() {
+  const { activeTabId } = useBrowserAPI();
   const [bookmarks, setBookmarks] = useState<Bookmark[]>([]);
   const [bookmarkTree, setBookmarkTree] = useState<BookmarkTreeNode[]>([]);
   const [filteredBookmarks, setFilteredBookmarks] = useState<Bookmark[]>([]);
@@ -143,6 +145,19 @@ export function Bookmarks() {
   };
 
   const handleOpen = async (url: string) => {
+    if (!activeTabId) {
+      toast.error('No active tab available');
+      return;
+    }
+    try {
+      await window.browserAPI.navigate(activeTabId, url);
+    } catch (error) {
+      console.error('Failed to open bookmark:', error);
+      toast.error('Failed to open bookmark');
+    }
+  };
+
+  const handleOpenNewTab = async (url: string) => {
     try {
       await window.browserAPI.createTab(url);
     } catch (error) {
@@ -391,8 +406,15 @@ export function Bookmarks() {
                 e.stopPropagation();
                 node.url && handleOpen(node.url);
               }}>
+                <ArrowRight className="w-4 h-4 mr-2" />
+                Open in Current Tab
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={(e: React.MouseEvent) => {
+                e.stopPropagation();
+                node.url && handleOpenNewTab(node.url);
+              }}>
                 <ExternalLink className="w-4 h-4 mr-2" />
-                Open
+                Open in New Tab
               </DropdownMenuItem>
               <DropdownMenuItem onClick={(e: React.MouseEvent) => {
                 e.stopPropagation();
@@ -535,8 +557,15 @@ export function Bookmarks() {
                               e.stopPropagation();
                               handleOpen(bookmark.url);
                             }}>
+                              <ArrowRight className="w-4 h-4 mr-2" />
+                              Open in Current Tab
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={(e: React.MouseEvent) => {
+                              e.stopPropagation();
+                              handleOpenNewTab(bookmark.url);
+                            }}>
                               <ExternalLink className="w-4 h-4 mr-2" />
-                              Open in new tab
+                              Open in New Tab
                             </DropdownMenuItem>
                             <DropdownMenuItem onClick={(e: React.MouseEvent) => {
                               e.stopPropagation();

@@ -12,6 +12,7 @@ export class AppMenu {
     newTab: this.isMac ? 'Cmd+T' : 'Ctrl+T',
     newWindow: this.isMac ? 'Cmd+N' : 'Ctrl+N',
     closeTab: this.isMac ? 'Cmd+W' : 'Ctrl+W',
+    restoreTab: this.isMac ? 'Cmd+Shift+T' : 'Ctrl+Shift+T',
     back: this.isMac ? 'Cmd+[' : 'Alt+Left',
     forward: this.isMac ? 'Cmd+]' : 'Alt+Right',
     reload: this.isMac ? 'Cmd+R' : 'Ctrl+R',
@@ -21,8 +22,6 @@ export class AppMenu {
     history: this.isMac ? 'Cmd+Y' : 'Ctrl+H',
     settings: this.isMac ? 'Cmd+,': 'Ctrl+,',
     downloads: this.isMac ? 'Cmd+Shift+J' : 'Ctrl+J',
-    enterFullscreen: this.isMac ? 'Fn+F' : 'F11',
-    exitFullscreen: this.isMac ? 'Fn+F' : 'F11',
   };
 
   constructor(
@@ -111,6 +110,15 @@ export class AppMenu {
               const { activeTabId } = this.tabService.getAllTabs();
               if (activeTabId) {
                 this.tabService.closeTab(activeTabId);
+              }
+            },
+          },
+          {
+            label: 'Reopen Closed Tab',
+            accelerator: this.keys.restoreTab,
+            click: () => {
+              if (this.ensureWindow()) {
+                this.tabService.restoreLastClosedTab();
               }
             },
           },
@@ -222,11 +230,6 @@ export class AppMenu {
           { role: 'zoomIn' as const },
           { role: 'zoomOut' as const },
           { type: 'separator' as const },
-          {
-            label: 'Toggle Full Screen',
-            accelerator: this.keys.enterFullscreen,
-            click: () => this.toggleFullscreen(),
-          },
           { role: 'togglefullscreen' as const },
         ],
       },
@@ -312,19 +315,5 @@ export class AppMenu {
 
   private async handleCheckForUpdates(): Promise<void> {
     await this.updateService.checkForUpdates(true);
-  }
-
-  private setFullscreen(shouldBeFull: boolean): void {
-    const focused = BrowserWindow.getFocusedWindow();
-    if (focused) {
-      focused.setFullScreen(shouldBeFull);
-    }
-  }
-
-  private toggleFullscreen(): void {
-    const focused = BrowserWindow.getFocusedWindow();
-    if (focused) {
-      focused.setFullScreen(!focused.isFullScreen());
-    }
   }
 }

@@ -1,4 +1,4 @@
-import type { TabInfo, HistoryEntry, HistoryQuery, HistoryStats, AppSettings, AutocompleteSuggestion, DownloadItem, DownloadUpdatePayload, Bookmark, BookmarkFolder, BookmarkTreeNode, CreateBookmarkParams, CreateFolderParams, UpdateBookmarkParams, MoveBookmarkParams } from '@/shared/types';
+import type { TabGroup, TabInfo, TabsSnapshot, HistoryEntry, HistoryQuery, HistoryStats, AppSettings, AutocompleteSuggestion, DownloadItem, DownloadUpdatePayload, Bookmark, BookmarkFolder, BookmarkTreeNode, CreateBookmarkParams, CreateFolderParams, UpdateBookmarkParams, MoveBookmarkParams } from '@/shared/types';
 
 export interface BrowserAPI {
   // Initialization
@@ -7,9 +7,16 @@ export interface BrowserAPI {
   // Tab Management
   createTab: (url?: string) => Promise<TabInfo>;
   closeTab: (tabId: string) => Promise<boolean>;
+  restoreClosedTab: () => Promise<boolean>;
   switchTab: (tabId: string) => Promise<boolean>;
-  getTabs: () => Promise<{ tabs: TabInfo[]; activeTabId: string | null }>;
+  getTabs: () => Promise<TabsSnapshot>;
   reorderTab: (tabId: string, newIndex: number) => Promise<boolean>;
+  createTabGroup: (name?: string, color?: string) => Promise<TabGroup>;
+  updateTabGroup: (groupId: string, name?: string, color?: string) => Promise<boolean>;
+  assignTabGroup: (tabId: string, groupId: string | null) => Promise<boolean>;
+  removeTabGroup: (groupId: string) => Promise<boolean>;
+  getTabGroups: () => Promise<TabGroup[]>;
+  toggleTabGroupCollapse: (groupId: string) => Promise<boolean>;
 
   // Navigation
   navigate: (tabId: string, url: string) => Promise<boolean>;
@@ -31,6 +38,7 @@ export interface BrowserAPI {
   onFullScreenChanged: (callback: (isFullScreen: boolean) => void) => () => void;
   bringBrowserViewToFront: () => Promise<boolean>;
   bringBrowserViewToBottom: () => Promise<boolean>;
+  sendScrollEvent: (deltaX: number, deltaY: number, x: number, y: number) => Promise<boolean>;
   
   // Desktop Capturer (for video recording)
   getDesktopSources: () => Promise<Array<{ id: string; name: string; thumbnail: any }>>;
@@ -93,6 +101,12 @@ export interface BrowserAPI {
   getAutocompleteSuggestions: (query: string) => Promise<AutocompleteSuggestion[]>;
   getSearchSuggestions: (query: string) => Promise<string[]>;
 
+  // Find in Page
+  findInPage: (tabId: string, text: string, options?: Electron.FindInPageOptions) => Promise<boolean>;
+  stopFindInPage: (tabId: string, action: 'clearSelection' | 'keepSelection' | 'activateSelection') => Promise<boolean>;
+  onFoundInPage: (callback: (tabId: string, result: Electron.Result) => void) => () => void;
+  onRequestFind: (callback: () => void) => () => void;
+
   // LLM Automation
   executeLLMAutomation: (userGoal: string, recordedSessionId: string) => Promise<{
     success: boolean;
@@ -102,6 +116,12 @@ export interface BrowserAPI {
   
   // Session Management
   loadAutomationSession: (sessionId: string) => Promise<any>;
+  
+  // Session Persistence
+  checkRestoreSession: () => Promise<boolean>;
+  restoreSession: () => Promise<boolean>;
+  discardSession: () => Promise<boolean>;
+
   getAutomationSessionHistory: (limit?: number) => Promise<any[]>;
   getAutomationSessions: () => Promise<any[]>;
   getAutomationSessionDetails: (sessionId: string) => Promise<any>;
@@ -110,7 +130,7 @@ export interface BrowserAPI {
   stopAutomation: (sessionId: string) => Promise<{ success: boolean }>;
 
   // Event listeners
-  onTabsUpdated: (callback: (data: { tabs: TabInfo[]; activeTabId: string | null }) => void) => () => void;
+  onTabsUpdated: (callback: (data: TabsSnapshot) => void) => () => void;
   onTabReordered: (callback: (data: { tabId: string; from: number; to: number }) => void) => () => void;
   onRecordingAction: (callback: (action: any) => void) => () => void;
   onRecordingStarted: (callback: () => void) => () => void;

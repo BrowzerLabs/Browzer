@@ -79,13 +79,6 @@ export class BrowserService {
     );
   }
 
-  public initializeAfterAuth(): void {
-    const { tabs } = this.tabService.getAllTabs();
-    if (tabs.length === 0) {
-      this.tabService.createTab();
-    }
-  }
-
   public getTabService(): TabService {
     return this.tabService;
   }
@@ -306,9 +299,12 @@ export class BrowserService {
    * Notify renderer about tab changes
    */
   private notifyTabsChanged(): void {
+    if (this.baseWindow.isDestroyed()) {
+      return;
+    }
     const allViews = this.baseWindow.contentView.children;
     allViews.forEach(view => {
-      if (view instanceof WebContentsView) {
+      if (view instanceof WebContentsView && !view.webContents.isDestroyed()) {
         view.webContents.send('browser:tabs-updated', this.tabService.getAllTabs());
       }
     });
@@ -327,6 +323,9 @@ export class BrowserService {
   }
 
   private notifyTabReordered(data: { tabId: string; from: number; to: number }): void {
+    if (this.baseWindow.isDestroyed()) {
+      return;
+    }
     const allViews = this.baseWindow.contentView.children;
     allViews.forEach(view => {
       if (view instanceof WebContentsView && !view.webContents.isDestroyed()) {
