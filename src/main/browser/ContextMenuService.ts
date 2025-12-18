@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import https from 'node:https';
 import http from 'node:http';
 import { EventEmitter } from 'events';
+import { RecordedAction } from '@/shared/types';
 
 const EXTENSION_MAP: Record<string, string> = {
   jpeg: 'jpg', jpg: 'jpg', png: 'png', gif: 'gif', 
@@ -13,16 +14,48 @@ const EXTENSION_MAP: Record<string, string> = {
 const DOWNLOAD_CONFIG = { MAX_REDIRECTS: 5, TIMEOUT_MS: 30000 };
 
 export class ContextMenuService extends EventEmitter {
+  private currentParams: ContextMenuParams | null = null;
+
   public destroy(): void {
     this.removeAllListeners();
   }
 
   public showContextMenu(webContents: WebContents, params: ContextMenuParams): void {
+    this.currentParams = params;
     this.buildContextMenu(webContents, params).popup({
       window: BrowserWindow.fromWebContents(webContents) || undefined,
       x: params.x,
       y: params.y,
     });
+  }
+
+  private emitContextMenuAction(action: string): void {
+    if (!this.currentParams) return;
+
+    const attributes: Record<string, string> = {};
+    if (this.currentParams.linkURL) attributes['href'] = this.currentParams.linkURL;
+    if (this.currentParams.srcURL) attributes['src'] = this.currentParams.srcURL;
+    if (this.currentParams.mediaType) attributes['type'] = this.currentParams.mediaType;
+    if (this.currentParams.selectionText) attributes['text'] = this.currentParams.selectionText;
+    if (this.currentParams.isEditable) attributes['editable'] = 'true';
+    if (this.currentParams.titleText) attributes['title'] = this.currentParams.titleText;
+    
+    const event: RecordedAction = {
+      type: 'context-menu',
+      value: action,
+      position: { x: this.currentParams.x, y: this.currentParams.y },
+      target: {
+        tagName: this.currentParams.mediaType === 'image' ? 'IMG' : 
+                 this.currentParams.mediaType === 'video' ? 'VIDEO' :
+                 this.currentParams.mediaType === 'audio' ? 'AUDIO' :
+                 this.currentParams.linkURL ? 'A' :
+                 this.currentParams.isEditable ? 'INPUT' : undefined,
+        attributes,
+      },
+      timestamp: Date.now(),
+    };
+    
+    this.emit('context-menu-action', event);
   }
 
   private buildContextMenu(wc: WebContents, params: ContextMenuParams): Menu {
@@ -46,7 +79,7 @@ export class ContextMenuService extends EventEmitter {
     const suggestions = params.dictionarySuggestions.slice(0, 5);
 
     const suggestionItems = suggestions.length
-      ? suggestions.map(s => ({ label: s, click: () => wc.replaceMisspelling(s) }))
+      ? suggestions.map(s => ({ label: s, click: () => { wc.replaceMisspelling(s); this.emitContextMenuAction(`Replace with "${s}"`); } }))
       : [{ label: 'No spelling suggestions', enabled: false }];
 
     return [
@@ -54,7 +87,7 @@ export class ContextMenuService extends EventEmitter {
       { type: 'separator' },
       {
         label: 'Add to Dictionary',
-        click: () => wc.session.addWordToSpellCheckerDictionary(params.misspelledWord),
+        click: () => { wc.session.addWordToSpellCheckerDictionary(params.misspelledWord); this.emitContextMenuAction('Add to Dictionary'); },
       },
     ];
   }
@@ -65,38 +98,39 @@ export class ContextMenuService extends EventEmitter {
     if (linkURL.startsWith('mailto:')) {
       const email = linkURL.replace('mailto:', '').split('?')[0];
       return [
-        { label: 'Copy Email Address', click: () => clipboard.writeText(email) },
-        { label: 'Send Email', click: () => shell.openExternal(linkURL) },
+        { label: 'Copy Email Address', click: () => { clipboard.writeText(email); this.emitContextMenuAction('Copy Email Address'); } },
+        { label: 'Send Email', click: () => { shell.openExternal(linkURL); this.emitContextMenuAction('Send Email'); } },
       ];
     }
 
     if (linkURL.startsWith('tel:')) {
       const phone = linkURL.replace('tel:', '');
       return [
-        { label: 'Copy Phone Number', click: () => clipboard.writeText(phone) },
-        { label: 'Call', click: () => shell.openExternal(linkURL) },
+        { label: 'Copy Phone Number', click: () => { clipboard.writeText(phone); this.emitContextMenuAction('Copy Phone Number'); } },
+        { label: 'Call', click: () => { shell.openExternal(linkURL); this.emitContextMenuAction('Call'); } },
       ];
     }
 
     return [
-      { label: 'Open Link in New Tab', click: () => this.emit('open-link-in-new-tab', linkURL) },
-      { label: 'Open Link in New Window', click: () => shell.openExternal(linkURL) },
+      { label: 'Open Link in New Tab', click: () => { this.emit('open-link-in-new-tab', linkURL); this.emitContextMenuAction('Open Link in New Tab'); } },
+      { label: 'Open Link in New Window', click: () => { shell.openExternal(linkURL); this.emitContextMenuAction('Open Link in New Window'); } },
       { type: 'separator' },
-      { label: 'Save Link As...', click: () => this.saveAs(linkURL, 'download') },
-      { label: 'Copy Link Address', click: () => clipboard.writeText(linkURL) },
-      ...(linkText ? [{ label: 'Copy Link Text', click: () => clipboard.writeText(linkText) }] : []),
+      { label: 'Save Link As...', click: () => { this.saveAs(linkURL, 'download'); this.emitContextMenuAction('Save Link As...'); } },
+      { label: 'Copy Link Address', click: () => { clipboard.writeText(linkURL); this.emitContextMenuAction('Copy Link Address'); } },
+      ...(linkText ? [{ label: 'Copy Link Text', click: () => { clipboard.writeText(linkText); this.emitContextMenuAction('Copy Link Text'); } }] : []),
     ];
   }
 
   private addImageItems(params: ContextMenuParams): MenuItemConstructorOptions[] {
     const { srcURL } = params;
     const isBase64 = srcURL.startsWith('data:image/');
+    const copyLabel = isBase64 ? 'Copy Image Data URL' : 'Copy Image Address';
 
     return [
-      { label: 'Open Image in New Tab', click: () => this.emit('open-link-in-new-tab', srcURL) },
-      { label: 'Save Image As...', click: () => this.saveImageAs(srcURL) },
-      { label: 'Copy Image', click: () => this.copyImageToClipboard(srcURL) },
-      { label: isBase64 ? 'Copy Image Data URL' : 'Copy Image Address', click: () => clipboard.writeText(srcURL) },
+      { label: 'Open Image in New Tab', click: () => { this.emit('open-link-in-new-tab', srcURL); this.emitContextMenuAction('Open Image in New Tab'); } },
+      { label: 'Save Image As...', click: () => { this.saveImageAs(srcURL); this.emitContextMenuAction('Save Image As...'); } },
+      { label: 'Copy Image', click: () => { this.copyImageToClipboard(srcURL); this.emitContextMenuAction('Copy Image'); } },
+      { label: copyLabel, click: () => { clipboard.writeText(srcURL); this.emitContextMenuAction(copyLabel); } },
     ];
   }
 
@@ -106,16 +140,16 @@ export class ContextMenuService extends EventEmitter {
     const ext = mediaType === 'video' ? '.mp4' : '.mp3';
 
     return [
-      { label: `Open ${label} in New Tab`, click: () => this.emit('open-link-in-new-tab', srcURL) },
-      { label: `Save ${label} As...`, click: () => this.saveAs(srcURL, mediaType, ext) },
-      { label: `Copy ${label} Address`, click: () => clipboard.writeText(srcURL) },
+      { label: `Open ${label} in New Tab`, click: () => { this.emit('open-link-in-new-tab', srcURL); this.emitContextMenuAction(`Open ${label} in New Tab`); } },
+      { label: `Save ${label} As...`, click: () => { this.saveAs(srcURL, mediaType, ext); this.emitContextMenuAction(`Save ${label} As...`); } },
+      { label: `Copy ${label} Address`, click: () => { clipboard.writeText(srcURL); this.emitContextMenuAction(`Copy ${label} Address`); } },
       { type: 'separator' },
-      { label: 'Play/Pause', click: () => this.execMediaAction(wc, params, 'element.paused ? element.play() : element.pause()') },
-      { label: 'Mute/Unmute', click: () => this.execMediaAction(wc, params, 'element.muted = !element.muted') },
+      { label: 'Play/Pause', click: () => { this.execMediaAction(wc, params, 'element.paused ? element.play() : element.pause()'); this.emitContextMenuAction('Play/Pause'); } },
+      { label: 'Mute/Unmute', click: () => { this.execMediaAction(wc, params, 'element.muted = !element.muted'); this.emitContextMenuAction('Mute/Unmute'); } },
       ...(mediaType === 'video'
         ? [
-            { label: 'Toggle Loop', click: () => this.execMediaAction(wc, params, 'element.loop = !element.loop') },
-            { label: 'Toggle Controls', click: () => this.execMediaAction(wc, params, 'element.controls = !element.controls') },
+            { label: 'Toggle Loop', click: () => { this.execMediaAction(wc, params, 'element.loop = !element.loop'); this.emitContextMenuAction('Toggle Loop'); } },
+            { label: 'Toggle Controls', click: () => { this.execMediaAction(wc, params, 'element.controls = !element.controls'); this.emitContextMenuAction('Toggle Controls'); } },
           ]
         : []),
     ];
@@ -124,16 +158,16 @@ export class ContextMenuService extends EventEmitter {
   private addEditableItems(wc: WebContents, params: ContextMenuParams): MenuItemConstructorOptions[] {
     const { editFlags } = params;
     const items: Array<{ label: string; accel?: string; enabled: boolean; action: () => void }> = [
-      { label: 'Undo', accel: 'CmdOrCtrl+Z', enabled: editFlags.canUndo, action: () => wc.undo() },
-      { label: 'Redo', accel: 'CmdOrCtrl+Shift+Z', enabled: editFlags.canRedo, action: () => wc.redo() },
+      { label: 'Undo', accel: 'CmdOrCtrl+Z', enabled: editFlags.canUndo, action: () => { wc.undo(); this.emitContextMenuAction('Undo'); } },
+      { label: 'Redo', accel: 'CmdOrCtrl+Shift+Z', enabled: editFlags.canRedo, action: () => { wc.redo(); this.emitContextMenuAction('Redo'); } },
     ];
 
     const clipboardItems: typeof items = [
-      { label: 'Cut', accel: 'CmdOrCtrl+X', enabled: editFlags.canCut, action: () => wc.cut() },
-      { label: 'Copy', accel: 'CmdOrCtrl+C', enabled: editFlags.canCopy, action: () => wc.copy() },
-      { label: 'Paste', accel: 'CmdOrCtrl+V', enabled: editFlags.canPaste, action: () => wc.paste() },
-      { label: 'Paste and Match Style', accel: 'CmdOrCtrl+Shift+V', enabled: editFlags.canPaste, action: () => wc.pasteAndMatchStyle() },
-      { label: 'Delete', enabled: editFlags.canDelete, action: () => wc.delete() },
+      { label: 'Cut', accel: 'CmdOrCtrl+X', enabled: editFlags.canCut, action: () => { wc.cut(); this.emitContextMenuAction('Cut'); } },
+      { label: 'Copy', accel: 'CmdOrCtrl+C', enabled: editFlags.canCopy, action: () => { wc.copy(); this.emitContextMenuAction('Copy'); } },
+      { label: 'Paste', accel: 'CmdOrCtrl+V', enabled: editFlags.canPaste, action: () => { wc.paste(); this.emitContextMenuAction('Paste'); } },
+      { label: 'Paste and Match Style', accel: 'CmdOrCtrl+Shift+V', enabled: editFlags.canPaste, action: () => { wc.pasteAndMatchStyle(); this.emitContextMenuAction('Paste and Match Style'); } },
+      { label: 'Delete', enabled: editFlags.canDelete, action: () => { wc.delete(); this.emitContextMenuAction('Delete'); } },
     ];
 
     return [
@@ -141,7 +175,7 @@ export class ContextMenuService extends EventEmitter {
       { type: 'separator' },
       ...clipboardItems.map(i => ({ label: i.label, accelerator: i.accel, enabled: i.enabled, click: i.action })),
       { type: 'separator' },
-      { label: 'Select All', accelerator: 'CmdOrCtrl+A', enabled: editFlags.canSelectAll, click: () => wc.selectAll() },
+      { label: 'Select All', accelerator: 'CmdOrCtrl+A', enabled: editFlags.canSelectAll, click: () => { wc.selectAll(); this.emitContextMenuAction('Select All'); } },
     ];
   }
 
@@ -150,24 +184,24 @@ export class ContextMenuService extends EventEmitter {
     const displayText = text.length > 50 ? `${text.substring(0, 50)}...` : text;
 
     return [
-      { label: 'Copy', accelerator: 'CmdOrCtrl+C', click: () => wc.copy() },
+      { label: 'Copy', accelerator: 'CmdOrCtrl+C', click: () => { wc.copy(); this.emitContextMenuAction('Copy'); } },
       {
         label: `Search Browzer for "${displayText}"`,
-        click: () => this.emit('open-link-in-new-tab', `https://www.google.com/search?q=${encodeURIComponent(text)}`),
+        click: () => { this.emit('open-link-in-new-tab', `https://www.google.com/search?q=${encodeURIComponent(text)}`); this.emitContextMenuAction(`Search for "${displayText}"`); },
       },
     ];
   }
 
   private addPageItems(wc: WebContents, params: ContextMenuParams): MenuItemConstructorOptions[] {
     return [
-      { label: 'Back', accelerator: 'Alt+Left', enabled: wc.navigationHistory.canGoBack(), click: () => wc.navigationHistory.goBack() },
-      { label: 'Forward', accelerator: 'Alt+Right', enabled: wc.navigationHistory.canGoForward(), click: () => wc.navigationHistory.goForward() },
-      { label: 'Reload', accelerator: 'CmdOrCtrl+R', click: () => wc.reload() },
+      { label: 'Back', accelerator: 'Alt+Left', enabled: wc.navigationHistory.canGoBack(), click: () => { wc.navigationHistory.goBack(); this.emitContextMenuAction('Back'); } },
+      { label: 'Forward', accelerator: 'Alt+Right', enabled: wc.navigationHistory.canGoForward(), click: () => { wc.navigationHistory.goForward(); this.emitContextMenuAction('Forward'); } },
+      { label: 'Reload', accelerator: 'CmdOrCtrl+R', click: () => { wc.reload(); this.emitContextMenuAction('Reload'); } },
       { type: 'separator' },
-      { label: 'Save As...', accelerator: 'CmdOrCtrl+S', click: () => this.savePageAs(wc) },
-      { label: 'Print...', accelerator: 'CmdOrCtrl+P', click: () => wc.print() },
+      { label: 'Save As...', accelerator: 'CmdOrCtrl+S', click: () => { this.savePageAs(wc); this.emitContextMenuAction('Save As...'); } },
+      { label: 'Print...', accelerator: 'CmdOrCtrl+P', click: () => { wc.print(); this.emitContextMenuAction('Print...'); } },
       { type: 'separator' },
-      { label: 'Inspect', accelerator: 'CmdOrCtrl+Shift+I', click: () => wc.inspectElement(params.x, params.y) },
+      { label: 'Inspect', accelerator: 'CmdOrCtrl+Shift+I', click: () => { wc.inspectElement(params.x, params.y); this.emitContextMenuAction('Inspect'); } },
     ];
   }
 

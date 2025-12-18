@@ -1,6 +1,5 @@
-/* eslint-disable no-case-declarations */
-import { MousePointer2, Keyboard, List, CheckCircle, RadioTower, Upload, Command, Navigation, CheckSquare, Circle, ArrowLeftRight } from "lucide-react";
-import { RecordedAction } from "../../shared/types";
+import { MousePointer2, Keyboard, List, CheckCircle, RadioTower, Upload, Command, Navigation, CheckSquare, Circle, ArrowLeftRight, ChevronRight } from "lucide-react";
+import { RecordedAction } from "@/shared/types";
 
 export class RecordingUtils {
     
@@ -16,16 +15,24 @@ export class RecordingUtils {
               icon: MousePointer2,
               title: 'Click',
               description: action.target?.text || action.target?.tagName || 'Element clicked',
-              color: 'bg-blue-500/10 text-blue-400 border-blue-500/20',
+              color: 'bg-blue-500/10 text-blue-400 border-blue-500/70',
             };
+          
+          case 'context-menu':
+            return {
+              icon: Navigation,
+              title: 'Context Menu',
+              description: action.target?.value || action.target?.tagName || 'Element right-clicked',
+              color: 'bg-purple-500/10 text-purple-400 border-purple-500/70',
+            }
       
           case 'input':
-            const inputType = action.target?.type || 'text';
+            const inputType = action.target?.attributes?.type || 'text';
             return {
               icon: Keyboard,
               title: `Input (${inputType})`,
-              description: `Entered text in ${action.target?.tagName || 'field'}`,
-              color: 'bg-green-500/10 text-green-400 border-green-500/20',
+              description: `Entered text in ${action.target?.attributes?.name || 'field'}`,
+              color: 'bg-green-500/10 text-green-400 border-green-500/70',
             };
       
           case 'select':
@@ -37,7 +44,7 @@ export class RecordingUtils {
               description: isMultiple 
                 ? `Selected ${selectedCount} option(s)` 
                 : `Selected: ${action.metadata?.selectedTexts?.[0] || action.value}`,
-              color: 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20',
+              color: 'bg-cyan-500/10 text-cyan-400 border-cyan-500/70',
             };
       
           case 'checkbox':
@@ -46,7 +53,7 @@ export class RecordingUtils {
               icon: CheckCircle,
               title: 'Checkbox',
               description: `${checked ? 'Checked' : 'Unchecked'} ${action.metadata?.label || 'checkbox'}`,
-              color: 'bg-teal-500/10 text-teal-400 border-teal-500/20',
+              color: 'bg-teal-500/10 text-teal-400 border-teal-500/70',
             };
       
           case 'radio':
@@ -54,7 +61,7 @@ export class RecordingUtils {
               icon: RadioTower,
               title: 'Radio Button',
               description: `Selected: ${action.metadata?.label || action.value}`,
-              color: 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20',
+              color: 'bg-indigo-500/10 text-indigo-400 border-indigo-500/70',
             };
       
           case 'file-upload':
@@ -63,7 +70,7 @@ export class RecordingUtils {
               icon: Upload,
               title: 'File Upload',
               description: `Uploaded ${fileCount} file(s): ${action.value}`,
-              color: 'bg-pink-500/10 text-pink-400 border-pink-500/20',
+              color: 'bg-pink-500/10 text-pink-400 border-pink-500/70',
             };
       
           case 'navigate':
@@ -71,10 +78,10 @@ export class RecordingUtils {
             const domain = url.replace(/^https?:\/\//, '').split('/')[0];
             const isSPA = action.metadata?.spa;
             return {
-              icon: Navigation,
+              icon: ChevronRight,
               title: isSPA ? 'Navigate (SPA)' : 'Navigate',
               description: domain || url,
-              color: 'bg-purple-500/10 text-purple-400 border-purple-500/20',
+              color: 'bg-teal-500/10 text-teal-400 border-teal-500',
             };
       
           case 'keypress':
@@ -84,7 +91,7 @@ export class RecordingUtils {
               icon: isShortcut ? Command : Keyboard,
               title: isShortcut ? 'Shortcut' : 'Keypress',
               description: `Pressed ${shortcut}`,
-              color: 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20',
+              color: 'bg-yellow-500/10 text-yellow-400 border-yellow-500',
             };
       
           case 'submit':
@@ -93,7 +100,7 @@ export class RecordingUtils {
               icon: CheckSquare,
               title: 'Form Submit',
               description: triggerText ? `Via: ${triggerText}` : 'Form submitted',
-              color: 'bg-orange-500/10 text-orange-400 border-orange-500/20',
+              color: 'bg-orange-500/10 text-orange-400 border-orange-500/70',
             };
       
           case 'tab-switch':
@@ -102,7 +109,7 @@ export class RecordingUtils {
               icon: ArrowLeftRight,
               title: 'Tab Switch',
               description: `Switched to: ${tabTitle}`,
-              color: 'bg-slate-500/10 text-slate-400 border-slate-500/20',
+              color: 'bg-slate-500/10 text-slate-400 border-slate-500/70',
             };
       
           default:
@@ -110,7 +117,7 @@ export class RecordingUtils {
               icon: Circle,
               title: action.type,
               description: 'Action recorded',
-              color: 'bg-gray-500/10 text-gray-400 border-gray-500/20',
+              color: 'bg-gray-500/10 text-gray-400 border-gray-500/70',
             };
         }
       }

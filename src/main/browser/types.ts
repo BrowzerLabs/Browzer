@@ -1,5 +1,5 @@
 import { WebContentsView } from 'electron';
-import { TabInfo } from '@/shared/types';
+import { ElementTarget, RecordedAction, TabInfo } from '@/shared/types';
 import { VideoRecorder } from '@/main/recording';
 import { BrowserAutomationExecutor } from '@/main/automation';
 import { PasswordAutomation } from '@/main/password';
@@ -26,6 +26,7 @@ export interface TabServiceEvents {
   'tab:switched': (previousTabId: string, newTab: Tab) => void;
   'tab:reordered': (data: { tabId: string; from: number; to: number }) => void;
   'tabs:changed': () => void;
+  'context-menu-action': (event: RecordedAction) => void;
 }
 
 export interface RecordingState {

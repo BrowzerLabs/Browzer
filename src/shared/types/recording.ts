@@ -33,7 +33,7 @@ export interface ElementTarget {
 }
 
 export interface RecordedAction {
-  type: 'click' | 'input' | 'navigate' | 'keypress' | 'submit' | 'select' | 'checkbox' | 'radio' | 'toggle' | 'file-upload' | 'tab-switch';
+  type: 'click' | 'input' | 'navigate' | 'keypress' | 'submit' | 'select' | 'checkbox' | 'radio' | 'toggle' | 'file-upload' | 'tab-switch' | 'context-menu';
   timestamp: number;
   target?: ElementTarget;
   value?: string | string[] | boolean;
