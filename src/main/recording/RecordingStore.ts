@@ -6,21 +6,9 @@ import { unlink, writeFile } from 'fs/promises';
 import { existsSync } from 'fs';
 import { SystemPromptBuilder } from '../llm';
 
-/**
- * RecordingStore - SQLite-based persistent storage for recorded sessions
- * 
- * Features:
- * - Scalable storage for thousands of recordings
- * - Fast queries with proper indexing
- * - Full-text search on recording names and descriptions
- * - Efficient statistics and aggregations
- * - Transaction support for data integrity
- * - Automatic video file cleanup
- */
 export class RecordingStore {
   private db: Database.Database;
 
-  // Prepared statements for better performance
   private stmts: {
     insert: Database.Statement;
     getById: Database.Statement;
@@ -36,7 +24,6 @@ export class RecordingStore {
     
     this.db = new Database(dbPath);
     
-    // Performance optimizations
     this.db.pragma('journal_mode = WAL');
     this.db.pragma('synchronous = NORMAL');
     this.db.pragma('foreign_keys = ON');
@@ -47,7 +34,6 @@ export class RecordingStore {
     
     this.initializeDatabase();
     
-    // Prepare frequently used statements
     this.stmts = {
       insert: this.db.prepare(`
         INSERT INTO recordings (
@@ -70,13 +56,9 @@ export class RecordingStore {
     console.log('RecordingStore initialized with SQLite at:', dbPath);
   }
 
-  /**
-   * Initialize database schema
-   */
   private initializeDatabase(): void {
     try {
       this.db.exec(`
-        -- Main recordings table
         CREATE TABLE IF NOT EXISTS recordings (
           id TEXT PRIMARY KEY,
           name TEXT NOT NULL,
@@ -85,29 +67,24 @@ export class RecordingStore {
           duration INTEGER NOT NULL,
           action_count INTEGER NOT NULL,
           
-          -- Video metadata
           video_path TEXT,
           video_size INTEGER,
           video_format TEXT,
           video_duration INTEGER,
           
-          -- Recording metadata
           start_url TEXT,
           
-          -- JSON data (for complex nested structures)
           actions_json TEXT NOT NULL,
           tabs_json TEXT,
           metadata_json TEXT
         );
 
-        -- Indexes for fast lookups
         CREATE INDEX IF NOT EXISTS idx_created_at ON recordings(created_at DESC);
         CREATE INDEX IF NOT EXISTS idx_name ON recordings(name);
         CREATE INDEX IF NOT EXISTS idx_action_count ON recordings(action_count DESC);
         CREATE INDEX IF NOT EXISTS idx_duration ON recordings(duration DESC);
         CREATE INDEX IF NOT EXISTS idx_video_path ON recordings(video_path);
 
-        -- Full-text search virtual table
         CREATE VIRTUAL TABLE IF NOT EXISTS recordings_fts USING fts5(
           id UNINDEXED,
           name,
@@ -116,7 +93,6 @@ export class RecordingStore {
           content_rowid='rowid'
         );
 
-        -- Triggers to keep FTS table in sync
         CREATE TRIGGER IF NOT EXISTS recordings_fts_insert AFTER INSERT ON recordings BEGIN
           INSERT INTO recordings_fts(rowid, id, name, description)
           VALUES (new.rowid, new.id, new.name, COALESCE(new.description, ''));
@@ -140,9 +116,6 @@ export class RecordingStore {
     }
   }
 
-  /**
-   * Convert database row to RecordingSession
-   */
   private rowToSession(row: any): RecordingSession {
     const base: RecordingSession = {
       id: row.id,
@@ -154,7 +127,6 @@ export class RecordingStore {
       actions: JSON.parse(row.actions_json),
     };
 
-    // Add optional fields
     if (row.video_path) base.videoPath = row.video_path;
     if (row.video_size) base.videoSize = row.video_size;
     if (row.video_format) base.videoFormat = row.video_format;
@@ -162,7 +134,6 @@ export class RecordingStore {
     if (row.start_url) base.url = row.start_url;
     if (row.tabs_json) base.tabs = JSON.parse(row.tabs_json);
     
-    // Parse metadata JSON and merge into base object
     if (row.metadata_json) {
       const metadata = JSON.parse(row.metadata_json);
       Object.assign(base, metadata);
@@ -171,12 +142,8 @@ export class RecordingStore {
     return base;
   }
 
-  /**
-   * Save a new recording session
-   */
   saveRecording(session: RecordingSession): void {
     try {
-      // Extract metadata fields (everything except core fields)
       const { id, name, description, actions, createdAt, duration, actionCount,
               videoPath, videoSize, videoFormat, videoDuration, url, tabs, ...metadata } = session;
 
@@ -204,9 +171,6 @@ export class RecordingStore {
     }
   }
 
-  /**
-   * Get all recordings
-   */
   getAllRecordings(): RecordingSession[] {
     try {
       const rows = this.stmts.getAll.all();
@@ -217,9 +181,6 @@ export class RecordingStore {
     }
   }
 
-  /**
-   * Get recording by ID
-   */
   getRecording(id: string): RecordingSession | undefined {
     try {
       const row = this.stmts.getById.get(id);
@@ -230,9 +191,6 @@ export class RecordingStore {
     }
   }
 
-  /**
-   * Search recordings by name or description
-   */
   searchRecordings(query: string, limit = 50): RecordingSession[] {
     try {
       const sql = `
@@ -251,9 +209,6 @@ export class RecordingStore {
     }
   }
 
-  /**
-   * Get recordings by date range
-   */
   getRecordingsByDateRange(startTime: number, endTime: number): RecordingSession[] {
     try {
       const sql = `
@@ -270,9 +225,6 @@ export class RecordingStore {
     }
   }
 
-  /**
-   * Get recent recordings
-   */
   getRecentRecordings(limit = 20): RecordingSession[] {
     try {
       const sql = `
@@ -289,9 +241,6 @@ export class RecordingStore {
     }
   }
 
-  /**
-   * Export recording to JSON file
-   */
   async exportRecording(id: string): Promise<{ success: boolean; filePath?: string; error?: string }> {
     try {
       const recording = this.getRecording(id);
@@ -301,7 +250,7 @@ export class RecordingStore {
       }
 
       const xmlString = SystemPromptBuilder.formatRecordedSession(recording)
-      const fileName = `recording-${recording.name.replace(/[^a-z0-9]/gi, '-').toLowerCase()}-${Date.now()}.xml`;
+      const fileName = `${recording.name.replace(/[^a-z0-9]/gi, '-').toLowerCase()}-${Date.now()}.xml`;
 
       const { filePath } = await dialog.showSaveDialog({
         title: 'Export Recording',
@@ -320,9 +269,6 @@ export class RecordingStore {
     }
   }
 
-  /**
-   * Delete recording by ID (including video file)
-   */
   async deleteRecording(id: string): Promise<boolean> {
     try {
       const recording = this.getRecording(id);
@@ -331,7 +277,6 @@ export class RecordingStore {
         return false;
       }
       
-      // Delete video file if it exists
       if (recording.videoPath) {
         await this.deleteVideoFile(recording.videoPath);
       }
@@ -350,9 +295,6 @@ export class RecordingStore {
     }
   }
 
-  /**
-   * Delete multiple recordings (optimized with transaction)
-   */
   async deleteRecordings(ids: string[]): Promise<number> {
     if (ids.length === 0) return 0;
 
@@ -362,7 +304,6 @@ export class RecordingStore {
         for (const id of recordingIds) {
           const recording = this.getRecording(id);
           if (recording?.videoPath) {
-            // Note: Video deletion is async, handled outside transaction
             this.deleteVideoFile(recording.videoPath).catch(err => 
               console.error('Failed to delete video:', err)
             );
@@ -381,9 +322,6 @@ export class RecordingStore {
     }
   }
 
-  /**
-   * Update recording metadata (cannot update video-related fields)
-   */
   updateRecording(id: string, updates: Partial<RecordingSession>): boolean {
     try {
       const recording = this.getRecording(id);
@@ -392,18 +330,14 @@ export class RecordingStore {
         return false;
       }
 
-      // Only allow updating safe fields
       const name = updates.name !== undefined ? updates.name : recording.name;
       const description = updates.description !== undefined ? updates.description : recording.description;
       
-      // Extract current metadata (non-core fields)
       const { id: _id, name: _name, description: _desc, actions, createdAt, duration, actionCount,
               videoPath, videoSize, videoFormat, videoDuration, url, tabs, ...currentMetadata } = recording;
       
-      // Extract update metadata (non-core fields)
       const { name: _uName, description: _uDesc, ...updateMetadata } = updates;
       
-      // Merge metadata
       const mergedMetadata = { ...currentMetadata, ...updateMetadata };
 
       this.stmts.update.run(
@@ -421,14 +355,10 @@ export class RecordingStore {
     }
   }
 
-  /**
-   * Clear all recordings (including video files)
-   */
   async clearAll(): Promise<void> {
     try {
       const recordings = this.getAllRecordings();
       
-      // Delete all video files
       for (const recording of recordings) {
         if (recording.videoPath) {
           await this.deleteVideoFile(recording.videoPath);
@@ -443,9 +373,6 @@ export class RecordingStore {
     }
   }
 
-  /**
-   * Get storage statistics (optimized with SQL aggregations)
-   */
   getStats(): { 
     count: number; 
     totalActions: number; 
@@ -471,7 +398,6 @@ export class RecordingStore {
         avgActions: number | null;
       };
 
-      // Calculate JSON storage size (approximate)
       const recordings = this.getAllRecordings();
       const totalSize = JSON.stringify(recordings).length;
 
@@ -496,9 +422,6 @@ export class RecordingStore {
     }
   }
 
-  /**
-   * Get recordings grouped by date
-   */
   getRecordingsByDate(): Map<string, RecordingSession[]> {
     try {
       const recordings = this.getAllRecordings();
@@ -519,9 +442,6 @@ export class RecordingStore {
     }
   }
 
-  /**
-   * Get top recordings by action count
-   */
   getTopRecordingsByActions(limit = 10): RecordingSession[] {
     try {
       const sql = `
@@ -538,9 +458,6 @@ export class RecordingStore {
     }
   }
 
-  /**
-   * Delete video file from disk
-   */
   private async deleteVideoFile(videoPath: string): Promise<void> {
     try {
       if (existsSync(videoPath)) {
@@ -552,9 +469,6 @@ export class RecordingStore {
     }
   }
 
-  /**
-   * Clean up orphaned video files (videos without corresponding recordings)
-   */
   async cleanupOrphanedVideos(videosDirectory: string): Promise<number> {
     try {
       const { readdir } = await import('fs/promises');
@@ -585,9 +499,6 @@ export class RecordingStore {
     }
   }
 
-  /**
-   * Optimize database (run periodically for maintenance)
-   */
   async optimize(): Promise<void> {
     try {
       console.log('Optimizing recordings database...');
@@ -600,9 +511,6 @@ export class RecordingStore {
     }
   }
 
-  /**
-   * Close database connection
-   */
   close(): void {
     try {
       this.db.close();
@@ -612,9 +520,6 @@ export class RecordingStore {
     }
   }
 
-  /**
-   * Get database statistics for monitoring
-   */
   getDatabaseInfo(): {
     size: number;
     pageCount: number;
