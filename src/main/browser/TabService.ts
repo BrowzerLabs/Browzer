@@ -91,6 +91,9 @@ export class TabService extends EventEmitter {
     this.contextMenuService.on('toast', (payload: ToastPayload) => {
       this.browserView.webContents.send('toast', payload);
     });
+    this.contextMenuService.on('context-menu-action', (event) => {
+      this.emit('context-menu-action', event);
+    });
     this.on('tabs:changed', () => this.triggerSaveSession());
     this.on('tab:created', () => this.triggerSaveSession());
     this.on('tab:closed', () => this.triggerSaveSession());
@@ -178,7 +181,7 @@ export class TabService extends EventEmitter {
 
     this.baseWindow.contentView.removeChildView(tab.view);
     tab.passwordAutomation?.stop().catch(console.error);
-    this.debuggerService.cleanupDebugger(tab.view, tabId);
+    this.debuggerService.cleanupDebugger(tab.view);
     
     // Remove all event listeners before closing to prevent memory leaks
     tab.view.webContents.removeAllListeners();
