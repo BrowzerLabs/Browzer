@@ -106,7 +106,6 @@ export class BrowserAutomationExecutor {
 
     // Use context extraction
     const result = await this.contextExtractor.extractContext({
-      tabId: this.tabId,
       full: params.full,
       scrollTo: params.scrollTo,
       elementTags: params.elementTags,
