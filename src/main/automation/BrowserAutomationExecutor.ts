@@ -1,5 +1,6 @@
 import { WebContentsView } from 'electron';
-
+import type { ToolExecutionResult, XMLContextOptions } from '@/shared/types';
+import { XMLExtractor } from '../context';
 import { ViewportSnapshotCapture } from './ViewportSnapshotCapture';
 import { ClickHandler } from './handlers/ClickHandler';
 import { TypeHandler } from './handlers/TypeHandler';
@@ -14,8 +15,8 @@ import type { ToolExecutionResult } from '@/shared/types';
 export class BrowserAutomationExecutor {
   private view: WebContentsView;
   private tabId: string;
-
-  private contextExtractor: BrowserContextExtractor;
+  
+  private contextExtractor:XMLExtractor;
   private snapshotCapture: ViewportSnapshotCapture;
 
   private clickHandler: ClickHandler;
@@ -27,8 +28,8 @@ export class BrowserAutomationExecutor {
   constructor(view: WebContentsView, tabId: string) {
     this.view = view;
     this.tabId = tabId;
-
-    this.contextExtractor = new BrowserContextExtractor(view);
+    
+    this.contextExtractor = new XMLExtractor(view);
     this.snapshotCapture = new ViewportSnapshotCapture(view);
 
     const context: HandlerContext = { view, tabId };
@@ -96,27 +97,21 @@ export class BrowserAutomationExecutor {
     }
   }
 
-  private async extractContext(params: {
-    full?: boolean;
-    scrollTo?: 'current' | 'top' | 'bottom' | number;
-    elementTags?: string[];
-    maxElements?: number;
-  }): Promise<ToolExecutionResult> {
-    const startTime = Date.now();
 
-    // Use context extraction
-    const result = await this.contextExtractor.extractContext({
-      full: params.full,
-      scrollTo: params.scrollTo,
-      elementTags: params.elementTags,
-      maxElements: params.maxElements,
+  private async extractContext(params: XMLContextOptions): Promise<ToolExecutionResult> {
+    const startTime = Date.now();
+    const result = await this.contextExtractor.extractXMLContext({
+      maxElements: params.maxElements || 100,
+      tags: params.tags || [],
+      viewport: params.viewport || 'current',
+      attributes: params.attributes || {}
     });
 
-    if (result.success && result.context) {
+    if (result.xml && !result.error) {
       return {
         success: true,
         toolName: 'extract_context',
-        context: result.context,
+        context: result.xml,
         url: this.view.webContents.getURL(),
       };
     }
@@ -128,11 +123,9 @@ export class BrowserAutomationExecutor {
         lastError: result.error,
         suggestions: [
           'Page may still be loading',
-          'Try with full=true for complete page context',
-          'Check if page has JavaScript errors',
-          'Verify elementTags filter is correct (e.g., ["BUTTON", "INPUT"])',
-        ],
-      },
+          'Verify elementTags filter is correct (e.g., ["button", "input"])'
+        ]
+      }
     });
   }
 
