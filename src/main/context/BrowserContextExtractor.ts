@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { WebContentsView } from 'electron';
 
 import {
@@ -9,12 +8,9 @@ import {
 } from '@/shared/types/context';
 
 export class BrowserContextExtractor {
-  private view: WebContentsView | null = null;
-
-  constructor(view?: WebContentsView) {
-    if (view) {
-      this.setView(view);
-    }
+  private view: WebContentsView 
+  constructor(view: WebContentsView) {
+    this.view = view;
   }
 
   public setView(view: WebContentsView): void {
@@ -50,7 +46,6 @@ export class BrowserContextExtractor {
         };
       }
 
-      // Get basic page info
       const url = this.view.webContents.getURL();
       const title = this.view.webContents.getTitle();
 
