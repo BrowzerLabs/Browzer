@@ -147,8 +147,8 @@ export class BrowserAutomationExecutor {
     const scrollTo = params.scrollTo || 'current';
     const result = await this.snapshotCapture.captureSnapshot(scrollTo);
     const executionTime = Date.now() - startTime;
-
-    if (result.success && result.image) {
+    
+    if (!result.error && result.image) {
       return {
         success: true,
         toolName: 'take_snapshot',
@@ -157,15 +157,8 @@ export class BrowserAutomationExecutor {
           type: 'image',
           source: {
             type: 'base64',
-            media_type: result.image.mediaType,
-            data: result.image.data,
-          },
-          metadata: {
-            width: result.image.width,
-            height: result.image.height,
-            sizeBytes: result.image.sizeBytes,
-            estimatedTokens: result.image.estimatedTokens,
-            viewport: result.viewport,
+            media_type: 'image/jpeg',
+            data: result.image
           },
         },
         timestamp: Date.now(),
@@ -179,24 +172,12 @@ export class BrowserAutomationExecutor {
       message: result.error || 'Failed to capture viewport snapshot',
       details: {
         lastError: result.error,
-        suggestions: [
-          'Page may still be loading',
-          'If scrolling to element, verify selector is correct',
-          'Try with scrollTo: "current" to capture without scrolling',
-          'Check if page has rendering issues',
-        ],
-      },
+        suggestions: []
+      }
     });
   }
 
-  /**
-   * Helper to create error results
-   */
-  private createErrorResult(
-    toolName: string,
-    startTime: number,
-    error: any
-  ): ToolExecutionResult {
+  private createErrorResult(toolName: string, startTime: number, error: any): ToolExecutionResult {
     return {
       success: false,
       toolName,
