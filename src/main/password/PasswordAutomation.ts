@@ -115,10 +115,11 @@ export class PasswordAutomation {
       const forms = await this.formDetector.detectForms();
       this.detectedForms = forms;
 
-      if (forms.length === 0) return;
+      await this.setupLoginFocusDetector();
 
-      await this.autofillService.setupAutofill(forms);
-      await this.setupFormSubmissionMonitoring(forms);
+      if (forms.length > 0) {
+        await this.autofillService.setupAutofill(forms);
+      }
     } catch (error) {
       console.error('[PasswordAutomation] Error scanning page:', error);
     }
@@ -189,6 +190,60 @@ export class PasswordAutomation {
     }
   }
 
+  private async setupLoginFocusDetector(): Promise<void> {
+    try {
+      await this.debugger.sendCommand('Runtime.evaluate', {
+        expression: `
+          (function() {
+            if (window.__browzerLoginFocusDetectorInstalled) return;
+            window.__browzerLoginFocusDetectorInstalled = true;
+  
+            let pendingLogin = null;
+  
+            const updateDraft = (event) => {
+              const target = event.target;
+              if (!target || target.tagName !== 'INPUT') return;
+              
+              const form = target.closest('form');
+              const root = form || document; 
+              
+              const passInput = root.querySelector('input[type="password"]');
+              if (!passInput) return;
+  
+              const inputs = Array.from(root.querySelectorAll('input'));
+              const passIndex = inputs.indexOf(passInput);
+              const userInput = inputs[passIndex - 1];
+  
+              pendingLogin = {
+                username: userInput ? userInput.value : '',
+                password: passInput.value,
+                url: window.location.href
+              };
+            };
+
+            document.addEventListener('submit', (e) => {
+              if (pendingLogin && pendingLogin.password) {
+                console.log('BROWZER_LOGIN_SUBMITTED', JSON.stringify(pendingLogin));
+                pendingLogin = null; 
+              }
+            }, true);
+
+            window.addEventListener('beforeunload', () => {
+              if (pendingLogin && pendingLogin.password) {
+                console.log('BROWZER_LOGIN_SUBMITTED', JSON.stringify(pendingLogin));
+              }
+            });
+  
+            document.addEventListener('input', updateDraft, true);
+            document.addEventListener('change', updateDraft, true);
+          })();
+        `,
+      });
+    } catch (error) {
+      console.error('[PasswordAutomation] Error setting up detector:', error);
+    }
+  }
+
   private handleConsoleMessage(params: any): void {
     if (params.type !== 'log') return;
 
@@ -214,9 +269,43 @@ export class PasswordAutomation {
         this.handlePasswordNever(fullMessage);
       } else if (message.startsWith('BROWZER_PASSWORD_DISMISS')) {
         this.handlePasswordDismiss();
+      } else if (message.startsWith('BROWZER_LOGIN_SUBMITTED')) {
+        this.handleLoginSubmitted(fullMessage);
       }
     } catch (error) {
       console.error('[PasswordAutomation] Error handling console message:', error);
+    }
+  }
+
+  private async handleLoginSubmitted(message: string): Promise<void> {
+    try {
+      const jsonStr = message.replace('BROWZER_LOGIN_SUBMITTED', '').trim();
+      if (!jsonStr) {
+        console.error('[PasswordAutomation] Empty JSON data for login submitted');
+        return;
+      }
+
+      const data = JSON.parse(jsonStr);
+      const currentUrl = this.view.webContents.getURL();
+      const origin = new URL(currentUrl).origin;
+
+      const submission: FormSubmission = {
+        formId: 'login_detector',
+        origin,
+        username: data.username,
+        email: data.username,
+        password: data.password,
+        timestamp: Date.now(),
+        url: currentUrl
+      };
+
+      setTimeout(async () => {
+        console.log('[PasswordAutomation] Handling login submitted:', submission);
+        await this.promptService.handleFormSubmission(submission);
+      }, 1500);
+    } catch (error) {
+      console.error('[PasswordAutomation] Error handling login submitted:', error);
+      console.error('[PasswordAutomation] Message was:', message);
     }
   }
 
