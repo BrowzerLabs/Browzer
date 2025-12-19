@@ -51,7 +51,6 @@ export class BrowserContextExtractor {
 
       const context: BrowserContext = {
         extractedAt: Date.now(),
-        tabId: options.tabId,
         url,
         title,
         dom: result.dom!,
