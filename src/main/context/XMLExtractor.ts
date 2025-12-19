@@ -32,10 +32,17 @@ export class XMLExtractor {
           
           function buildAttrs(el) {
             const attrs = [];
+            const rect = el.getBoundingClientRect();
+            
+            attrs.push('x="' + Math.round(rect.x) + '"');
+            attrs.push('y="' + Math.round(rect.y) + '"');
+            attrs.push('width="' + Math.round(rect.width) + '"');
+            attrs.push('height="' + Math.round(rect.height) + '"');
+            
             const PRIORITY_ATTRS = ['id', 'name', 'type', 'href', 'aria-label', 'data-testid', 'data-test-id', 'placeholder', 'value', 'role', 'title'];
             
             for (const attrName of PRIORITY_ATTRS) {
-              if (attrs.length >= 10) break;
+              if (attrs.length >= 14) break;
               const value = el.getAttribute(attrName);
               if (!value || IGNORE_ATTRS.has(attrName) || (value && IGNORE_VALUES.has(value?.toLowerCase()))) continue;
               
@@ -46,14 +53,14 @@ export class XMLExtractor {
               attrs.push(attrName + '="' + finalValue.replace(/"/g, '&quot;') + '"');
             }
             
-            if (attrs.length === 0) {
+            if (attrs.length === 4) {
               let text = (el.innerText || el.textContent || '').trim().replace(/\s+/g, ' ').substring(0, 40);
               if (text) attrs.push('text="' + text.replace(/"/g, '&quot;') + '"');
             }
             
-            if (attrs.length < 10) {
+            if (attrs.length < 14) {
               for (const attr of el.attributes) {
-                if (attrs.length >= 10) break;
+                if (attrs.length >= 14) break;
                 const name = attr.name;
                 const value = attr.value;
                 if (PRIORITY_ATTRS.includes(name) || IGNORE_ATTRS.has(name) || IGNORE_VALUES.has(value) || !value || value.length > 100 || value.trim() === '') continue;

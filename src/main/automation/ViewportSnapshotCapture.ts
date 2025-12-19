@@ -2,8 +2,8 @@ import { WebContentsView } from 'electron';
 
 export class ViewportSnapshotCapture {
   
-  private readonly JPEG_QUALITY = 85;
-  private readonly MAX_DIMENSION = 1568;
+  private readonly JPEG_QUALITY = 70;
+  private readonly MAX_DIMENSION = 1024;
   
   constructor(private view: WebContentsView) {}
 
@@ -15,21 +15,7 @@ export class ViewportSnapshotCapture {
       | number
       | { element: string; backupSelectors?: string[] }
   ): Promise<{
-    success: boolean;
-    image?: {
-      data: string;
-      mediaType: 'image/jpeg';
-      width: number;
-      height: number;
-      sizeBytes: number;
-      estimatedTokens: number;
-    };
-    viewport?: {
-      scrollX: number;
-      scrollY: number;
-      width: number;
-      height: number;
-    };
+    image?: string;
     error?: string;
   }> {
     try {
@@ -38,7 +24,6 @@ export class ViewportSnapshotCapture {
         await this.sleep(2000);
       }
 
-      const viewportInfo = await this.getViewportInfo();
       const image = await this.view.webContents.capturePage();
       
       const originalSize = image.getSize();
@@ -58,48 +43,25 @@ export class ViewportSnapshotCapture {
           width = Math.round(height * aspectRatio);
         }
         
-        const resized = image.resize({ width, height });
+        const resized = image.resize({ width, height, quality: 'good' });
         const jpeg = resized.toJPEG(this.JPEG_QUALITY);
         const base64Data = jpeg.toString('base64');
-        const sizeBytes = jpeg.length;
-        const estimatedTokens = Math.round((width * height) / 750);
         
         return {
-          success: true,
-          image: {
-            data: base64Data,
-            mediaType: 'image/jpeg',
-            width,
-            height,
-            sizeBytes,
-            estimatedTokens,
-          },
-          viewport: viewportInfo,
+          image: base64Data,
         };
       } else {
         const jpeg = image.toJPEG(this.JPEG_QUALITY);
         const base64Data = jpeg.toString('base64');
-        const sizeBytes = jpeg.length;
-        const estimatedTokens = Math.round((width * height) / 750);
         
         return {
-          success: true,
-          image: {
-            data: base64Data,
-            mediaType: 'image/jpeg',
-            width,
-            height,
-            sizeBytes,
-            estimatedTokens,
-          },
-          viewport: viewportInfo,
+          image: base64Data,
         };
       }
     } catch (error) {
       console.error('Failed to capture snapshot:', error);
       return {
-        success: false,
-        error: error instanceof Error ? error.message : String(error),
+        error: error instanceof Error ? error.message : String(error)
       };
     }
   }
@@ -154,21 +116,6 @@ export class ViewportSnapshotCapture {
     }
   }
 
-  private async getViewportInfo(): Promise<{
-    scrollX: number;
-    scrollY: number;
-    width: number;
-    height: number;
-  }> {
-    return await this.view.webContents.executeJavaScript(`
-      ({
-        scrollX: window.scrollX,
-        scrollY: window.scrollY,
-        width: window.innerWidth,
-        height: window.innerHeight
-      })
-    `);
-  }
 
   private sleep(ms: number): Promise<void> {
     return new Promise((resolve) => setTimeout(resolve, ms));
