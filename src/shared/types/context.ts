@@ -161,3 +161,15 @@ export interface ContextExtractionResult {
   error?: string;
   duration: number;
 }
+
+export interface XMLContextOptions {
+  viewport: 'current' | 'full';
+  tags: string[];
+  maxElements: number;
+  attributes: Record<string, string>;
+}
+
+export interface XMLContextResult {
+  xml?: string;
+  error?: string;
+}
