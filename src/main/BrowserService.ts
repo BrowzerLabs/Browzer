@@ -268,10 +268,6 @@ export class BrowserService {
       }
     });
 
-    this.tabService.on('tab:created', () => {
-      this.requestAddressBarFocus();
-    });
-
     this.tabService.on('context-menu-action', (event: RecordedAction) => {
       if (this.recordingService.isRecordingActive()) {
         this.recordingService.handleContextMenuAction({...event, tabId: this.tabService.getActiveTabId()});
@@ -314,18 +310,6 @@ export class BrowserService {
         view.webContents.send('browser:tabs-updated', this.tabService.getAllTabs());
       }
     });
-  }
-
-  public requestAddressBarFocus(): void {
-    if (this.browserView.webContents.isDestroyed()) {
-      return;
-    }
-    this.browserView.webContents.focus();
-    setTimeout(() => {
-      if (!this.browserView.webContents.isDestroyed()) {
-        this.browserView.webContents.send('request-address-bar-focus');
-      }
-    }, 10);
   }
 
   private notifyTabReordered(data: { tabId: string; from: number; to: number }): void {
