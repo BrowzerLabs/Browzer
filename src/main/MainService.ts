@@ -5,6 +5,7 @@ import { ConnectionService } from './api';
 import { AuthService } from '@/main/auth/AuthService';
 import { AppMenu } from '@/main/menu/AppMenu';
 import { UpdateService } from './UpdateService';
+import { ThemeService } from '@/main/theme/ThemeService';
 import { BaseWindow, WebContentsView, dialog } from 'electron';
 import path from 'node:path';
 
@@ -20,16 +21,30 @@ export class MainService {
   private browserView: WebContentsView | null = null;
   private sidebarVisible = true;
   private sidebarWidthPercent = 30;
+  private themeService: ThemeService;
   
 
   constructor() {
+    const isMac = process.platform === 'darwin';
+    const isWindows = process.platform === 'win32';
+    
     this.baseWindow = new BaseWindow({
       width: 1400,
       height: 900,
       minWidth: 900,
       minHeight: 700,
-      titleBarStyle: 'hiddenInset',
-      trafficLightPosition: { x: 10, y: 10 },
+      ...(isMac && {
+        titleBarStyle: 'hiddenInset',
+        trafficLightPosition: { x: 10, y: 10 },
+      }),
+      ...(isWindows && {
+        titleBarStyle: 'hidden',
+        titleBarOverlay: {
+          color: '#00000000',
+          symbolColor: '#ffffff',
+          height: 32,
+        },
+      }),
       show: false,
       transparent: true,
       darkTheme: true,
@@ -60,6 +75,8 @@ export class MainService {
 
     this.connectionService = new ConnectionService(this.browserView.webContents);
 
+    this.themeService = new ThemeService(this.baseWindow);
+
     this.authService = new AuthService(this.browserService, this.connectionService);
     
     this.connectionService.setRefreshCallback(() => this.authService.refreshSession());
@@ -67,7 +84,8 @@ export class MainService {
     this.ipcHandlers = new IPCHandlers(
       this.baseWindow,
       this.browserService,
-      this.authService
+      this.authService,
+      this.themeService
     );
 
     this.appMenu = new AppMenu(this.browserService.getTabService(), this.updateService);
@@ -151,6 +169,7 @@ export class MainService {
 
   public destroy(): void {
     this.ipcHandlers.cleanup();
+    this.themeService.destroy();
     this.browserService.destroy();
     this.baseWindow = null;
     this.browserView = null;

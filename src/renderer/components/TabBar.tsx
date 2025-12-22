@@ -94,6 +94,7 @@ export function TabBar({
   });
 
   const [isFullScreen, setIsFullScreen] = useState(false);
+  const [platform, setPlatform] = useState<'darwin' | 'win32' | 'linux'>('darwin');
   const [pendingGroupTabId, setPendingGroupTabId] = useState<string | null>(null);
   const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
   const [isGroupDialogOpen, setIsGroupDialogOpen] = useState(false);
@@ -151,6 +152,9 @@ export function TabBar({
   }, [tabs]);
 
   useEffect(() => {
+    const detectedPlatform = window.browserAPI.getPlatform();
+    setPlatform(detectedPlatform);
+
     const initFullScreenState = async () => {
       try {
         const fullScreen = await window.browserAPI.isFullScreen?.();
@@ -232,28 +236,15 @@ export function TabBar({
 
       const containerWidth = containerRef.current.offsetWidth;
       const currentGap = tabCount > LAYOUT.COMPACT_THRESHOLD ? LAYOUT.GAP_COMPACT : LAYOUT.GAP_NORMAL;
-      const paddingLeft = isFullScreen ? 2 : LAYOUT.PADDING_LEFT;
+      const gapSpace = (tabCount - 1) * currentGap;
       
-      // First, check if tabs can fit at max width with button inline
-      const gapSpaceInline = tabCount * currentGap; // gaps between tabs + gap before button
-      const buttonSpace = LAYOUT.NEW_TAB_BUTTON_SPACE;
-      const reservedSpaceInline = buttonSpace + 8; // 8px for padding-right
-      const availableSpaceInline = containerWidth - paddingLeft - reservedSpaceInline - gapSpaceInline;
-      const calculatedWidthInline = Math.floor(availableSpaceInline / tabCount);
+      const isMac = platform === 'darwin';
+      const isWindows = platform === 'win32';
+      const paddingLeft = isFullScreen ? 2 : (isMac ? LAYOUT.PADDING_LEFT : 8);
+      const paddingRight = isWindows ? LAYOUT.WINDOWS_CONTROLS_WIDTH : LAYOUT.PADDING_RIGHT;
       
-      // If tabs can fit at max width with button inline, keep button inline
-      if (calculatedWidthInline >= LAYOUT.MAX_TAB_WIDTH) {
-        setShouldFixButton(false);
-        setTabWidth(LAYOUT.MAX_TAB_WIDTH);
-        return;
-      }
-      
-      // Otherwise, fix button at right and calculate tab width accordingly
-      setShouldFixButton(true);
-      const gapSpaceFixed = (tabCount - 1) * currentGap; // only gaps between tabs
-      const reservedSpaceFixed = buttonSpace + 8; // 8px for padding-right
-      const availableSpaceFixed = containerWidth - paddingLeft - reservedSpaceFixed - gapSpaceFixed;
-      const calculatedWidthFixed = Math.floor(availableSpaceFixed / tabCount);
+      const availableSpace = containerWidth - paddingLeft - paddingRight - LAYOUT.NEW_TAB_BUTTON_SPACE - gapSpace;
+      const calculatedWidthFixed = Math.floor(availableSpace / tabCount);
       
       // Allow tabs to shrink down to just show favicon + minimal padding (16px icon + 8px padding (px-1) = 24px minimum)
       const minRequiredWidth = 24;
@@ -263,7 +254,7 @@ export function TabBar({
     calculateTabWidth();
     window.addEventListener('resize', calculateTabWidth);
     return () => window.removeEventListener('resize', calculateTabWidth);
-  }, [visibleTabs.length, isFullScreen]);
+  }, [visibleTabs.length, isFullScreen, platform]);
 
   const activeTab = activeId ? localTabs.find(t => t.id === activeId) : null;
 
@@ -272,8 +263,10 @@ export function TabBar({
       <div 
         ref={containerRef}
         className={cn(
-          'flex items-center h-9 pr-5 tab-bar-draggable bg-background relative',
-          isFullScreen ? 'pl-2' : 'pl-20'
+          'flex items-center h-9 tab-bar-draggable overflow-hidden bg-background',
+          isFullScreen ? 'pl-2 pr-2' : (
+            platform === 'darwin' ? 'pl-20 pr-2' : 'pl-2 pr-36'
+          )
         )}
         onDoubleClick={handleDoubleClick}
         onKeyDown={handleKeyDown}

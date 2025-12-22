@@ -165,6 +165,8 @@ export interface BrowserAPI {
   setTheme: (theme: 'light' | 'dark' | 'system') => Promise<boolean>;
   isDarkMode: () => Promise<boolean>;
 
+  getPlatform: () => 'darwin' | 'win32' | 'linux';
+
   // Download actions
   getDownloads: () => Promise<DownloadItem[]>;
   pauseDownload: (id: string) => Promise<boolean>,
