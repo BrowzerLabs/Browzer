@@ -19,6 +19,10 @@ jobs:
   build-windows:
     runs-on: windows-latest
     
+    env:
+      WINDOWS_CERTIFICATE_BASE64: ${{ secrets.WINDOWS_CERTIFICATE_BASE64 }}
+      WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+    
     strategy:
       matrix:
         arch: [x64, arm64]
@@ -74,10 +78,7 @@ jobs:
           Get-Content package.json | Select-String '"version"'
       
       - name: Setup Windows code signing certificate
-        if: ${{ secrets.WINDOWS_CERTIFICATE_BASE64 != '' }}
-        env:
-          WINDOWS_CERTIFICATE_BASE64: ${{ secrets.WINDOWS_CERTIFICATE_BASE64 }}
-          WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+        if: ${{ env.WINDOWS_CERTIFICATE_BASE64 != '' }}
         shell: pwsh
         run: |
           # Decode certificate from base64
