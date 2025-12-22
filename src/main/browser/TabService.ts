@@ -170,6 +170,12 @@ export class TabService extends EventEmitter {
     view.webContents.loadURL(this.navigationService.normalizeURL(urlToLoad));
     this.switchToTab(tabId);
     this.emit('tab:created', tab, previousActiveTabId);
+    const focusDelay = process.platform === 'win32' ? 220 : 100;
+    setTimeout(() => {
+      this.browserView.webContents.focus();
+      this.browserView.webContents.send('request-address-bar-focus');
+    }, focusDelay);
+    
     return tab;
   }
 
