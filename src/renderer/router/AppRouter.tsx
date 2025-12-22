@@ -3,7 +3,6 @@ import { ProtectedRoute } from '@/renderer/components/auth/ProtectedRoute';
 import { SignInPage, SignUpPage, ForgotPasswordPage } from '@/renderer/pages/auth';
 import { ConfirmSignupPage } from '@/renderer/pages/auth/ConfirmSignupPage';
 import { ResetPasswordCallbackPage } from '@/renderer/pages/auth/ResetPasswordCallbackPage';
-import { PricingPage } from '@/renderer/pages/PricingPage';
 import { SubscriptionSuccessPage } from '@/renderer/pages/subscription/SubscriptionSuccessPage';
 import { SubscriptionCancelPage } from '@/renderer/pages/subscription/SubscriptionCancelPage';
 import { BrowserChrome } from '@/renderer/components/BrowserChrome';
@@ -44,9 +43,6 @@ function AppRoutes() {
       />
       <Route path="/auth/signup" element={<SignUpPage />} />
       <Route path="/auth/forgot-password" element={<ForgotPasswordPage />} />
-      
-      <Route path="/pricing" element={<PricingPage />} />
-      
       <Route path="/auth/confirm-signup" element={<ConfirmSignupPage />} />
       <Route path="/auth/reset-password" element={<ResetPasswordCallbackPage />} />
       
