@@ -115,77 +115,67 @@ export class PasswordAutomation {
       const forms = await this.formDetector.detectForms();
       this.detectedForms = forms;
 
-      if (forms.length === 0) return;
+      await this.setupLoginFocusDetector();
 
-      await this.autofillService.setupAutofill(forms);
-      await this.setupFormSubmissionMonitoring(forms);
+      if (forms.length > 0) {
+        await this.autofillService.setupAutofill(forms);
+      }
     } catch (error) {
       console.error('[PasswordAutomation] Error scanning page:', error);
     }
   }
 
-  private async setupFormSubmissionMonitoring(forms: DetectedForm[]): Promise<void> {
+  private async setupLoginFocusDetector(): Promise<void> {
     try {
-      const formData = forms.map(form => ({
-        formId: form.formId,
-        formSelector: form.formSelector,
-        usernameSelector: form.usernameField?.selector || form.emailField?.selector,
-        passwordSelector: form.passwordField?.selector,
-        origin: form.origin
-      }));
-
       await this.debugger.sendCommand('Runtime.evaluate', {
         expression: `
           (function() {
-            if (window.__browzerFormMonitoring) return;
-            window.__browzerFormMonitoring = true;
-
-            const forms = ${JSON.stringify(formData)};
-
-            forms.forEach(formData => {
-              let formElement = null;
-              if (formData.formSelector) {
-                formElement = document.querySelector(formData.formSelector);
-              }
-
-              const monitorSubmit = () => {
-                const usernameField = formData.usernameSelector ? 
-                  document.querySelector(formData.usernameSelector) : null;
-                const passwordField = formData.passwordSelector ? 
-                  document.querySelector(formData.passwordSelector) : null;
-
-                if (passwordField && passwordField.value) {
-                  const username = usernameField ? usernameField.value : '';
-                  const password = passwordField.value;
-
-                  console.log('BROWZER_FORM_SUBMIT', JSON.stringify({
-                    formId: formData.formId,
-                    origin: formData.origin,
-                    username: username,
-                    password: password,
-                    timestamp: Date.now()
-                  }));
-                }
+            if (window.__browzerLoginFocusDetectorInstalled) return;
+            window.__browzerLoginFocusDetectorInstalled = true;
+  
+            let pendingLogin = null;
+  
+            const updateDraft = (event) => {
+              const target = event.target;
+              if (!target || target.tagName !== 'INPUT') return;
+              
+              const form = target.closest('form');
+              const root = form || document; 
+              
+              const passInput = root.querySelector('input[type="password"]');
+              if (!passInput) return;
+  
+              const inputs = Array.from(root.querySelectorAll('input'));
+              const passIndex = inputs.indexOf(passInput);
+              const userInput = inputs[passIndex - 1];
+  
+              pendingLogin = {
+                username: userInput ? userInput.value : '',
+                password: passInput.value,
+                url: window.location.href
               };
+            };
 
-              if (formElement) {
-                formElement.addEventListener('submit', monitorSubmit);
+            document.addEventListener('submit', (e) => {
+              if (pendingLogin && pendingLogin.password) {
+                console.log('BROWZER_LOGIN_SUBMITTED', JSON.stringify(pendingLogin));
+                pendingLogin = null; 
               }
+            }, true);
 
-              const buttons = document.querySelectorAll('button[type="submit"], input[type="submit"]');
-              buttons.forEach(button => {
-                button.addEventListener('click', () => {
-                  setTimeout(monitorSubmit, 100);
-                });
-              });
+            window.addEventListener('beforeunload', () => {
+              if (pendingLogin && pendingLogin.password) {
+                console.log('BROWZER_LOGIN_SUBMITTED', JSON.stringify(pendingLogin));
+              }
             });
-
-            console.log('[Browzer] Form monitoring setup');
+  
+            document.addEventListener('input', updateDraft, true);
+            document.addEventListener('change', updateDraft, true);
           })();
-        `
+        `,
       });
     } catch (error) {
-      console.error('[PasswordAutomation] Error setting up form monitoring:', error);
+      console.error('[PasswordAutomation] Error setting up detector:', error);
     }
   }
 
@@ -204,8 +194,6 @@ export class PasswordAutomation {
         this.handleShowAutofill(fullMessage);
       } else if (message.startsWith('BROWZER_AUTOFILL_SELECT')) {
         this.handleAutofillSelect(fullMessage);
-      } else if (message.startsWith('BROWZER_FORM_SUBMIT')) {
-        this.handleFormSubmit(fullMessage);
       } else if (message.startsWith('BROWZER_PASSWORD_SAVE')) {
         this.handlePasswordSave(fullMessage);
       } else if (message.startsWith('BROWZER_PASSWORD_UPDATE')) {
@@ -214,9 +202,43 @@ export class PasswordAutomation {
         this.handlePasswordNever(fullMessage);
       } else if (message.startsWith('BROWZER_PASSWORD_DISMISS')) {
         this.handlePasswordDismiss();
+      } else if (message.startsWith('BROWZER_LOGIN_SUBMITTED')) {
+        this.handleLoginSubmitted(fullMessage);
       }
     } catch (error) {
       console.error('[PasswordAutomation] Error handling console message:', error);
+    }
+  }
+
+  private async handleLoginSubmitted(message: string): Promise<void> {
+    try {
+      const jsonStr = message.replace('BROWZER_LOGIN_SUBMITTED', '').trim();
+      if (!jsonStr) {
+        console.error('[PasswordAutomation] Empty JSON data for login submitted');
+        return;
+      }
+
+      const data = JSON.parse(jsonStr);
+      const currentUrl = this.view.webContents.getURL();
+      const origin = new URL(currentUrl).origin;
+
+      const submission: FormSubmission = {
+        formId: 'login_detector',
+        origin,
+        username: data.username,
+        email: data.username,
+        password: data.password,
+        timestamp: Date.now(),
+        url: currentUrl
+      };
+
+      setTimeout(async () => {
+        console.log('[PasswordAutomation] Handling login submitted:', submission);
+        await this.promptService.handleFormSubmission(submission);
+      }, 1500);
+    } catch (error) {
+      console.error('[PasswordAutomation] Error handling login submitted:', error);
+      console.error('[PasswordAutomation] Message was:', message);
     }
   }
 
@@ -249,33 +271,6 @@ export class PasswordAutomation {
       }
     } catch (error) {
       console.error('[PasswordAutomation] Error handling autofill select:', error);
-    }
-  }
-
-  private async handleFormSubmit(message: string): Promise<void> {
-    try {
-      const jsonStr = message.replace('BROWZER_FORM_SUBMIT', '').trim();
-      if (!jsonStr) {
-        console.error('[PasswordAutomation] Empty JSON data for form submit');
-        return;
-      }
-
-      const data = JSON.parse(jsonStr);
-      const submission: FormSubmission = {
-        formId: data.formId,
-        origin: data.origin,
-        username: data.username,
-        password: data.password,
-        timestamp: data.timestamp,
-        url: this.view.webContents.getURL()
-      };
-
-      setTimeout(async () => {
-        await this.promptService.handleFormSubmission(submission);
-      }, 1500);
-    } catch (error) {
-      console.error('[PasswordAutomation] Error handling form submit:', error);
-      console.error('[PasswordAutomation] Message was:', message);
     }
   }
 
