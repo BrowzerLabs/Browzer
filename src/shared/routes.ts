@@ -39,11 +39,6 @@ export const ROUTES: Record<string, RouteConfig> = {
     title: 'Home',
     favicon: 'home',
   },
-  pricing: {
-    path: '/pricing',
-    title: 'Pricing',
-    favicon: 'credit-card',
-  },
   settings: {
     path: '/settings',
     title: 'Settings',
