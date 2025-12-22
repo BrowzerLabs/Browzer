@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { ProtectedRoute } from '@/renderer/components/auth/ProtectedRoute';
 import { SignInPage, SignUpPage, ForgotPasswordPage } from '@/renderer/pages/auth';
 import { ConfirmSignupPage } from '@/renderer/pages/auth/ConfirmSignupPage';
@@ -83,10 +83,10 @@ function AppRoutes() {
 
 export function AppRouter() {
   return (
-    <BrowserRouter>
+    <HashRouter>
       <NotificationProvider>
         <AppRoutes />
       </NotificationProvider>
-    </BrowserRouter>
+    </HashRouter>
   );
 }
