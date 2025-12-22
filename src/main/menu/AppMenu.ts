@@ -263,10 +263,7 @@ export class AppMenu {
                 { type: 'separator' as const },
                 { role: 'window' as const },
               ]
-            : [
-                { type: 'separator' as const },
-                { role: 'close' as const },
-              ]),
+            : []),
         ],
       },
 
