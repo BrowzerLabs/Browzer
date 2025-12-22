@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import type { TabGroup, TabInfo, TabsSnapshot } from '@/shared/types';
 
 export function useBrowserAPI() {
@@ -8,10 +8,17 @@ export function useBrowserAPI() {
   
   const updateSequenceRef = useRef(0);
   const lastReorderTimeRef = useRef(0);
+  const updateTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     const unsubscribeTabsUpdated = window.browserAPI.onTabsUpdated((data: TabsSnapshot) => {
       const now = Date.now();
+      
+      // Debounce rapid updates to prevent excessive re-renders
+      if (updateTimeoutRef.current) {
+        clearTimeout(updateTimeoutRef.current);
+      }
+      
       if (now - lastReorderTimeRef.current < 100) {
         setActiveTabId(data.activeTabId);
         setTabGroups(data.groups || []);
@@ -23,10 +30,13 @@ export function useBrowserAPI() {
         return;
       }
       
-      updateSequenceRef.current++;
-      setTabs(data.tabs);
-      setActiveTabId(data.activeTabId);
-      setTabGroups(data.groups || []);
+      // Batch updates for better performance
+      updateTimeoutRef.current = setTimeout(() => {
+        updateSequenceRef.current++;
+        setTabs(data.tabs);
+        setActiveTabId(data.activeTabId);
+        setTabGroups(data.groups || []);
+      }, 16); // ~60fps
     });
 
     const unsubscribeTabReordered = window.browserAPI.onTabReordered((data: { tabId: string; from: number; to: number }) => {
@@ -68,6 +78,9 @@ export function useBrowserAPI() {
     });
 
     return () => {
+      if (updateTimeoutRef.current) {
+        clearTimeout(updateTimeoutRef.current);
+      }
       unsubscribeTabsUpdated();
       unsubscribeTabReordered();
     };
@@ -131,7 +144,12 @@ export function useBrowserAPI() {
     return reorderTab(activeTabId, currentIndex + 1);
   }, [activeTabId, tabs, reorderTab]);
 
-  const activeTab = tabs.find(tab => tab.id === activeTabId) || null;
+  // Memoize activeTab to prevent unnecessary re-renders
+  const activeTab = useMemo(() => 
+    tabs.find(tab => tab.id === activeTabId) || null,
+    [tabs, activeTabId]
+  );
+  
   const createTabGroup = useCallback(async (name?: string, color?: string) => {
     return await window.browserAPI.createTabGroup(name, color);
   }, []);

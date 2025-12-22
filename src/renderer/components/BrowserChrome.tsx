@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, memo, useCallback } from 'react';
 import { useBrowserAPI } from '@/renderer/hooks/useBrowserAPI';
 import { useSidebarStore } from '@/renderer/store/useSidebarStore';
 import { useOverlayVisibility } from '@/renderer/hooks/useBrowserViewLayer';
@@ -11,7 +11,7 @@ import { FindBar } from './FindBar';
 import { useFindStore } from '@/renderer/stores/findStore';
 import { useScrollForwarding } from '@/renderer/hooks/useScrollForwarding';
 
-export function BrowserChrome() {
+export const BrowserChrome = memo(function BrowserChrome() {
   useScrollForwarding();
   const browserAPI = useBrowserAPI();
   const { isVisible: isSidebarVisible, showSidebar } = useSidebarStore();
@@ -74,6 +74,47 @@ export function BrowserChrome() {
     return () => unsubStart();
   }, [showSidebar]);
 
+  // Memoize navigation handlers
+  const handleNavigate = useCallback((url: string) => {
+    if (browserAPI.activeTabId) {
+      browserAPI.navigate(browserAPI.activeTabId, url);
+    }
+  }, [browserAPI]);
+
+  const handleBack = useCallback(() => {
+    if (browserAPI.activeTabId) {
+      browserAPI.goBack(browserAPI.activeTabId);
+    }
+  }, [browserAPI]);
+
+  const handleForward = useCallback(() => {
+    if (browserAPI.activeTabId) {
+      browserAPI.goForward(browserAPI.activeTabId);
+    }
+  }, [browserAPI]);
+
+  const handleReload = useCallback(() => {
+    if (browserAPI.activeTabId) {
+      browserAPI.reload(browserAPI.activeTabId);
+    }
+  }, [browserAPI]);
+
+  const handleStop = useCallback(() => {
+    if (browserAPI.activeTabId) {
+      browserAPI.stop(browserAPI.activeTabId);
+    }
+  }, [browserAPI]);
+
+  const handleRestoreSession = useCallback(async () => {
+    await window.browserAPI.restoreSession();
+    setShowRestorePopup(false);
+  }, []);
+
+  const handleCloseRestorePopup = useCallback(async () => {
+    await window.browserAPI.discardSession();
+    setShowRestorePopup(false);
+  }, []);
+
   return (
     <div className="h-full w-full flex flex-col select-none">
       <div className="interactive-ui">
@@ -95,52 +136,22 @@ export function BrowserChrome() {
 
         <NavigationBar
           activeTab={browserAPI.activeTab}
-          onNavigate={(url) => {
-            if (browserAPI.activeTabId) {
-              browserAPI.navigate(browserAPI.activeTabId, url);
-            }
-          }}
-          onBack={() => {
-            if (browserAPI.activeTabId) {
-              browserAPI.goBack(browserAPI.activeTabId);
-            }
-          }}
-          onForward={() => {
-            if (browserAPI.activeTabId) {
-              browserAPI.goForward(browserAPI.activeTabId);
-            }
-          }}
-          onReload={() => {
-            if (browserAPI.activeTabId) {
-              browserAPI.reload(browserAPI.activeTabId);
-            }
-          }}
-          onStop={() => {
-            if (browserAPI.activeTabId) {
-              browserAPI.stop(browserAPI.activeTabId);
-            }
-          }}
+          onNavigate={handleNavigate}
+          onBack={handleBack}
+          onForward={handleForward}
+          onReload={handleReload}
+          onStop={handleStop}
         />
 
         {showBookmarksBar && (
-          <BookmarkBar onNavigate={(url) => {
-          if (browserAPI.activeTabId) {
-            browserAPI.navigate(browserAPI.activeTabId, url);
-          }
-        }} />
+          <BookmarkBar onNavigate={handleNavigate} />
         )}
       </div>
 
       {showRestorePopup && (
         <RestoreSessionPopup
-          onRestore={async () => {
-            await window.browserAPI.restoreSession();
-            setShowRestorePopup(false);
-          }}
-          onClose={async () => {
-            await window.browserAPI.discardSession();
-            setShowRestorePopup(false);
-          }}
+          onRestore={handleRestoreSession}
+          onClose={handleCloseRestorePopup}
         />
       )}
 
@@ -154,4 +165,4 @@ export function BrowserChrome() {
       </div>
     </div>
   );
-}
+});

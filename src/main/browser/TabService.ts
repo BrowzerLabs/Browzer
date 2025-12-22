@@ -154,22 +154,33 @@ export class TabService extends EventEmitter {
       id: tabId,
       view,
       info: tabInfo,
-      videoRecorder: new VideoRecorder(view),
-      passwordAutomation: new PasswordAutomation(view, this.passwordManager, tabId, this.handleCredentialSelected.bind(this)),
-      automationExecutor: new BrowserAutomationExecutor(view, tabId),
+      videoRecorder: null as any, // Initialize later
+      passwordAutomation: null as any, // Initialize later
+      automationExecutor: null as any, // Initialize later
     };
 
+    // Step 3: Add to state immediately (makes UI responsive)
     this.tabs.set(tabId, tab);
     this.orderedTabIds.push(tabId);
-    this.setupTabWebContentsEvents(tab);
-    this.debuggerService.initializeDebugger(view, tabId).catch(err => 
-      console.error('[TabService] Failed to initialize debugger:', tabId, err)
-    );
+    
+    // Step 4: Setup critical event listeners only
+    this.setupCriticalTabEvents(tab);
+    
+    // Step 5: Add view and show tab (instant UI feedback)
     this.baseWindow.contentView.addChildView(view);
     this.updateTabViewBounds(view, this.currentSidebarWidth);
-    view.webContents.loadURL(this.navigationService.normalizeURL(urlToLoad));
     this.switchToTab(tabId);
+    
+    // Step 6: Start loading URL (non-blocking)
+    view.webContents.loadURL(this.navigationService.normalizeURL(urlToLoad));
+    
+    // Step 7: Notify UI once (batched update)
     this.emit('tab:created', tab, previousActiveTabId);
+    
+    // Step 8: Initialize heavy objects asynchronously
+    this.initializeTabFeaturesAsync(tab, tabId);
+    
+    // Step 9: Handle focus with platform-specific timing
     const focusDelay = process.platform === 'win32' ? 220 : 100;
     setTimeout(() => {
       this.browserView.webContents.focus();
@@ -177,6 +188,158 @@ export class TabService extends EventEmitter {
     }, focusDelay);
     
     return tab;
+  }
+
+  /**
+   * Setup only critical event listeners immediately
+   * Defer non-critical listeners to async initialization
+   */
+  private setupCriticalTabEvents(tab: Tab): void {
+    const { view, info } = tab;
+    const wc = view.webContents;
+
+    // Critical: Title updates
+    wc.on('page-title-updated', (_, title) => {
+      info.title = this.navigationService.getInternalPageTitle(info.url) || title || 'Untitled';
+      this.emit('tabs:changed');
+    });
+
+    // Critical: Loading state
+    wc.on('did-start-loading', () => {
+      info.isLoading = true;
+      info.error = null;
+      info.failedUrl = undefined;
+      this.emit('tabs:changed');
+    });
+
+    // Critical: Navigation
+    wc.on('did-navigate', (_, url) => this.handleNavigation(info, wc, url));
+    wc.on('did-navigate-in-page', (_, url) => this.handleNavigation(info, wc, url));
+
+    // Critical: Error handling
+    wc.on('did-fail-load', (_, errorCode, errorDescription, validatedURL, isMainFrame) => {
+      if (!isMainFrame || shouldIgnoreError(errorCode)) return;
+      info.isLoading = false;
+      const error = errorPageService.createNavigationError(errorCode, errorDescription, validatedURL);
+      if (error) {
+        info.error = error;
+        info.failedUrl = validatedURL;
+        info.title = error.title;
+        info.url = validatedURL;
+        info.favicon = undefined;
+        wc.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(errorPageService.generateErrorPage(error))}`);
+      }
+      this.emit('tabs:changed');
+    });
+  }
+
+  /**
+   * Initialize heavy features asynchronously after tab is visible
+   * This prevents blocking the UI thread
+   */
+  private async initializeTabFeaturesAsync(tab: Tab, tabId: string): Promise<void> {
+    const { view, info } = tab;
+    const wc = view.webContents;
+
+    // Use setImmediate to defer to next tick (non-blocking)
+    setImmediate(async () => {
+      try {
+        // Initialize heavy objects
+        tab.videoRecorder = new VideoRecorder(view);
+        tab.passwordAutomation = new PasswordAutomation(
+          view,
+          this.passwordManager,
+          tabId,
+          this.handleCredentialSelected.bind(this)
+        );
+        tab.automationExecutor = new BrowserAutomationExecutor(view, tabId);
+
+        // Setup remaining event listeners
+        this.setupNonCriticalTabEvents(tab);
+
+        // Initialize debugger (lowest priority)
+        await this.debuggerService.initializeDebugger(view, tabId).catch(err =>
+          console.error('[TabService] Failed to initialize debugger:', tabId, err)
+        );
+      } catch (error) {
+        console.error('[TabService] Failed to initialize tab features:', tabId, error);
+      }
+    });
+  }
+
+  /**
+   * Setup non-critical event listeners after tab is created
+   */
+  private setupNonCriticalTabEvents(tab: Tab): void {
+    const { view, info } = tab;
+    const wc = view.webContents;
+
+    wc.on('did-stop-loading', async () => {
+      info.isLoading = false;
+      info.canGoBack = wc.navigationHistory.canGoBack();
+      info.canGoForward = wc.navigationHistory.canGoForward();
+      
+      if (info.url && info.title) {
+        this.historyService.addEntry(info.url, info.title, HistoryTransition.LINK, info.favicon)
+          .catch(err => console.error('Failed to add history entry:', err));
+      }
+      
+      if (tab.passwordAutomation && !this.navigationService.isInternalPage(info.url)) {
+        try { await tab.passwordAutomation.start(); }
+        catch (error) { console.error('[TabService] Failed to start password automation:', error); }
+      }
+      this.emit('tabs:changed');
+    });
+
+    wc.on('will-navigate', (event, url) => {
+      if (!url.startsWith('browzer-action://')) return;
+      event.preventDefault();
+      const action = url.replace('browzer-action://', '');
+      if (action === 'retry') this.retryNavigation(tab.id);
+      else if (action === 'home') this.navigate(tab.id, 'browzer://home');
+      else if (action === 'bypass-certificate') this.bypassCertificateError(tab.id);
+    });
+
+    wc.on('page-favicon-updated', (_, favicons) => {
+      if (!this.navigationService.isInternalPage(info.url) && favicons.length > 0) {
+        info.favicon = favicons[0];
+        this.emit('tabs:changed');
+      }
+    });
+
+    wc.setWindowOpenHandler(({ url }) => { this.createTab(url); return { action: 'deny' }; });
+
+    wc.on('before-input-event', (event: any, input: any) => {
+      const isDevToolsShortcut = (input.control || input.meta) && input.shift;
+      if (isDevToolsShortcut && input.key.toLowerCase() === 'i') {
+        event.preventDefault();
+        wc.isDevToolsOpened() ? wc.closeDevTools() : wc.openDevTools({ mode: 'right', activate: true });
+      } else if (isDevToolsShortcut && input.key.toLowerCase() === 'c') {
+        event.preventDefault();
+        wc.openDevTools({ mode: 'right', activate: true });
+      } else if ((input.control || input.meta) && !input.shift && input.key.toLowerCase() === 'f') {
+        event.preventDefault();
+        this.browserView.webContents.send('browser:request-find');
+      }
+    });
+
+    wc.on('context-menu', (_, params) => {
+      if (!this.navigationService.isInternalPage(info.url)) this.contextMenuService.showContextMenu(wc, params);
+    });
+
+    wc.on('found-in-page', (_, result: Electron.Result) => {
+      this.browserView.webContents.send('browser:found-in-page', tab.id, result);
+    });
+
+    wc.on('certificate-error', (event, url, error, certificate, callback) => {
+      const host = new URL(url).host;
+      if (tab.bypassedCertificateHosts?.has(host)) {
+        event.preventDefault();
+        callback(true);
+        return;
+      }
+      callback(false);
+    });
   }
 
   public closeTab(tabId: string): boolean {
@@ -491,110 +654,6 @@ export class TabService extends EventEmitter {
     }
   }
 
-  private setupTabWebContentsEvents(tab: Tab): void {
-    const { view, info } = tab;
-    const wc = view.webContents;
-
-    wc.on('page-title-updated', (_, title) => {
-      info.title = this.navigationService.getInternalPageTitle(info.url) || title || 'Untitled';
-      this.emit('tabs:changed');
-    });
-
-    wc.on('did-start-loading', () => {
-      info.isLoading = true;
-      info.error = null;
-      info.failedUrl = undefined;
-      this.emit('tabs:changed');
-    });
-
-    wc.on('did-stop-loading', async () => {
-      info.isLoading = false;
-      info.canGoBack = wc.navigationHistory.canGoBack();
-      info.canGoForward = wc.navigationHistory.canGoForward();
-      
-      if (info.url && info.title) {
-        this.historyService.addEntry(info.url, info.title, HistoryTransition.LINK, info.favicon)
-          .catch(err => console.error('Failed to add history entry:', err));
-      }
-      
-      if (tab.passwordAutomation && !this.navigationService.isInternalPage(info.url)) {
-        try { await tab.passwordAutomation.start(); }
-        catch (error) { console.error('[TabService] Failed to start password automation:', error); }
-      }
-      this.emit('tabs:changed');
-    });
-
-    wc.on('will-navigate', (event, url) => {
-      if (!url.startsWith('browzer-action://')) return;
-      event.preventDefault();
-      const action = url.replace('browzer-action://', '');
-      if (action === 'retry') this.retryNavigation(tab.id);
-      else if (action === 'home') this.navigate(tab.id, 'browzer://home');
-      else if (action === 'bypass-certificate') this.bypassCertificateError(tab.id);
-    });
-
-    wc.on('did-navigate', (_, url) => this.handleNavigation(info, wc, url));
-    wc.on('did-navigate-in-page', (_, url) => this.handleNavigation(info, wc, url));
-
-    wc.on('page-favicon-updated', (_, favicons) => {
-      if (!this.navigationService.isInternalPage(info.url) && favicons.length > 0) {
-        info.favicon = favicons[0];
-        this.emit('tabs:changed');
-      }
-    });
-
-    wc.setWindowOpenHandler(({ url }) => { this.createTab(url); return { action: 'deny' }; });
-
-    wc.on('before-input-event', (event: any, input: any) => {
-      const isDevToolsShortcut = (input.control || input.meta) && input.shift;
-      if (isDevToolsShortcut && input.key.toLowerCase() === 'i') {
-        event.preventDefault();
-        wc.isDevToolsOpened() ? wc.closeDevTools() : wc.openDevTools({ mode: 'right', activate: true });
-      } else if (isDevToolsShortcut && input.key.toLowerCase() === 'c') {
-        event.preventDefault();
-        wc.openDevTools({ mode: 'right', activate: true });
-      } else if ((input.control || input.meta) && !input.shift && input.key.toLowerCase() === 'f') {
-        event.preventDefault();
-        this.browserView.webContents.send('browser:request-find');
-      }
-    });
-
-    wc.on('did-fail-load', (_, errorCode, errorDescription, validatedURL, isMainFrame) => {
-      if (!isMainFrame || shouldIgnoreError(errorCode)) return;
-
-      info.isLoading = false;
-      const error = errorPageService.createNavigationError(errorCode, errorDescription, validatedURL);
-      
-      if (error) {
-        console.error(`[TabService] Navigation failed for ${validatedURL}: ${errorDescription} (code: ${errorCode})`);
-        info.error = error;
-        info.failedUrl = validatedURL;
-        info.title = error.title;
-        info.url = validatedURL;
-        info.favicon = undefined;
-        wc.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(errorPageService.generateErrorPage(error))}`);
-      }
-      this.emit('tabs:changed');
-    });
-
-    wc.on('context-menu', (_, params) => {
-      if (!this.navigationService.isInternalPage(info.url)) this.contextMenuService.showContextMenu(wc, params);
-    });
-
-    wc.on('found-in-page', (_, result: Electron.Result) => {
-      this.browserView.webContents.send('browser:found-in-page', tab.id, result);
-    });
-
-    wc.on('certificate-error', (event, url, error, certificate, callback) => {
-      const host = new URL(url).host;
-      if (tab.bypassedCertificateHosts?.has(host)) {
-        event.preventDefault();
-        callback(true);
-        return;
-      }
-      callback(false);
-    });
-  }
 
   public bypassCertificateError(tabId: string): boolean {
     const tab = this.tabs.get(tabId);
