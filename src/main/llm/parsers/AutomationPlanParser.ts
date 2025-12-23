@@ -1,9 +1,8 @@
 import Anthropic from '@anthropic-ai/sdk';
+
 import { AutomationStep, ParsedAutomationPlan } from '..';
 
-
 export class AutomationPlanParser {
-  
   public static parsePlan(response: Anthropic.Message): ParsedAutomationPlan {
     const steps: AutomationStep[] = [];
     let analysis = '';
@@ -23,7 +22,7 @@ export class AutomationPlanParser {
             toolName: block.name,
             toolUseId: block.id,
             input: block.input,
-            order: stepOrder++
+            order: stepOrder++,
           });
         }
       }
@@ -34,8 +33,7 @@ export class AutomationPlanParser {
       analysis: analysis.trim(),
       totalSteps: steps.length,
       planType,
-      metadataToolUseId
+      metadataToolUseId,
     };
   }
-
 }

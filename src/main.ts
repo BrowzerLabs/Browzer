@@ -1,7 +1,9 @@
 import { app, protocol, net, dialog } from 'electron';
-import started from 'electron-squirrel-startup';
-import { MainService } from './main/MainService';
 import path from 'path';
+
+import started from 'electron-squirrel-startup';
+
+import { MainService } from './main/MainService';
 
 if (started) {
   app.quit();
@@ -10,7 +12,9 @@ if (started) {
 // Set as default protocol client for browzer:// URLs
 if (process.defaultApp) {
   if (process.argv.length >= 2) {
-    app.setAsDefaultProtocolClient('browzer', process.execPath, [path.resolve(process.argv[1])]);
+    app.setAsDefaultProtocolClient('browzer', process.execPath, [
+      path.resolve(process.argv[1]),
+    ]);
   }
 } else {
   app.setAsDefaultProtocolClient('browzer');
@@ -21,7 +25,8 @@ if (!gotTheLock) {
   dialog.showMessageBox({
     type: 'error',
     title: 'Application is already running',
-    message: 'Another instance of the application is already running. Only one instance is allowed at a time.'
+    message:
+      'Another instance of the application is already running. Only one instance is allowed at a time.',
   });
   app.quit();
 }
@@ -33,8 +38,8 @@ protocol.registerSchemesAsPrivileged([
       secure: true,
       supportFetchAPI: true,
       bypassCSP: false,
-      stream: true
-    }
+      stream: true,
+    },
   },
   {
     scheme: 'browzer',
@@ -44,15 +49,15 @@ protocol.registerSchemesAsPrivileged([
       supportFetchAPI: true,
       allowServiceWorkers: true,
       corsEnabled: true,
-    }
-  }
+    },
+  },
 ]);
 
 let mainService: MainService | null = null;
 
 const createWindow = () => {
   mainService = new MainService();
-  
+
   const baseWindow = mainService.getBaseWindow();
   if (baseWindow) {
     baseWindow.on('closed', () => {
@@ -61,7 +66,6 @@ const createWindow = () => {
   }
 };
 
-
 app.whenReady().then(() => {
   protocol.handle('video-file', (request) => {
     const url = request.url.replace('video-file://', '');
@@ -69,7 +73,7 @@ app.whenReady().then(() => {
     const normalizedPath = path.normalize(decodedPath);
     return net.fetch(`file://${normalizedPath}`);
   });
-  
+
   createWindow();
 });
 

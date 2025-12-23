@@ -1,14 +1,15 @@
 import { WebContentsView, app } from 'electron';
 import { mkdir, writeFile, stat } from 'fs/promises';
 import path from 'path';
+
 import { RecordedAction } from '@/shared/types';
 
 /**
  * SnapshotManager - Intelligent screenshot capture for visual context
- * 
+ *
  * Captures screenshots at strategic moments during recording to provide
  * visual context for LLMs without overwhelming system resources.
- * 
+ *
  * Strategy:
  * - Only capture on high-value interactive actions (clicks, submits, etc.)
  * - Skip rapid successive actions (debouncing)
@@ -22,12 +23,12 @@ export class SnapshotManager {
   private snapshotQueue: Array<() => Promise<void>> = [];
   private isProcessingQueue = false;
   private snapshotCount = 0;
-  
+
   // Configuration
   private readonly MIN_SNAPSHOT_INTERVAL = 500; // Minimum 500ms between snapshots
   private readonly SNAPSHOT_QUALITY = 80; // JPEG quality (0-100)
   private readonly MAX_QUEUE_SIZE = 10; // Max pending snapshots
-  
+
   // Action types that warrant snapshots (high-value interactions)
   private readonly SNAPSHOT_ACTION_TYPES = new Set([
     'click',
@@ -37,12 +38,16 @@ export class SnapshotManager {
     'checkbox',
     'radio',
     'toggle',
-    'tab-switch'
+    'tab-switch',
   ]);
 
   constructor() {
     // Store snapshots in app's userData directory
-    this.snapshotsDir = path.join(app.getPath('userData'), 'recordings', 'snapshots');
+    this.snapshotsDir = path.join(
+      app.getPath('userData'),
+      'recordings',
+      'snapshots'
+    );
   }
 
   /**
@@ -55,11 +60,11 @@ export class SnapshotManager {
     this.lastSnapshotTime = 0;
     this.snapshotQueue = []; // Clear any pending snapshots from previous session
     this.isProcessingQueue = false;
-    
+
     // Create session-specific directory
     const sessionDir = path.join(this.snapshotsDir, recordingId);
     await mkdir(sessionDir, { recursive: true });
-    
+
     console.log('📸 Snapshot manager initialized for recording:', recordingId);
   }
 
@@ -161,27 +166,32 @@ export class SnapshotManager {
     try {
       // Capture screenshot from WebContentsView
       const image = await view.webContents.capturePage();
-      
+
       // Convert to JPEG with compression for smaller file size
       const jpeg = image.toJPEG(this.SNAPSHOT_QUALITY);
-      
+
       // Generate filename with timestamp and action type
       const filename = `${Date.now()}_${action.type}_${this.snapshotCount}.jpg`;
-      const snapshotPath = path.join(this.snapshotsDir, this.recordingId || 'unknown', filename);
-      
+      const snapshotPath = path.join(
+        this.snapshotsDir,
+        this.recordingId || 'unknown',
+        filename
+      );
+
       // Save to disk
       await writeFile(snapshotPath, jpeg);
-      
+
       this.snapshotCount++;
-      
+
       // Get file size for metadata
       const stats = await stat(snapshotPath);
       action.snapshotSize = stats.size;
-      
-      console.log(`📸 Snapshot captured: ${filename} (${(stats.size / 1024).toFixed(1)} KB)`);
-      
+
+      console.log(
+        `📸 Snapshot captured: ${filename} (${(stats.size / 1024).toFixed(1)} KB)`
+      );
+
       return snapshotPath;
-      
     } catch (error) {
       console.error('Error capturing snapshot:', error);
       return null;
@@ -201,13 +211,13 @@ export class SnapshotManager {
     }
 
     const sessionDir = path.join(this.snapshotsDir, this.recordingId);
-    
+
     // Calculate total size of all snapshots
     let totalSize = 0;
     try {
       const fs = await import('fs/promises');
       const files = await fs.readdir(sessionDir);
-      
+
       for (const file of files) {
         const filePath = path.join(sessionDir, file);
         const stats = await stat(filePath);
@@ -220,7 +230,7 @@ export class SnapshotManager {
     return {
       count: this.snapshotCount,
       totalSize,
-      directory: sessionDir
+      directory: sessionDir,
     };
   }
 
@@ -230,12 +240,14 @@ export class SnapshotManager {
   public async finalizeRecording(): Promise<void> {
     // Wait for queue to finish processing
     while (this.snapshotQueue.length > 0) {
-      await new Promise(resolve => setTimeout(resolve, 100));
+      await new Promise((resolve) => setTimeout(resolve, 100));
     }
 
     const stats = await this.getSnapshotStats();
-    console.log(`📸 Snapshot session finalized: ${stats.count} snapshots, ${(stats.totalSize / 1024 / 1024).toFixed(2)} MB`);
-    
+    console.log(
+      `📸 Snapshot session finalized: ${stats.count} snapshots, ${(stats.totalSize / 1024 / 1024).toFixed(2)} MB`
+    );
+
     this.lastSnapshotTime = 0;
   }
 
@@ -244,7 +256,7 @@ export class SnapshotManager {
    */
   public async deleteSnapshots(recordingId: string): Promise<void> {
     const sessionDir = path.join(this.snapshotsDir, recordingId);
-    
+
     try {
       const fs = await import('fs/promises');
       await fs.rm(sessionDir, { recursive: true, force: true });

@@ -1,6 +1,7 @@
+import { XCircle } from 'lucide-react';
+
 import { Button } from '@/renderer/ui/button';
 import { Card } from '@/renderer/ui/card';
-import { XCircle } from 'lucide-react';
 
 export function SubscriptionCancelPage() {
   const handleViewPlans = () => {

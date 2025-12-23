@@ -1,6 +1,11 @@
 import { useState, useCallback } from 'react';
 import { Download, Pause, Play, XCircle } from 'lucide-react';
-import { formatBytes, formatSpeed, formatRemainingTime } from '@/renderer/lib/utils';
+
+import {
+  formatBytes,
+  formatSpeed,
+  formatRemainingTime,
+} from '@/renderer/lib/utils';
 import { useDownloads } from '@/renderer/hooks/useDownloads';
 import { useBrowserViewLayer } from '@/renderer/hooks/useBrowserViewLayer';
 import { Progress } from '@/renderer/ui/progress';
@@ -23,17 +28,26 @@ export function DownloadsDropdown({ onNavigate }: DownloadsDropdownProps) {
 
   const openMenu = useCallback(() => {
     setIsOpen(true);
-   }, []);
+  }, []);
 
-  const { downloads, activeCount, pauseDownload, resumeDownload, cancelDownload } = useDownloads({
+  const {
+    downloads,
+    activeCount,
+    pauseDownload,
+    resumeDownload,
+    cancelDownload,
+  } = useDownloads({
     notify: true,
     onNewDownload: openMenu,
   });
 
-  const handleOpenChange = useCallback((open: boolean) => {
-    setIsOpen(open);
-    handleOverlayChange(open);
-  }, [handleOverlayChange]);
+  const handleOpenChange = useCallback(
+    (open: boolean) => {
+      setIsOpen(open);
+      handleOverlayChange(open);
+    },
+    [handleOverlayChange]
+  );
 
   const handleViewAll = useCallback(() => {
     setIsOpen(false);
@@ -73,7 +87,9 @@ export function DownloadsDropdown({ onNavigate }: DownloadsDropdownProps) {
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-80 p-2">
         <div className="flex items-center justify-between mb-2">
-          <span className="text-sm font-medium text-gray-900 dark:text-gray-100">Downloads</span>
+          <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
+            Downloads
+          </span>
           <button
             className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
             onClick={handleViewAll}
@@ -104,7 +120,12 @@ interface DownloadItemCardProps {
   onCancel: (id: string) => void;
 }
 
-function DownloadItemCard({ item, onPause, onResume, onCancel }: DownloadItemCardProps) {
+function DownloadItemCard({
+  item,
+  onPause,
+  onResume,
+  onCancel,
+}: DownloadItemCardProps) {
   const isActive = item.state === 'progressing';
   const isPaused = item.state === 'paused';
   const isDone = item.state === 'completed';
@@ -112,17 +133,19 @@ function DownloadItemCard({ item, onPause, onResume, onCancel }: DownloadItemCar
   const isFailed = item.state === 'failed' || item.state === 'interrupted';
   const isTerminal = isDone || isCancelled || isFailed;
   const hasUnknownTotal = item.totalBytes <= 0;
-  const percent = hasUnknownTotal ? undefined : Math.round((item.progress || 0) * 100);
+  const percent = hasUnknownTotal
+    ? undefined
+    : Math.round((item.progress || 0) * 100);
 
   const statusText = isDone
     ? 'Completed'
     : isPaused
-    ? 'Paused'
-    : isFailed
-    ? 'Failed'
-    : isCancelled
-    ? 'Cancelled'
-    : 'In progress';
+      ? 'Paused'
+      : isFailed
+        ? 'Failed'
+        : isCancelled
+          ? 'Cancelled'
+          : 'In progress';
 
   return (
     <div className="border border-gray-200 dark:border-slate-800 rounded-md p-2 space-y-2">
@@ -135,7 +158,8 @@ function DownloadItemCard({ item, onPause, onResume, onCancel }: DownloadItemCar
             <span>{statusText}</span>
             {!isCancelled && (
               <span>
-                {' '}• {formatBytes(item.receivedBytes)}
+                {' '}
+                • {formatBytes(item.receivedBytes)}
                 {hasUnknownTotal ? (
                   <span> • Resuming</span>
                 ) : (
@@ -149,9 +173,11 @@ function DownloadItemCard({ item, onPause, onResume, onCancel }: DownloadItemCar
                 {formatSpeed(item.speed)}
               </span>
             )}
-            {isActive && !hasUnknownTotal && formatRemainingTime(item.remainingTime) && (
-              <span> • {formatRemainingTime(item.remainingTime)}</span>
-            )}
+            {isActive &&
+              !hasUnknownTotal &&
+              formatRemainingTime(item.remainingTime) && (
+                <span> • {formatRemainingTime(item.remainingTime)}</span>
+              )}
           </div>
         </div>
         <div className="flex items-center gap-1">
@@ -184,21 +210,20 @@ function DownloadItemCard({ item, onPause, onResume, onCancel }: DownloadItemCar
           )}
         </div>
       </div>
-      {!isTerminal && (
-        hasUnknownTotal ? (
+      {!isTerminal &&
+        (hasUnknownTotal ? (
           <div className="h-1.5 w-full bg-primary/20 rounded-full overflow-hidden relative">
-            <div 
-              className="h-full bg-primary rounded-full absolute" 
-              style={{ 
+            <div
+              className="h-full bg-primary rounded-full absolute"
+              style={{
                 width: '40%',
-                animation: 'shimmer 1.5s ease-in-out infinite'
-              }} 
+                animation: 'shimmer 1.5s ease-in-out infinite',
+              }}
             />
           </div>
         ) : (
           <Progress value={percent} className="h-1.5" />
-        )
-      )}
+        ))}
       <style>{`
         @keyframes shimmer {
           0% { transform: translateX(-100%); }

@@ -1,6 +1,6 @@
 /**
  * Automation handlers
- * 
+ *
  * Exports specialized handlers for different automation operations
  */
 

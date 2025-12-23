@@ -3,22 +3,22 @@ import Anthropic from '@anthropic-ai/sdk';
 
 /**
  * ContextWindowManager - Advanced context window optimization for long-running automations
- * 
+ *
  * Problem:
  * - Automation sessions can have 50+ message turns (100+ messages with tool results)
  * - Each turn adds 5K-20K tokens (tool calls + results + errors)
  * - Context window fills up quickly, hitting 200K limit
  * - System prompt + tools = ~40K tokens (fixed)
  * - Messages must stay under ~160K tokens
- * 
+ *
  * Solution: Hybrid Sliding Window + Summarization
- * 
+ *
  * Strategy:
  * 1. Keep RECENT messages (last 10 turns) in FULL detail
  * 2. SUMMARIZE older messages into condensed execution history
  * 3. ALWAYS preserve: User goal, successful steps count, current state
  * 4. AGGRESSIVELY remove: Failed attempts, redundant errors, old analysis results
- * 
+ *
  * This approach:
  * - Maintains context quality for recent actions
  * - Provides historical context without token bloat
@@ -46,15 +46,21 @@ export class ContextWindowManager {
 
     // Check if optimization is needed
     if (originalTokens <= this.TARGET_MESSAGE_TOKENS) {
-      console.log(`✅ [ContextWindow] Messages within limit: ${originalTokens.toLocaleString()} tokens`);
+      console.log(
+        `✅ [ContextWindow] Messages within limit: ${originalTokens.toLocaleString()} tokens`
+      );
       return {
         optimizedMessages: messages,
         compressionApplied: false,
       };
     }
 
-    console.log(`⚠️  [ContextWindow] Messages exceed target: ${originalTokens.toLocaleString()} / ${this.TARGET_MESSAGE_TOKENS.toLocaleString()} tokens`);
-    console.log(`🗜️  [ContextWindow] Applying hybrid sliding window + summarization...`);
+    console.log(
+      `⚠️  [ContextWindow] Messages exceed target: ${originalTokens.toLocaleString()} / ${this.TARGET_MESSAGE_TOKENS.toLocaleString()} tokens`
+    );
+    console.log(
+      `🗜️  [ContextWindow] Applying hybrid sliding window + summarization...`
+    );
 
     // Apply optimization
     const optimizedMessages = this.applyHybridOptimization(messages, userGoal);
@@ -64,7 +70,9 @@ export class ContextWindowManager {
     console.log(`✅ [ContextWindow] Optimization complete:`);
     console.log(`   - Original: ${originalTokens.toLocaleString()} tokens`);
     console.log(`   - Optimized: ${optimizedTokens.toLocaleString()} tokens`);
-    console.log(`   - Saved: ${tokensSaved.toLocaleString()} tokens (${Math.round(tokensSaved / originalTokens * 100)}%)`);
+    console.log(
+      `   - Saved: ${tokensSaved.toLocaleString()} tokens (${Math.round((tokensSaved / originalTokens) * 100)}%)`
+    );
 
     return {
       optimizedMessages,
@@ -97,9 +105,9 @@ export class ContextWindowManager {
     const optimizedMessages: Anthropic.MessageParam[] = [
       {
         role: 'user',
-        content: summary
+        content: summary,
       },
-      ...recentTurns.flatMap(turn => turn.messages)
+      ...recentTurns.flatMap((turn) => turn.messages),
     ];
 
     return optimizedMessages;
@@ -109,7 +117,10 @@ export class ContextWindowManager {
     turnNumber: number;
     messages: Anthropic.MessageParam[];
   }> {
-    const turns: Array<{ turnNumber: number; messages: Anthropic.MessageParam[] }> = [];
+    const turns: Array<{
+      turnNumber: number;
+      messages: Anthropic.MessageParam[];
+    }> = [];
     let currentTurn: Anthropic.MessageParam[] = [];
     let turnNumber = 0;
 
@@ -120,7 +131,7 @@ export class ContextWindowManager {
       if (message.role === 'assistant') {
         turns.push({
           turnNumber: ++turnNumber,
-          messages: [...currentTurn]
+          messages: [...currentTurn],
         });
         currentTurn = [];
       }
@@ -130,7 +141,7 @@ export class ContextWindowManager {
     if (currentTurn.length > 0) {
       turns.push({
         turnNumber: ++turnNumber,
-        messages: currentTurn
+        messages: currentTurn,
       });
     }
 
@@ -138,7 +149,10 @@ export class ContextWindowManager {
   }
 
   private static summarizeOlderTurns(
-    olderTurns: Array<{ turnNumber: number; messages: Anthropic.MessageParam[] }>,
+    olderTurns: Array<{
+      turnNumber: number;
+      messages: Anthropic.MessageParam[];
+    }>,
     userGoal: string
   ): string {
     // Extract execution summary from older turns
@@ -146,18 +160,19 @@ export class ContextWindowManager {
     const failedSteps: string[] = [];
     let totalSteps = 0;
 
-    olderTurns.forEach(turn => {
-      turn.messages.forEach(message => {
+    olderTurns.forEach((turn) => {
+      turn.messages.forEach((message) => {
         if (message.role === 'user' && Array.isArray(message.content)) {
           // Extract tool results
-          message.content.forEach(block => {
+          message.content.forEach((block) => {
             if (block.type === 'tool_result') {
               totalSteps++;
               try {
-                const result = typeof block.content === 'string' 
-                  ? JSON.parse(block.content) 
-                  : block.content;
-                
+                const result =
+                  typeof block.content === 'string'
+                    ? JSON.parse(block.content)
+                    : block.content;
+
                 // Check if this is a compressed analysis result
                 if (result.note && result.note.includes('compressed')) {
                   // Skip compressed results in summary
@@ -168,7 +183,10 @@ export class ContextWindowManager {
                   // Extract tool name from result or use generic
                   const toolName = result.toolName || 'action';
                   successfulSteps.push(toolName);
-                } else if (result.error && !result.error.includes('Not executed')) {
+                } else if (
+                  result.error &&
+                  !result.error.includes('Not executed')
+                ) {
                   // Only include actual errors, not "not executed" placeholders
                   const toolName = result.toolName || 'action';
                   failedSteps.push(`${toolName}: ${result.error}`);
@@ -197,7 +215,14 @@ ${successfulSteps.length > 0 ? successfulSteps.slice(0, 20).join(', ') : 'None y
 ${successfulSteps.length > 20 ? `... and ${successfulSteps.length - 20} more` : ''}
 
 **Key Errors Encountered:**
-${failedSteps.length > 0 ? failedSteps.slice(0, 5).map((err, i) => `${i + 1}. ${err}`).join('\n') : 'None'}
+${
+  failedSteps.length > 0
+    ? failedSteps
+        .slice(0, 5)
+        .map((err, i) => `${i + 1}. ${err}`)
+        .join('\n')
+    : 'None'
+}
 ${failedSteps.length > 5 ? `... and ${failedSteps.length - 5} more errors` : ''}
 
 **Note:** This is a compressed summary of earlier execution history. Recent messages below contain full details.
@@ -219,9 +244,11 @@ ${failedSteps.length > 5 ? `... and ${failedSteps.length - 5} more errors` : ''}
   /**
    * Check if messages are approaching context limit
    */
-  public static isApproachingLimit(messages: Anthropic.MessageParam[]): boolean {
+  public static isApproachingLimit(
+    messages: Anthropic.MessageParam[]
+  ): boolean {
     const tokens = this.estimateTokens(messages);
-    return tokens > (this.TARGET_MESSAGE_TOKENS * 0.9); // 90% threshold
+    return tokens > this.TARGET_MESSAGE_TOKENS * 0.9; // 90% threshold
   }
 
   /**
@@ -247,7 +274,7 @@ ${failedSteps.length > 5 ? `... and ${failedSteps.length - 5} more errors` : ''}
       totalTokens,
       remainingTokens,
       utilizationPercent,
-      needsOptimization
+      needsOptimization,
     };
   }
 }

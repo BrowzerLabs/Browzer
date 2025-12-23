@@ -15,7 +15,7 @@ export const useSidebarStore = create<SidebarState>()(
       toggleSidebar: () => {
         const currentVisibility = get().isVisible;
         const newVisibility = !currentVisibility;
-        
+
         set({ isVisible: newVisibility });
         window.browserAPI.setSidebarState(newVisibility);
       },

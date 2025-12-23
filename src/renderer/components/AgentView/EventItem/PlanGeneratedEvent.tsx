@@ -1,31 +1,35 @@
 /**
  * PlanGeneratedEvent Component
- * 
+ *
  * Displays generated automation plan with steps
  */
 
 import React, { useState } from 'react';
 import { FileText, ChevronDown, ChevronUp } from 'lucide-react';
+
+import { EventItemProps } from '../types';
+
 import { Card } from '@/renderer/ui/card';
 import { Badge } from '@/renderer/ui/badge';
 import { Button } from '@/renderer/ui/button';
 import { cn } from '@/renderer/lib/utils';
-import { EventItemProps } from '../types';
 
 export function PlanGeneratedEvent({ event, isLatest }: EventItemProps) {
   const [isExpanded, setIsExpanded] = useState(true);
   const plan = event.data.plan;
 
   return (
-    <Card className={cn(
-      "p-4 border-l-4 border-l-green-500 bg-green-50/50 dark:bg-green-950/20",
-      isLatest && "animate-in fade-in slide-in-from-bottom-2 duration-300"
-    )}>
+    <Card
+      className={cn(
+        'p-4 border-l-4 border-l-green-500 bg-green-50/50 dark:bg-green-950/20',
+        isLatest && 'animate-in fade-in slide-in-from-bottom-2 duration-300'
+      )}
+    >
       <div className="flex items-start gap-3">
         <div className="flex-shrink-0 mt-0.5">
           <FileText className="w-5 h-5 text-green-600" />
         </div>
-        
+
         <div className="flex-1 min-w-0">
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center gap-2">
@@ -41,7 +45,7 @@ export function PlanGeneratedEvent({ event, isLatest }: EventItemProps) {
                 </Badge>
               )}
             </div>
-            
+
             <Button
               variant="ghost"
               size="sm"

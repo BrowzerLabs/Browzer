@@ -1,8 +1,9 @@
 import React, { useEffect, useRef } from 'react';
+import { ChevronUp, ChevronDown, X } from 'lucide-react';
+
 import { useFindStore } from '@/renderer/stores/findStore';
 import { useBrowserAPI } from '@/renderer/hooks/useBrowserAPI';
 import { useOverlayVisibility } from '@/renderer/hooks/useBrowserViewLayer';
-import { ChevronUp, ChevronDown, X } from 'lucide-react';
 
 export const FindBar = () => {
   const { state, setState, closeFindBar } = useFindStore();
@@ -23,13 +24,18 @@ export const FindBar = () => {
 
   // Listen for search results
   useEffect(() => {
-    const removeListener = window.browserAPI.onFoundInPage((tId: string, result: { matches: number; activeMatchOrdinal: number }) => {
-      if (!activeTabId || tId !== activeTabId) return;
-      setState({
-        matchCount: result.matches,
-        activeMatch: result.activeMatchOrdinal
-      });
-    });
+    const removeListener = window.browserAPI.onFoundInPage(
+      (
+        tId: string,
+        result: { matches: number; activeMatchOrdinal: number }
+      ) => {
+        if (!activeTabId || tId !== activeTabId) return;
+        setState({
+          matchCount: result.matches,
+          activeMatch: result.activeMatchOrdinal,
+        });
+      }
+    );
     return removeListener;
   }, [activeTabId, setState]);
 
@@ -58,28 +64,42 @@ export const FindBar = () => {
     }
   };
 
-  const handleNext = async() => {
+  const handleNext = async () => {
     if (!state.searchText || !activeTabId) return;
-    const shouldWrap = state.matchCount > 0 && state.activeMatch >= state.matchCount;
+    const shouldWrap =
+      state.matchCount > 0 && state.activeMatch >= state.matchCount;
     if (shouldWrap) {
-      await window.browserAPI.findInPage(activeTabId, state.searchText, { findNext: false, forward: true });
+      await window.browserAPI.findInPage(activeTabId, state.searchText, {
+        findNext: false,
+        forward: true,
+      });
     } else {
-      await window.browserAPI.findInPage(activeTabId, state.searchText, { findNext: true, forward: true });
+      await window.browserAPI.findInPage(activeTabId, state.searchText, {
+        findNext: true,
+        forward: true,
+      });
     }
   };
 
   const handlePrev = async () => {
     if (!state.searchText || !activeTabId) return;
     const shouldWrap = state.matchCount > 0 && state.activeMatch <= 1;
-      if (shouldWrap) {
-        await window.browserAPI.findInPage(activeTabId, state.searchText, { findNext: false, forward: false });
-      } else {
-        await window.browserAPI.findInPage(activeTabId, state.searchText, { findNext: true, forward: false });
-      }
+    if (shouldWrap) {
+      await window.browserAPI.findInPage(activeTabId, state.searchText, {
+        findNext: false,
+        forward: false,
+      });
+    } else {
+      await window.browserAPI.findInPage(activeTabId, state.searchText, {
+        findNext: true,
+        forward: false,
+      });
+    }
   };
 
   const handleClose = async () => {
-    if (activeTabId) await window.browserAPI.stopFindInPage(activeTabId, 'clearSelection');
+    if (activeTabId)
+      await window.browserAPI.stopFindInPage(activeTabId, 'clearSelection');
     closeFindBar();
   };
 
@@ -100,31 +120,44 @@ export const FindBar = () => {
     <div className="interactive-ui absolute top-2 right-5 z-50 w-[340px] bg-white dark:bg-zinc-800 border dark:border-zinc-700 rounded-md shadow-xl flex items-center p-1.5 gap-2 animate-in fade-in slide-in-from-top-2 duration-200">
       <div className="flex-1 flex items-center bg-zinc-100 dark:bg-zinc-900 rounded-sm px-2 h-8 border dark:border-zinc-700 focus-within:ring-1 focus-within:ring-blue-500">
         <input
-            ref={inputRef}
-            type="text"
-            value={state.searchText}
-            onChange={(e) => handleSearch(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder="Find in page"
-            className="flex-1 bg-transparent border-none outline-none text-sm text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400"
+          ref={inputRef}
+          type="text"
+          value={state.searchText}
+          onChange={(e) => handleSearch(e.target.value)}
+          onKeyDown={handleKeyDown}
+          placeholder="Find in page"
+          className="flex-1 bg-transparent border-none outline-none text-sm text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400"
         />
         {state.searchText && (
-            <span className="text-xs text-zinc-400 whitespace-nowrap ml-2">
-                {state.matchCount > 0 ? `${state.activeMatch}/${state.matchCount}` : '0/0'}
-            </span>
+          <span className="text-xs text-zinc-400 whitespace-nowrap ml-2">
+            {state.matchCount > 0
+              ? `${state.activeMatch}/${state.matchCount}`
+              : '0/0'}
+          </span>
         )}
       </div>
-      
+
       <div className="flex items-center gap-0.5">
-        <button onClick={handlePrev} className="p-1.5 hover:bg-zinc-100 dark:hover:bg-zinc-700 rounded-sm text-zinc-600 dark:text-zinc-400 disabled:opacity-50" disabled={!state.matchCount}>
-            <ChevronUp size={16} />
+        <button
+          onClick={handlePrev}
+          className="p-1.5 hover:bg-zinc-100 dark:hover:bg-zinc-700 rounded-sm text-zinc-600 dark:text-zinc-400 disabled:opacity-50"
+          disabled={!state.matchCount}
+        >
+          <ChevronUp size={16} />
         </button>
-        <button onClick={handleNext} className="p-1.5 hover:bg-zinc-100 dark:hover:bg-zinc-700 rounded-sm text-zinc-600 dark:text-zinc-400 disabled:opacity-50" disabled={!state.matchCount}>
-            <ChevronDown size={16} />
+        <button
+          onClick={handleNext}
+          className="p-1.5 hover:bg-zinc-100 dark:hover:bg-zinc-700 rounded-sm text-zinc-600 dark:text-zinc-400 disabled:opacity-50"
+          disabled={!state.matchCount}
+        >
+          <ChevronDown size={16} />
         </button>
         <div className="w-[1px] h-4 bg-zinc-200 dark:bg-zinc-700 mx-1" />
-        <button onClick={handleClose} className="p-1.5 hover:bg-zinc-100 dark:hover:bg-zinc-700 rounded-sm text-zinc-600 dark:text-zinc-400">
-            <X size={16} />
+        <button
+          onClick={handleClose}
+          className="p-1.5 hover:bg-zinc-100 dark:hover:bg-zinc-700 rounded-sm text-zinc-600 dark:text-zinc-400"
+        >
+          <X size={16} />
         </button>
       </div>
     </div>

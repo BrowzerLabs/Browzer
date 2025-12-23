@@ -1,9 +1,13 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+
 import { Input } from '@/renderer/ui/input';
 
 const AUTO_SAVE_INTERVAL = 5000;
 
-interface BufferedInputProps extends Omit<React.ComponentProps<typeof Input>, 'onChange' | 'value'> {
+interface BufferedInputProps extends Omit<
+  React.ComponentProps<typeof Input>,
+  'onChange' | 'value'
+> {
   value: string;
   onSave: (value: string) => void;
 }
@@ -33,7 +37,7 @@ export function BufferedInput({ value, onSave, ...props }: BufferedInputProps) {
       if (autoSaveTimerRef.current) {
         clearInterval(autoSaveTimerRef.current);
       }
-      
+
       autoSaveTimerRef.current = setInterval(() => {
         saveIfChanged();
       }, AUTO_SAVE_INTERVAL);

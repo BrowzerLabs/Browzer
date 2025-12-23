@@ -1,15 +1,19 @@
 import { Brain, Loader2 } from 'lucide-react';
+
+import { EventItemProps } from '../types';
+
 import { Card } from '@/renderer/ui/card';
 import { cn } from '@/renderer/lib/utils';
-import { EventItemProps } from '../types';
 
 export function ThinkingEvent({ event, isLatest }: EventItemProps) {
   const thinkingText = event.data?.message || 'Browzer is thinking...';
   return (
-    <Card className={cn(
-      "p-4 border-l-4 border-l-purple-500 bg-purple-50/50 dark:bg-purple-950/20",
-      isLatest && "animate-in fade-in slide-in-from-bottom-2 duration-300"
-    )}>
+    <Card
+      className={cn(
+        'p-4 border-l-4 border-l-purple-500 bg-purple-50/50 dark:bg-purple-950/20',
+        isLatest && 'animate-in fade-in slide-in-from-bottom-2 duration-300'
+      )}
+    >
       <div className="flex items-start gap-3">
         <div className="flex-shrink-0 mt-0.5">
           {isLatest ? (

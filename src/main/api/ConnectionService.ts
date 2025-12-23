@@ -1,8 +1,9 @@
 import { WebContents } from 'electron';
+import { EventEmitter } from 'events';
+
 import { ApiClient, ApiConfig } from './ApiClient';
 import { SSEClient, SSEConfig } from './SSEClient';
 import { initializeApi } from './api';
-import { EventEmitter } from 'events';
 
 export enum ConnectionStatus {
   DISCONNECTED = 'disconnected',
@@ -19,11 +20,10 @@ export class ConnectionService extends EventEmitter {
 
   private browserUIWebContents: WebContents;
 
-  constructor(
-    browserUIWebContents: WebContents
-  ) {
+  constructor(browserUIWebContents: WebContents) {
     super();
-    this.apiBaseURL = process.env.BACKEND_API_URL ?? 'http://localhost:8000/api/v1'; 
+    this.apiBaseURL =
+      process.env.BACKEND_API_URL ?? 'http://localhost:8000/api/v1';
     this.browserUIWebContents = browserUIWebContents;
 
     const apiConfig: ApiConfig = {
@@ -32,17 +32,20 @@ export class ConnectionService extends EventEmitter {
     };
 
     this.apiClient = new ApiClient(apiConfig);
-    
+
     // Initialize global api instance
     initializeApi(this.apiClient);
-    
-    this.initialize().catch(err => {
+
+    this.initialize().catch((err) => {
       console.error('Failed to initialize ConnectionService:', err);
     });
   }
 
   async initialize(): Promise<boolean> {
-    if (this.status === ConnectionStatus.CONNECTING || this.status === ConnectionStatus.CONNECTED) {
+    if (
+      this.status === ConnectionStatus.CONNECTING ||
+      this.status === ConnectionStatus.CONNECTED
+    ) {
       console.log('[ConnectionService] Already connected or connecting');
       return true;
     }
@@ -65,7 +68,6 @@ export class ConnectionService extends EventEmitter {
 
       this.status = ConnectionStatus.CONNECTED;
       return true;
-
     } catch (error: any) {
       console.error('[ConnectionService] Connection failed:', error);
       this.status = ConnectionStatus.ERROR;

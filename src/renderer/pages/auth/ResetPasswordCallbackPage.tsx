@@ -1,13 +1,20 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/renderer/ui/card';
+import { Loader2, CheckCircle2, XCircle } from 'lucide-react';
+import { toast } from 'sonner';
+
+import { AuthLayout } from './AuthLayout';
+
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/renderer/ui/card';
 import { Button } from '@/renderer/ui/button';
 import { Input } from '@/renderer/ui/input';
 import { Label } from '@/renderer/ui/label';
-import { Loader2, CheckCircle2, XCircle } from 'lucide-react';
-import { AuthLayout } from './AuthLayout';
-import { toast } from 'sonner';
-
 
 type PageState = 'verifying' | 'reset_form' | 'success' | 'error';
 
@@ -30,14 +37,16 @@ export function ResetPasswordCallbackPage() {
       // Parse URL hash (Supabase sends data in fragment)
       const hash = location.hash.substring(1); // Remove leading #
       const params = new URLSearchParams(hash);
-      
+
       // Check for error from Supabase
       const error = params.get('error');
       const errorDescription = params.get('error_description');
-      
+
       if (error) {
         setState('error');
-        setError(decodeURIComponent(errorDescription || error).replace(/\+/g, ' '));
+        setError(
+          decodeURIComponent(errorDescription || error).replace(/\+/g, ' ')
+        );
         toast.error('Reset link invalid or expired');
         return;
       }
@@ -86,12 +95,15 @@ export function ResetPasswordCallbackPage() {
     setIsSubmitting(true);
 
     try {
-      const response = await window.authAPI.updatePassword(newPassword, accessToken);
+      const response = await window.authAPI.updatePassword(
+        newPassword,
+        accessToken
+      );
 
       if (response.success) {
         setState('success');
         toast.success('Password updated successfully!');
-        
+
         // Wait a moment then redirect to sign in
         setTimeout(() => {
           navigate('/auth/signin');
@@ -190,14 +202,22 @@ export function ResetPasswordCallbackPage() {
             <div className="flex flex-col items-center justify-center py-8 space-y-6">
               <XCircle className="h-12 w-12 text-destructive" />
               <div className="text-center space-y-2">
-                <p className="font-medium text-destructive">Reset Link Invalid</p>
+                <p className="font-medium text-destructive">
+                  Reset Link Invalid
+                </p>
                 <p className="text-sm text-muted-foreground">{error}</p>
               </div>
               <div className="flex flex-col gap-2 w-full">
-                <Button onClick={() => navigate('/auth/forgot-password')} variant="outline">
+                <Button
+                  onClick={() => navigate('/auth/forgot-password')}
+                  variant="outline"
+                >
                   Request New Reset Link
                 </Button>
-                <Button onClick={() => navigate('/auth/signin')} variant="ghost">
+                <Button
+                  onClick={() => navigate('/auth/signin')}
+                  variant="ghost"
+                >
                   Back to Sign In
                 </Button>
               </div>

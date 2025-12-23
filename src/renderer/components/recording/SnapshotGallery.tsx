@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Camera, X, ZoomIn, ChevronLeft, ChevronRight } from 'lucide-react';
+
 import type { RecordedAction } from '@/shared/types';
 import { Button } from '@/renderer/ui/button';
 import { Badge } from '@/renderer/ui/badge';
@@ -10,8 +11,12 @@ interface SnapshotGalleryProps {
 }
 
 export function SnapshotGallery({ actions }: SnapshotGalleryProps) {
-  const [selectedSnapshot, setSelectedSnapshot] = useState<{ path: string; action: RecordedAction; index: number } | null>(null);
-  
+  const [selectedSnapshot, setSelectedSnapshot] = useState<{
+    path: string;
+    action: RecordedAction;
+    index: number;
+  } | null>(null);
+
   // Filter actions that have snapshots
   const actionsWithSnapshots = actions
     .map((action, index) => ({ action, index }))
@@ -30,7 +35,9 @@ export function SnapshotGallery({ actions }: SnapshotGalleryProps) {
 
   const handlePrevious = () => {
     if (!selectedSnapshot) return;
-    const currentIndex = actionsWithSnapshots.findIndex(({ index }) => index === selectedSnapshot.index);
+    const currentIndex = actionsWithSnapshots.findIndex(
+      ({ index }) => index === selectedSnapshot.index
+    );
     if (currentIndex > 0) {
       const prev = actionsWithSnapshots[currentIndex - 1];
       const path = prev.action.snapshotPath || '';
@@ -40,7 +47,9 @@ export function SnapshotGallery({ actions }: SnapshotGalleryProps) {
 
   const handleNext = () => {
     if (!selectedSnapshot) return;
-    const currentIndex = actionsWithSnapshots.findIndex(({ index }) => index === selectedSnapshot.index);
+    const currentIndex = actionsWithSnapshots.findIndex(
+      ({ index }) => index === selectedSnapshot.index
+    );
     if (currentIndex < actionsWithSnapshots.length - 1) {
       const next = actionsWithSnapshots[currentIndex + 1];
       const path = next.action.snapshotPath || '';
@@ -48,8 +57,10 @@ export function SnapshotGallery({ actions }: SnapshotGalleryProps) {
     }
   };
 
-  const currentSnapshotIndex = selectedSnapshot 
-    ? actionsWithSnapshots.findIndex(({ index }) => index === selectedSnapshot.index) + 1
+  const currentSnapshotIndex = selectedSnapshot
+    ? actionsWithSnapshots.findIndex(
+        ({ index }) => index === selectedSnapshot.index
+      ) + 1
     : 0;
 
   return (
@@ -60,16 +71,25 @@ export function SnapshotGallery({ actions }: SnapshotGalleryProps) {
             <Camera className="w-5 h-5 text-purple-600" />
             Visual Snapshots ({actionsWithSnapshots.length})
           </h3>
-          <Badge variant="secondary" className="bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400">
+          <Badge
+            variant="secondary"
+            className="bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400"
+          >
             Context for LLM
           </Badge>
         </div>
-        
+
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 max-h-[400px] overflow-y-auto pr-2">
           {actionsWithSnapshots.map(({ action, index }) => (
             <button
               key={index}
-              onClick={() => setSelectedSnapshot({ path: action.snapshotPath || '', action, index })}
+              onClick={() =>
+                setSelectedSnapshot({
+                  path: action.snapshotPath || '',
+                  action,
+                  index,
+                })
+              }
               className="group relative aspect-video rounded-lg overflow-hidden border-2 border-gray-200 dark:border-gray-700 hover:border-blue-500 dark:hover:border-blue-500 transition-all hover:shadow-lg"
             >
               <img
@@ -82,7 +102,10 @@ export function SnapshotGallery({ actions }: SnapshotGalleryProps) {
                 <ZoomIn className="w-6 h-6 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
               </div>
               <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-2">
-                <Badge variant="secondary" className="text-xs bg-white/90 text-gray-900">
+                <Badge
+                  variant="secondary"
+                  className="text-xs bg-white/90 text-gray-900"
+                >
                   #{index + 1} {action.type}
                 </Badge>
               </div>
@@ -92,7 +115,10 @@ export function SnapshotGallery({ actions }: SnapshotGalleryProps) {
       </div>
 
       {/* Lightbox Dialog */}
-      <Dialog open={!!selectedSnapshot} onOpenChange={() => setSelectedSnapshot(null)}>
+      <Dialog
+        open={!!selectedSnapshot}
+        onOpenChange={() => setSelectedSnapshot(null)}
+      >
         <DialogContent className="max-w-[95vw] w-[1400px] max-h-[95vh] p-0 overflow-hidden">
           {selectedSnapshot && (
             <div className="relative">
@@ -110,7 +136,9 @@ export function SnapshotGallery({ actions }: SnapshotGalleryProps) {
                   </Button>
                   <Button
                     onClick={handleNext}
-                    disabled={currentSnapshotIndex === actionsWithSnapshots.length}
+                    disabled={
+                      currentSnapshotIndex === actionsWithSnapshots.length
+                    }
                     variant="ghost"
                     size="icon"
                     className="absolute right-4 top-1/2 -translate-y-1/2 z-10 bg-black/50 hover:bg-black/70 text-white rounded-full disabled:opacity-30"
@@ -133,10 +161,16 @@ export function SnapshotGallery({ actions }: SnapshotGalleryProps) {
               <div className="bg-black/90 text-white p-4 border-t border-gray-700">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm text-gray-400">Action #{selectedSnapshot.index + 1}</p>
-                    <p className="text-lg font-semibold capitalize">{selectedSnapshot.action.type}</p>
+                    <p className="text-sm text-gray-400">
+                      Action #{selectedSnapshot.index + 1}
+                    </p>
+                    <p className="text-lg font-semibold capitalize">
+                      {selectedSnapshot.action.type}
+                    </p>
                     {selectedSnapshot.action.value && (
-                      <p className="text-sm text-gray-400 mt-1">Value: {selectedSnapshot.action.value}</p>
+                      <p className="text-sm text-gray-400 mt-1">
+                        Value: {selectedSnapshot.action.value}
+                      </p>
                     )}
                   </div>
                   <div className="text-right">
@@ -144,7 +178,9 @@ export function SnapshotGallery({ actions }: SnapshotGalleryProps) {
                       {currentSnapshotIndex} of {actionsWithSnapshots.length}
                     </p>
                     <p className="text-sm text-gray-400">
-                      {new Date(selectedSnapshot.action.timestamp).toLocaleString()}
+                      {new Date(
+                        selectedSnapshot.action.timestamp
+                      ).toLocaleString()}
                     </p>
                   </div>
                 </div>

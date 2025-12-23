@@ -1,16 +1,17 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import Anthropic from '@anthropic-ai/sdk';
+
 import { ContextConfig, ContextStats, CacheBreakpoint } from './types';
 
 /**
  * ContextManager - Intelligent context management for automation sessions
- * 
+ *
  * Implements Anthropic best practices for:
  * - Prompt caching with optimal breakpoints
  * - Context editing when approaching token limits
  * - Long context optimization
  * - Token counting and budget tracking
- * 
+ *
  * Based on Anthropic documentation:
  * - PROMPT_CACHING.md: Cache static content, use ephemeral cache control
  * - CONTEXT_EDITING.md: Clear old tool uses when approaching limits
@@ -19,10 +20,10 @@ import { ContextConfig, ContextStats, CacheBreakpoint } from './types';
  */
 export class ContextManager {
   private config: ContextConfig;
-  
+
   // Claude Sonnet 4.5 context window
   private readonly MAX_CONTEXT_TOKENS = 200_000;
-  
+
   // Minimum tokens for caching (Sonnet requirement)
   private readonly MIN_CACHE_TOKENS = 1024;
 
@@ -30,18 +31,21 @@ export class ContextManager {
     this.config = {
       // Trigger context editing at 150K tokens (75% of 200K)
       triggerThreshold: config?.triggerThreshold || 150_000,
-      
+
       // Keep last 3 tool uses after clearing
       keepToolUses: config?.keepToolUses || 3,
-      
+
       // Clear at least 10K tokens to make cache invalidation worthwhile
       clearAtLeast: config?.clearAtLeast || 10_000,
-      
+
       // Don't clear extract_context or take_snapshot tools
-      excludeTools: config?.excludeTools || ['extract_context', 'take_snapshot'],
-      
+      excludeTools: config?.excludeTools || [
+        'extract_context',
+        'take_snapshot',
+      ],
+
       // Keep tool inputs by default (only clear results)
-      clearToolInputs: config?.clearToolInputs || false
+      clearToolInputs: config?.clearToolInputs || false,
     };
   }
 
@@ -58,7 +62,7 @@ export class ContextManager {
     // Add main system prompt
     systemBlocks.push({
       type: 'text',
-      text: systemPrompt
+      text: systemPrompt,
     });
 
     // Add cached context (recorded session) with cache control
@@ -66,7 +70,7 @@ export class ContextManager {
       systemBlocks.push({
         type: 'text',
         text: cachedContext,
-        cache_control: { type: 'ephemeral' }
+        cache_control: { type: 'ephemeral' },
       });
     }
 
@@ -92,10 +96,10 @@ export class ContextManager {
     // Add cache control to last tool (caches all tools before it)
     const cachedTools = [...tools];
     const lastTool = cachedTools[cachedTools.length - 1];
-    
+
     cachedTools[cachedTools.length - 1] = {
       ...lastTool,
-      cache_control: { type: 'ephemeral' }
+      cache_control: { type: 'ephemeral' },
     };
 
     return cachedTools;
@@ -116,14 +120,14 @@ export class ContextManager {
 
     if (cacheThreshold > 0) {
       const optimized = [...messages];
-      
+
       // Add cache control to a message in the middle of history
       // This allows the model to reuse the conversation prefix
       const cacheIndex = Math.floor(cacheThreshold / 2);
-      
+
       if (cacheIndex > 0 && cacheIndex < optimized.length) {
         const message = optimized[cacheIndex];
-        
+
         // Add cache control to message content
         if (Array.isArray(message.content)) {
           const lastBlock = message.content[message.content.length - 1];
@@ -134,9 +138,9 @@ export class ContextManager {
                 ...message.content.slice(0, -1),
                 {
                   ...lastBlock,
-                  cache_control: { type: 'ephemeral' }
-                } as any
-              ]
+                  cache_control: { type: 'ephemeral' },
+                } as any,
+              ],
             };
           }
         }
@@ -157,9 +161,7 @@ export class ContextManager {
    * Apply context editing to messages
    * Removes old tool uses while preserving important context
    */
-  applyContextEditing(
-    messages: Anthropic.MessageParam[]
-  ): {
+  applyContextEditing(messages: Anthropic.MessageParam[]): {
     editedMessages: Anthropic.MessageParam[];
     clearedCount: number;
     clearedTokens: number;
@@ -186,7 +188,9 @@ export class ContextManager {
             assistantIndex: i,
             userIndex: i + 1,
             toolName: toolUse.name,
-            tokens: this.estimateMessageTokens(message) + this.estimateMessageTokens(nextMessage)
+            tokens:
+              this.estimateMessageTokens(message) +
+              this.estimateMessageTokens(nextMessage),
           });
         }
       }
@@ -201,40 +205,45 @@ export class ContextManager {
       return {
         editedMessages: messages,
         clearedCount: 0,
-        clearedTokens: 0
+        clearedTokens: 0,
       };
     }
 
     // Filter out excluded tools and calculate tokens
     const clearablePairs = toolUsePairs.filter(
-      pair => !this.config.excludeTools.includes(pair.toolName)
+      (pair) => !this.config.excludeTools.includes(pair.toolName)
     );
 
     const pairsToRemove = clearablePairs.slice(0, toClear);
-    const totalClearedTokens = pairsToRemove.reduce((sum, pair) => sum + pair.tokens, 0);
+    const totalClearedTokens = pairsToRemove.reduce(
+      (sum, pair) => sum + pair.tokens,
+      0
+    );
 
     // Check if we're clearing enough tokens
     if (totalClearedTokens < this.config.clearAtLeast) {
       return {
         editedMessages: messages,
         clearedCount: 0,
-        clearedTokens: 0
+        clearedTokens: 0,
       };
     }
 
     // Create edited messages
     const indicesToRemove = new Set<number>();
-    pairsToRemove.forEach(pair => {
+    pairsToRemove.forEach((pair) => {
       indicesToRemove.add(pair.assistantIndex);
       indicesToRemove.add(pair.userIndex);
     });
 
-    const editedMessages = messages.filter((_, index) => !indicesToRemove.has(index));
+    const editedMessages = messages.filter(
+      (_, index) => !indicesToRemove.has(index)
+    );
 
     return {
       editedMessages,
       clearedCount: pairsToRemove.length,
-      clearedTokens: totalClearedTokens
+      clearedTokens: totalClearedTokens,
     };
   }
 
@@ -263,7 +272,7 @@ export class ContextManager {
       toolsTokens,
       systemTokens,
       cachedTokens,
-      remainingCapacity: this.MAX_CONTEXT_TOKENS - totalTokens
+      remainingCapacity: this.MAX_CONTEXT_TOKENS - totalTokens,
     };
   }
 
@@ -281,7 +290,7 @@ export class ContextManager {
     if (toolCount > 0) {
       breakpoints.push({
         type: 'tools',
-        position: toolCount
+        position: toolCount,
       });
     }
 
@@ -289,7 +298,7 @@ export class ContextManager {
     if (systemBlocks > 1) {
       breakpoints.push({
         type: 'system',
-        position: systemBlocks
+        position: systemBlocks,
       });
     }
 
@@ -298,7 +307,7 @@ export class ContextManager {
       breakpoints.push({
         type: 'messages',
         position: Math.floor(messageCount / 2),
-        messageIndex: Math.floor(messageCount / 2)
+        messageIndex: Math.floor(messageCount / 2),
       });
     }
 
@@ -318,9 +327,11 @@ export class ContextManager {
   /**
    * Estimate tokens for system prompt
    */
-  private estimateSystemTokens(system: string | Array<Anthropic.Messages.TextBlockParam>): number {
-    const content = Array.isArray(system) 
-      ? system.map(b => b.text).join('')
+  private estimateSystemTokens(
+    system: string | Array<Anthropic.Messages.TextBlockParam>
+  ): number {
+    const content = Array.isArray(system)
+      ? system.map((b) => b.text).join('')
       : system;
     return Math.ceil(content.length / 4);
   }
@@ -336,7 +347,9 @@ export class ContextManager {
   /**
    * Find tool_use block in message content
    */
-  private findToolUse(content: Anthropic.MessageParam['content']): { name: string } | null {
+  private findToolUse(
+    content: Anthropic.MessageParam['content']
+  ): { name: string } | null {
     if (!Array.isArray(content)) return null;
 
     for (const block of content) {
@@ -354,7 +367,7 @@ export class ContextManager {
   private findToolResult(content: Anthropic.MessageParam['content']): boolean {
     if (!Array.isArray(content)) return false;
 
-    return content.some(block => block.type === 'tool_result');
+    return content.some((block) => block.type === 'tool_result');
   }
 
   /**

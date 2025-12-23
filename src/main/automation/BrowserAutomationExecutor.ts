@@ -1,8 +1,6 @@
 import { WebContentsView } from 'electron';
-import type { ToolExecutionResult } from '@/shared/types';
-import { BrowserContextExtractor } from '@/main/context/BrowserContextExtractor';
-import { ViewportSnapshotCapture } from './ViewportSnapshotCapture';
 
+import { ViewportSnapshotCapture } from './ViewportSnapshotCapture';
 import { ClickHandler } from './handlers/ClickHandler';
 import { TypeHandler } from './handlers/TypeHandler';
 import { FormHandler } from './handlers/FormHandler';
@@ -10,13 +8,16 @@ import { NavigationHandler } from './handlers/NavigationHandler';
 import { InteractionHandler } from './handlers/InteractionHandler';
 import { HandlerContext } from './handlers/BaseHandler';
 
+import { BrowserContextExtractor } from '@/main/context/BrowserContextExtractor';
+import type { ToolExecutionResult } from '@/shared/types';
+
 export class BrowserAutomationExecutor {
   private view: WebContentsView;
   private tabId: string;
-  
+
   private contextExtractor: BrowserContextExtractor;
   private snapshotCapture: ViewportSnapshotCapture;
-  
+
   private clickHandler: ClickHandler;
   private typeHandler: TypeHandler;
   private formHandler: FormHandler;
@@ -26,10 +27,10 @@ export class BrowserAutomationExecutor {
   constructor(view: WebContentsView, tabId: string) {
     this.view = view;
     this.tabId = tabId;
-    
+
     this.contextExtractor = new BrowserContextExtractor(view);
     this.snapshotCapture = new ViewportSnapshotCapture(view);
-    
+
     const context: HandlerContext = { view, tabId };
     this.clickHandler = new ClickHandler(context);
     this.typeHandler = new TypeHandler(context);
@@ -38,23 +39,25 @@ export class BrowserAutomationExecutor {
     this.interactionHandler = new InteractionHandler(context);
   }
 
-  public async executeTool(toolName: string, params: any): Promise<ToolExecutionResult> {
-
+  public async executeTool(
+    toolName: string,
+    params: any
+  ): Promise<ToolExecutionResult> {
     switch (toolName) {
       // Navigation operations
       case 'navigate':
         return this.navigationHandler.executeNavigate(params);
       case 'wait':
         return this.navigationHandler.executeWait(params);
-      
+
       // Click operations
       case 'click':
         return this.clickHandler.execute(params);
-      
+
       // Input operations
       case 'type':
         return this.typeHandler.execute(params);
-      
+
       // Form operations
       case 'select':
         return this.formHandler.executeSelect(params);
@@ -62,21 +65,21 @@ export class BrowserAutomationExecutor {
         return this.formHandler.executeCheckbox(params);
       case 'submit':
         return this.formHandler.executeSubmit(params, this.clickHandler);
-      
+
       // Interaction operations
       case 'keyPress':
         return this.interactionHandler.executeKeyPress(params);
       case 'scroll':
         return this.interactionHandler.executeScroll(params);
-      
+
       // Context extraction
       case 'extract_context':
         return this.extractContext(params);
-      
+
       // Snapshot capture
       case 'take_snapshot':
         return this.captureViewportSnapshot(params);
-      
+
       default:
         return this.createErrorResult(toolName, Date.now(), {
           code: 'EXECUTION_ERROR',
@@ -86,13 +89,12 @@ export class BrowserAutomationExecutor {
             suggestions: [
               'Check tool name for typos',
               'Verify tool is supported by the current browser',
-              'Check if page has JavaScript errors'
-            ]
-          }
+              'Check if page has JavaScript errors',
+            ],
+          },
         });
     }
   }
-
 
   private async extractContext(params: {
     full?: boolean;
@@ -108,7 +110,7 @@ export class BrowserAutomationExecutor {
       full: params.full,
       scrollTo: params.scrollTo,
       elementTags: params.elementTags,
-      maxElements: params.maxElements
+      maxElements: params.maxElements,
     });
 
     if (result.success && result.context) {
@@ -129,9 +131,9 @@ export class BrowserAutomationExecutor {
           'Page may still be loading',
           'Try with full=true for complete page context',
           'Check if page has JavaScript errors',
-          'Verify elementTags filter is correct (e.g., ["BUTTON", "INPUT"])'
-        ]
-      }
+          'Verify elementTags filter is correct (e.g., ["BUTTON", "INPUT"])',
+        ],
+      },
     });
   }
 
@@ -139,16 +141,21 @@ export class BrowserAutomationExecutor {
    * Capture viewport snapshot - Visual screenshot for Claude vision analysis
    */
   private async captureViewportSnapshot(params: {
-    scrollTo?: 'current' | 'top' | 'bottom' | number | { 
-      element: string; 
-      backupSelectors: string[] 
-    };
+    scrollTo?:
+      | 'current'
+      | 'top'
+      | 'bottom'
+      | number
+      | {
+          element: string;
+          backupSelectors: string[];
+        };
   }): Promise<ToolExecutionResult> {
     const startTime = Date.now();
     const scrollTo = params.scrollTo || 'current';
     const result = await this.snapshotCapture.captureSnapshot(scrollTo);
     const executionTime = Date.now() - startTime;
-    
+
     if (result.success && result.image) {
       return {
         success: true,
@@ -159,20 +166,20 @@ export class BrowserAutomationExecutor {
           source: {
             type: 'base64',
             media_type: result.image.mediaType,
-            data: result.image.data
+            data: result.image.data,
           },
           metadata: {
             width: result.image.width,
             height: result.image.height,
             sizeBytes: result.image.sizeBytes,
             estimatedTokens: result.image.estimatedTokens,
-            viewport: result.viewport
-          }
+            viewport: result.viewport,
+          },
         },
         timestamp: Date.now(),
         tabId: this.tabId,
-        url: this.view.webContents.getURL()
-      } as ToolExecutionResult; 
+        url: this.view.webContents.getURL(),
+      } as ToolExecutionResult;
     }
 
     return this.createErrorResult('take_snapshot', startTime, {
@@ -184,21 +191,25 @@ export class BrowserAutomationExecutor {
           'Page may still be loading',
           'If scrolling to element, verify selector is correct',
           'Try with scrollTo: "current" to capture without scrolling',
-          'Check if page has rendering issues'
-        ]
-      }
+          'Check if page has rendering issues',
+        ],
+      },
     });
   }
 
   /**
    * Helper to create error results
    */
-  private createErrorResult(toolName: string, startTime: number, error: any): ToolExecutionResult {
+  private createErrorResult(
+    toolName: string,
+    startTime: number,
+    error: any
+  ): ToolExecutionResult {
     return {
       success: false,
       toolName,
       error,
-      url: this.view.webContents.getURL()
+      url: this.view.webContents.getURL(),
     };
   }
 }

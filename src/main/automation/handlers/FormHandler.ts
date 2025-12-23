@@ -1,13 +1,19 @@
-import { ClickHandler } from '.';
 import { BaseHandler, HandlerContext } from './BaseHandler';
-import type { SelectParams, CheckboxParams, SubmitParams, ToolExecutionResult } from '@/shared/types';
+
+import { ClickHandler } from '.';
+
+import type {
+  SelectParams,
+  CheckboxParams,
+  SubmitParams,
+  ToolExecutionResult,
+} from '@/shared/types';
 
 export class FormHandler extends BaseHandler {
   constructor(context: HandlerContext) {
     super(context);
   }
 
-  
   async executeSelect(params: SelectParams): Promise<ToolExecutionResult> {
     const startTime = Date.now();
 
@@ -18,7 +24,9 @@ export class FormHandler extends BaseHandler {
 
       if (!result.success) {
         return this.createErrorResult('select', startTime, {
-          code: result.error?.includes('not found') ? 'ELEMENT_NOT_FOUND' : 'EXECUTION_ERROR',
+          code: result.error?.includes('not found')
+            ? 'ELEMENT_NOT_FOUND'
+            : 'EXECUTION_ERROR',
           message: result.error || 'Failed to select option',
           details: {
             lastError: result.error,
@@ -26,9 +34,9 @@ export class FormHandler extends BaseHandler {
               'Verify the select element attributes',
               'Check if the dropdown is dynamically loaded',
               'Verify the value/label/index matches an available option',
-              'Ensure page has finished loading'
-            ]
-          }
+              'Ensure page has finished loading',
+            ],
+          },
         });
       }
 
@@ -38,17 +46,16 @@ export class FormHandler extends BaseHandler {
         success: true,
         toolName: 'select',
         value: result.selectedValue,
-        url: this.getUrl()
+        url: this.getUrl(),
       };
-
     } catch (error) {
       console.error('[FormHandler] ❌ Select failed:', error);
       return this.createErrorResult('select', startTime, {
         code: 'EXECUTION_ERROR',
         message: `Select failed: ${error instanceof Error ? error.message : String(error)}`,
         details: {
-          lastError: error instanceof Error ? error.message : String(error)
-        }
+          lastError: error instanceof Error ? error.message : String(error),
+        },
       });
     }
   }
@@ -210,12 +217,11 @@ export class FormHandler extends BaseHandler {
 
       const result = await this.view.webContents.executeJavaScript(script);
       return result;
-
     } catch (error) {
       console.error('[FormHandler] ❌  select failed:', error);
       return {
         success: false,
-        error: error instanceof Error ? error.message : String(error)
+        error: error instanceof Error ? error.message : String(error),
       };
     }
   }
@@ -225,23 +231,27 @@ export class FormHandler extends BaseHandler {
    */
   async executeCheckbox(params: CheckboxParams): Promise<ToolExecutionResult> {
     const startTime = Date.now();
-    console.log(`[FormHandler] ☑️  Checkbox: ${params.checked ? 'check' : 'uncheck'}`);
+    console.log(
+      `[FormHandler] ☑️  Checkbox: ${params.checked ? 'check' : 'uncheck'}`
+    );
 
     try {
       const result = await this.executeFindAndToggleCheckbox(params);
 
       if (!result.success) {
         return this.createErrorResult('checkbox', startTime, {
-          code: result.error?.includes('not found') ? 'ELEMENT_NOT_FOUND' : 'EXECUTION_ERROR',
+          code: result.error?.includes('not found')
+            ? 'ELEMENT_NOT_FOUND'
+            : 'EXECUTION_ERROR',
           message: result.error || 'Failed to toggle checkbox',
           details: {
             lastError: result.error,
             suggestions: [
               'Verify the checkbox element attributes',
               'Check if the checkbox is visible',
-              'Ensure type="checkbox" or type="radio"'
-            ]
-          }
+              'Ensure type="checkbox" or type="radio"',
+            ],
+          },
         });
       }
 
@@ -251,17 +261,16 @@ export class FormHandler extends BaseHandler {
         success: true,
         toolName: 'checkbox',
         value: result.checked,
-        url: this.getUrl()
+        url: this.getUrl(),
       };
-
     } catch (error) {
       console.error('[FormHandler] ❌ Checkbox failed:', error);
       return this.createErrorResult('checkbox', startTime, {
         code: 'EXECUTION_ERROR',
         message: `Checkbox failed: ${error instanceof Error ? error.message : String(error)}`,
         details: {
-          lastError: error instanceof Error ? error.message : String(error)
-        }
+          lastError: error instanceof Error ? error.message : String(error),
+        },
       });
     }
   }
@@ -389,12 +398,11 @@ export class FormHandler extends BaseHandler {
 
       const result = await this.view.webContents.executeJavaScript(script);
       return result;
-
     } catch (error) {
       console.error('[FormHandler] ❌  checkbox failed:', error);
       return {
         success: false,
-        error: error instanceof Error ? error.message : String(error)
+        error: error instanceof Error ? error.message : String(error),
       };
     }
   }
@@ -402,7 +410,10 @@ export class FormHandler extends BaseHandler {
   /**
    * Execute form submit operation
    */
-  async executeSubmit(params: SubmitParams, clickHandler: ClickHandler): Promise<ToolExecutionResult> {
+  async executeSubmit(
+    params: SubmitParams,
+    clickHandler: ClickHandler
+  ): Promise<ToolExecutionResult> {
     const startTime = Date.now();
     console.log('[FormHandler] 📤 Submit form');
 
@@ -411,7 +422,7 @@ export class FormHandler extends BaseHandler {
       if (params.submitButton) {
         return await clickHandler.execute({
           ...params.submitButton,
-          tag: params.submitButton.tag || 'BUTTON'
+          tag: params.submitButton.tag || 'BUTTON',
         });
       }
 
@@ -427,9 +438,9 @@ export class FormHandler extends BaseHandler {
             suggestions: [
               'Verify a form element exists on the page',
               'Try specifying form parameters',
-              'Consider using submitButton to click the submit button instead'
-            ]
-          }
+              'Consider using submitButton to click the submit button instead',
+            ],
+          },
         });
       }
 
@@ -438,17 +449,16 @@ export class FormHandler extends BaseHandler {
       return {
         success: true,
         toolName: 'submit',
-        url: this.getUrl()
+        url: this.getUrl(),
       };
-
     } catch (error) {
       console.error('[FormHandler] ❌ Submit failed:', error);
       return this.createErrorResult('submit', startTime, {
         code: 'EXECUTION_ERROR',
         message: `Submit failed: ${error instanceof Error ? error.message : String(error)}`,
         details: {
-          lastError: error instanceof Error ? error.message : String(error)
-        }
+          lastError: error instanceof Error ? error.message : String(error),
+        },
       });
     }
   }
@@ -465,7 +475,9 @@ export class FormHandler extends BaseHandler {
         (async function() {
           let form = null;
           
-          ${params.form ? `
+          ${
+            params.form
+              ? `
             // Find form by attributes
             const targetTag = ${JSON.stringify(params.form.tag || 'FORM')};
             const targetAttrs = ${JSON.stringify(params.form.attributes || {})};
@@ -507,10 +519,12 @@ export class FormHandler extends BaseHandler {
               scored.sort((a, b) => b.score - a.score);
               form = scored[0].element;
             }
-          ` : `
+          `
+              : `
             // Find first form on page
             form = document.querySelector('form');
-          `}
+          `
+          }
           
           if (!form) {
             return { success: false, error: 'No form found' };
@@ -535,12 +549,11 @@ export class FormHandler extends BaseHandler {
 
       const result = await this.view.webContents.executeJavaScript(script);
       return result;
-
     } catch (error) {
       console.error('[FormHandler] ❌  submit failed:', error);
       return {
         success: false,
-        error: error instanceof Error ? error.message : String(error)
+        error: error instanceof Error ? error.message : String(error),
       };
     }
   }

@@ -1,4 +1,5 @@
 import { BaseHandler } from './base';
+
 import { HistoryQuery } from '@/shared/types';
 
 export class HistoryHandler extends BaseHandler {
@@ -30,9 +31,12 @@ export class HistoryHandler extends BaseHandler {
       return historyService.deleteEntries(ids);
     });
 
-    this.handle('history:delete-by-date-range', async (_, startTime: number, endTime: number) => {
-      return historyService.deleteByDateRange(startTime, endTime);
-    });
+    this.handle(
+      'history:delete-by-date-range',
+      async (_, startTime: number, endTime: number) => {
+        return historyService.deleteByDateRange(startTime, endTime);
+      }
+    );
 
     this.handle('history:clear-all', async () => {
       return historyService.clearAll();

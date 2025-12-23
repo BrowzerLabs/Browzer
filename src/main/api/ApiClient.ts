@@ -1,8 +1,9 @@
-
-import axios, { AxiosInstance, AxiosRequestConfig, AxiosError } from 'axios';
 import { app } from 'electron';
 import { randomUUID } from 'crypto';
 import os from 'os';
+
+import axios, { AxiosInstance, AxiosRequestConfig, AxiosError } from 'axios';
+
 import { tokenManager } from '../auth/TokenManager';
 
 export interface ApiConfig {
@@ -24,7 +25,7 @@ export class ApiClient {
 
   constructor(config: ApiConfig) {
     this.electronId = this.generateElectronId();
-    
+
     this.axios = axios.create({
       baseURL: config.baseURL,
       timeout: config.timeout || 30000,
@@ -72,17 +73,21 @@ export class ApiClient {
         return response;
       },
       async (error: AxiosError) => {
-        const originalRequest = error.config as AxiosRequestConfig & { _retry?: boolean };
+        const originalRequest = error.config as AxiosRequestConfig & {
+          _retry?: boolean;
+        };
 
         // Handle 401 Unauthorized - attempt token refresh
         if (error.response?.status === 401 && !originalRequest._retry) {
-          console.warn('[ApiClient] 401 Unauthorized - attempting token refresh');
+          console.warn(
+            '[ApiClient] 401 Unauthorized - attempting token refresh'
+          );
 
           // Check if refresh is already in progress
           if (tokenManager.isRefreshInProgress()) {
             console.log('[ApiClient] Refresh already in progress, waiting...');
             const success = await tokenManager.waitForRefresh();
-            
+
             if (success) {
               // Retry original request with new token
               const newToken = tokenManager.getAccessToken();
@@ -91,7 +96,9 @@ export class ApiClient {
               }
               return this.axios.request(originalRequest);
             } else {
-              console.error('[ApiClient] Token refresh failed, clearing session');
+              console.error(
+                '[ApiClient] Token refresh failed, clearing session'
+              );
               tokenManager.clearTokens();
               return Promise.reject(error);
             }
@@ -108,21 +115,27 @@ export class ApiClient {
               const success = await refreshPromise;
 
               if (success) {
-                console.log('[ApiClient] Token refreshed successfully, retrying request');
-                
+                console.log(
+                  '[ApiClient] Token refreshed successfully, retrying request'
+                );
+
                 // Retry original request with new token
                 const newToken = tokenManager.getAccessToken();
                 if (newToken && originalRequest.headers) {
-                  originalRequest.headers['Authorization'] = `Bearer ${newToken}`;
+                  originalRequest.headers['Authorization'] =
+                    `Bearer ${newToken}`;
                 }
-                
+
                 return this.axios.request(originalRequest);
               } else {
                 console.error('[ApiClient] Token refresh failed');
                 tokenManager.clearTokens();
               }
             } catch (refreshError) {
-              console.error('[ApiClient] Token refresh exception:', refreshError);
+              console.error(
+                '[ApiClient] Token refresh exception:',
+                refreshError
+              );
               tokenManager.clearTokens();
             }
           } else {
@@ -130,7 +143,7 @@ export class ApiClient {
             tokenManager.clearTokens();
           }
         }
-        
+
         return Promise.reject(error);
       }
     );
@@ -140,17 +153,21 @@ export class ApiClient {
    * Establish connection with backend
    * Note: This only verifies Electron app instance, not user authentication
    */
-  async connect(): Promise<ApiResponse<{
-    sse_url: string;
-    message: string;
-  }>> {
+  async connect(): Promise<
+    ApiResponse<{
+      sse_url: string;
+      message: string;
+    }>
+  > {
     try {
       const response = await this.axios.post('/connection/establish', {
         electron_version: app.getVersion(),
         os_platform: os.platform(),
       });
 
-      console.log('[ApiClient] Electron app connection established successfully');
+      console.log(
+        '[ApiClient] Electron app connection established successfully'
+      );
 
       return {
         success: true,
@@ -165,10 +182,12 @@ export class ApiClient {
   /**
    * Check connection health
    */
-  async healthCheck(): Promise<ApiResponse<{
-    status: string;
-    server_time: string;
-  }>> {
+  async healthCheck(): Promise<
+    ApiResponse<{
+      status: string;
+      server_time: string;
+    }>
+  > {
     try {
       const response = await this.axios.get('/connection/health');
       return {
@@ -189,7 +208,7 @@ export class ApiClient {
       const response = await this.axios.post('/connection/disconnect');
       tokenManager.clearTokens();
       console.log('[ApiClient] Disconnected successfully');
-      
+
       return {
         success: true,
         data: response.data,
@@ -203,7 +222,10 @@ export class ApiClient {
   /**
    * Generic GET request
    */
-  async get<T>(endpoint: string, config?: AxiosRequestConfig): Promise<ApiResponse<T>> {
+  async get<T>(
+    endpoint: string,
+    config?: AxiosRequestConfig
+  ): Promise<ApiResponse<T>> {
     try {
       const response = await this.axios.get<T>(endpoint, config);
       return {
@@ -219,7 +241,11 @@ export class ApiClient {
   /**
    * Generic POST request
    */
-  async post<T>(endpoint: string, data?: any, config?: AxiosRequestConfig): Promise<ApiResponse<T>> {
+  async post<T>(
+    endpoint: string,
+    data?: any,
+    config?: AxiosRequestConfig
+  ): Promise<ApiResponse<T>> {
     try {
       const response = await this.axios.post<T>(endpoint, data, config);
       return {
@@ -235,7 +261,11 @@ export class ApiClient {
   /**
    * Generic PUT request
    */
-  async put<T>(endpoint: string, data?: any, config?: AxiosRequestConfig): Promise<ApiResponse<T>> {
+  async put<T>(
+    endpoint: string,
+    data?: any,
+    config?: AxiosRequestConfig
+  ): Promise<ApiResponse<T>> {
     try {
       const response = await this.axios.put<T>(endpoint, data, config);
       return {
@@ -251,7 +281,11 @@ export class ApiClient {
   /**
    * Generic PATCH request
    */
-  async patch<T>(endpoint: string, data?: any, config?: AxiosRequestConfig): Promise<ApiResponse<T>> {
+  async patch<T>(
+    endpoint: string,
+    data?: any,
+    config?: AxiosRequestConfig
+  ): Promise<ApiResponse<T>> {
     try {
       const response = await this.axios.patch<T>(endpoint, data, config);
       return {
@@ -267,7 +301,10 @@ export class ApiClient {
   /**
    * Generic DELETE request
    */
-  async delete<T>(endpoint: string, config?: AxiosRequestConfig): Promise<ApiResponse<T>> {
+  async delete<T>(
+    endpoint: string,
+    config?: AxiosRequestConfig
+  ): Promise<ApiResponse<T>> {
     try {
       const response = await this.axios.delete<T>(endpoint, config);
       return {
@@ -310,7 +347,6 @@ export class ApiClient {
       };
     }
   }
-
 
   /**
    * Get Electron instance ID

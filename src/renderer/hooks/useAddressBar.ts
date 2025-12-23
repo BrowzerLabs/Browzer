@@ -1,4 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
+
 import type { AutocompleteSuggestion } from '@/shared/types';
 import { isLikelyUrl } from '@/shared/utils';
 import { useBrowserViewLayerStore } from '@/renderer/stores/browserViewLayerStore';
@@ -26,7 +27,9 @@ interface UseAddressBarReturn {
   fetchSuggestions: (query: string) => Promise<void>;
 }
 
-export function useAddressBar(options: UseAddressBarOptions = {}): UseAddressBarReturn {
+export function useAddressBar(
+  options: UseAddressBarOptions = {}
+): UseAddressBarReturn {
   const {
     debounceMs = 150,
     minChars = 1,
@@ -45,7 +48,8 @@ export function useAddressBar(options: UseAddressBarOptions = {}): UseAddressBar
   const abortControllerRef = useRef<AbortController | null>(null);
   const { registerOverlay, unregisterOverlay } = useBrowserViewLayerStore();
 
-  const showDropdown = isOpen && (suggestions.length > 0 || searchSuggestions.length > 0);
+  const showDropdown =
+    isOpen && (suggestions.length > 0 || searchSuggestions.length > 0);
 
   useEffect(() => {
     if (showDropdown) {
@@ -60,46 +64,55 @@ export function useAddressBar(options: UseAddressBarOptions = {}): UseAddressBar
 
   const totalSuggestions = suggestions.length + searchSuggestions.length;
 
-  const fetchSuggestions = useCallback(async (query: string) => {
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-    }
-    abortControllerRef.current = new AbortController();
+  const fetchSuggestions = useCallback(
+    async (query: string) => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+      abortControllerRef.current = new AbortController();
 
-    if (query.length < minChars) {
-      setSuggestions([]);
-      setSearchSuggestions([]);
-      setIsOpen(false);
-      return;
-    }
-
-    setIsLoading(true);
-
-    try {
-      const autocompleteSuggestions = await window.browserAPI.getAutocompleteSuggestions(query);
-      setSuggestions(autocompleteSuggestions);
-
-      if (includeSearchSuggestions && !isLikelyUrl(query)) {
-        const googleSuggestions = await window.browserAPI.getSearchSuggestions(query);
-        const existingUrls = new Set(autocompleteSuggestions.map((s: { title: string }) => s.title.toLowerCase()));
-        const filteredSearchSuggestions = googleSuggestions.filter(
-          (s: string) => !existingUrls.has(s.toLowerCase())
-        );
-        setSearchSuggestions(filteredSearchSuggestions.slice(0, 4));
-      } else {
+      if (query.length < minChars) {
+        setSuggestions([]);
         setSearchSuggestions([]);
+        setIsOpen(false);
+        return;
       }
 
-      setIsOpen(true);
-      setSelectedIndex(-1);
-    } catch (error) {
-      console.error('Error fetching suggestions:', error);
-      setSuggestions([]);
-      setSearchSuggestions([]);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [minChars, includeSearchSuggestions]);
+      setIsLoading(true);
+
+      try {
+        const autocompleteSuggestions =
+          await window.browserAPI.getAutocompleteSuggestions(query);
+        setSuggestions(autocompleteSuggestions);
+
+        if (includeSearchSuggestions && !isLikelyUrl(query)) {
+          const googleSuggestions =
+            await window.browserAPI.getSearchSuggestions(query);
+          const existingUrls = new Set(
+            autocompleteSuggestions.map((s: { title: string }) =>
+              s.title.toLowerCase()
+            )
+          );
+          const filteredSearchSuggestions = googleSuggestions.filter(
+            (s: string) => !existingUrls.has(s.toLowerCase())
+          );
+          setSearchSuggestions(filteredSearchSuggestions.slice(0, 4));
+        } else {
+          setSearchSuggestions([]);
+        }
+
+        setIsOpen(true);
+        setSelectedIndex(-1);
+      } catch (error) {
+        console.error('Error fetching suggestions:', error);
+        setSuggestions([]);
+        setSearchSuggestions([]);
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [minChars, includeSearchSuggestions]
+  );
 
   const setInputValueSilent = useCallback((value: string) => {
     if (debounceTimerRef.current) {
@@ -108,102 +121,123 @@ export function useAddressBar(options: UseAddressBarOptions = {}): UseAddressBar
     setInputValueState(value);
   }, []);
 
-  const handleInputChange = useCallback((value: string) => {
-    setInputValueState(value);
-    setOriginalInputValue(value); // Store original user input
+  const handleInputChange = useCallback(
+    (value: string) => {
+      setInputValueState(value);
+      setOriginalInputValue(value); // Store original user input
 
-    if (debounceTimerRef.current) {
-      clearTimeout(debounceTimerRef.current);
-    }
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+      }
 
-    debounceTimerRef.current = setTimeout(() => {
-      fetchSuggestions(value);
-    }, debounceMs);
-  }, [debounceMs, fetchSuggestions]);
+      debounceTimerRef.current = setTimeout(() => {
+        fetchSuggestions(value);
+      }, debounceMs);
+    },
+    [debounceMs, fetchSuggestions]
+  );
 
-  const getValueForIndex = useCallback((index: number): string => {
-    if (index === -1) {
+  const getValueForIndex = useCallback(
+    (index: number): string => {
+      if (index === -1) {
+        return originalInputValue;
+      }
+      if (index < suggestions.length) {
+        return suggestions[index].url;
+      }
+      const searchIndex = index - suggestions.length;
+      if (searchIndex < searchSuggestions.length) {
+        return searchSuggestions[searchIndex];
+      }
       return originalInputValue;
-    }
-    if (index < suggestions.length) {
-      return suggestions[index].url;
-    }
-    const searchIndex = index - suggestions.length;
-    if (searchIndex < searchSuggestions.length) {
-      return searchSuggestions[searchIndex];
-    }
-    return originalInputValue;
-  }, [suggestions, searchSuggestions, originalInputValue]);
+    },
+    [suggestions, searchSuggestions, originalInputValue]
+  );
 
-  const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>): string | null => {
-    if (!isOpen && e.key !== 'ArrowDown') {
-      return null;
-    }
-
-    switch (e.key) {
-      case 'ArrowDown':
-        e.preventDefault();
-        if (!isOpen && inputValue) {
-          setIsOpen(true);
-          setOriginalInputValue(inputValue);
-          fetchSuggestions(inputValue);
-        } else if (totalSuggestions > 0) {
-          const newIndex = selectedIndex < totalSuggestions - 1 ? selectedIndex + 1 : 0;
-          setSelectedIndex(newIndex);
-          setInputValueState(getValueForIndex(newIndex));
-        }
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent<HTMLInputElement>): string | null => {
+      if (!isOpen && e.key !== 'ArrowDown') {
         return null;
+      }
 
-      case 'ArrowUp':
-        e.preventDefault();
-        if (totalSuggestions > 0) {
-          const newIndex = selectedIndex <= 0 ? totalSuggestions - 1 : selectedIndex - 1;
-          setSelectedIndex(newIndex);
-          setInputValueState(getValueForIndex(newIndex));
-        }
-        return null;
-
-      case 'Enter':
-        e.preventDefault();
-        if (selectedIndex >= 0) {
-          // Selected a suggestion
-          if (selectedIndex < suggestions.length) {
-            // It's an autocomplete suggestion
-            const selected = suggestions[selectedIndex];
-            setInputValueState(selected.url);
-            setIsOpen(false);
-            return selected.url;
-          } else {
-            // It's a search suggestion
-            const searchIndex = selectedIndex - suggestions.length;
-            const searchQuery = searchSuggestions[searchIndex];
-            const searchUrl = `https://www.google.com/search?q=${encodeURIComponent(searchQuery)}`;
-            setInputValueState(searchUrl);
-            setIsOpen(false);
-            return searchUrl;
+      switch (e.key) {
+        case 'ArrowDown':
+          e.preventDefault();
+          if (!isOpen && inputValue) {
+            setIsOpen(true);
+            setOriginalInputValue(inputValue);
+            fetchSuggestions(inputValue);
+          } else if (totalSuggestions > 0) {
+            const newIndex =
+              selectedIndex < totalSuggestions - 1 ? selectedIndex + 1 : 0;
+            setSelectedIndex(newIndex);
+            setInputValueState(getValueForIndex(newIndex));
           }
-        } else {
-          // No selection, navigate to input value
+          return null;
+
+        case 'ArrowUp':
+          e.preventDefault();
+          if (totalSuggestions > 0) {
+            const newIndex =
+              selectedIndex <= 0 ? totalSuggestions - 1 : selectedIndex - 1;
+            setSelectedIndex(newIndex);
+            setInputValueState(getValueForIndex(newIndex));
+          }
+          return null;
+
+        case 'Enter':
+          e.preventDefault();
+          if (selectedIndex >= 0) {
+            // Selected a suggestion
+            if (selectedIndex < suggestions.length) {
+              // It's an autocomplete suggestion
+              const selected = suggestions[selectedIndex];
+              setInputValueState(selected.url);
+              setIsOpen(false);
+              return selected.url;
+            } else {
+              // It's a search suggestion
+              const searchIndex = selectedIndex - suggestions.length;
+              const searchQuery = searchSuggestions[searchIndex];
+              const searchUrl = `https://www.google.com/search?q=${encodeURIComponent(searchQuery)}`;
+              setInputValueState(searchUrl);
+              setIsOpen(false);
+              return searchUrl;
+            }
+          } else {
+            // No selection, navigate to input value
+            setIsOpen(false);
+            return inputValue;
+          }
+
+        case 'Escape':
+          e.preventDefault();
           setIsOpen(false);
-          return inputValue;
-        }
+          setSelectedIndex(-1);
+          return null;
 
-      case 'Escape':
-        e.preventDefault();
-        setIsOpen(false);
-        setSelectedIndex(-1);
-        return null;
+        case 'Tab':
+          // Allow tab to close dropdown
+          setIsOpen(false);
+          setSelectedIndex(-1);
+          return null;
 
-      case 'Tab':
-        // Allow tab to close dropdown
-        setIsOpen(false);
-        setSelectedIndex(-1);
-        return null;
-
-      default:
-        return null;
-    }
-  }, [isOpen, inputValue, selectedIndex, suggestions, searchSuggestions, totalSuggestions, fetchSuggestions, originalInputValue, getValueForIndex]);
+        default:
+          return null;
+      }
+    },
+    [
+      isOpen,
+      inputValue,
+      selectedIndex,
+      suggestions,
+      searchSuggestions,
+      totalSuggestions,
+      fetchSuggestions,
+      originalInputValue,
+      getValueForIndex,
+    ]
+  );
 
   const clearSuggestions = useCallback(() => {
     setSuggestions([]);

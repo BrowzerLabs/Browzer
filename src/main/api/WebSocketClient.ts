@@ -1,6 +1,6 @@
 /**
  * WebSocket Client for real-time communication with FastAPI backend
- * 
+ *
  * Features:
  * - Automatic reconnection
  * - Heartbeat/ping-pong
@@ -84,12 +84,11 @@ export class WebSocketClient extends EventEmitter {
           this.scheduleReconnect();
         }
       };
-
     } catch (error) {
       console.error('[WebSocketClient] Connection failed:', error);
       this.isConnecting = false;
       this.emit('error', error);
-      
+
       if (this.shouldReconnect) {
         this.scheduleReconnect();
       }
@@ -102,7 +101,7 @@ export class WebSocketClient extends EventEmitter {
   disconnect(): void {
     this.shouldReconnect = false;
     this.stopHeartbeat();
-    
+
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
@@ -178,7 +177,10 @@ export class WebSocketClient extends EventEmitter {
         break;
 
       case 'unsubscribed':
-        console.log('[WebSocketClient] Unsubscribed from channel:', data.channel);
+        console.log(
+          '[WebSocketClient] Unsubscribed from channel:',
+          data.channel
+        );
         this.emit('unsubscribed', data.channel);
         break;
 
@@ -225,8 +227,10 @@ export class WebSocketClient extends EventEmitter {
       return;
     }
 
-    console.log(`[WebSocketClient] Reconnecting in ${this.reconnectInterval}ms...`);
-    
+    console.log(
+      `[WebSocketClient] Reconnecting in ${this.reconnectInterval}ms...`
+    );
+
     this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = null;
       this.connect();

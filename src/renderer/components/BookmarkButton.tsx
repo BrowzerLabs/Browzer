@@ -1,17 +1,20 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Star, Loader2, Folder } from 'lucide-react';
+
 import { Button } from '@/renderer/ui/button';
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '@/renderer/ui/popover';
+import { Popover, PopoverContent, PopoverTrigger } from '@/renderer/ui/popover';
 import { Input } from '@/renderer/ui/input';
 import { Label } from '@/renderer/ui/label';
 import { cn } from '@/renderer/lib/utils';
 import type { Bookmark, BookmarkTreeNode } from '@/shared/types';
 import { BOOKMARK_BAR_ID } from '@/shared/types';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/renderer/ui/select';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/renderer/ui/select';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/renderer/ui/tooltip';
 
 interface BookmarkButtonProps {
@@ -33,23 +36,30 @@ export function BookmarkButton({
   const [currentBookmark, setCurrentBookmark] = useState<Bookmark | null>(null);
   const [editTitle, setEditTitle] = useState(title);
   const [selectedFolder, setSelectedFolder] = useState<string>(BOOKMARK_BAR_ID);
-  const [folders, setFolders] = useState<{ id: string; title: string; depth: number }[]>([]);
-  
+  const [folders, setFolders] = useState<
+    { id: string; title: string; depth: number }[]
+  >([]);
+
   const lastBrowserViewStateRef = useRef<boolean | null>(null);
 
-  const extractFolders = useCallback((nodes: BookmarkTreeNode[]): { id: string; title: string; depth: number }[] => {
-    const result: { id: string; title: string; depth: number }[] = [];
-    
-    const traverse = (node: BookmarkTreeNode, depth: number) => {
-      if (node.isFolder) {
-        result.push({ id: node.id, title: node.title || 'Untitled', depth });
-        node.children?.forEach(child => traverse(child, depth + 1));
-      }
-    };
-    
-    nodes.forEach(node => traverse(node, 0));
-    return result;
-  }, []);
+  const extractFolders = useCallback(
+    (
+      nodes: BookmarkTreeNode[]
+    ): { id: string; title: string; depth: number }[] => {
+      const result: { id: string; title: string; depth: number }[] = [];
+
+      const traverse = (node: BookmarkTreeNode, depth: number) => {
+        if (node.isFolder) {
+          result.push({ id: node.id, title: node.title || 'Untitled', depth });
+          node.children?.forEach((child) => traverse(child, depth + 1));
+        }
+      };
+
+      nodes.forEach((node) => traverse(node, 0));
+      return result;
+    },
+    []
+  );
 
   useEffect(() => {
     const loadFolders = async () => {
@@ -117,38 +127,50 @@ export function BookmarkButton({
     setIsOpen(false);
   }, []);
 
-  const handleStarClick = useCallback(async (e: React.MouseEvent) => {
-    e.stopPropagation();
-    e.preventDefault();
-    
-    if (!url || isLoading) return;
+  const handleStarClick = useCallback(
+    async (e: React.MouseEvent) => {
+      e.stopPropagation();
+      e.preventDefault();
 
-    if (isBookmarked && currentBookmark) {
-      setEditTitle(currentBookmark.title || '');
-      setSelectedFolder(currentBookmark.parentId || BOOKMARK_BAR_ID);
-      setIsOpen(true);
-    } else {
-      setIsLoading(true);
-      try {
-        const bookmark = await window.browserAPI.createBookmark({
-          url,
-          title,
-          favicon,
-          parentId: selectedFolder,
-        });
-        setIsBookmarked(true);
-        setCurrentBookmark(bookmark);
-        setEditTitle(bookmark.title || '');
-        setSelectedFolder(bookmark.parentId || BOOKMARK_BAR_ID);
+      if (!url || isLoading) return;
+
+      if (isBookmarked && currentBookmark) {
+        setEditTitle(currentBookmark.title || '');
+        setSelectedFolder(currentBookmark.parentId || BOOKMARK_BAR_ID);
         setIsOpen(true);
-        onBookmarkChange?.(true);
-      } catch (err) {
-        console.error('[BookmarkButton] Failed to create bookmark:', err);
-      } finally {
-        setIsLoading(false);
+      } else {
+        setIsLoading(true);
+        try {
+          const bookmark = await window.browserAPI.createBookmark({
+            url,
+            title,
+            favicon,
+            parentId: selectedFolder,
+          });
+          setIsBookmarked(true);
+          setCurrentBookmark(bookmark);
+          setEditTitle(bookmark.title || '');
+          setSelectedFolder(bookmark.parentId || BOOKMARK_BAR_ID);
+          setIsOpen(true);
+          onBookmarkChange?.(true);
+        } catch (err) {
+          console.error('[BookmarkButton] Failed to create bookmark:', err);
+        } finally {
+          setIsLoading(false);
+        }
       }
-    }
-  }, [url, title, favicon, isLoading, isBookmarked, currentBookmark, selectedFolder, onBookmarkChange]);
+    },
+    [
+      url,
+      title,
+      favicon,
+      isLoading,
+      isBookmarked,
+      currentBookmark,
+      selectedFolder,
+      onBookmarkChange,
+    ]
+  );
 
   const handleSave = useCallback(async () => {
     if (!currentBookmark) {
@@ -172,7 +194,11 @@ export function BookmarkButton({
         });
       }
 
-      setCurrentBookmark({ ...currentBookmark, title: editTitle, parentId: selectedFolder });
+      setCurrentBookmark({
+        ...currentBookmark,
+        title: editTitle,
+        parentId: selectedFolder,
+      });
       closePopover();
     } catch (err) {
       console.error('[BookmarkButton] Failed to update bookmark:', err);
@@ -215,7 +241,7 @@ export function BookmarkButton({
     <Popover open={isOpen} onOpenChange={handleOpenChange}>
       <Tooltip>
         <TooltipTrigger asChild>
-          <PopoverTrigger 
+          <PopoverTrigger
             onClick={handleStarClick}
             disabled={isLoading || !url}
           >
@@ -240,11 +266,15 @@ export function BookmarkButton({
               {isBookmarked ? 'Edit bookmark' : 'Bookmark added'}
             </h4>
             <p className="text-xs text-muted-foreground mt-0.5">
-              {isBookmarked ? 'Update your bookmark details' : 'Edit your bookmark details'}
+              {isBookmarked
+                ? 'Update your bookmark details'
+                : 'Edit your bookmark details'}
             </p>
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="bookmark-name" className="text-xs">Name</Label>
+            <Label htmlFor="bookmark-name" className="text-xs">
+              Name
+            </Label>
             <Input
               id="bookmark-name"
               value={editTitle}
@@ -261,7 +291,11 @@ export function BookmarkButton({
               </SelectTrigger>
               <SelectContent>
                 {folders.map((folder) => (
-                  <SelectItem key={folder.id} value={folder.id} className="text-sm">
+                  <SelectItem
+                    key={folder.id}
+                    value={folder.id}
+                    className="text-sm"
+                  >
                     <div className="flex items-center gap-2">
                       <Folder className="w-3 h-3 text-yellow-500" />
                       <span style={{ paddingLeft: `${folder.depth * 8}px` }}>
@@ -277,18 +311,18 @@ export function BookmarkButton({
             <p className="text-xs text-muted-foreground truncate">{url}</p>
           </div>
           <div className="flex justify-between pt-1">
-            <Button 
-              variant="outline" 
-              size="sm" 
-              onClick={handleRemove} 
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleRemove}
               disabled={isLoading}
               className="h-7 text-xs"
             >
               Remove
             </Button>
-            <Button 
-              size="sm" 
-              onClick={handleSave} 
+            <Button
+              size="sm"
+              onClick={handleSave}
               disabled={isLoading}
               className="h-7 text-xs"
             >

@@ -1,4 +1,5 @@
 import { nativeTheme, BaseWindow } from 'electron';
+
 import Store from 'electron-store';
 
 type ThemeMode = 'light' | 'dark' | 'system';
@@ -10,18 +11,16 @@ interface ThemeStore {
 export class ThemeService {
   private store: Store<ThemeStore>;
 
-  public constructor(
-    private baseWindow: BaseWindow
-  ) {
+  public constructor(private baseWindow: BaseWindow) {
     this.store = new Store<ThemeStore>({
       name: 'theme-preferences',
       defaults: {
         theme: 'system',
-      }
+      },
     });
 
     this.applyTheme(this.getTheme());
-    
+
     nativeTheme.on('updated', () => {
       this.updateWindowTitleBarOverlay();
     });
@@ -50,7 +49,7 @@ export class ThemeService {
       });
     }
   }
-  
+
   public isDarkMode(): boolean {
     return nativeTheme.shouldUseDarkColors;
   }

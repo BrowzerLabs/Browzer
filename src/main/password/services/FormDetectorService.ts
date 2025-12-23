@@ -1,16 +1,17 @@
 import { WebContentsView } from 'electron';
+
 import { DetectedForm, FormField, FormHeuristics } from '@/main/password';
 
 /**
  * FormDetectorService - Intelligent form detection using heuristics
- * 
+ *
  * Detects login, signup, and password change forms using multiple signals:
  * - Field names, IDs, and autocomplete attributes
  * - Form action URLs
  * - Field visibility and positioning
  * - Submit button text
  * - Page context (URL, title)
- * 
+ *
  * Based on Chrome's password manager form detection logic
  */
 export class FormDetectorService {
@@ -36,29 +37,10 @@ export class FormDetectorService {
         /id/i,
         /^user$/i,
       ],
-      emailPatterns: [
-        /email/i,
-        /e-mail/i,
-        /mail/i,
-        /@/,
-      ],
-      passwordPatterns: [
-        /pass(word)?/i,
-        /pwd/i,
-        /secret/i,
-        /pin/i,
-      ],
-      newPasswordPatterns: [
-        /new.?pass/i,
-        /new.?pwd/i,
-        /confirm/i,
-        /repeat/i,
-      ],
-      currentPasswordPatterns: [
-        /current.?pass/i,
-        /old.?pass/i,
-        /existing/i,
-      ],
+      emailPatterns: [/email/i, /e-mail/i, /mail/i, /@/],
+      passwordPatterns: [/pass(word)?/i, /pwd/i, /secret/i, /pin/i],
+      newPasswordPatterns: [/new.?pass/i, /new.?pwd/i, /confirm/i, /repeat/i],
+      currentPasswordPatterns: [/current.?pass/i, /old.?pass/i, /existing/i],
       loginActionPatterns: [
         /login/i,
         /signin/i,
@@ -98,7 +80,9 @@ export class FormDetectorService {
     try {
       // Check if debugger is attached
       if (!this.debugger.isAttached()) {
-        console.log('[FormDetectorService] Debugger not attached, skipping form detection');
+        console.log(
+          '[FormDetectorService] Debugger not attached, skipping form detection'
+        );
         return [];
       }
 
@@ -259,7 +243,10 @@ export class FormDetectorService {
         }
       }
     } catch (error) {
-      console.error('[FormDetectorService] Error detecting formless logins:', error);
+      console.error(
+        '[FormDetectorService] Error detecting formless logins:',
+        error
+      );
     }
 
     return forms;
@@ -268,7 +255,10 @@ export class FormDetectorService {
   /**
    * Analyze form data and classify form type
    */
-  private async analyzeFormData(data: any, origin: string): Promise<DetectedForm | null> {
+  private async analyzeFormData(
+    data: any,
+    origin: string
+  ): Promise<DetectedForm | null> {
     const passwordFields = data.passwordFields || [];
     const textFields = data.textFields || [];
     const submitButtons = data.submitButtons || [];
@@ -278,14 +268,16 @@ export class FormDetectorService {
     // Classify password fields
     const currentPasswordField = this.findCurrentPasswordField(passwordFields);
     const newPasswordField = this.findNewPasswordField(passwordFields);
-    const confirmPasswordField = passwordFields.length > 2 ? passwordFields[2] : null;
+    const confirmPasswordField =
+      passwordFields.length > 2 ? passwordFields[2] : null;
 
     // Classify text fields
     const emailField = this.findEmailField(textFields);
     const usernameField = this.findUsernameField(textFields);
 
     // Determine form type
-    let formType: 'login' | 'signup' | 'change-password' | 'multi-step' = 'login';
+    let formType: 'login' | 'signup' | 'change-password' | 'multi-step' =
+      'login';
     let confidence = 0.5;
 
     if (passwordFields.length >= 2 && newPasswordField) {
@@ -308,13 +300,22 @@ export class FormDetectorService {
 
     // Boost confidence based on form action
     if (data.action) {
-      if (this.matchesPatterns(data.action, this.heuristics.loginActionPatterns)) {
+      if (
+        this.matchesPatterns(data.action, this.heuristics.loginActionPatterns)
+      ) {
         formType = 'login';
         confidence = Math.min(confidence + 0.1, 1.0);
-      } else if (this.matchesPatterns(data.action, this.heuristics.signupActionPatterns)) {
+      } else if (
+        this.matchesPatterns(data.action, this.heuristics.signupActionPatterns)
+      ) {
         formType = 'signup';
         confidence = Math.min(confidence + 0.1, 1.0);
-      } else if (this.matchesPatterns(data.action, this.heuristics.changePasswordPatterns)) {
+      } else if (
+        this.matchesPatterns(
+          data.action,
+          this.heuristics.changePasswordPatterns
+        )
+      ) {
         formType = 'change-password';
         confidence = Math.min(confidence + 0.1, 1.0);
       }
@@ -324,7 +325,9 @@ export class FormDetectorService {
 
     return {
       formId,
-      formSelector: data.id ? `#${data.id}` : `form:nth-of-type(${data.formIndex + 1})`,
+      formSelector: data.id
+        ? `#${data.id}`
+        : `form:nth-of-type(${data.formIndex + 1})`,
       action: data.action,
       method: data.method,
       origin,
@@ -333,7 +336,9 @@ export class FormDetectorService {
       passwordField: currentPasswordField || passwordFields[0],
       newPasswordField,
       confirmPasswordField,
-      submitButton: submitButtons[0] ? { selector: '', text: submitButtons[0].text } : undefined,
+      submitButton: submitButtons[0]
+        ? { selector: '', text: submitButtons[0].text }
+        : undefined,
       formType,
       confidence,
       timestamp: Date.now(),
@@ -343,7 +348,10 @@ export class FormDetectorService {
   /**
    * Analyze formless data
    */
-  private async analyzeFormlessData(data: any, origin: string): Promise<DetectedForm | null> {
+  private async analyzeFormlessData(
+    data: any,
+    origin: string
+  ): Promise<DetectedForm | null> {
     if (!data.passwordField) return null;
 
     const textFields = data.textFields || [];
@@ -368,18 +376,24 @@ export class FormDetectorService {
    * Find email field from text fields
    */
   private findEmailField(textFields: any[]): FormField | undefined {
-    const emailField = textFields.find(field => 
-      field.type === 'email' ||
-      this.matchesPatterns(field.name, this.heuristics.emailPatterns) ||
-      this.matchesPatterns(field.id, this.heuristics.emailPatterns) ||
-      this.matchesPatterns(field.autocomplete, this.heuristics.emailPatterns) ||
-      this.matchesPatterns(field.placeholder, this.heuristics.emailPatterns)
+    const emailField = textFields.find(
+      (field) =>
+        field.type === 'email' ||
+        this.matchesPatterns(field.name, this.heuristics.emailPatterns) ||
+        this.matchesPatterns(field.id, this.heuristics.emailPatterns) ||
+        this.matchesPatterns(
+          field.autocomplete,
+          this.heuristics.emailPatterns
+        ) ||
+        this.matchesPatterns(field.placeholder, this.heuristics.emailPatterns)
     );
 
     if (!emailField) return undefined;
 
     return {
-      selector: emailField.id ? `#${emailField.id}` : `input[name="${emailField.name}"]`,
+      selector: emailField.id
+        ? `#${emailField.id}`
+        : `input[name="${emailField.name}"]`,
       type: 'email',
       name: emailField.name,
       id: emailField.id,
@@ -394,17 +408,23 @@ export class FormDetectorService {
    * Find username field from text fields
    */
   private findUsernameField(textFields: any[]): FormField | undefined {
-    const usernameField = textFields.find(field => 
-      this.matchesPatterns(field.name, this.heuristics.usernamePatterns) ||
-      this.matchesPatterns(field.id, this.heuristics.usernamePatterns) ||
-      this.matchesPatterns(field.autocomplete, ['username']) ||
-      this.matchesPatterns(field.placeholder, this.heuristics.usernamePatterns)
+    const usernameField = textFields.find(
+      (field) =>
+        this.matchesPatterns(field.name, this.heuristics.usernamePatterns) ||
+        this.matchesPatterns(field.id, this.heuristics.usernamePatterns) ||
+        this.matchesPatterns(field.autocomplete, ['username']) ||
+        this.matchesPatterns(
+          field.placeholder,
+          this.heuristics.usernamePatterns
+        )
     );
 
     if (!usernameField) return undefined;
 
     return {
-      selector: usernameField.id ? `#${usernameField.id}` : `input[name="${usernameField.name}"]`,
+      selector: usernameField.id
+        ? `#${usernameField.id}`
+        : `input[name="${usernameField.name}"]`,
       type: 'username',
       name: usernameField.name,
       id: usernameField.id,
@@ -418,37 +438,51 @@ export class FormDetectorService {
   /**
    * Find current password field
    */
-  private findCurrentPasswordField(passwordFields: any[]): FormField | undefined {
-    const currentField = passwordFields.find(field =>
-      this.matchesPatterns(field.autocomplete, ['current-password']) ||
-      this.matchesPatterns(field.name, this.heuristics.currentPasswordPatterns) ||
-      this.matchesPatterns(field.id, this.heuristics.currentPasswordPatterns)
+  private findCurrentPasswordField(
+    passwordFields: any[]
+  ): FormField | undefined {
+    const currentField = passwordFields.find(
+      (field) =>
+        this.matchesPatterns(field.autocomplete, ['current-password']) ||
+        this.matchesPatterns(
+          field.name,
+          this.heuristics.currentPasswordPatterns
+        ) ||
+        this.matchesPatterns(field.id, this.heuristics.currentPasswordPatterns)
     );
 
     if (!currentField && passwordFields.length === 1) {
       return this.createPasswordField(passwordFields[0], 'current-password');
     }
 
-    return currentField ? this.createPasswordField(currentField, 'current-password') : undefined;
+    return currentField
+      ? this.createPasswordField(currentField, 'current-password')
+      : undefined;
   }
 
   /**
    * Find new password field
    */
   private findNewPasswordField(passwordFields: any[]): FormField | undefined {
-    const newField = passwordFields.find(field =>
-      this.matchesPatterns(field.autocomplete, ['new-password']) ||
-      this.matchesPatterns(field.name, this.heuristics.newPasswordPatterns) ||
-      this.matchesPatterns(field.id, this.heuristics.newPasswordPatterns)
+    const newField = passwordFields.find(
+      (field) =>
+        this.matchesPatterns(field.autocomplete, ['new-password']) ||
+        this.matchesPatterns(field.name, this.heuristics.newPasswordPatterns) ||
+        this.matchesPatterns(field.id, this.heuristics.newPasswordPatterns)
     );
 
-    return newField ? this.createPasswordField(newField, 'new-password') : undefined;
+    return newField
+      ? this.createPasswordField(newField, 'new-password')
+      : undefined;
   }
 
   /**
    * Create FormField from password field data
    */
-  private createPasswordField(field: any, type: 'password' | 'current-password' | 'new-password'): FormField {
+  private createPasswordField(
+    field: any,
+    type: 'password' | 'current-password' | 'new-password'
+  ): FormField {
     return {
       selector: field.id ? `#${field.id}` : `input[name="${field.name}"]`,
       type,
@@ -464,9 +498,12 @@ export class FormDetectorService {
   /**
    * Check if text matches any pattern
    */
-  private matchesPatterns(text: string | undefined, patterns: (RegExp | string)[]): boolean {
+  private matchesPatterns(
+    text: string | undefined,
+    patterns: (RegExp | string)[]
+  ): boolean {
     if (!text) return false;
-    return patterns.some(pattern => {
+    return patterns.some((pattern) => {
       if (typeof pattern === 'string') {
         return text.toLowerCase().includes(pattern.toLowerCase());
       }

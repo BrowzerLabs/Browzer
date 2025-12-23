@@ -1,9 +1,8 @@
-import ThemeToggle from "@/renderer/ui/theme-toggle";
+import ThemeToggle from '@/renderer/ui/theme-toggle';
 
 export interface AuthLayoutProps {
   children: React.ReactNode;
 }
-       
 
 export function AuthLayout({ children }: AuthLayoutProps) {
   return (
@@ -14,7 +13,6 @@ export function AuthLayout({ children }: AuthLayoutProps) {
             Browzer
           </h1>
         </div>
-
 
         {children}
 

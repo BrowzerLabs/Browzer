@@ -21,15 +21,15 @@ export enum AutomationStatus {
   RUNNING = 'running',
   COMPLETED = 'completed',
   FAILED = 'failed',
-  STOPPED = 'stopped'
+  STOPPED = 'stopped',
 }
 
 export interface ElementFinderParams {
   tag: string;
-  text?: string
-  attributes?: Record<string, string>;  
+  text?: string;
+  attributes?: Record<string, string>;
   boundingBox?: { x: number; y: number; width: number; height: number };
-  elementIndex?: number;           
+  elementIndex?: number;
 }
 
 export interface NavigateParams {
@@ -83,7 +83,7 @@ export interface SubmitParams {
  * Detailed error information
  */
 export interface AutomationError {
-  code: 
+  code:
     | 'ELEMENT_NOT_FOUND'
     | 'ELEMENT_NOT_VISIBLE'
     | 'ELEMENT_NOT_ENABLED'

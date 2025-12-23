@@ -67,15 +67,29 @@ const COLORS: Record<NavigationErrorCategory, string> = {
   [NavigationErrorCategory.UNKNOWN]: '#6366f1',
 };
 
-const escapeHtml = (text: string) => text.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' })[c] ?? c);
-const truncateUrl = (url: string, max = 80) => url.length <= max ? url : url.slice(0, max - 3) + '...';
-const getCodeLabel = (code: NavigationErrorCode) => NavigationErrorCode[code]?.replace(/^ERR_/, '').replace(/_/g, ' ') ?? `ERROR ${code}`;
+const escapeHtml = (text: string) =>
+  text.replace(
+    /[&<>"']/g,
+    (c) =>
+      ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#039;',
+      })[c] ?? c
+  );
+const truncateUrl = (url: string, max = 80) =>
+  url.length <= max ? url : url.slice(0, max - 3) + '...';
+const getCodeLabel = (code: NavigationErrorCode) =>
+  NavigationErrorCode[code]?.replace(/^ERR_/, '').replace(/_/g, ' ') ??
+  `ERROR ${code}`;
 
 export class ErrorPageService {
   generateErrorPage(error: NavigationError): string {
     const color = COLORS[error.category];
     const isSSL = error.category === NavigationErrorCategory.SSL;
-    
+
     return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -120,7 +134,7 @@ export class ErrorPageService {
     <h1>${error.title}</h1>
     <p class="desc">${error.description}</p>
     <div class="url">${escapeHtml(truncateUrl(error.url))}</div>
-    ${error.suggestions.length ? `<div class="suggestions"><h3>Try the following:</h3><ul>${error.suggestions.map(s => `<li>${escapeHtml(s)}</li>`).join('')}</ul></div>` : ''}
+    ${error.suggestions.length ? `<div class="suggestions"><h3>Try the following:</h3><ul>${error.suggestions.map((s) => `<li>${escapeHtml(s)}</li>`).join('')}</ul></div>` : ''}
     <div class="actions">
       ${error.isRecoverable ? '<button class="btn btn-primary" onclick="location.href=\'browzer-action://retry\'">Try again</button>' : ''}
       <button class="btn btn-secondary" onclick="location.href='browzer-action://home'">Home</button>
@@ -132,8 +146,14 @@ export class ErrorPageService {
 </html>`;
   }
 
-  createNavigationError(errorCode: number, errorDescription: string, url: string): NavigationError | null {
-    return shouldIgnoreError(errorCode) ? null : getNavigationErrorInfo(errorCode, errorDescription, url);
+  createNavigationError(
+    errorCode: number,
+    errorDescription: string,
+    url: string
+  ): NavigationError | null {
+    return shouldIgnoreError(errorCode)
+      ? null
+      : getNavigationErrorInfo(errorCode, errorDescription, url);
   }
 
   shouldShowErrorPage = (code: number) => !shouldIgnoreError(code);

@@ -1,5 +1,7 @@
 import { shell } from 'electron';
+
 import { BaseHandler } from './base';
+
 import { RecordedAction } from '@/shared/types';
 
 export class RecordingHandler extends BaseHandler {
@@ -14,9 +16,17 @@ export class RecordingHandler extends BaseHandler {
       return browserService.stopRecording();
     });
 
-    this.handle('browser:save-recording', async (_, name: string, description: string, actions: RecordedAction[]) => {
-      return browserService.saveRecording(name, description, actions);
-    });
+    this.handle(
+      'browser:save-recording',
+      async (
+        _,
+        name: string,
+        description: string,
+        actions: RecordedAction[]
+      ) => {
+        return browserService.saveRecording(name, description, actions);
+      }
+    );
 
     this.handle('browser:get-all-recordings', async () => {
       return browserService.getRecordingStore().getAllRecordings();

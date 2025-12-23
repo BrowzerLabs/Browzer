@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+
 import { AgentHeader } from './AgentHeader';
 import { AgentChatArea } from './AgentChatArea';
 import { AgentFooter } from './AgentFooter';
@@ -50,14 +51,14 @@ export default function AgentView() {
       )}
 
       <AgentChatArea
-          agentMode={agentMode}
-          viewMode={viewState}
-          currentSession={currentSession}
-          sessionHistory={sessionHistory}
-          isLoadingSession={isLoadingSession}
-          isLoadingHistory={isLoadingHistory}
-          onSessionSelect={handleSessionSelect}
-        />
+        agentMode={agentMode}
+        viewMode={viewState}
+        currentSession={currentSession}
+        sessionHistory={sessionHistory}
+        isLoadingSession={isLoadingSession}
+        isLoadingHistory={isLoadingHistory}
+        onSessionSelect={handleSessionSelect}
+      />
 
       <AgentFooter
         userPrompt={userPrompt}

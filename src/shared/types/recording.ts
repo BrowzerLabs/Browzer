@@ -14,7 +14,19 @@ export interface ElementTarget {
 }
 
 export interface RecordedAction {
-  type: 'click' | 'input' | 'navigate' | 'keypress' | 'submit' | 'select' | 'checkbox' | 'radio' | 'toggle' | 'file-upload' | 'tab-switch' | 'context-menu';
+  type:
+    | 'click'
+    | 'input'
+    | 'navigate'
+    | 'keypress'
+    | 'submit'
+    | 'select'
+    | 'checkbox'
+    | 'radio'
+    | 'toggle'
+    | 'file-upload'
+    | 'tab-switch'
+    | 'context-menu';
   timestamp: number;
   target?: ElementTarget;
   value?: string | string[] | boolean;
@@ -50,18 +62,18 @@ export interface RecordingSession {
   duration: number; // in milliseconds
   actionCount: number;
   url?: string; // Starting URL (deprecated, use startTabId instead)
-  
+
   // Multi-tab recording metadata
   startTabId?: string; // Tab where recording started
   tabs?: RecordingTabInfo[]; // All tabs that were active during recording
   tabSwitchCount?: number; // Number of tab switches during recording
-  
+
   // Video recording metadata
   videoPath?: string; // Absolute path to the video file
   videoSize?: number; // Video file size in bytes
   videoFormat?: string; // Video format (e.g., 'webm')
   videoDuration?: number; // Actual video duration in milliseconds
-  
+
   // Snapshot metadata
   snapshotCount?: number; // Number of snapshots captured
   snapshotsDirectory?: string; // Directory containing all snapshots for this session

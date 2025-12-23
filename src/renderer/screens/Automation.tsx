@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Bot, Loader2Icon, RefreshCcw } from 'lucide-react';
-import { Button } from '@/renderer/ui/button';
 import { toast } from 'sonner';
+
+import { Button } from '@/renderer/ui/button';
 import { SessionListItem } from '@/renderer/stores/automationStore';
 import { AutomationSessionCard } from '@/renderer/components/automation/AutomationSessionCard';
 import { AutomationStats } from '@/renderer/components/automation/AutomationStats';
@@ -10,16 +11,21 @@ import { AutomationDialog } from '@/renderer/components/automation/AutomationDia
 
 export function Automation() {
   const [sessions, setSessions] = useState<SessionListItem[]>([]);
-  const [filteredSessions, setFilteredSessions] = useState<SessionListItem[]>([]);
+  const [filteredSessions, setFilteredSessions] = useState<SessionListItem[]>(
+    []
+  );
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
-  const [filterStatus, setFilterStatus] = useState<'all' | 'running' | 'completed' | 'failed' | 'stopped'>('all');
-  const [selectedSession, setSelectedSession] = useState<SessionListItem | null>(null);
+  const [filterStatus, setFilterStatus] = useState<
+    'all' | 'running' | 'completed' | 'failed' | 'stopped'
+  >('all');
+  const [selectedSession, setSelectedSession] =
+    useState<SessionListItem | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
 
   useEffect(() => {
     loadSessions();
-    
+
     const unsubscribe = window.browserAPI.onAutomationProgress(() => {
       loadSessions();
     });
@@ -37,7 +43,9 @@ export function Automation() {
     try {
       setLoading(true);
       const data = await window.browserAPI.getAutomationSessions();
-      const sorted = data.sort((a: SessionListItem, b: SessionListItem) => b.updatedAt - a.createdAt);
+      const sorted = data.sort(
+        (a: SessionListItem, b: SessionListItem) => b.updatedAt - a.createdAt
+      );
       setSessions(sorted);
       setFilteredSessions(sorted);
     } catch (error) {
@@ -85,7 +93,11 @@ export function Automation() {
   };
 
   const handleDeleteSession = async (sessionId: string) => {
-    if (!confirm('Are you sure you want to delete this automation session? This action cannot be undone.')) {
+    if (
+      !confirm(
+        'Are you sure you want to delete this automation session? This action cannot be undone.'
+      )
+    ) {
       return;
     }
 
@@ -140,7 +152,8 @@ export function Automation() {
               Automation Sessions
             </h1>
             <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">
-              {stats.total} sessions • {stats.running} running • {stats.completed} completed • {stats.failed} failed
+              {stats.total} sessions • {stats.running} running •{' '}
+              {stats.completed} completed • {stats.failed} failed
             </p>
           </div>
 
@@ -151,8 +164,8 @@ export function Automation() {
                 toast.success('Sessions refreshed');
               }}
               disabled={loading}
-              size='icon-lg'
-              variant='outline'
+              size="icon-lg"
+              variant="outline"
             >
               <RefreshCcw />
             </Button>

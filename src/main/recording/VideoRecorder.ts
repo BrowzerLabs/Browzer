@@ -5,7 +5,7 @@ import { pathToFileURL } from 'url';
 
 /**
  * VideoRecorder - Records screen activity of active webContents
- * 
+ *
  * Uses Electron's desktopCapturer API to capture the entire window.
  * Creates a hidden offscreen window to handle MediaRecorder API.
  * Saves recordings as WebM files (VP8/VP9 codec) for efficient storage and playback.
@@ -40,10 +40,10 @@ export class VideoRecorder {
     try {
       this.recordingId = recordingId;
       this.startTime = Date.now();
-      
+
       // Create recordings directory
       await mkdir(this.recordingDir, { recursive: true });
-      
+
       // Generate filename
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
       const filename = `recording-${recordingId || timestamp}.webm`;
@@ -52,7 +52,7 @@ export class VideoRecorder {
       // Get desktop sources
       const sources = await desktopCapturer.getSources({
         types: ['window', 'screen'],
-        thumbnailSize: { width: 150, height: 150 }
+        thumbnailSize: { width: 150, height: 150 },
       });
 
       if (sources.length === 0) {
@@ -61,9 +61,12 @@ export class VideoRecorder {
       }
 
       // Find the Browzer window or use first screen
-      const source = sources.find(s => s.name.includes('browzer') || s.name.includes('Browzer')) 
-        || sources.find(s => s.id.startsWith('screen'))
-        || sources[0];
+      const source =
+        sources.find(
+          (s) => s.name.includes('browzer') || s.name.includes('Browzer')
+        ) ||
+        sources.find((s) => s.id.startsWith('screen')) ||
+        sources[0];
 
       console.log('📹 Using video source:', source.name);
 
@@ -78,20 +81,20 @@ export class VideoRecorder {
           nodeIntegration: false,
           contextIsolation: true,
           webSecurity: false, // CRITICAL: Allow access to mediaDevices
-          allowRunningInsecureContent: false
-        }
+          allowRunningInsecureContent: false,
+        },
       });
 
       // Load the recorder HTML file from disk (file:// protocol has mediaDevices access)
       const recorderPath = join(__dirname, '../../recorder.html');
       const recorderURL = pathToFileURL(recorderPath).href;
-      
+
       console.log('📄 Loading recorder from:', recorderURL);
-      
+
       await this.offscreenWindow.loadURL(recorderURL);
-      
+
       // Wait a bit for page to fully initialize
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      await new Promise((resolve) => setTimeout(resolve, 1000));
 
       // Start recording
       const success = await this.offscreenWindow.webContents.executeJavaScript(
@@ -108,7 +111,6 @@ export class VideoRecorder {
         this.offscreenWindow = null;
         return false;
       }
-
     } catch (error) {
       console.error('Failed to start video recording:', error);
       this.isRecording = false;
@@ -133,10 +135,15 @@ export class VideoRecorder {
     try {
       // Stop recording and get video data with timeout
       const videoBlob = await Promise.race([
-        this.offscreenWindow.webContents.executeJavaScript('window.stopRecording()'),
-        new Promise<null>((_, reject) => 
-          setTimeout(() => reject(new Error('Video stop timeout after 10s')), 10000)
-        )
+        this.offscreenWindow.webContents.executeJavaScript(
+          'window.stopRecording()'
+        ),
+        new Promise<null>((_, reject) =>
+          setTimeout(
+            () => reject(new Error('Video stop timeout after 10s')),
+            10000
+          )
+        ),
       ]);
 
       if (!videoBlob || !Array.isArray(videoBlob) || videoBlob.length === 0) {
@@ -156,18 +163,17 @@ export class VideoRecorder {
         this.offscreenWindow = null;
         return null;
       }
-      
+
       const { writeFile } = await import('fs/promises');
       const buffer = Buffer.from(videoBlob);
       await writeFile(this.videoPath, buffer);
 
       this.isRecording = false;
-      
+
       this.offscreenWindow.close();
       this.offscreenWindow = null;
 
       return this.videoPath;
-
     } catch (error) {
       console.error('Failed to stop video recording:', error);
       this.isRecording = false;

@@ -6,7 +6,6 @@ export function useDeepLink() {
 
   useEffect(() => {
     const unsubscribe = window.browserAPI.onDeepLink(async (path: string) => {
-      
       await window.browserAPI.hideAllTabs();
       navigate(path);
     });

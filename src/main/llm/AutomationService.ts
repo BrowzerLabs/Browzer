@@ -1,11 +1,18 @@
 import { EventEmitter } from 'events';
-import { BrowserAutomationExecutor } from '@/main/automation/BrowserAutomationExecutor';
-import { RecordingStore } from '@/main/recording';
+
 import { AutomationClient } from './clients/AutomationClient';
 import { AutomationStateManager } from './core/AutomationStateManager';
 import { SessionManager } from './session/SessionManager';
 import { IterativeAutomationResult } from './core/types';
-import { AutomationProgressEvent, AutomationEventType, RecordingSession, AutomationStatus } from '@/shared/types';
+
+import { RecordingStore } from '@/main/recording';
+import { BrowserAutomationExecutor } from '@/main/automation/BrowserAutomationExecutor';
+import {
+  AutomationProgressEvent,
+  AutomationEventType,
+  RecordingSession,
+  AutomationStatus,
+} from '@/shared/types';
 
 export class AutomationService extends EventEmitter {
   private executor: BrowserAutomationExecutor;
@@ -18,13 +25,13 @@ export class AutomationService extends EventEmitter {
   constructor(
     executor: BrowserAutomationExecutor,
     recordingStore: RecordingStore,
-    sessionManager: SessionManager,
+    sessionManager: SessionManager
   ) {
     super();
     this.executor = executor;
     this.recordingStore = recordingStore;
     this.sessionManager = sessionManager;
-    
+
     this.automationClient = new AutomationClient();
     this.setupAutomationClientListeners();
   }
@@ -38,7 +45,7 @@ export class AutomationService extends EventEmitter {
       console.error('❌ [AutomationService] AutomationClient error:', error);
       this.emitProgress('automation_error', {
         error: error.message,
-        stack: error.stack
+        stack: error.stack,
       });
     });
   }
@@ -48,23 +55,26 @@ export class AutomationService extends EventEmitter {
   }
 
   public stopAutomation(): void {
-    this.stateManager.markComplete(AutomationStatus.STOPPED, 'Automation stopped by user');
+    this.stateManager.markComplete(
+      AutomationStatus.STOPPED,
+      'Automation stopped by user'
+    );
     this.emitProgress('automation_stopped', {
-      message: 'Automation stopped by user'
+      message: 'Automation stopped by user',
     });
   }
 
   private emitProgress(type: AutomationEventType, data: any): void {
     const event: AutomationProgressEvent = {
       type,
-      data
+      data,
     };
     this.emit('progress', event);
   }
 
   public async executeAutomation(
     userGoal: string,
-    recordedSessionId: string,
+    recordedSessionId: string
   ): Promise<IterativeAutomationResult> {
     this.recordedSession = this.recordingStore.getRecording(recordedSessionId);
     this.stateManager = new AutomationStateManager(
@@ -77,33 +87,37 @@ export class AutomationService extends EventEmitter {
     this.stateManager.on('progress', (event: AutomationProgressEvent) => {
       this.emitProgress(event.type, event.data);
     });
-    
+
     try {
       await this.stateManager.generateInitialPlan();
 
       while (this.stateManager.isRunning()) {
-        const executionResult = await this.stateManager.executePlanWithRecovery();
-        
+        const executionResult =
+          await this.stateManager.executePlanWithRecovery();
+
         if (executionResult.isComplete) {
-          if(executionResult.error) {
+          if (executionResult.error) {
             this.emitProgress('automation_error', {
               error: executionResult.error,
-              stack: executionResult.error
+              stack: executionResult.error,
             });
           }
-          this.stateManager.markComplete(executionResult.status, executionResult.error);
+          this.stateManager.markComplete(
+            executionResult.status,
+            executionResult.error
+          );
           break;
         }
       }
 
       const finalResult = this.stateManager.getFinalResult();
-      
-      const status = finalResult.success 
-        ? AutomationStatus.COMPLETED 
+
+      const status = finalResult.success
+        ? AutomationStatus.COMPLETED
         : AutomationStatus.FAILED;
-      
+
       await this.automationClient.updateSessionStatus(status);
-      
+
       this.emitProgress('automation_complete', {
         success: finalResult.success,
         totalSteps: this.stateManager.getTotalStepsExecuted(),
@@ -114,27 +128,30 @@ export class AutomationService extends EventEmitter {
         plan: this.stateManager.getCurrentPlan(),
         executionResults: this.stateManager.getExecutedSteps(),
         error: finalResult.error,
-        totalStepsExecuted: this.stateManager.getTotalStepsExecuted()
+        totalStepsExecuted: this.stateManager.getTotalStepsExecuted(),
       };
-
     } catch (error: any) {
       console.error('❌ [IterativeAutomation] Fatal error:', error);
       this.emitProgress('automation_error', {
         error: error.message || 'Unknown error occurred',
-        stack: error.stack
+        stack: error.stack,
       });
-      
-      this.automationClient.updateSessionStatus(AutomationStatus.FAILED).catch((error) => {
-        console.error('❌ [IterativeAutomation] Failed to update session status:', error);
-      });
+
+      this.automationClient
+        .updateSessionStatus(AutomationStatus.FAILED)
+        .catch((error) => {
+          console.error(
+            '❌ [IterativeAutomation] Failed to update session status:',
+            error
+          );
+        });
 
       return {
         success: false,
         executionResults: this.stateManager?.getExecutedSteps() || [],
         error: error.message || 'Unknown error occurred',
-        totalStepsExecuted: this.stateManager?.getTotalStepsExecuted() || 0
+        totalStepsExecuted: this.stateManager?.getTotalStepsExecuted() || 0,
       };
     }
   }
-
 }

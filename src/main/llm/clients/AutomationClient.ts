@@ -1,7 +1,9 @@
+import { EventEmitter } from 'events';
+
 import Anthropic from '@anthropic-ai/sdk';
+
 import { api } from '@/main/api';
 import { SystemPromptType, AutomationStatus } from '@/shared/types';
-import { EventEmitter } from 'events';
 
 export class AutomationClient extends EventEmitter {
   private sessionId: string | null = null;
@@ -14,15 +16,14 @@ export class AutomationClient extends EventEmitter {
     formatted_session: string,
     user_goal: string
   ): Promise<Anthropic.Message> {
-
     try {
-      const response = await api.post<{ message: Anthropic.Message; session_id: string }>(
-        '/automation/plan',
-        {
-          recording_session: formatted_session,
-          user_goal
-        }
-      );
+      const response = await api.post<{
+        message: Anthropic.Message;
+        session_id: string;
+      }>('/automation/plan', {
+        recording_session: formatted_session,
+        user_goal,
+      });
 
       if (!response.success || !response.data?.message) {
         throw new Error(response.error || 'Failed to create automation plan');
@@ -32,9 +33,11 @@ export class AutomationClient extends EventEmitter {
       console.log(`✅ [AutomationClient] Session created: ${this.sessionId}`);
 
       return response.data.message;
-
     } catch (error) {
-      console.error('❌ [AutomationClient] Failed to create automation plan:', error);
+      console.error(
+        '❌ [AutomationClient] Failed to create automation plan:',
+        error
+      );
       throw error;
     }
   }
@@ -44,9 +47,10 @@ export class AutomationClient extends EventEmitter {
     messages: Anthropic.MessageParam[],
     cachedContext: string
   ): Promise<Anthropic.Message> {
-
     if (!this.sessionId) {
-      console.error('No active automation session. Call createAutomationPlan() first.');
+      console.error(
+        'No active automation session. Call createAutomationPlan() first.'
+      );
       throw new Error('No active automation session');
     }
 
@@ -58,12 +62,12 @@ export class AutomationClient extends EventEmitter {
         {
           system_prompt_type: system_prompt_type,
           messages: messages,
-          cached_context: cachedContext
+          cached_context: cachedContext,
         },
         {
           headers: {
-            'session-id': this.sessionId
-          }
+            'session-id': this.sessionId,
+          },
         }
       );
 
@@ -73,9 +77,11 @@ export class AutomationClient extends EventEmitter {
 
       console.log('✅ [AutomationClient] Conversation continued successfully');
       return response.data.message as Anthropic.Message;
-
     } catch (error) {
-      console.error('❌ [AutomationClient] Failed to continue conversation:', error);
+      console.error(
+        '❌ [AutomationClient] Failed to continue conversation:',
+        error
+      );
       throw error;
     }
   }
@@ -87,17 +93,19 @@ export class AutomationClient extends EventEmitter {
     }
 
     try {
-      
-
-      const response = await api.post<{ success: boolean; session_id: string; status: string }>(
+      const response = await api.post<{
+        success: boolean;
+        session_id: string;
+        status: string;
+      }>(
         '/automation/session/update',
         {
-          status: status
+          status: status,
         },
         {
           headers: {
-            'session-id': this.sessionId
-          }
+            'session-id': this.sessionId,
+          },
         }
       );
 
@@ -105,10 +113,12 @@ export class AutomationClient extends EventEmitter {
         throw new Error(response.error || 'Failed to update session status');
       }
 
-      this.sessionId = null
-
+      this.sessionId = null;
     } catch (error) {
-      console.error('❌ [AutomationClient] Failed to update session status:', error);
+      console.error(
+        '❌ [AutomationClient] Failed to update session status:',
+        error
+      );
       throw error;
     }
   }

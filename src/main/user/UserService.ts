@@ -1,20 +1,28 @@
-import Store from 'electron-store';
 import { randomUUID } from 'crypto';
 import { app } from 'electron';
-import { User, Session, SubscriptionStatus, SubscriptionPlan, UserPreferences, Subscription } from '@/shared/types';
 
+import Store from 'electron-store';
+
+import {
+  User,
+  Session,
+  SubscriptionStatus,
+  SubscriptionPlan,
+  UserPreferences,
+  Subscription,
+} from '@/shared/types';
 
 /**
  * UserService
- * 
+ *
  * Handles user authentication, session management, and profile operations.
- * 
+ *
  * Architecture:
  * - Uses electron-store for local persistence
  * - Session-based authentication (ready for JWT tokens)
  * - Scalable for future backend integration
  * - Supports subscription management
- * 
+ *
  * Future Backend Integration:
  * - Replace local storage with API calls
  * - Implement JWT token refresh
@@ -57,7 +65,7 @@ export class UserService {
    */
   private restoreSession(): void {
     const session = this.sessionStore.get('currentSession');
-    
+
     if (!session) {
       console.log('No existing session found');
       return;
@@ -82,10 +90,10 @@ export class UserService {
 
     this.currentSession = session;
     this.currentUser = user;
-    
+
     // Update last activity
     this.updateSessionActivity();
-    
+
     console.log(`Session restored for user: ${user.email}`);
   }
 
@@ -101,7 +109,9 @@ export class UserService {
     const users = this.userStore.get('users');
 
     // Check if user already exists
-    const existingUser = Object.values(users).find(u => u.email === data.email);
+    const existingUser = Object.values(users).find(
+      (u) => u.email === data.email
+    );
     if (existingUser) {
       throw new Error('User with this email already exists');
     }
@@ -136,9 +146,12 @@ export class UserService {
    * Sign in user
    * In production, this would authenticate with your backend
    */
-  public async signIn(email: string, password?: string): Promise<{ user: User; session: Session }> {
+  public async signIn(
+    email: string,
+    password?: string
+  ): Promise<{ user: User; session: Session }> {
     const users = this.userStore.get('users');
-    const user = Object.values(users).find(u => u.email === email);
+    const user = Object.values(users).find((u) => u.email === email);
 
     if (!user) {
       throw new Error('User not found');
@@ -173,7 +186,7 @@ export class UserService {
     }
 
     console.log(`User signed out: ${this.currentUser.email}`);
-    
+
     this.clearSession();
   }
 
@@ -201,7 +214,9 @@ export class UserService {
   /**
    * Update user profile
    */
-  public async updateProfile(updates: Partial<Pick<User, 'name' | 'avatar' | 'preferences'>>): Promise<User> {
+  public async updateProfile(
+    updates: Partial<Pick<User, 'name' | 'avatar' | 'preferences'>>
+  ): Promise<User> {
     if (!this.currentUser) {
       throw new Error('No user signed in');
     }
@@ -228,7 +243,9 @@ export class UserService {
   /**
    * Update user preferences
    */
-  public async updatePreferences(preferences: Partial<UserPreferences>): Promise<User> {
+  public async updatePreferences(
+    preferences: Partial<UserPreferences>
+  ): Promise<User> {
     if (!this.currentUser) {
       throw new Error('No user signed in');
     }
@@ -256,7 +273,9 @@ export class UserService {
    * Update subscription status
    * For future use with payment integration
    */
-  public async updateSubscription(subscription: Partial<Subscription>): Promise<User> {
+  public async updateSubscription(
+    subscription: Partial<Subscription>
+  ): Promise<User> {
     if (!this.currentUser) {
       throw new Error('No user signed in');
     }
@@ -285,7 +304,7 @@ export class UserService {
    */
   private createSession(userId: string): Session {
     const now = Date.now();
-    
+
     return {
       sessionId: randomUUID(),
       userId,
@@ -344,7 +363,7 @@ export class UserService {
     this.userStore.set('users', users);
 
     console.log(`Account deleted for user: ${this.currentUser.email}`);
-    
+
     this.clearSession();
   }
 
@@ -362,7 +381,7 @@ export class UserService {
    */
   public async createGuestUser(): Promise<{ user: User; session: Session }> {
     const guestEmail = `guest_${Date.now()}@browzer.local`;
-    
+
     const user = await this.createUser({
       email: guestEmail,
       name: 'Guest User',
@@ -372,7 +391,7 @@ export class UserService {
     user.subscription = {
       status: SubscriptionStatus.ACTIVE,
       plan: SubscriptionPlan.FREE,
-      trialEndsAt: Date.now() + (7 * 24 * 60 * 60 * 1000), // 7 days
+      trialEndsAt: Date.now() + 7 * 24 * 60 * 60 * 1000, // 7 days
     };
 
     const users = this.userStore.get('users');

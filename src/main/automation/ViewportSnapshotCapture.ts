@@ -2,10 +2,10 @@ import { WebContentsView } from 'electron';
 
 /**
  * ViewportSnapshotCapture - Capture visual snapshots for Claude vision analysis
- * 
+ *
  * Captures screenshots of the viewport with optional scrolling and element targeting.
  * Optimized for Claude's vision capabilities with proper image sizing and base64 encoding.
- * 
+ *
  * Based on Anthropic's vision best practices:
  * - Optimal size: 1.15 megapixels (within 1568px dimensions)
  * - Format: JPEG with quality 80-90 for balance
@@ -13,11 +13,11 @@ import { WebContentsView } from 'electron';
  */
 export class ViewportSnapshotCapture {
   private view: WebContentsView;
-  
+
   // Image optimization settings based on Claude vision docs
   private readonly JPEG_QUALITY = 85; // Balance between quality and size
   private readonly MAX_DIMENSION = 1568; // Optimal for Claude without resizing
-  
+
   constructor(view: WebContentsView) {
     this.view = view;
   }
@@ -26,7 +26,12 @@ export class ViewportSnapshotCapture {
    * Capture viewport snapshot with optional scrolling and element targeting
    */
   public async captureSnapshot(
-    scrollTo?: 'current' | 'top' | 'bottom' | number | { element: string; backupSelectors?: string[] }
+    scrollTo?:
+      | 'current'
+      | 'top'
+      | 'bottom'
+      | number
+      | { element: string; backupSelectors?: string[] }
   ): Promise<{
     success: boolean;
     image?: {
@@ -49,7 +54,7 @@ export class ViewportSnapshotCapture {
       // Perform scroll if requested
       if (scrollTo && scrollTo !== 'current') {
         await this.performScroll(scrollTo);
-        
+
         // Wait for scroll animations and content to settle
         await this.sleep(2000);
       }
@@ -59,19 +64,20 @@ export class ViewportSnapshotCapture {
 
       // Capture the screenshot
       const image = await this.view.webContents.capturePage();
-      
+
       // Get original dimensions
       const originalSize = image.getSize();
       let width = originalSize.width;
       let height = originalSize.height;
-      
+
       // Resize if needed to stay within optimal dimensions
-      const needsResize = width > this.MAX_DIMENSION || height > this.MAX_DIMENSION;
-      
+      const needsResize =
+        width > this.MAX_DIMENSION || height > this.MAX_DIMENSION;
+
       if (needsResize) {
         // Calculate new dimensions maintaining aspect ratio
         const aspectRatio = width / height;
-        
+
         if (width > height) {
           width = this.MAX_DIMENSION;
           height = Math.round(width / aspectRatio);
@@ -79,20 +85,22 @@ export class ViewportSnapshotCapture {
           height = this.MAX_DIMENSION;
           width = Math.round(height * aspectRatio);
         }
-        
+
         // Resize the image
         const resized = image.resize({ width, height });
-        
+
         // Convert to JPEG base64
         const jpeg = resized.toJPEG(this.JPEG_QUALITY);
         const base64Data = jpeg.toString('base64');
         const sizeBytes = jpeg.length;
-        
+
         // Estimate tokens: (width * height) / 750
         const estimatedTokens = Math.round((width * height) / 750);
-        
-        console.log(`📸 Snapshot captured and resized: ${originalSize.width}x${originalSize.height} → ${width}x${height} (${(sizeBytes / 1024).toFixed(1)} KB, ~${estimatedTokens} tokens)`);
-        
+
+        console.log(
+          `📸 Snapshot captured and resized: ${originalSize.width}x${originalSize.height} → ${width}x${height} (${(sizeBytes / 1024).toFixed(1)} KB, ~${estimatedTokens} tokens)`
+        );
+
         return {
           success: true,
           image: {
@@ -101,9 +109,9 @@ export class ViewportSnapshotCapture {
             width,
             height,
             sizeBytes,
-            estimatedTokens
+            estimatedTokens,
           },
-          viewport: viewportInfo
+          viewport: viewportInfo,
         };
       } else {
         // No resize needed, use original
@@ -111,9 +119,11 @@ export class ViewportSnapshotCapture {
         const base64Data = jpeg.toString('base64');
         const sizeBytes = jpeg.length;
         const estimatedTokens = Math.round((width * height) / 750);
-        
-        console.log(`📸 Snapshot captured: ${width}x${height} (${(sizeBytes / 1024).toFixed(1)} KB, ~${estimatedTokens} tokens)`);
-        
+
+        console.log(
+          `📸 Snapshot captured: ${width}x${height} (${(sizeBytes / 1024).toFixed(1)} KB, ~${estimatedTokens} tokens)`
+        );
+
         return {
           success: true,
           image: {
@@ -122,17 +132,16 @@ export class ViewportSnapshotCapture {
             width,
             height,
             sizeBytes,
-            estimatedTokens
+            estimatedTokens,
           },
-          viewport: viewportInfo
+          viewport: viewportInfo,
         };
       }
-      
     } catch (error) {
       console.error('Failed to capture snapshot:', error);
       return {
         success: false,
-        error: error instanceof Error ? error.message : String(error)
+        error: error instanceof Error ? error.message : String(error),
       };
     }
   }
@@ -141,7 +150,11 @@ export class ViewportSnapshotCapture {
    * Perform smooth scroll to specified position
    */
   private async performScroll(
-    scrollTo: 'top' | 'bottom' | number | { element: string; backupSelectors?: string[] }
+    scrollTo:
+      | 'top'
+      | 'bottom'
+      | number
+      | { element: string; backupSelectors?: string[] }
   ): Promise<void> {
     if (scrollTo === 'top') {
       await this.view.webContents.executeJavaScript(`
@@ -177,12 +190,12 @@ export class ViewportSnapshotCapture {
           return { success: false, error: 'Element not found with any selector' };
         })();
       `;
-      
+
       const result = await this.view.webContents.executeJavaScript(script);
       if (!result.success) {
         throw new Error(result.error || 'Failed to scroll to element');
       }
-      
+
       console.log(`✅ Scrolled to element: ${result.usedSelector}`);
     }
   }
@@ -210,6 +223,6 @@ export class ViewportSnapshotCapture {
    * Sleep helper
    */
   private sleep(ms: number): Promise<void> {
-    return new Promise(resolve => setTimeout(resolve, ms));
+    return new Promise((resolve) => setTimeout(resolve, ms));
   }
 }

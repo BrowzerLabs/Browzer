@@ -1,9 +1,17 @@
-import { app, session, shell, type WebContents, BaseWindow, WebContentsView } from 'electron';
+import {
+  app,
+  session,
+  shell,
+  type WebContents,
+  BaseWindow,
+  WebContentsView,
+} from 'electron';
 import fs from 'node:fs';
 import path from 'node:path';
 import { EventEmitter } from 'events';
-import type { DownloadItem, DownloadUpdatePayload } from '@/shared/types';
 import { randomUUID } from 'node:crypto';
+
+import type { DownloadItem, DownloadUpdatePayload } from '@/shared/types';
 
 interface ManagedDownload {
   item?: Electron.DownloadItem;
@@ -20,9 +28,15 @@ export class DownloadService extends EventEmitter {
   private pendingSavePaths = new Map<string, string>();
   private pendingRetryIds = new Map<string, string>();
   private throttleTimers = new Map<string, NodeJS.Timeout>();
-  private readonly handleWillDownload: (event: Electron.Event, item: Electron.DownloadItem) => void;
+  private readonly handleWillDownload: (
+    event: Electron.Event,
+    item: Electron.DownloadItem
+  ) => void;
 
-  constructor(private baseWindow: BaseWindow, private rendererContents: WebContents) {
+  constructor(
+    private baseWindow: BaseWindow,
+    private rendererContents: WebContents
+  ) {
     super();
 
     session.defaultSession.setDownloadPath(app.getPath('downloads'));
@@ -32,15 +46,20 @@ export class DownloadService extends EventEmitter {
   }
 
   public destroy(): void {
-    session.defaultSession.removeListener('will-download', this.handleWillDownload);
-    this.throttleTimers.forEach(timer => clearTimeout(timer));
+    session.defaultSession.removeListener(
+      'will-download',
+      this.handleWillDownload
+    );
+    this.throttleTimers.forEach((timer) => clearTimeout(timer));
     this.throttleTimers.clear();
     this.downloads.clear();
     this.pendingSavePaths.clear();
   }
 
   public getDownloads(): DownloadItem[] {
-    return Array.from(this.downloads.values()).map(entry => ({ ...entry.data }));
+    return Array.from(this.downloads.values()).map((entry) => ({
+      ...entry.data,
+    }));
   }
 
   public pauseDownload(id: string): boolean {
@@ -75,7 +94,9 @@ export class DownloadService extends EventEmitter {
     const entry = this.downloads.get(id);
     if (!entry) return false;
 
-    const savePath = entry.data.savePath || path.join(app.getPath('downloads'), entry.data.fileName);
+    const savePath =
+      entry.data.savePath ||
+      path.join(app.getPath('downloads'), entry.data.fileName);
     this.pendingSavePaths.set(entry.data.url, savePath);
     this.pendingRetryIds.set(entry.data.url, id);
 
@@ -105,12 +126,16 @@ export class DownloadService extends EventEmitter {
 
   public showInFolder(id: string): boolean {
     const entry = this.downloads.get(id);
-    if (!entry?.data.savePath || !fs.existsSync(entry.data.savePath)) return false;
+    if (!entry?.data.savePath || !fs.existsSync(entry.data.savePath))
+      return false;
     shell.showItemInFolder(entry.data.savePath);
     return true;
   }
 
-  private onWillDownload(_event: Electron.Event, item: Electron.DownloadItem): void {
+  private onWillDownload(
+    _event: Electron.Event,
+    item: Electron.DownloadItem
+  ): void {
     const retryId = this.pendingRetryIds.get(item.getURL());
     const id = retryId ?? this.generateId();
     const existing = this.downloads.get(id);
@@ -128,7 +153,10 @@ export class DownloadService extends EventEmitter {
       mimeType: item.getMimeType(),
       totalBytes: Math.max(item.getTotalBytes(), 0),
       receivedBytes: item.getReceivedBytes(),
-      progress: this.calculateProgress(item.getReceivedBytes(), item.getTotalBytes()),
+      progress: this.calculateProgress(
+        item.getReceivedBytes(),
+        item.getTotalBytes()
+      ),
       state: 'progressing',
       startTime: Date.now(),
       canResume: item.canResume(),
@@ -144,7 +172,10 @@ export class DownloadService extends EventEmitter {
     download.fileName = path.basename(savePath);
     download.totalBytes = Math.max(item.getTotalBytes(), download.totalBytes);
     download.receivedBytes = item.getReceivedBytes();
-    download.progress = this.calculateProgress(download.receivedBytes, download.totalBytes);
+    download.progress = this.calculateProgress(
+      download.receivedBytes,
+      download.totalBytes
+    );
     download.canResume = item.canResume();
     download.state = item.isPaused() ? 'paused' : 'progressing';
 
@@ -167,7 +198,11 @@ export class DownloadService extends EventEmitter {
     });
   }
 
-  private onItemUpdated(id: string, item: Electron.DownloadItem, state: 'interrupted' | 'progressing'): void {
+  private onItemUpdated(
+    id: string,
+    item: Electron.DownloadItem,
+    state: 'interrupted' | 'progressing'
+  ): void {
     const entry = this.downloads.get(id);
     if (!entry) return;
 
@@ -175,15 +210,24 @@ export class DownloadService extends EventEmitter {
     const timeDelta = (now - entry.lastUpdateTime) / 1000;
     const bytesDelta = item.getReceivedBytes() - entry.lastReceivedBytes;
 
-    entry.data.totalBytes = Math.max(item.getTotalBytes(), entry.data.totalBytes);
+    entry.data.totalBytes = Math.max(
+      item.getTotalBytes(),
+      entry.data.totalBytes
+    );
     entry.data.receivedBytes = item.getReceivedBytes();
-    entry.data.progress = this.calculateProgress(entry.data.receivedBytes, entry.data.totalBytes);
+    entry.data.progress = this.calculateProgress(
+      entry.data.receivedBytes,
+      entry.data.totalBytes
+    );
     entry.data.canResume = item.canResume();
 
     if (timeDelta > 0) {
       entry.data.speed = Math.round(bytesDelta / timeDelta);
       const remaining = entry.data.totalBytes - entry.data.receivedBytes;
-      entry.data.remainingTime = entry.data.speed > 0 ? Math.round(remaining / entry.data.speed) : undefined;
+      entry.data.remainingTime =
+        entry.data.speed > 0
+          ? Math.round(remaining / entry.data.speed)
+          : undefined;
     }
 
     entry.lastReceivedBytes = entry.data.receivedBytes;
@@ -200,7 +244,11 @@ export class DownloadService extends EventEmitter {
     }
   }
 
-  private onItemDone(id: string, item: Electron.DownloadItem, state: 'completed' | 'cancelled' | 'interrupted'): void {
+  private onItemDone(
+    id: string,
+    item: Electron.DownloadItem,
+    state: 'completed' | 'cancelled' | 'interrupted'
+  ): void {
     const entry = this.downloads.get(id);
     if (!entry) return;
 
@@ -210,9 +258,15 @@ export class DownloadService extends EventEmitter {
       this.throttleTimers.delete(id);
     }
 
-    entry.data.totalBytes = Math.max(item.getTotalBytes(), entry.data.totalBytes);
+    entry.data.totalBytes = Math.max(
+      item.getTotalBytes(),
+      entry.data.totalBytes
+    );
     entry.data.receivedBytes = item.getReceivedBytes();
-    entry.data.progress = this.calculateProgress(entry.data.receivedBytes, entry.data.totalBytes);
+    entry.data.progress = this.calculateProgress(
+      entry.data.receivedBytes,
+      entry.data.totalBytes
+    );
     entry.data.endTime = Date.now();
     entry.data.canResume = false;
     entry.data.speed = undefined;
@@ -306,7 +360,12 @@ export class DownloadService extends EventEmitter {
     if (entries.length <= MAX_DOWNLOADS_HISTORY) return;
 
     const completed = entries
-      .filter(([, m]) => m.data.state === 'completed' || m.data.state === 'cancelled' || m.data.state === 'failed')
+      .filter(
+        ([, m]) =>
+          m.data.state === 'completed' ||
+          m.data.state === 'cancelled' ||
+          m.data.state === 'failed'
+      )
       .sort((a, b) => (a[1].data.endTime ?? 0) - (b[1].data.endTime ?? 0));
 
     const toRemove = entries.length - MAX_DOWNLOADS_HISTORY;
@@ -335,4 +394,3 @@ export class DownloadService extends EventEmitter {
     });
   }
 }
-

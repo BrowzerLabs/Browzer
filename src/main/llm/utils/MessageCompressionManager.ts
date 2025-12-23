@@ -3,37 +3,37 @@ import Anthropic from '@anthropic-ai/sdk';
 
 /**
  * MessageCompressionManager - Smart context window optimization for conversation messages
- * 
+ *
  * Compression Types:
- * 
+ *
  * 1. **Unexecuted Tool Calls** (Priority: First)
  *    - Removes BOTH tool_use and tool_result blocks for steps that weren't executed
  *    - Marker: "Not executed - automation stopped before reaching this step"
  *    - Savings: ~50-100 tokens per unexecuted step
  *    - Critical for failed automations with many skipped steps
- * 
+ *
  * 2. **Analysis Results** (extract_context, take_snapshot)
  *    - Compress ALL occurrences to minimal strings
  *    - Analysis data is only useful when fresh, no need to retain old results
  *    - Savings: 10K-50K+ tokens per result
- * 
+ *
  * 3. **Error Messages** (AUTOMATION ERROR ENCOUNTERED)
  *    - Keep ONLY the most recent error with full context
  *    - Compress all older errors to minimal strings
  *    - Only latest error is relevant for recovery
  *    - Savings: 5K-20K+ tokens per error
- * 
+ *
  * Total Savings: Can save 100K-300K+ tokens in long-running automations!
  */
 export class MessageCompressionManager {
   private static readonly ANALYSIS_TOOLS = ['extract_context', 'take_snapshot'];
   private static readonly ERROR_MARKER = 'AUTOMATION ERROR ENCOUNTERED';
-  private static readonly UNEXECUTED_MARKER = 'Not executed - automation stopped before reaching this step';
-  private static readonly COMPRESSED_ANALYSIS = 
+  private static readonly UNEXECUTED_MARKER =
+    'Not executed - automation stopped before reaching this step';
+  private static readonly COMPRESSED_ANALYSIS =
     '✅ Analysis completed successfully, full result provided & compressed to save context';
-  
-  private static readonly COMPRESSED_ERROR = 
-    '⚠️ Previous error compressed';
+
+  private static readonly COMPRESSED_ERROR = '⚠️ Previous error compressed';
 
   /**
    * Check if a tool is an analysis tool
@@ -44,13 +44,11 @@ export class MessageCompressionManager {
 
   /**
    * Master compression method - applies all compression strategies
-   * 
+   *
    * This is the main entry point that orchestrates all compression types.
    * Call this after the model receives new content to clean up context window.
    */
-  public static compressMessages(
-    messages: Anthropic.MessageParam[]
-  ): {
+  public static compressMessages(messages: Anthropic.MessageParam[]): {
     compressedMessages: Anthropic.MessageParam[];
     compressedCount: number;
   } {
@@ -74,21 +72,19 @@ export class MessageCompressionManager {
 
     return {
       compressedMessages: workingMessages,
-      compressedCount: totalCompressed
+      compressedCount: totalCompressed,
     };
   }
 
   /**
    * Compress analysis tool results in messages array
-   * 
+   *
    * Strategy:
    * - Find all tool_result blocks for analysis tools
    * - Compress ALL of them to minimal strings
    * - Analysis results don't need to be retained after model processes them
    */
-  private static compressAnalysisResults(
-    messages: Anthropic.MessageParam[]
-  ): {
+  private static compressAnalysisResults(messages: Anthropic.MessageParam[]): {
     compressedMessages: Anthropic.MessageParam[];
     compressedCount: number;
   } {
@@ -109,14 +105,14 @@ export class MessageCompressionManager {
           if (block.type === 'tool_result') {
             // Check if this is an analysis tool result by examining content
             const isAnalysisResult = this.isAnalysisToolResult(block.content);
-            
+
             if (isAnalysisResult) {
               const originalSize = JSON.stringify(block.content).length;
               analysisResultIndices.push({
                 messageIndex,
                 contentIndex,
                 toolUseId: block.tool_use_id,
-                originalSize
+                originalSize,
               });
             }
           }
@@ -130,19 +126,23 @@ export class MessageCompressionManager {
         compressedCount: 0,
       };
     }
-    
-    const compressedMessages = JSON.parse(JSON.stringify(messages)) as Anthropic.MessageParam[];
-    analysisResultIndices.forEach(({ messageIndex, contentIndex, originalSize }) => {
-      const message = compressedMessages[messageIndex];
-      if (Array.isArray(message.content)) {
-        const block = message.content[contentIndex];
-        if (block.type === 'tool_result') {
-          block.content = this.COMPRESSED_ANALYSIS;
-          
-          compressedCount++;
+
+    const compressedMessages = JSON.parse(
+      JSON.stringify(messages)
+    ) as Anthropic.MessageParam[];
+    analysisResultIndices.forEach(
+      ({ messageIndex, contentIndex, originalSize }) => {
+        const message = compressedMessages[messageIndex];
+        if (Array.isArray(message.content)) {
+          const block = message.content[contentIndex];
+          if (block.type === 'tool_result') {
+            block.content = this.COMPRESSED_ANALYSIS;
+
+            compressedCount++;
+          }
         }
       }
-    });
+    );
 
     return {
       compressedMessages,
@@ -152,29 +152,28 @@ export class MessageCompressionManager {
 
   private static isAnalysisToolResult(content: string | any): boolean {
     try {
-      const parsed = typeof content === 'string' ? JSON.parse(content) : content;
-      
+      const parsed =
+        typeof content === 'string' ? JSON.parse(content) : content;
+
       if (parsed.extractedAt && parsed.dom && parsed.url) {
         return true;
       }
-      
+
       if (parsed.data && parsed.data.snapshot) {
         return true;
       }
-      
+
       if (parsed.note && parsed.note.includes('compressed')) {
         return false;
       }
-      
+
       return false;
     } catch {
       return false;
     }
   }
 
-  private static compressErrorMessages(
-    messages: Anthropic.MessageParam[]
-  ): {
+  private static compressErrorMessages(messages: Anthropic.MessageParam[]): {
     compressedMessages: Anthropic.MessageParam[];
     compressedCount: number;
   } {
@@ -196,16 +195,19 @@ export class MessageCompressionManager {
             errorIndices.push({
               messageIndex,
               contentIndex,
-              originalSize
+              originalSize,
             });
           }
         });
-      } else if (typeof message.content === 'string' && this.isErrorMessage(message.content)) {
+      } else if (
+        typeof message.content === 'string' &&
+        this.isErrorMessage(message.content)
+      ) {
         const originalSize = message.content.length;
         errorIndices.push({
           messageIndex,
           contentIndex: -1, // Indicates string content
-          originalSize
+          originalSize,
         });
       }
     });
@@ -219,11 +221,13 @@ export class MessageCompressionManager {
     }
 
     // Compress all errors EXCEPT the last one
-    const compressedMessages = JSON.parse(JSON.stringify(messages)) as Anthropic.MessageParam[];
+    const compressedMessages = JSON.parse(
+      JSON.stringify(messages)
+    ) as Anthropic.MessageParam[];
 
     errorIndices.forEach(({ messageIndex, contentIndex }) => {
       const message = compressedMessages[messageIndex];
-      
+
       if (contentIndex === -1) {
         // String content
         message.content = this.COMPRESSED_ERROR;
@@ -248,10 +252,7 @@ export class MessageCompressionManager {
     return text.includes(this.ERROR_MARKER);
   }
 
-  
-  private static removeUnexecutedTools(
-    messages: Anthropic.MessageParam[]
-  ): {
+  private static removeUnexecutedTools(messages: Anthropic.MessageParam[]): {
     compressedMessages: Anthropic.MessageParam[];
     compressedCount: number;
   } {
@@ -259,10 +260,13 @@ export class MessageCompressionManager {
 
     const unexecutedToolIds = new Set<string>();
 
-    messages.forEach(message => {
+    messages.forEach((message) => {
       if (message.role === 'user' && Array.isArray(message.content)) {
-        message.content.forEach(block => {
-          if (block.type === 'tool_result' && this.isUnexecutedResult(block.content)) {
+        message.content.forEach((block) => {
+          if (
+            block.type === 'tool_result' &&
+            this.isUnexecutedResult(block.content)
+          ) {
             unexecutedToolIds.add(block.tool_use_id);
           }
         });
@@ -276,22 +280,26 @@ export class MessageCompressionManager {
       };
     }
 
-    const compressedMessages = JSON.parse(JSON.stringify(messages)) as Anthropic.MessageParam[];
+    const compressedMessages = JSON.parse(
+      JSON.stringify(messages)
+    ) as Anthropic.MessageParam[];
 
-    compressedMessages.forEach(message => {
+    compressedMessages.forEach((message) => {
       if (Array.isArray(message.content)) {
-        
-        message.content = message.content.filter(block => {
+        message.content = message.content.filter((block) => {
           if (block.type === 'tool_use' && unexecutedToolIds.has(block.id)) {
             compressedCount++;
             return false;
           }
-          
-          if (block.type === 'tool_result' && unexecutedToolIds.has(block.tool_use_id)) {
+
+          if (
+            block.type === 'tool_result' &&
+            unexecutedToolIds.has(block.tool_use_id)
+          ) {
             compressedCount++;
             return false;
           }
-          
+
           return true;
         });
       }

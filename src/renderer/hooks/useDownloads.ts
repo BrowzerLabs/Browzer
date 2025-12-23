@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { DownloadItem, DownloadUpdatePayload } from '@/shared/types';
 import { toast } from 'sonner';
+
+import type { DownloadItem, DownloadUpdatePayload } from '@/shared/types';
 
 interface UseDownloadsOptions {
   notify?: boolean;
@@ -14,14 +15,17 @@ export function useDownloads(options: UseDownloadsOptions = {}) {
   const previous = useRef<Map<string, DownloadItem>>(new Map());
 
   const activeCount = useMemo(
-    () => downloads.filter((d) => d.state === 'progressing' || d.state === 'queued').length,
+    () =>
+      downloads.filter((d) => d.state === 'progressing' || d.state === 'queued')
+        .length,
     [downloads]
   );
 
   useEffect(() => {
     let isMounted = true;
 
-    window.browserAPI.getDownloads()
+    window.browserAPI
+      .getDownloads()
       .then((items: DownloadItem[]) => {
         if (isMounted) {
           setDownloads(items);
@@ -33,57 +37,65 @@ export function useDownloads(options: UseDownloadsOptions = {}) {
         }
       });
 
-    const unsubscribe = window.browserAPI.onDownloadsUpdated((payload: DownloadUpdatePayload) => {
-      setDownloads(payload.downloads);
+    const unsubscribe = window.browserAPI.onDownloadsUpdated(
+      (payload: DownloadUpdatePayload) => {
+        setDownloads(payload.downloads);
 
-      const changed = payload.changedId
-        ? payload.downloads.find((d) => d.id === payload.changedId)
-        : undefined;
+        const changed = payload.changedId
+          ? payload.downloads.find((d) => d.id === payload.changedId)
+          : undefined;
 
-      if (!changed) {
-        return;
-      }
-
-      const prev = previous.current.get(changed.id);
-      previous.current.set(changed.id, changed);
-
-      if (!notify) return;
-
-      if (!prev) {
-        if (onNewDownload) {
-          onNewDownload(changed);
+        if (!changed) {
+          return;
         }
-        if (notify) {
-          toast.message(`Downloading ${changed.fileName}`, { duration: 2000 });
-        }
-        return;
-      }
 
-      if (prev.state !== changed.state) {
-        switch (changed.state) {
-          case 'completed':
-            toast.success(`${changed.fileName} downloaded`, { duration: 2500 });
-            break;
-          case 'failed':
-          case 'interrupted':
-            toast.error(`${changed.fileName} failed`, { duration: 2500 });
-            break;
-          case 'cancelled':
-            toast.error(`${changed.fileName} cancelled`, { duration: 2000 });
-            break;
-          case 'paused':
-            toast.message(`${changed.fileName} paused`, { duration: 2000 });
-            break;
-          case 'progressing':
-            if (prev.state === 'paused') {
-              toast.message(`${changed.fileName} resumed`, { duration: 2000 });
-            }
-            break;
-          default:
-            break;
+        const prev = previous.current.get(changed.id);
+        previous.current.set(changed.id, changed);
+
+        if (!notify) return;
+
+        if (!prev) {
+          if (onNewDownload) {
+            onNewDownload(changed);
+          }
+          if (notify) {
+            toast.message(`Downloading ${changed.fileName}`, {
+              duration: 2000,
+            });
+          }
+          return;
+        }
+
+        if (prev.state !== changed.state) {
+          switch (changed.state) {
+            case 'completed':
+              toast.success(`${changed.fileName} downloaded`, {
+                duration: 2500,
+              });
+              break;
+            case 'failed':
+            case 'interrupted':
+              toast.error(`${changed.fileName} failed`, { duration: 2500 });
+              break;
+            case 'cancelled':
+              toast.error(`${changed.fileName} cancelled`, { duration: 2000 });
+              break;
+            case 'paused':
+              toast.message(`${changed.fileName} paused`, { duration: 2000 });
+              break;
+            case 'progressing':
+              if (prev.state === 'paused') {
+                toast.message(`${changed.fileName} resumed`, {
+                  duration: 2000,
+                });
+              }
+              break;
+            default:
+              break;
+          }
         }
       }
-    });
+    );
 
     return () => {
       isMounted = false;
@@ -91,39 +103,59 @@ export function useDownloads(options: UseDownloadsOptions = {}) {
     };
   }, [notify, onNewDownload]);
 
-  const withFeedback = useCallback(async (fn: () => Promise<boolean>, onError: string, onSuccess?: string) => {
-    try {
-      const ok = await fn();
-      if (ok && onSuccess) {
-        toast.success(onSuccess);
-      } else if (!ok) {
+  const withFeedback = useCallback(
+    async (fn: () => Promise<boolean>, onError: string, onSuccess?: string) => {
+      try {
+        const ok = await fn();
+        if (ok && onSuccess) {
+          toast.success(onSuccess);
+        } else if (!ok) {
+          toast.error(onError);
+        }
+        return ok;
+      } catch (error) {
+        console.error(error);
         toast.error(onError);
+        return false;
       }
-      return ok;
-    } catch (error) {
-      console.error(error);
-      toast.error(onError);
-      return false;
-    }
-  }, []);
+    },
+    []
+  );
 
   const pauseDownload = useCallback(
-    (id: string) => withFeedback(() => window.browserAPI.pauseDownload(id), 'Unable to pause download'),
+    (id: string) =>
+      withFeedback(
+        () => window.browserAPI.pauseDownload(id),
+        'Unable to pause download'
+      ),
     [withFeedback]
   );
 
   const resumeDownload = useCallback(
-    (id: string) => withFeedback(() => window.browserAPI.resumeDownload(id), 'Unable to resume download'),
+    (id: string) =>
+      withFeedback(
+        () => window.browserAPI.resumeDownload(id),
+        'Unable to resume download'
+      ),
     [withFeedback]
   );
 
   const cancelDownload = useCallback(
-    (id: string) => withFeedback(() => window.browserAPI.cancelDownload(id), 'Unable to cancel download'),
+    (id: string) =>
+      withFeedback(
+        () => window.browserAPI.cancelDownload(id),
+        'Unable to cancel download'
+      ),
     [withFeedback]
   );
 
   const retryDownload = useCallback(
-    (id: string) => withFeedback(() => window.browserAPI.retryDownload(id), 'Unable to retry download', 'Retry started'),
+    (id: string) =>
+      withFeedback(
+        () => window.browserAPI.retryDownload(id),
+        'Unable to retry download',
+        'Retry started'
+      ),
     [withFeedback]
   );
 
@@ -141,12 +173,20 @@ export function useDownloads(options: UseDownloadsOptions = {}) {
   );
 
   const openDownload = useCallback(
-    (id: string) => withFeedback(() => window.browserAPI.openDownload(id), 'File could not be opened'),
+    (id: string) =>
+      withFeedback(
+        () => window.browserAPI.openDownload(id),
+        'File could not be opened'
+      ),
     [withFeedback]
   );
 
   const showInFolder = useCallback(
-    (id: string) => withFeedback(() => window.browserAPI.showDownloadInFolder(id), 'File not found on disk'),
+    (id: string) =>
+      withFeedback(
+        () => window.browserAPI.showDownloadInFolder(id),
+        'File not found on disk'
+      ),
     [withFeedback]
   );
 
@@ -163,4 +203,3 @@ export function useDownloads(options: UseDownloadsOptions = {}) {
     activeCount,
   };
 }
-

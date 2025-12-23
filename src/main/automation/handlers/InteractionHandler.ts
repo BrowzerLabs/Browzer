@@ -1,5 +1,10 @@
 import { BaseHandler, HandlerContext } from './BaseHandler';
-import type { KeyPressParams, ScrollParams, ToolExecutionResult } from '@/shared/types';
+
+import type {
+  KeyPressParams,
+  ScrollParams,
+  ToolExecutionResult,
+} from '@/shared/types';
 
 export class InteractionHandler extends BaseHandler {
   constructor(context: HandlerContext) {
@@ -12,9 +17,11 @@ export class InteractionHandler extends BaseHandler {
     try {
       if (params.focusElement) {
         const focusResult = await this.findAndFocusElement(params.focusElement);
-        
+
         if (!focusResult.success) {
-          console.warn('[InteractionHandler] ⚠️ Could not find element to focus, pressing key anyway');
+          console.warn(
+            '[InteractionHandler] ⚠️ Could not find element to focus, pressing key anyway'
+          );
         } else {
           await this.sleep(150);
         }
@@ -37,7 +44,7 @@ export class InteractionHandler extends BaseHandler {
         type: 'keyDown',
         key: params.key,
         code: this.getKeyCode(params.key),
-        modifiers: modifiersBitmask
+        modifiers: modifiersBitmask,
       });
 
       await this.sleep(50);
@@ -46,7 +53,7 @@ export class InteractionHandler extends BaseHandler {
         type: 'keyUp',
         key: params.key,
         code: this.getKeyCode(params.key),
-        modifiers: modifiersBitmask
+        modifiers: modifiersBitmask,
       });
 
       console.log(`[InteractionHandler] ✅ Key pressed: ${params.key}`);
@@ -56,9 +63,8 @@ export class InteractionHandler extends BaseHandler {
       return {
         success: true,
         toolName: 'keyPress',
-        url: this.getUrl()
+        url: this.getUrl(),
       };
-
     } catch (error) {
       console.error('[InteractionHandler] ❌ Key press failed:', error);
       return this.createErrorResult('keyPress', startTime, {
@@ -68,9 +74,9 @@ export class InteractionHandler extends BaseHandler {
           lastError: error instanceof Error ? error.message : String(error),
           suggestions: [
             'Verify the key name is correct (e.g., "Enter", "Escape", "Tab")',
-            'Check if modifiers are supported'
-          ]
-        }
+            'Check if modifiers are supported',
+          ],
+        },
       });
     }
   }
@@ -90,15 +96,16 @@ export class InteractionHandler extends BaseHandler {
           })();
         `;
 
-        const result = await this.view.webContents.executeJavaScript(scrollScript);
-        
+        const result =
+          await this.view.webContents.executeJavaScript(scrollScript);
+
         if (!result.success) {
           return this.createErrorResult('scroll', startTime, {
             code: 'ELEMENT_NOT_FOUND',
             message: result.error || 'Could not find element to scroll to',
             details: {
-              suggestions: ['Verify the element selector is correct']
-            }
+              suggestions: ['Verify the element selector is correct'],
+            },
           });
         }
       } else {
@@ -125,22 +132,23 @@ export class InteractionHandler extends BaseHandler {
       return {
         success: true,
         toolName: 'scroll',
-        url: this.getUrl()
+        url: this.getUrl(),
       };
-
     } catch (error) {
       console.error('[InteractionHandler] ❌ Scroll failed:', error);
       return this.createErrorResult('scroll', startTime, {
         code: 'EXECUTION_ERROR',
         message: `Scroll failed: ${error instanceof Error ? error.message : String(error)}`,
         details: {
-          lastError: error instanceof Error ? error.message : String(error)
-        }
+          lastError: error instanceof Error ? error.message : String(error),
+        },
       });
     }
   }
 
-  private async findAndFocusElement(params: any): Promise<{ success: boolean; centerX?: number; centerY?: number }> {
+  private async findAndFocusElement(
+    params: any
+  ): Promise<{ success: boolean; centerX?: number; centerY?: number }> {
     try {
       console.log('[InteractionHandler] 🔍 Finding element to focus');
 
@@ -221,7 +229,7 @@ export class InteractionHandler extends BaseHandler {
       `;
 
       const result = await this.view.webContents.executeJavaScript(script);
-      
+
       if (result.success && result.centerX && result.centerY) {
         const cdp = this.view.webContents.debugger;
 
@@ -230,7 +238,7 @@ export class InteractionHandler extends BaseHandler {
           x: Math.round(result.centerX),
           y: Math.round(result.centerY),
           button: 'left',
-          clickCount: 1
+          clickCount: 1,
         });
 
         await this.sleep(50);
@@ -240,14 +248,13 @@ export class InteractionHandler extends BaseHandler {
           x: Math.round(result.centerX),
           y: Math.round(result.centerY),
           button: 'left',
-          clickCount: 1
+          clickCount: 1,
         });
-        
+
         console.log('[InteractionHandler] ✅ Element found and focused');
       }
-      
-      return result;
 
+      return result;
     } catch (error) {
       console.error('[InteractionHandler] ❌ Find and focus failed:', error);
       return { success: false };
@@ -259,20 +266,20 @@ export class InteractionHandler extends BaseHandler {
    */
   private getKeyCode(key: string): string {
     const keyMap: Record<string, string> = {
-      'Enter': 'Enter',
-      'Escape': 'Escape',
-      'Tab': 'Tab',
-      'Backspace': 'Backspace',
-      'Delete': 'Delete',
-      'ArrowUp': 'ArrowUp',
-      'ArrowDown': 'ArrowDown',
-      'ArrowLeft': 'ArrowLeft',
-      'ArrowRight': 'ArrowRight',
-      'Home': 'Home',
-      'End': 'End',
-      'PageUp': 'PageUp',
-      'PageDown': 'PageDown',
-      'Space': 'Space'
+      Enter: 'Enter',
+      Escape: 'Escape',
+      Tab: 'Tab',
+      Backspace: 'Backspace',
+      Delete: 'Delete',
+      ArrowUp: 'ArrowUp',
+      ArrowDown: 'ArrowDown',
+      ArrowLeft: 'ArrowLeft',
+      ArrowRight: 'ArrowRight',
+      Home: 'Home',
+      End: 'End',
+      PageUp: 'PageUp',
+      PageDown: 'PageDown',
+      Space: 'Space',
     };
 
     return keyMap[key] || key;

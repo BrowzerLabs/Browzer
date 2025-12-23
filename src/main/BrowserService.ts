@@ -1,11 +1,6 @@
 import { BaseWindow, WebContentsView, dialog } from 'electron';
-import { AutocompleteSuggestion, RecordedAction } from '@/shared/types';
-import { RecordingStore } from '@/main/recording';
-import { HistoryService } from '@/main/history/HistoryService';
-import { PasswordManager } from '@/main/password/PasswordManager';
-import { BookmarkService } from '@/main/bookmark';
+
 import { BrowserAutomationExecutor } from './automation';
-import { SessionManager } from '@/main/llm/session/SessionManager';
 import {
   TabService,
   RecordingService,
@@ -16,6 +11,13 @@ import {
 import { SettingsService } from './settings/SettingsService';
 import { DownloadService } from './download/DownloadService';
 import { AdBlockerService } from './adblocker/AdBlockerService';
+
+import { AutocompleteSuggestion, RecordedAction } from '@/shared/types';
+import { RecordingStore } from '@/main/recording';
+import { HistoryService } from '@/main/history/HistoryService';
+import { PasswordManager } from '@/main/password/PasswordManager';
+import { BookmarkService } from '@/main/bookmark';
+import { SessionManager } from '@/main/llm/session/SessionManager';
 
 export class BrowserService {
   // Modular components
@@ -49,10 +51,16 @@ export class BrowserService {
     this.adBlockerService = new AdBlockerService();
 
     // Initialize managers
-    this.navigationService = new NavigationService(this.settingsService, this.historyService);
+    this.navigationService = new NavigationService(
+      this.settingsService,
+      this.historyService
+    );
     this.debuggerService = new DebuggerService();
-    this.downloadService = new DownloadService(this.baseWindow, this.browserView.webContents);
-    
+    this.downloadService = new DownloadService(
+      this.baseWindow,
+      this.browserView.webContents
+    );
+
     this.tabService = new TabService(
       baseWindow,
       browserView,
@@ -63,7 +71,7 @@ export class BrowserService {
       this.debuggerService,
       this.bookmarkService
     );
-    
+
     this.setupTabEventListeners();
     this.setupAdBlocker();
 
@@ -87,7 +95,9 @@ export class BrowserService {
     return this.navigationService.getSearchSuggestions(query);
   }
 
-  public async getAutocompleteSuggestions(query: string): Promise<AutocompleteSuggestion[]> {
+  public async getAutocompleteSuggestions(
+    query: string
+  ): Promise<AutocompleteSuggestion[]> {
     return this.navigationService.getAutocompleteSuggestions(query);
   }
 
@@ -97,7 +107,7 @@ export class BrowserService {
       dialog.showMessageBox({
         type: 'error',
         title: 'No tab active to record.',
-        message: 'Please ensure at least one tab is active for recording'
+        message: 'Please ensure at least one tab is active for recording',
       });
       return false;
     }
@@ -150,10 +160,10 @@ export class BrowserService {
     return this.automationManager.executeAutomation(
       newTab,
       userGoal,
-      recordedSessionId,
+      recordedSessionId
     );
   }
-  
+
   public stopAutomation(sessionId: string): void {
     this.automationManager.stopAutomation(sessionId);
   }
@@ -208,7 +218,11 @@ export class BrowserService {
     return activeTab.automationExecutor;
   }
 
-  public updateLayout(_windowWidth: number, _windowHeight: number, sidebarWidth = 0): void {
+  public updateLayout(
+    _windowWidth: number,
+    _windowHeight: number,
+    sidebarWidth = 0
+  ): void {
     this.tabService.updateLayout(sidebarWidth);
   }
 
@@ -258,9 +272,12 @@ export class BrowserService {
       this.notifyTabsChanged();
     });
 
-    this.tabService.on('tab:reordered', (data: { tabId: string; from: number; to: number }) => {
-      this.notifyTabReordered(data);
-    });
+    this.tabService.on(
+      'tab:reordered',
+      (data: { tabId: string; from: number; to: number }) => {
+        this.notifyTabReordered(data);
+      }
+    );
 
     this.tabService.on('tab:switched', (previousTabId, newTab) => {
       if (this.recordingService.isRecordingActive()) {
@@ -270,7 +287,10 @@ export class BrowserService {
 
     this.tabService.on('context-menu-action', (event: RecordedAction) => {
       if (this.recordingService.isRecordingActive()) {
-        this.recordingService.handleContextMenuAction({...event, tabId: this.tabService.getActiveTabId()});
+        this.recordingService.handleContextMenuAction({
+          ...event,
+          tabId: this.tabService.getActiveTabId(),
+        });
       }
     });
   }
@@ -305,19 +325,26 @@ export class BrowserService {
       return;
     }
     const allViews = this.baseWindow.contentView.children;
-    allViews.forEach(view => {
+    allViews.forEach((view) => {
       if (view instanceof WebContentsView && !view.webContents.isDestroyed()) {
-        view.webContents.send('browser:tabs-updated', this.tabService.getAllTabs());
+        view.webContents.send(
+          'browser:tabs-updated',
+          this.tabService.getAllTabs()
+        );
       }
     });
   }
 
-  private notifyTabReordered(data: { tabId: string; from: number; to: number }): void {
+  private notifyTabReordered(data: {
+    tabId: string;
+    from: number;
+    to: number;
+  }): void {
     if (this.baseWindow.isDestroyed()) {
       return;
     }
     const allViews = this.baseWindow.contentView.children;
-    allViews.forEach(view => {
+    allViews.forEach((view) => {
       if (view instanceof WebContentsView && !view.webContents.isDestroyed()) {
         view.webContents.send('browser:tab-reordered', data);
       }

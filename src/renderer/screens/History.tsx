@@ -1,9 +1,20 @@
 import { useEffect, useState } from 'react';
-import { Search, Trash2, Clock, TrendingUp, Calendar, Loader2Icon, ExternalLink, X, RefreshCcw } from 'lucide-react';
+import {
+  Search,
+  Trash2,
+  Clock,
+  TrendingUp,
+  Calendar,
+  Loader2Icon,
+  ExternalLink,
+  X,
+  RefreshCcw,
+} from 'lucide-react';
+import { toast } from 'sonner';
+
 import type { HistoryEntry, HistoryStats } from '../../shared/types';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
-import { toast } from 'sonner';
 import { formatDate } from '../lib/utils';
 import { Badge } from '../ui/badge';
 import { Checkbox } from '../ui/checkbox';
@@ -14,7 +25,9 @@ export function History() {
   const [stats, setStats] = useState<HistoryStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedEntries, setSelectedEntries] = useState<Set<string>>(new Set());
+  const [selectedEntries, setSelectedEntries] = useState<Set<string>>(
+    new Set()
+  );
   const [timeFilter, setTimeFilter] = useState<'all' | 'today' | 'week'>('all');
 
   useEffect(() => {
@@ -102,7 +115,11 @@ export function History() {
   };
 
   const handleClearAll = async () => {
-    if (!confirm('Are you sure you want to clear all browsing history? This action cannot be undone.')) {
+    if (
+      !confirm(
+        'Are you sure you want to clear all browsing history? This action cannot be undone.'
+      )
+    ) {
       return;
     }
 
@@ -118,7 +135,6 @@ export function History() {
       toast.error('Failed to clear history');
     }
   };
-
 
   const toggleSelectEntry = (id: string) => {
     const newSelected = new Set(selectedEntries);
@@ -189,7 +205,7 @@ export function History() {
           <div>
             <h1 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-3">
               <Clock className="w-5 h-5 text-blue-600" />
-             History
+              History
             </h1>
             {stats && (
               <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">
@@ -199,14 +215,14 @@ export function History() {
           </div>
 
           <div className="flex gap-2">
-            <Button 
-              onClick={() => { 
-                loadHistory(); 
-                loadStats(); 
-                toast.success('History refreshed'); 
-              }} 
-              size='icon-lg'
-              variant='outline'
+            <Button
+              onClick={() => {
+                loadHistory();
+                loadStats();
+                toast.success('History refreshed');
+              }}
+              size="icon-lg"
+              variant="outline"
               disabled={loading}
             >
               <RefreshCcw />
@@ -217,11 +233,11 @@ export function History() {
                 Delete Selected ({selectedEntries.size})
               </Button>
             )}
-            <Button 
-              onClick={handleClearAll} 
-              className='bg-red-100 text-red-600 hover:bg-red-200'
-              size='icon-lg'
-              variant='outline'
+            <Button
+              onClick={handleClearAll}
+              className="bg-red-100 text-red-600 hover:bg-red-200"
+              size="icon-lg"
+              variant="outline"
               title="Clear all history"
             >
               <Trash2 className="w-4 h-4" />
@@ -283,8 +299,12 @@ export function History() {
                   <Calendar className="w-5 h-5 text-blue-600" />
                 </div>
                 <div>
-                  <p className="text-sm text-gray-600 dark:text-gray-400">Today</p>
-                  <p className="text-2xl font-bold text-gray-900 dark:text-white">{stats.todayVisits}</p>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                    Today
+                  </p>
+                  <p className="text-2xl font-bold text-gray-900 dark:text-white">
+                    {stats.todayVisits}
+                  </p>
                 </div>
               </div>
             </div>
@@ -295,8 +315,12 @@ export function History() {
                   <TrendingUp className="w-5 h-5 text-green-600" />
                 </div>
                 <div>
-                  <p className="text-sm text-gray-600 dark:text-gray-400">This Week</p>
-                  <p className="text-2xl font-bold text-gray-900 dark:text-white">{stats.weekVisits}</p>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                    This Week
+                  </p>
+                  <p className="text-2xl font-bold text-gray-900 dark:text-white">
+                    {stats.weekVisits}
+                  </p>
                 </div>
               </div>
             </div>
@@ -307,8 +331,12 @@ export function History() {
                   <Clock className="w-5 h-5 text-purple-600" />
                 </div>
                 <div>
-                  <p className="text-sm text-gray-600 dark:text-gray-400">Total Sites</p>
-                  <p className="text-2xl font-bold text-gray-900 dark:text-white">{stats.totalEntries}</p>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                    Total Sites
+                  </p>
+                  <p className="text-2xl font-bold text-gray-900 dark:text-white">
+                    {stats.totalEntries}
+                  </p>
                 </div>
               </div>
             </div>
@@ -338,7 +366,7 @@ export function History() {
                 <Checkbox
                   checked={selectedEntries.size === filteredHistory.length}
                   onCheckedChange={toggleSelectAll}
-                  className='border-primary'
+                  className="border-primary"
                 />
                 <span className="text-sm text-gray-600 dark:text-gray-400">
                   Select all ({filteredHistory.length})
@@ -361,7 +389,7 @@ export function History() {
                       <Checkbox
                         checked={selectedEntries.has(entry.id)}
                         onCheckedChange={() => toggleSelectEntry(entry.id)}
-                        className='border-primary'
+                        className="border-primary"
                       />
 
                       {entry.favicon ? (
@@ -380,17 +408,17 @@ export function History() {
                       )}
 
                       <div className="flex-1 min-w-0">
-                          <h3 className="text-sm text-gray-900 dark:text-white truncate">
-                            {entry.title}
-                          </h3>
-                          <p 
-                            className="text-xs text-gray-600 dark:text-gray-400 truncate cursor-pointer hover:text-blue-600 dark:hover:text-blue-400"
-                            onClick={() => {
-                              window.browserAPI.createTab(entry.url)
-                            }}
-                          >
-                            {entry.url}
-                          </p>
+                        <h3 className="text-sm text-gray-900 dark:text-white truncate">
+                          {entry.title}
+                        </h3>
+                        <p
+                          className="text-xs text-gray-600 dark:text-gray-400 truncate cursor-pointer hover:text-blue-600 dark:hover:text-blue-400"
+                          onClick={() => {
+                            window.browserAPI.createTab(entry.url);
+                          }}
+                        >
+                          {entry.url}
+                        </p>
                       </div>
 
                       <div className="flex items-center gap-4">

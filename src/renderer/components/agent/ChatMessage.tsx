@@ -1,4 +1,5 @@
 import React from 'react';
+
 import { Item } from '@/renderer/ui/item';
 
 export interface ChatMessageData {
@@ -23,11 +24,13 @@ export function ChatMessage({ message }: ChatMessageProps) {
           isUser
             ? 'bg-blue-600 text-white'
             : isSystem
-            ? 'bg-green-600 text-white'
-            : 'bg-gray-800 text-gray-100'
+              ? 'bg-green-600 text-white'
+              : 'bg-gray-800 text-gray-100'
         }`}
       >
-        <p className="text-xs whitespace-pre-wrap leading-relaxed">{message.content}</p>
+        <p className="text-xs whitespace-pre-wrap leading-relaxed">
+          {message.content}
+        </p>
       </Item>
     </div>
   );

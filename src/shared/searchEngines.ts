@@ -35,11 +35,14 @@ export const SEARCH_ENGINES: SearchEngine[] = [
 export const DEFAULT_SEARCH_ENGINE_ID = 'google';
 
 export function getSearchEngineById(id: string): SearchEngine | undefined {
-  return SEARCH_ENGINES.find(engine => engine.id === id);
+  return SEARCH_ENGINES.find((engine) => engine.id === id);
 }
 
 export function getDefaultSearchEngine(): SearchEngine {
-  return SEARCH_ENGINES.find(engine => engine.id === DEFAULT_SEARCH_ENGINE_ID) || SEARCH_ENGINES[0];
+  return (
+    SEARCH_ENGINES.find((engine) => engine.id === DEFAULT_SEARCH_ENGINE_ID) ||
+    SEARCH_ENGINES[0]
+  );
 }
 
 export function buildSearchUrl(engineId: string, query: string): string {

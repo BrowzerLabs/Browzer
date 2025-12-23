@@ -118,17 +118,17 @@ export interface FormHeuristics {
   // Username/Email field indicators
   usernamePatterns: RegExp[];
   emailPatterns: RegExp[];
-  
+
   // Password field indicators
   passwordPatterns: RegExp[];
   newPasswordPatterns: RegExp[];
   currentPasswordPatterns: RegExp[];
-  
+
   // Form action indicators
   loginActionPatterns: RegExp[];
   signupActionPatterns: RegExp[];
   changePasswordPatterns: RegExp[];
-  
+
   // Submit button indicators
   submitButtonPatterns: RegExp[];
 }

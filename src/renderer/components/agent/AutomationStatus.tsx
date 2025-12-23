@@ -1,5 +1,6 @@
 import React from 'react';
 import { Loader2, CheckCircle2, XCircle, Clock } from 'lucide-react';
+
 import { Item } from '@/renderer/ui/item';
 import { Progress } from '@/renderer/ui/progress';
 
@@ -18,7 +19,12 @@ interface AutomationStatusProps {
   totalCount: number;
 }
 
-export function AutomationStatus({ isExecuting, steps, completedCount, totalCount }: AutomationStatusProps) {
+export function AutomationStatus({
+  isExecuting,
+  steps,
+  completedCount,
+  totalCount,
+}: AutomationStatusProps) {
   if (!isExecuting || steps.length === 0) return null;
 
   const progress = totalCount > 0 ? (completedCount / totalCount) * 100 : 0;
@@ -64,7 +70,9 @@ export function AutomationStatus({ isExecuting, steps, completedCount, totalCoun
               <div className="flex-1 min-w-0">
                 <p className="truncate text-gray-300">{step.description}</p>
                 {step.error && (
-                  <p className="text-red-400 text-[10px] mt-0.5 truncate">{step.error}</p>
+                  <p className="text-red-400 text-[10px] mt-0.5 truncate">
+                    {step.error}
+                  </p>
                 )}
               </div>
             </div>
