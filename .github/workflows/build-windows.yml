@@ -283,45 +283,45 @@ EOF
           VERSION="${{ steps.prepare.outputs.version }}"
           
           cat > release_notes.md <<EOF
-          # Browzer ${VERSION} - Windows
-          
-          ## 📦 Downloads
-          
-          ### Windows
-          
-          Choose the appropriate version for your system:
-          
-          - **64-bit (x64)**: Download \`Browzer-${VERSION}-x64-Setup.exe\`
-          - **ARM64**: Download \`Browzer-${VERSION}-arm64-Setup.exe\` (for Windows on ARM)
-          
-          ### ✅ Installation
-          
-          1. Download the appropriate installer (.exe) for your system
-          2. Run the installer
-          3. Follow the installation wizard
-          4. Launch Browzer from the Start Menu or Desktop shortcut
-          
-          > **Note**: Windows SmartScreen may show a warning for unsigned builds. Click "More info" → "Run anyway" to proceed.
-          
-          ### 🔐 Verification
-          
-          Verify the integrity of your download:
-          
-          \`\`\`powershell
-          Get-FileHash -Algorithm SHA256 Browzer-${VERSION}-x64-Setup.exe
-          \`\`\`
-          
-          Compare with the .sha256 file included in the release.
-          
-          ### 🔄 Auto-Updates
-          
-          Once installed, Browzer will automatically check for and install future updates.
-          
-          ### 📝 What's New
-          
-          <!-- Add your release notes here -->
-          
-          EOF
+# Browzer ${VERSION} - Windows
+
+## 📦 Downloads
+
+### Windows
+
+Choose the appropriate version for your system:
+
+- **64-bit (x64)**: Download \`Browzer-${VERSION}-x64-Setup.exe\`
+- **ARM64**: Download \`Browzer-${VERSION}-arm64-Setup.exe\` (for Windows on ARM)
+
+### ✅ Installation
+
+1. Download the appropriate installer (.exe) for your system
+2. Run the installer
+3. Follow the installation wizard
+4. Launch Browzer from the Start Menu or Desktop shortcut
+
+> **Note**: Windows SmartScreen may show a warning for unsigned builds. Click "More info" → "Run anyway" to proceed.
+
+### 🔐 Verification
+
+Verify the integrity of your download:
+
+\`\`\`powershell
+Get-FileHash -Algorithm SHA256 Browzer-${VERSION}-x64-Setup.exe
+\`\`\`
+
+Compare with the .sha256 file included in the release.
+
+### 🔄 Auto-Updates
+
+Once installed, Browzer will automatically check for and install future updates.
+
+### 📝 What's New
+
+<!-- Add your release notes here -->
+
+EOF
           
           cat release_notes.md
       
