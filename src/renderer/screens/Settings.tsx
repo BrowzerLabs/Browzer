@@ -1,4 +1,13 @@
 import { useEffect, useState } from 'react';
+import {
+  Settings as SettingsIcon,
+  Shield,
+  Palette,
+  Loader2Icon,
+  Key,
+} from 'lucide-react';
+import { toast } from 'sonner';
+
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/renderer/ui/tabs';
 import { ScrollArea } from '@/renderer/ui/scroll-area';
 import { GeneralSettings } from '@/renderer/components/settings/GeneralSettings';
@@ -6,8 +15,6 @@ import { PrivacySettings } from '@/renderer/components/settings/PrivacySettings'
 import { AppearanceSettings } from '@/renderer/components/settings/AppearanceSettings';
 import { PasswordSettings } from '@/renderer/components/settings/PasswordSettings';
 import { AppSettings } from '@/shared/types';
-import { Settings as SettingsIcon, Shield, Palette, Loader2Icon, Key } from 'lucide-react';
-import { toast } from 'sonner';
 import { Separator } from '@/renderer/ui/separator';
 
 export function Settings() {
@@ -63,90 +70,96 @@ export function Settings() {
 
   if (!settings) {
     return (
-      <div className='flex h-full items-center justify-center'>
-        <Loader2Icon className='animate-spin size-4' />
+      <div className="flex h-full items-center justify-center">
+        <Loader2Icon className="animate-spin size-4" />
       </div>
     );
   }
 
   return (
-    <section className='flex h-full flex-col px-8 py-4 bg-slate-100 dark:bg-slate-900'>
-      <div className='border-b px-8 py-2'>
-        <h1 className='text-xl font-semibold'>Settings</h1>
-        <p className='text-muted-foreground mt-1 text-xs'>
+    <section className="flex h-full flex-col px-8 py-4 bg-slate-100 dark:bg-slate-900">
+      <div className="border-b px-8 py-2">
+        <h1 className="text-xl font-semibold">Settings</h1>
+        <p className="text-muted-foreground mt-1 text-xs">
           Manage your browser preferences and configuration
         </p>
       </div>
 
-      <div className='flex flex-1'>
+      <div className="flex flex-1">
         <Tabs
           value={activeTab}
           onValueChange={setActiveTab}
-          orientation='vertical'
-          className='flex w-full flex-row gap-0'
+          orientation="vertical"
+          className="flex w-full flex-row gap-0"
         >
-           <ScrollArea className='w-64'>
-              <TabsList className='flex h-auto w-full flex-col items-stretch justify-start gap-1 rounded-none p-4 bg-transparent'>
-                <TabsTrigger
-                  value='general'
-                  className='justify-start gap-3 rounded-full px-4 py-2.5'
-                >
-                  <SettingsIcon className='h-4 w-4' />
-                  <span>General</span>
-                </TabsTrigger>
-                <TabsTrigger
-                  value='appearance'
-                  className='justify-start gap-3 rounded-full px-4 py-2.5'
-                >
-                  <Palette className='h-4 w-4' />
-                  <span>Appearance</span>
-                </TabsTrigger>
-                <TabsTrigger
-                  value='passwords'
-                  className='justify-start gap-3 rounded-full px-4 py-2.5'
-                >
-                  <Key className='h-4 w-4' />
-                  <span>Passwords</span>
-                </TabsTrigger>
-                <TabsTrigger
-                  value='privacy'
-                  className='justify-start gap-3 rounded-full px-4 py-2.5'
-                >
-                  <Shield className='h-4 w-4' />
-                  <span>Privacy & Security</span>
-                </TabsTrigger>
-              </TabsList>
-            </ScrollArea>
-          
-          <Separator orientation='vertical' />
+          <ScrollArea className="w-64">
+            <TabsList className="flex h-auto w-full flex-col items-stretch justify-start gap-1 rounded-none p-4 bg-transparent">
+              <TabsTrigger
+                value="general"
+                className="justify-start gap-3 rounded-full px-4 py-2.5"
+              >
+                <SettingsIcon className="h-4 w-4" />
+                <span>General</span>
+              </TabsTrigger>
+              <TabsTrigger
+                value="appearance"
+                className="justify-start gap-3 rounded-full px-4 py-2.5"
+              >
+                <Palette className="h-4 w-4" />
+                <span>Appearance</span>
+              </TabsTrigger>
+              <TabsTrigger
+                value="passwords"
+                className="justify-start gap-3 rounded-full px-4 py-2.5"
+              >
+                <Key className="h-4 w-4" />
+                <span>Passwords</span>
+              </TabsTrigger>
+              <TabsTrigger
+                value="privacy"
+                className="justify-start gap-3 rounded-full px-4 py-2.5"
+              >
+                <Shield className="h-4 w-4" />
+                <span>Privacy & Security</span>
+              </TabsTrigger>
+            </TabsList>
+          </ScrollArea>
 
-          <div className='flex-1 overflow-hidden'>
-            <ScrollArea className='h-full'>
-              <div className='mx-auto max-w-5xl p-8'>
-                <TabsContent value='general'>
+          <Separator orientation="vertical" />
+
+          <div className="flex-1 overflow-hidden">
+            <ScrollArea className="h-full">
+              <div className="mx-auto max-w-5xl p-8">
+                <TabsContent value="general">
                   <GeneralSettings
                     settings={settings.general}
-                    onUpdate={(key, value) => handleUpdateSetting('general', key, value)}
+                    onUpdate={(key, value) =>
+                      handleUpdateSetting('general', key, value)
+                    }
                     onReset={() => handleResetCategory('general')}
                   />
                 </TabsContent>
 
-                <TabsContent value='passwords'>
+                <TabsContent value="passwords">
                   <PasswordSettings />
                 </TabsContent>
 
-                <TabsContent value='privacy'>
+                <TabsContent value="privacy">
                   <PrivacySettings
                     settings={settings.privacy}
-                    onUpdate={(key, value) => handleUpdateSetting('privacy', key, value)}
+                    onUpdate={(key, value) =>
+                      handleUpdateSetting('privacy', key, value)
+                    }
                     onReset={() => handleResetCategory('privacy')}
                   />
                 </TabsContent>
 
-                <TabsContent value='appearance'>
+                <TabsContent value="appearance">
                   <AppearanceSettings
                     settings={settings.appearance}
-                    onUpdate={(key, value) => handleUpdateSetting('appearance', key, value)}
+                    onUpdate={(key, value) =>
+                      handleUpdateSetting('appearance', key, value)
+                    }
                     onReset={() => handleResetCategory('appearance')}
                   />
                 </TabsContent>

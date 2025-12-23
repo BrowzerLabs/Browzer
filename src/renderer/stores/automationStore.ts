@@ -1,7 +1,11 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { AutomationEventType, AutomationProgressEvent } from '@/shared/types';
-import { AutomationStatus } from '@/shared/types';
+
+import {
+  AutomationEventType,
+  AutomationProgressEvent,
+  AutomationStatus,
+} from '@/shared/types';
 
 export interface AutomationEventItem {
   id: string;
@@ -47,7 +51,11 @@ interface AutomationStore {
   startNewSession: () => void;
   setSelectedRecording: (recordingId: string | null) => void;
   setUserPrompt: (prompt: string) => void;
-  startAutomation: (userGoal: string, recordingId: string, sessionId: string) => void;
+  startAutomation: (
+    userGoal: string,
+    recordingId: string,
+    sessionId: string
+  ) => void;
   loadStoredSession: (sessionId: string) => Promise<void>;
   loadSessionHistory: () => Promise<void>;
   addEvent: (sessionId: string, event: AutomationProgressEvent) => void;
@@ -76,18 +84,18 @@ export const useAutomationStore = create<AutomationStore>()(
           viewState: 'new_session',
           currentSession: null,
           selectedRecordingId: null,
-          userPrompt: ''
+          userPrompt: '',
         });
       },
-      
+
       setSelectedRecording: (recordingId) => {
         set({ selectedRecordingId: recordingId });
       },
-      
+
       setUserPrompt: (prompt) => {
         set({ userPrompt: prompt });
       },
-      
+
       startAutomation: (userGoal, recordingId, sessionId) => {
         const newSession: AutomationSession = {
           sessionId,
@@ -95,23 +103,24 @@ export const useAutomationStore = create<AutomationStore>()(
           recordingId,
           status: AutomationStatus.RUNNING,
           events: [],
-          startTime: Date.now()
+          startTime: Date.now(),
         };
-        
-        set({ 
+
+        set({
           viewState: 'existing_session',
           currentSession: newSession,
           userPrompt: '', // Clear prompt after submission
-          selectedRecordingId: recordingId // Lock recording selection
+          selectedRecordingId: recordingId, // Lock recording selection
         });
       },
-      
+
       loadStoredSession: async (sessionId) => {
         set({ isLoadingSession: true });
-        
+
         try {
-          const sessionData = await window.browserAPI.loadAutomationSession(sessionId);
-          
+          const sessionData =
+            await window.browserAPI.loadAutomationSession(sessionId);
+
           if (sessionData) {
             const session: AutomationSession = {
               sessionId: sessionData.sessionId,
@@ -122,14 +131,14 @@ export const useAutomationStore = create<AutomationStore>()(
               result: sessionData.result,
               error: sessionData.error,
               startTime: sessionData.startTime,
-              endTime: sessionData.endTime
+              endTime: sessionData.endTime,
             };
-            
+
             set({
               viewState: 'existing_session',
               currentSession: session,
               selectedRecordingId: sessionData.recordingId,
-              isLoadingSession: false
+              isLoadingSession: false,
             });
           }
         } catch (error) {
@@ -137,37 +146,38 @@ export const useAutomationStore = create<AutomationStore>()(
           set({ isLoadingSession: false });
         }
       },
-      
+
       loadSessionHistory: async () => {
         set({ isLoadingHistory: true });
-        
+
         try {
-          const history = await window.browserAPI.getAutomationSessionHistory(5);
-          
+          const history =
+            await window.browserAPI.getAutomationSessionHistory(5);
+
           set({
             sessionHistory: history || [],
-            isLoadingHistory: false
+            isLoadingHistory: false,
           });
         } catch (error) {
           console.error('[AutomationStore] Failed to load history:', error);
           set({ isLoadingHistory: false });
         }
       },
-      
+
       addEvent: (sessionId, event) => {
         const { currentSession } = get();
-        
-        if (!currentSession || (sessionId !== currentSession.sessionId)) {
+
+        if (!currentSession || sessionId !== currentSession.sessionId) {
           alert('No current session found');
           return;
         }
-        
+
         if (event.type === 'step_complete' || event.type === 'step_error') {
           const toolUseId = event.data.toolUseId;
           const existingIndex = currentSession.events.findIndex(
-            e => e.data.toolUseId === toolUseId && e.type === 'step_start'
+            (e) => e.data.toolUseId === toolUseId && e.type === 'step_start'
           );
-          
+
           if (existingIndex !== -1) {
             const updatedEvents = [...currentSession.events];
             updatedEvents[existingIndex] = {
@@ -176,105 +186,105 @@ export const useAutomationStore = create<AutomationStore>()(
               data: {
                 ...updatedEvents[existingIndex].data,
                 ...event.data,
-                status: event.type === 'step_complete' ? 'success' : 'error'
-              }
+                status: event.type === 'step_complete' ? 'success' : 'error',
+              },
             };
-            
+
             set({
               currentSession: {
                 ...currentSession,
-                events: updatedEvents
-              }
+                events: updatedEvents,
+              },
             });
             return;
           }
         }
-        
+
         const eventItem: AutomationEventItem = {
           id: `${event.data.toolUseId || sessionId}-${Date.now()}-${Math.random()}`,
           sessionId,
           type: event.type,
-          data: event.data
+          data: event.data,
         };
-        
+
         set({
           currentSession: {
             ...currentSession,
-            events: [...currentSession.events, eventItem]
-          }
+            events: [...currentSession.events, eventItem],
+          },
         });
       },
-      
+
       completeAutomation: (sessionId, result) => {
         const { currentSession } = get();
-        
+
         if (!currentSession || currentSession.sessionId !== sessionId) {
           return;
         }
-        
+
         set({
           currentSession: {
             ...currentSession,
             status: AutomationStatus.COMPLETED,
             result,
-            endTime: Date.now()
-          }
+            endTime: Date.now(),
+          },
         });
       },
-      
+
       errorAutomation: (sessionId, error) => {
         const { currentSession } = get();
-        
+
         if (!currentSession || currentSession.sessionId !== sessionId) {
           return;
         }
-        
+
         set({
           currentSession: {
             ...currentSession,
             status: AutomationStatus.FAILED,
             error,
-            endTime: Date.now()
-          }
+            endTime: Date.now(),
+          },
         });
       },
-      
+
       stopAutomation: async (sessionId) => {
         const { currentSession } = get();
         if (!currentSession || currentSession.sessionId !== sessionId) {
           alert('Cannot stop automation: session not found or mismatched');
           return;
         }
-        
+
         await window.browserAPI.stopAutomation(sessionId);
         set({
           currentSession: {
             ...currentSession,
             status: AutomationStatus.STOPPED,
             error: 'Automation stopped by user',
-            endTime: Date.now()
-          }
+            endTime: Date.now(),
+          },
         });
       },
-      
+
       clearSession: () => {
         set({
           viewState: 'new_session',
           currentSession: null,
-          selectedRecordingId: null
+          selectedRecordingId: null,
         });
       },
-      
+
       resetPrompt: () => {
         set({ userPrompt: '' });
-      }
+      },
     }),
     {
       name: 'automation-storage',
       partialize: (state) => ({
         currentSessionId: state.currentSession?.sessionId,
-        selectedRecordingId: state.selectedRecordingId
-      })
+        selectedRecordingId: state.selectedRecordingId,
+      }),
     }
   )
 );

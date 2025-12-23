@@ -1,13 +1,15 @@
 import { useEffect, useState } from 'react';
-import { useBrowserAPI } from '@/renderer/hooks/useBrowserAPI';
-import { useSidebarStore } from '@/renderer/store/useSidebarStore';
-import { useOverlayVisibility } from '@/renderer/hooks/useBrowserViewLayer';
+
 import { TabBar } from './TabBar';
 import { NavigationBar } from './NavigationBar';
 import { BookmarkBar } from './BookmarkBar';
 import { Sidebar } from './Sidebar';
 import { RestoreSessionPopup } from './RestoreSessionPopup';
 import { FindBar } from './FindBar';
+
+import { useOverlayVisibility } from '@/renderer/hooks/useBrowserViewLayer';
+import { useSidebarStore } from '@/renderer/store/useSidebarStore';
+import { useBrowserAPI } from '@/renderer/hooks/useBrowserAPI';
 import { useFindStore } from '@/renderer/stores/findStore';
 import { useScrollForwarding } from '@/renderer/hooks/useScrollForwarding';
 
@@ -55,11 +57,13 @@ export function BrowserChrome() {
 
     loadSetting();
 
-    const unsubSettings = window.browserAPI.onSettingsChanged((data: { category: string; key: string; value: unknown }) => {
-      if (data.category === 'appearance' && data.key === 'showBookmarksBar') {
-        setShowBookmarksBar(data.value as boolean);
+    const unsubSettings = window.browserAPI.onSettingsChanged(
+      (data: { category: string; key: string; value: unknown }) => {
+        if (data.category === 'appearance' && data.key === 'showBookmarksBar') {
+          setShowBookmarksBar(data.value as boolean);
+        }
       }
-    });
+    );
 
     return () => {
       unsubSettings();
@@ -70,7 +74,7 @@ export function BrowserChrome() {
     const unsubStart = window.browserAPI.onRecordingStarted(() => {
       showSidebar();
     });
-    
+
     return () => unsubStart();
   }, [showSidebar]);
 
@@ -123,11 +127,13 @@ export function BrowserChrome() {
         />
 
         {showBookmarksBar && (
-          <BookmarkBar onNavigate={(url) => {
-          if (browserAPI.activeTabId) {
-            browserAPI.navigate(browserAPI.activeTabId, url);
-          }
-        }} />
+          <BookmarkBar
+            onNavigate={(url) => {
+              if (browserAPI.activeTabId) {
+                browserAPI.navigate(browserAPI.activeTabId, url);
+              }
+            }}
+          />
         )}
       </div>
 

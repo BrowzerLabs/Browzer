@@ -1,4 +1,4 @@
 export * from './Home';
-export * from './Profile';
+export { default as Profile } from './Profile';
 export * from './SubscriptionPage';
-export * from './NotFound';
+export { default as NotFound } from './NotFound';

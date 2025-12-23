@@ -1,11 +1,12 @@
 import { ReactNode, useEffect, useState, useRef } from 'react';
 import { Navigate } from 'react-router-dom';
-import { useAuth } from '@/renderer/hooks/useAuth';
 import { Loader2, Shield, ShieldCheckIcon } from 'lucide-react';
+
+import { useAuth } from '@/renderer/hooks/useAuth';
 
 /**
  * ProtectedRoute - Protects routes requiring authentication
- * 
+ *
  * Flow:
  * 1. Check if user is authenticated
  * 2. If loading, show spinner
@@ -25,8 +26,9 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
 
   // Initialize browser when authenticated
   useEffect(() => {
-    const shouldInitialize = isAuthenticated && !browserReady && !browserInitRef.current;
-    
+    const shouldInitialize =
+      isAuthenticated && !browserReady && !browserInitRef.current;
+
     if (!shouldInitialize) return;
 
     browserInitRef.current = true;
@@ -58,7 +60,9 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
     return (
       <div className="h-screen flex flex-col gap-2 items-center justify-center bg-background">
         <ShieldCheckIcon className="size-10 animate-pulse" />
-        <p className='text-xs animate-pulse'>Verifying wheather its really you</p>
+        <p className="text-xs animate-pulse">
+          Verifying wheather its really you
+        </p>
       </div>
     );
   }
@@ -73,7 +77,7 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
     return (
       <div className="h-screen flex flex-col items-center justify-center gap-2 text-teal-500 bg-background">
         <Loader2 className="size-7 animate-spin" />
-        <p className='animate-pulse text-xs'>Setting up your Browzer</p>
+        <p className="animate-pulse text-xs">Setting up your Browzer</p>
       </div>
     );
   }

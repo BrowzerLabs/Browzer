@@ -1,7 +1,9 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import Database from 'better-sqlite3';
 import { app } from 'electron';
 import path from 'path';
+
+import Database from 'better-sqlite3';
+
 import {
   StoredSession,
   StoredMessage,
@@ -13,19 +15,23 @@ import {
   UpdateSessionOptions,
   AddMessageOptions,
   AddStepOptions,
-  SessionMetadata
+  SessionMetadata,
 } from './types';
+
 import { AutomationStatus } from '@/shared/types';
 
 export class SessionStore {
   private db: Database.Database;
 
   constructor(dbPath?: string) {
-    const defaultPath = path.join(app.getPath('userData'), 'automation-sessions.db');
+    const defaultPath = path.join(
+      app.getPath('userData'),
+      'automation-sessions.db'
+    );
     this.db = new Database(dbPath || defaultPath);
-    
+
     this.db.pragma('journal_mode = WAL');
-    
+
     this.initializeDatabase();
   }
 
@@ -94,7 +100,7 @@ export class SessionStore {
   createSession(options: CreateSessionOptions): StoredSession {
     const id = options.id ?? this.generateSessionId();
     const now = Date.now();
-    
+
     const metadata: SessionMetadata = {
       totalInputTokens: 0,
       totalOutputTokens: 0,
@@ -104,7 +110,7 @@ export class SessionStore {
       recoveryAttempts: 0,
       totalStepsExecuted: 0,
       phaseNumber: 1,
-      isInRecovery: false
+      isInRecovery: false,
     };
 
     const session: StoredSession = {
@@ -114,7 +120,7 @@ export class SessionStore {
       status: AutomationStatus.RUNNING,
       createdAt: now,
       updatedAt: now,
-      metadata
+      metadata,
     };
 
     const stmt = this.db.prepare(`
@@ -133,10 +139,14 @@ export class SessionStore {
     );
 
     if (options.cachedContext) {
-      this.db.prepare(`
+      this.db
+        .prepare(
+          `
         INSERT INTO session_cache (session_id, cached_context, cache_breakpoints)
         VALUES (?, ?, ?)
-      `).run(id, options.cachedContext, JSON.stringify([]));
+      `
+        )
+        .run(id, options.cachedContext, JSON.stringify([]));
     }
 
     return session;
@@ -184,7 +194,10 @@ export class SessionStore {
     if (options.metadata) {
       const currentSession = this.getSession(sessionId);
       if (currentSession) {
-        const updatedMetadata = { ...currentSession.metadata, ...options.metadata };
+        const updatedMetadata = {
+          ...currentSession.metadata,
+          ...options.metadata,
+        };
         updates.push('metadata = ?');
         values.push(JSON.stringify(updatedMetadata));
       }
@@ -208,7 +221,9 @@ export class SessionStore {
    * Delete session and all related data
    */
   deleteSession(sessionId: string): void {
-    this.db.prepare('DELETE FROM automation_sessions WHERE id = ?').run(sessionId);
+    this.db
+      .prepare('DELETE FROM automation_sessions WHERE id = ?')
+      .run(sessionId);
   }
 
   /**
@@ -226,8 +241,8 @@ export class SessionStore {
     `);
 
     const rows = stmt.all(limit, offset) as any[];
-    
-    return rows.map(row => {
+
+    return rows.map((row) => {
       const metadata = JSON.parse(row.metadata) as SessionMetadata;
       return {
         id: row.id,
@@ -238,7 +253,7 @@ export class SessionStore {
         updatedAt: row.updated_at,
         messageCount: row.message_count,
         stepCount: row.step_count,
-        totalCost: metadata.totalCost
+        totalCost: metadata.totalCost,
       };
     });
   }
@@ -248,7 +263,7 @@ export class SessionStore {
    */
   addMessage(options: AddMessageOptions): StoredMessage {
     const now = Date.now();
-    
+
     const stmt = this.db.prepare(`
       INSERT INTO session_messages (session_id, role, content, tokens, cached, created_at)
       VALUES (?, ?, ?, ?, ?, ?)
@@ -270,7 +285,7 @@ export class SessionStore {
       content: options.content,
       tokens: options.tokens,
       cached: options.cached || false,
-      createdAt: now
+      createdAt: now,
     };
   }
 
@@ -285,15 +300,15 @@ export class SessionStore {
     `);
 
     const rows = stmt.all(sessionId) as any[];
-    
-    return rows.map(row => ({
+
+    return rows.map((row) => ({
       id: row.id,
       sessionId: row.session_id,
       role: row.role,
       content: JSON.parse(row.content),
       tokens: row.tokens,
       cached: row.cached === 1,
-      createdAt: row.created_at
+      createdAt: row.created_at,
     }));
   }
 
@@ -302,7 +317,7 @@ export class SessionStore {
    */
   addStep(options: AddStepOptions): StoredStep {
     const now = Date.now();
-    
+
     const stmt = this.db.prepare(`
       INSERT INTO session_steps (
         session_id, step_number, tool_name, tool_use_id, effects, result, success, error, tokens, created_at
@@ -334,7 +349,7 @@ export class SessionStore {
       success: options.success,
       error: options.error,
       tokens: options.tokens,
-      createdAt: now
+      createdAt: now,
     };
   }
 
@@ -349,8 +364,8 @@ export class SessionStore {
     `);
 
     const rows = stmt.all(sessionId) as any[];
-    
-    return rows.map(row => ({
+
+    return rows.map((row) => ({
       id: row.id,
       sessionId: row.session_id,
       stepNumber: row.step_number,
@@ -361,7 +376,7 @@ export class SessionStore {
       success: row.success === 1,
       error: row.error,
       tokens: row.tokens,
-      createdAt: row.created_at
+      createdAt: row.created_at,
     }));
   }
 
@@ -374,26 +389,30 @@ export class SessionStore {
     `);
 
     const row = stmt.get(sessionId) as any;
-    
+
     if (row) {
       return {
         sessionId: row.session_id,
         cachedContext: row.cached_context,
         cacheBreakpoints: JSON.parse(row.cache_breakpoints),
-        lastCacheHit: row.last_cache_hit
+        lastCacheHit: row.last_cache_hit,
       };
     }
 
     // Create default cache metadata
     const defaultCache: SessionCacheMetadata = {
       sessionId,
-      cacheBreakpoints: []
+      cacheBreakpoints: [],
     };
 
-    this.db.prepare(`
+    this.db
+      .prepare(
+        `
       INSERT INTO session_cache (session_id, cache_breakpoints)
       VALUES (?, ?)
-    `).run(sessionId, JSON.stringify([]));
+    `
+      )
+      .run(sessionId, JSON.stringify([]));
 
     return defaultCache;
   }
@@ -402,25 +421,33 @@ export class SessionStore {
    * Update cache metadata
    */
   updateCacheMetadata(metadata: SessionCacheMetadata): void {
-    this.db.prepare(`
+    this.db
+      .prepare(
+        `
       UPDATE session_cache
       SET cached_context = ?, cache_breakpoints = ?, last_cache_hit = ?
       WHERE session_id = ?
-    `).run(
-      metadata.cachedContext || null,
-      JSON.stringify(metadata.cacheBreakpoints),
-      metadata.lastCacheHit || null,
-      metadata.sessionId
-    );
+    `
+      )
+      .run(
+        metadata.cachedContext || null,
+        JSON.stringify(metadata.cacheBreakpoints),
+        metadata.lastCacheHit || null,
+        metadata.sessionId
+      );
   }
 
   /**
    * Clear old messages (for context editing)
    */
   clearOldMessages(sessionId: string, keepCount: number): number {
-    const totalCount = this.db.prepare(`
+    const totalCount = this.db
+      .prepare(
+        `
       SELECT COUNT(*) as count FROM session_messages WHERE session_id = ?
-    `).get(sessionId) as any;
+    `
+      )
+      .get(sessionId) as any;
 
     if (totalCount.count <= keepCount) {
       return 0;
@@ -428,7 +455,9 @@ export class SessionStore {
 
     const toDelete = totalCount.count - keepCount;
 
-    const result = this.db.prepare(`
+    const result = this.db
+      .prepare(
+        `
       DELETE FROM session_messages
       WHERE id IN (
         SELECT id FROM session_messages
@@ -436,7 +465,9 @@ export class SessionStore {
         ORDER BY created_at ASC
         LIMIT ?
       )
-    `).run(sessionId, toDelete);
+    `
+      )
+      .run(sessionId, toDelete);
 
     return result.changes;
   }
@@ -449,18 +480,22 @@ export class SessionStore {
     stepCount: number;
     totalTokens: number;
   } {
-    const stats = this.db.prepare(`
+    const stats = this.db
+      .prepare(
+        `
       SELECT
         (SELECT COUNT(*) FROM session_messages WHERE session_id = ?) as message_count,
         (SELECT COUNT(*) FROM session_steps WHERE session_id = ?) as step_count,
         (SELECT COALESCE(SUM(tokens), 0) FROM session_messages WHERE session_id = ?) as message_tokens,
         (SELECT COALESCE(SUM(tokens), 0) FROM session_steps WHERE session_id = ?) as step_tokens
-    `).get(sessionId, sessionId, sessionId, sessionId) as any;
+    `
+      )
+      .get(sessionId, sessionId, sessionId, sessionId) as any;
 
     return {
       messageCount: stats.message_count,
       stepCount: stats.step_count,
-      totalTokens: stats.message_tokens + stats.step_tokens
+      totalTokens: stats.message_tokens + stats.step_tokens,
     };
   }
 
@@ -483,7 +518,7 @@ export class SessionStore {
       createdAt: row.created_at,
       updatedAt: row.updated_at,
       completedAt: row.completed_at,
-      metadata: JSON.parse(row.metadata)
+      metadata: JSON.parse(row.metadata),
     };
   }
 

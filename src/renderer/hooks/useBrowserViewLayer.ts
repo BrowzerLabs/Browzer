@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef } from 'react';
+
 import { useBrowserViewLayerStore } from '@/renderer/stores/browserViewLayerStore';
 
 export function useBrowserViewLayer() {
@@ -15,26 +16,35 @@ export function useBrowserViewLayer() {
     };
   }, [unregisterOverlay]);
 
-  const register = useCallback((id: string) => {
-    registeredOverlaysRef.current.add(id);
-    registerOverlay(id);
-  }, [registerOverlay]);
+  const register = useCallback(
+    (id: string) => {
+      registeredOverlaysRef.current.add(id);
+      registerOverlay(id);
+    },
+    [registerOverlay]
+  );
 
-  const unregister = useCallback((id: string) => {
-    registeredOverlaysRef.current.delete(id);
-    unregisterOverlay(id);
-  }, [unregisterOverlay]);
+  const unregister = useCallback(
+    (id: string) => {
+      registeredOverlaysRef.current.delete(id);
+      unregisterOverlay(id);
+    },
+    [unregisterOverlay]
+  );
 
   // Creates a handler for onOpenChange callbacks
-  const createOverlayHandler = useCallback((id: string) => {
-    return (open: boolean) => {
-      if (open) {
-        register(id);
-      } else {
-        unregister(id);
-      }
-    };
-  }, [register, unregister]);
+  const createOverlayHandler = useCallback(
+    (id: string) => {
+      return (open: boolean) => {
+        if (open) {
+          register(id);
+        } else {
+          unregister(id);
+        }
+      };
+    },
+    [register, unregister]
+  );
 
   return {
     registerOverlay: register,
@@ -53,7 +63,7 @@ export function useOverlayVisibility(id: string, isVisible: boolean) {
   useEffect(() => {
     if (isVisible) {
       registerOverlay(id);
-    } 
+    }
     return () => {
       unregisterOverlay(id);
     };

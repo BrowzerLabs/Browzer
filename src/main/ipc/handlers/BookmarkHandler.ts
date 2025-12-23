@@ -1,5 +1,11 @@
 import { BaseHandler } from './base';
-import { CreateBookmarkParams, CreateFolderParams, UpdateBookmarkParams, MoveBookmarkParams } from '@/shared/types';
+
+import {
+  CreateBookmarkParams,
+  CreateFolderParams,
+  UpdateBookmarkParams,
+  MoveBookmarkParams,
+} from '@/shared/types';
 
 export class BookmarkHandler extends BaseHandler {
   register(): void {
@@ -8,9 +14,12 @@ export class BookmarkHandler extends BaseHandler {
     this.handle('bookmark:create', async (_, params: CreateBookmarkParams) => {
       return bookmarkService.createBookmark(params);
     });
-    this.handle('bookmark:create-folder', async (_, params: CreateFolderParams) => {
-      return bookmarkService.createFolder(params);
-    });
+    this.handle(
+      'bookmark:create-folder',
+      async (_, params: CreateFolderParams) => {
+        return bookmarkService.createFolder(params);
+      }
+    );
     this.handle('bookmark:get', async (_, id: string) => {
       return bookmarkService.getById(id);
     });

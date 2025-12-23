@@ -1,8 +1,16 @@
 import { useEffect, useState } from 'react';
+import {
+  CheckCircle,
+  Loader2,
+  AlertCircle,
+  CreditCard,
+  Settings,
+  Database,
+} from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+
 import { Button } from '@/renderer/ui/button';
 import { Card } from '@/renderer/ui/card';
-import { CheckCircle, Loader2, AlertCircle, CreditCard, Settings, Database } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
 import { subscriptionProcessingState } from '@/renderer/notification/notificationCallbacks';
 
 interface SubscriptionUpdate {
@@ -17,29 +25,36 @@ interface SubscriptionUpdate {
 export function SubscriptionSuccessPage() {
   const navigate = useNavigate();
   const [currentStep, setCurrentStep] = useState<string>('waiting');
-  const [currentMessage, setCurrentMessage] = useState<string>('Waiting for payment confirmation...');
+  const [currentMessage, setCurrentMessage] = useState<string>(
+    'Waiting for payment confirmation...'
+  );
   const [isComplete, setIsComplete] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [tier, setTier] = useState<string | null>(null);
 
   useEffect(() => {
-    const unsubscribe = subscriptionProcessingState.subscribe((data: SubscriptionUpdate) => {
-      console.log('[SubscriptionSuccessPage] Received update:', data);
-      
-      if (data.step) {
-        setCurrentStep(data.step);
-        setCurrentMessage(data.message || '');
+    const unsubscribe = subscriptionProcessingState.subscribe(
+      (data: SubscriptionUpdate) => {
+        console.log('[SubscriptionSuccessPage] Received update:', data);
 
-        if (data.step === 'complete') {
-          setIsComplete(true);
-          setTier(data.tier || null);
-        } else if (data.step === 'error') {
-          setError(data.message || 'An error occurred');
+        if (data.step) {
+          setCurrentStep(data.step);
+          setCurrentMessage(data.message || '');
+
+          if (data.step === 'complete') {
+            setIsComplete(true);
+            setTier(data.tier || null);
+          } else if (data.step === 'error') {
+            setError(data.message || 'An error occurred');
+          }
+        } else if (data.event) {
+          console.log(
+            '[SubscriptionSuccessPage] Subscription event:',
+            data.event
+          );
         }
-      } else if (data.event) {
-        console.log('[SubscriptionSuccessPage] Subscription event:', data.event);
       }
-    });
+    );
 
     const fallbackTimer = setTimeout(() => {
       syncSubscriptionFallback();
@@ -101,7 +116,9 @@ export function SubscriptionSuccessPage() {
           <div className="space-y-3">
             <div className="flex items-center justify-center gap-3 text-base">
               {getStepIcon()}
-              <span className="font-medium text-gray-700 dark:text-gray-300">{currentMessage}</span>
+              <span className="font-medium text-gray-700 dark:text-gray-300">
+                {currentMessage}
+              </span>
             </div>
             <p className="text-sm text-gray-500 dark:text-gray-400">
               This usually takes just a few seconds
@@ -147,8 +164,8 @@ export function SubscriptionSuccessPage() {
           </div>
         )}
         <p className="text-gray-600 dark:text-gray-400 mb-8">
-          Your subscription has been activated successfully! You now have access to all
-          premium features.
+          Your subscription has been activated successfully! You now have access
+          to all premium features.
         </p>
         <Button onClick={handleViewSubscription} className="w-full" size="lg">
           View Subscription Details

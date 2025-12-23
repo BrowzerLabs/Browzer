@@ -1,11 +1,13 @@
 import { WebContentsView } from 'electron';
+
 import { PasswordManager } from '../PasswordManager';
 import { PasswordPromptData, FormSubmission } from '../types';
+
 import { jsonStringifyForJS } from '@/main/utils/jsEscape';
 
 /**
  * PasswordPromptService - Chrome-like save/update password prompts
- * 
+ *
  * Features:
  * - Native-looking save prompt
  * - Update prompt for existing credentials
@@ -44,31 +46,50 @@ export class PasswordPromptService {
       }
 
       // Check if credential already exists
-      const existingCredentials = this.passwordManager.getCredentialsForOrigin(origin);
-      const existingCredential = existingCredentials.find(c => c.username === identifier);
+      const existingCredentials =
+        this.passwordManager.getCredentialsForOrigin(origin);
+      const existingCredential = existingCredentials.find(
+        (c) => c.username === identifier
+      );
 
       if (existingCredential) {
         // Check if password changed
-        const savedPassword = this.passwordManager.getPassword(existingCredential.id);
+        const savedPassword = this.passwordManager.getPassword(
+          existingCredential.id
+        );
         if (savedPassword !== password) {
           // Show update prompt
-          await this.showUpdatePrompt(origin, identifier, password, existingCredential.id);
+          await this.showUpdatePrompt(
+            origin,
+            identifier,
+            password,
+            existingCredential.id
+          );
         } else {
-          console.log('[PasswordPromptService] Password unchanged, no prompt needed');
+          console.log(
+            '[PasswordPromptService] Password unchanged, no prompt needed'
+          );
         }
       } else {
         // Show save prompt
         await this.showSavePrompt(origin, identifier, password);
       }
     } catch (error) {
-      console.error('[PasswordPromptService] Error handling form submission:', error);
+      console.error(
+        '[PasswordPromptService] Error handling form submission:',
+        error
+      );
     }
   }
 
   /**
    * Show save password prompt
    */
-  private async showSavePrompt(origin: string, username: string, password: string): Promise<void> {
+  private async showSavePrompt(
+    origin: string,
+    username: string,
+    password: string
+  ): Promise<void> {
     if (this.promptShown) {
       console.log('[PasswordPromptService] Prompt already shown');
       return;
@@ -265,13 +286,16 @@ export class PasswordPromptService {
 
             console.log('[Browzer] ✅ Save password prompt shown');
           })();
-        `
+        `,
       });
 
       this.promptShown = true;
       console.log('[PasswordPromptService] Save prompt shown for:', username);
     } catch (error) {
-      console.error('[PasswordPromptService] Error showing save prompt:', error);
+      console.error(
+        '[PasswordPromptService] Error showing save prompt:',
+        error
+      );
     }
   }
 
@@ -439,22 +463,33 @@ export class PasswordPromptService {
 
             console.log('[Browzer] ✅ Update password prompt shown');
           })();
-        `
+        `,
       });
 
       this.promptShown = true;
       console.log('[PasswordPromptService] Update prompt shown for:', username);
     } catch (error) {
-      console.error('[PasswordPromptService] Error showing update prompt:', error);
+      console.error(
+        '[PasswordPromptService] Error showing update prompt:',
+        error
+      );
     }
   }
 
   /**
    * Handle save password action
    */
-  public async handleSavePassword(origin: string, username: string, password: string): Promise<boolean> {
+  public async handleSavePassword(
+    origin: string,
+    username: string,
+    password: string
+  ): Promise<boolean> {
     try {
-      const success = await this.passwordManager.saveCredential(origin, username, password);
+      const success = await this.passwordManager.saveCredential(
+        origin,
+        username,
+        password
+      );
       if (success) {
         this.clearPendingPrompt();
         this.promptShown = false;
@@ -477,7 +512,11 @@ export class PasswordPromptService {
   ): Promise<boolean> {
     try {
       // saveCredential will update if exists
-      const success = await this.passwordManager.saveCredential(origin, username, password);
+      const success = await this.passwordManager.saveCredential(
+        origin,
+        username,
+        password
+      );
       if (success) {
         this.clearPendingPrompt();
         this.promptShown = false;
@@ -506,7 +545,9 @@ export class PasswordPromptService {
   public handleDismiss(): void {
     this.clearPendingPrompt();
     this.promptShown = false;
-    console.log('[PasswordPromptService] Prompt dismissed, will show again on next submit');
+    console.log(
+      '[PasswordPromptService] Prompt dismissed, will show again on next submit'
+    );
   }
 
   /**

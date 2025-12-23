@@ -1,4 +1,5 @@
 import { ReactNode, MouseEvent } from 'react';
+
 import { cn } from '@/renderer/lib/utils';
 
 interface LinkProps {
@@ -9,12 +10,12 @@ interface LinkProps {
    * - Browser tabs: Use full URLs to open in browser tab
    */
   href: string;
-  
+
   /**
    * Link content
    */
   children: ReactNode;
-  
+
   /**
    * Where to open the link
    * - 'internal': Navigate within the app (hash routing)
@@ -22,12 +23,12 @@ interface LinkProps {
    * - 'external': Open in system default browser (external to app)
    */
   target?: 'internal' | 'tab' | 'external';
-  
+
   /**
    * Additional CSS classes
    */
   className?: string;
-  
+
   /**
    * Click handler (called before navigation)
    */
@@ -36,38 +37,37 @@ interface LinkProps {
 
 /**
  * Universal Link component for Browzer
- * 
+ *
  * Handles three types of navigation:
  * 1. Internal routing (hash-based for internal pages like settings)
  * 2. Browser tab navigation (opens URL in new tab within Browzer)
  * 3. External links (opens in system default browser)
- * 
+ *
  * @example
  * // Internal navigation
  * <Link href="#/settings">Settings</Link>
- * 
+ *
  * @example
  * // Open in browser tab
  * <Link href="https://github.com" target="tab">GitHub</Link>
- * 
+ *
  * @example
  * // Open in external browser
  * <Link href="https://google.com" target="external">Google</Link>
  */
-export function Link({ 
-  href, 
-  children, 
-  target = 'internal', 
+export function Link({
+  href,
+  children,
+  target = 'internal',
   className,
-  onClick 
+  onClick,
 }: LinkProps) {
-  
   const handleClick = async (e: MouseEvent<HTMLAnchorElement>) => {
     e.preventDefault();
-    
+
     // Call custom onClick if provided
     onClick?.(e);
-    
+
     try {
       if (target === 'internal') {
         // Internal hash routing
@@ -96,7 +96,7 @@ export function Link({
       console.error('Link navigation failed:', error);
     }
   };
-  
+
   return (
     <a
       href={href}

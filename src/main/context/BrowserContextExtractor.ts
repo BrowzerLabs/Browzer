@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { WebContentsView } from 'electron';
+
 import {
   BrowserContext,
   ContextExtractionOptions,
@@ -23,14 +24,16 @@ export class BrowserContextExtractor {
   /**
    * Extract browser context
    */
-  public async extractContext(options: ContextExtractionOptions): Promise<ContextExtractionResult> {
+  public async extractContext(
+    options: ContextExtractionOptions
+  ): Promise<ContextExtractionResult> {
     const startTime = Date.now();
 
     if (!this.view) {
       return {
         success: false,
         error: 'No WebContentsView set',
-        duration: Date.now() - startTime
+        duration: Date.now() - startTime,
       };
     }
 
@@ -43,7 +46,7 @@ export class BrowserContextExtractor {
         return {
           success: false,
           error: result.error || 'Context extraction failed',
-          duration: Date.now() - startTime
+          duration: Date.now() - startTime,
         };
       }
 
@@ -56,24 +59,25 @@ export class BrowserContextExtractor {
         tabId: options.tabId,
         url,
         title,
-        dom: result.dom!
+        dom: result.dom!,
       };
 
       const duration = Date.now() - startTime;
-      console.log(`[ContextExtractor] ✅ Context extracted in ${duration}ms - ${result.dom!.stats.interactiveElements} elements`);
+      console.log(
+        `[ContextExtractor] ✅ Context extracted in ${duration}ms - ${result.dom!.stats.interactiveElements} elements`
+      );
 
       return {
         success: true,
         context,
-        duration
+        duration,
       };
-
     } catch (error) {
       console.error('[ContextExtractor] ❌ Extraction failed:', error);
       return {
         success: false,
         error: (error as Error).message,
-        duration: Date.now() - startTime
+        duration: Date.now() - startTime,
       };
     }
   }
@@ -81,7 +85,9 @@ export class BrowserContextExtractor {
   /**
    * UNIFIED SCRIPT: Scroll + Extract in ONE browser execution
    */
-  private async executeExtractionScript(options: ContextExtractionOptions): Promise<{
+  private async executeExtractionScript(
+    options: ContextExtractionOptions
+  ): Promise<{
     success: boolean;
     error?: string;
     dom?: DOMContext;
@@ -318,12 +324,11 @@ export class BrowserContextExtractor {
 
       const result = await this.view!.webContents.executeJavaScript(script);
       return result;
-
     } catch (error) {
       console.error('[ContextExtractor] ❌ Script execution failed:', error);
       return {
         success: false,
-        error: error instanceof Error ? error.message : String(error)
+        error: error instanceof Error ? error.message : String(error),
       };
     }
   }

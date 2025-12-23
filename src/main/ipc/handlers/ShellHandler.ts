@@ -1,4 +1,5 @@
 import { shell } from 'electron';
+
 import { BaseHandler } from './base';
 
 export class ShellHandler extends BaseHandler {

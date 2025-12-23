@@ -18,6 +18,7 @@ import {
   arrayMove,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+
 import type { TabGroup, TabInfo } from '@/shared/types';
 import { cn } from '@/renderer/lib/utils';
 import { Button } from '@/renderer/ui/button';
@@ -54,18 +55,22 @@ interface TabBarProps {
   onMoveTabLeft?: () => void;
   onMoveTabRight?: () => void;
   onCreateGroup?: (name?: string, color?: string) => Promise<TabGroup>;
-  onUpdateGroup?: (groupId: string, name?: string, color?: string) => Promise<boolean>;
+  onUpdateGroup?: (
+    groupId: string,
+    name?: string,
+    color?: string
+  ) => Promise<boolean>;
   onAssignGroup?: (tabId: string, groupId: string | null) => Promise<boolean>;
   onRemoveTabGroup?: (groupId: string) => Promise<boolean>;
   onToggleGroupCollapse?: (groupId: string) => Promise<boolean>;
 }
 
-export function TabBar({ 
-  tabs, 
-  activeTabId, 
+export function TabBar({
+  tabs,
+  activeTabId,
   tabGroups,
-  onTabClick, 
-  onTabClose, 
+  onTabClick,
+  onTabClose,
   onNewTab,
   onMoveTabLeft,
   onMoveTabRight,
@@ -80,22 +85,30 @@ export function TabBar({
   const [shouldFixButton, setShouldFixButton] = useState<boolean>(false);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [localTabs, setLocalTabs] = useState(tabs);
-  
+
   const visibleTabs = localTabs.filter((tab) => {
     if (!tab.group) return true;
     if (!tab.group.collapsed) return true;
     if (tab.id === activeTabId) return true;
-    
-    const activeTabInGroup = localTabs.find(t => t.group?.id === tab.group?.id && t.id === activeTabId);
+
+    const activeTabInGroup = localTabs.find(
+      (t) => t.group?.id === tab.group?.id && t.id === activeTabId
+    );
     if (activeTabInGroup) return false;
-    
-    const firstGroupIndex = localTabs.findIndex(t => t.group?.id === tab.group?.id);
+
+    const firstGroupIndex = localTabs.findIndex(
+      (t) => t.group?.id === tab.group?.id
+    );
     return localTabs[firstGroupIndex].id === tab.id;
   });
 
   const [isFullScreen, setIsFullScreen] = useState(false);
-  const [platform, setPlatform] = useState<'darwin' | 'win32' | 'linux'>('darwin');
-  const [pendingGroupTabId, setPendingGroupTabId] = useState<string | null>(null);
+  const [platform, setPlatform] = useState<'darwin' | 'win32' | 'linux'>(
+    'darwin'
+  );
+  const [pendingGroupTabId, setPendingGroupTabId] = useState<string | null>(
+    null
+  );
   const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
   const [isGroupDialogOpen, setIsGroupDialogOpen] = useState(false);
   const [newGroupName, setNewGroupName] = useState('');
@@ -105,37 +118,53 @@ export function TabBar({
   const handleMenuOpenChange = createOverlayHandler('tab-menu');
   const handleGroupDialogChange = createOverlayHandler('tab-group-dialog');
 
-  const handleGroupDialogOpenChange = useCallback((open: boolean) => {
-    setIsGroupDialogOpen(open);
-    handleGroupDialogChange(open);
-    if (!open) {
-      setPendingGroupTabId(null);
-      setEditingGroupId(null);
+  const handleGroupDialogOpenChange = useCallback(
+    (open: boolean) => {
+      setIsGroupDialogOpen(open);
+      handleGroupDialogChange(open);
+      if (!open) {
+        setPendingGroupTabId(null);
+        setEditingGroupId(null);
+        setNewGroupName('');
+      }
+    },
+    [handleGroupDialogChange]
+  );
+
+  const startCreateGroup = useCallback(
+    (tabId: string) => {
+      setPendingGroupTabId(tabId);
       setNewGroupName('');
-    }
-  }, [handleGroupDialogChange]);
+      const nextColor = GROUP_COLORS[tabGroups.length % GROUP_COLORS.length];
+      setNewGroupColor(nextColor);
+      handleGroupDialogOpenChange(true);
+    },
+    [tabGroups.length, handleGroupDialogOpenChange]
+  );
 
-  const startCreateGroup = useCallback((tabId: string) => {
-    setPendingGroupTabId(tabId);
-    setNewGroupName('');
-    const nextColor = GROUP_COLORS[(tabGroups.length) % GROUP_COLORS.length];
-    setNewGroupColor(nextColor);
-    handleGroupDialogOpenChange(true);
-  }, [tabGroups.length, handleGroupDialogOpenChange]);
-
-  const startEditGroup = useCallback((group: TabGroup) => {
-    setEditingGroupId(group.id);
-    setNewGroupName(group.name);
-    setNewGroupColor(group.color);
-    handleGroupDialogOpenChange(true);
-  }, [handleGroupDialogOpenChange]);
+  const startEditGroup = useCallback(
+    (group: TabGroup) => {
+      setEditingGroupId(group.id);
+      setNewGroupName(group.name);
+      setNewGroupColor(group.color);
+      handleGroupDialogOpenChange(true);
+    },
+    [handleGroupDialogOpenChange]
+  );
 
   const handleCreateGroupSubmit = useCallback(async () => {
     try {
       if (editingGroupId && onUpdateGroup) {
-        await onUpdateGroup(editingGroupId, newGroupName.trim() || undefined, newGroupColor);
+        await onUpdateGroup(
+          editingGroupId,
+          newGroupName.trim() || undefined,
+          newGroupColor
+        );
       } else if (onCreateGroup) {
-        const group = await onCreateGroup(newGroupName.trim() || undefined, newGroupColor);
+        const group = await onCreateGroup(
+          newGroupName.trim() || undefined,
+          newGroupColor
+        );
         if (group && pendingGroupTabId) {
           await onAssignGroup?.(pendingGroupTabId, group.id);
         }
@@ -145,8 +174,17 @@ export function TabBar({
     } finally {
       handleGroupDialogOpenChange(false);
     }
-  }, [newGroupColor, newGroupName, onAssignGroup, onCreateGroup, onUpdateGroup, editingGroupId, pendingGroupTabId, handleGroupDialogOpenChange]);
-  
+  }, [
+    newGroupColor,
+    newGroupName,
+    onAssignGroup,
+    onCreateGroup,
+    onUpdateGroup,
+    editingGroupId,
+    pendingGroupTabId,
+    handleGroupDialogOpenChange,
+  ]);
+
   useEffect(() => {
     setLocalTabs(tabs);
   }, [tabs]);
@@ -169,14 +207,20 @@ export function TabBar({
     const unsubscribe =
       window.browserAPI.onFullScreenChanged?.((full: boolean) => {
         setIsFullScreen(full);
-      }) ?? (() => {});
+      }) ??
+      (() => {
+        // No-op unsubscribe when listener is not available
+      });
 
     initFullScreenState();
 
     return () => unsubscribe();
   }, []);
-  
-  const gap = visibleTabs.length > LAYOUT.COMPACT_THRESHOLD ? LAYOUT.GAP_COMPACT : LAYOUT.GAP_NORMAL;
+
+  const gap =
+    visibleTabs.length > LAYOUT.COMPACT_THRESHOLD
+      ? LAYOUT.GAP_COMPACT
+      : LAYOUT.GAP_NORMAL;
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -197,16 +241,21 @@ export function TabBar({
   const handleDragEnd = async (event: DragEndEvent) => {
     const { active, over } = event;
     setActiveId(null);
-    
+
     if (!over || active.id === over.id) return;
 
-    const realOldIndex = localTabs.findIndex(t => t.id === active.id);
-    const realNewIndex = localTabs.findIndex(t => t.id === over.id);
-    
-    if (realOldIndex === -1 || realNewIndex === -1 || realOldIndex === realNewIndex) return;
-    
-    setLocalTabs(prev => arrayMove(prev, realOldIndex, realNewIndex));
-    
+    const realOldIndex = localTabs.findIndex((t) => t.id === active.id);
+    const realNewIndex = localTabs.findIndex((t) => t.id === over.id);
+
+    if (
+      realOldIndex === -1 ||
+      realNewIndex === -1 ||
+      realOldIndex === realNewIndex
+    )
+      return;
+
+    setLocalTabs((prev) => arrayMove(prev, realOldIndex, realNewIndex));
+
     try {
       await window.browserAPI.reorderTab(active.id as string, realNewIndex);
     } catch (error) {
@@ -215,17 +264,20 @@ export function TabBar({
     }
   };
 
-  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
-    if ((e.ctrlKey || e.metaKey) && e.shiftKey) {
-      if (e.key === 'ArrowLeft') {
-        e.preventDefault();
-        onMoveTabLeft?.();
-      } else if (e.key === 'ArrowRight') {
-        e.preventDefault();
-        onMoveTabRight?.();
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey) {
+        if (e.key === 'ArrowLeft') {
+          e.preventDefault();
+          onMoveTabLeft?.();
+        } else if (e.key === 'ArrowRight') {
+          e.preventDefault();
+          onMoveTabRight?.();
+        }
       }
-    }
-  }, [onMoveTabLeft, onMoveTabRight]);
+    },
+    [onMoveTabLeft, onMoveTabRight]
+  );
 
   useEffect(() => {
     const calculateTabWidth = () => {
@@ -235,20 +287,35 @@ export function TabBar({
       if (tabCount === 0) return;
 
       const containerWidth = containerRef.current.offsetWidth;
-      const currentGap = tabCount > LAYOUT.COMPACT_THRESHOLD ? LAYOUT.GAP_COMPACT : LAYOUT.GAP_NORMAL;
+      const currentGap =
+        tabCount > LAYOUT.COMPACT_THRESHOLD
+          ? LAYOUT.GAP_COMPACT
+          : LAYOUT.GAP_NORMAL;
       const gapSpace = (tabCount - 1) * currentGap;
-      
+
       const isMac = platform === 'darwin';
       const isWindows = platform === 'win32';
-      const paddingLeft = isFullScreen ? 2 : (isMac ? LAYOUT.PADDING_LEFT : 8);
-      const paddingRight = isWindows ? LAYOUT.WINDOWS_CONTROLS_WIDTH : LAYOUT.PADDING_RIGHT;
-      
-      const availableSpace = containerWidth - paddingLeft - paddingRight - LAYOUT.NEW_TAB_BUTTON_SPACE - gapSpace;
+      const paddingLeft = isFullScreen ? 2 : isMac ? LAYOUT.PADDING_LEFT : 8;
+      const paddingRight = isWindows
+        ? LAYOUT.WINDOWS_CONTROLS_WIDTH
+        : LAYOUT.PADDING_RIGHT;
+
+      const availableSpace =
+        containerWidth -
+        paddingLeft -
+        paddingRight -
+        LAYOUT.NEW_TAB_BUTTON_SPACE -
+        gapSpace;
       const calculatedWidthFixed = Math.floor(availableSpace / tabCount);
-      
+
       // Allow tabs to shrink down to just show favicon + minimal padding (16px icon + 8px padding (px-1) = 24px minimum)
       const minRequiredWidth = 24;
-      setTabWidth(Math.max(minRequiredWidth, Math.min(LAYOUT.MAX_TAB_WIDTH, calculatedWidthFixed)));
+      setTabWidth(
+        Math.max(
+          minRequiredWidth,
+          Math.min(LAYOUT.MAX_TAB_WIDTH, calculatedWidthFixed)
+        )
+      );
     };
 
     calculateTabWidth();
@@ -256,29 +323,34 @@ export function TabBar({
     return () => window.removeEventListener('resize', calculateTabWidth);
   }, [visibleTabs.length, isFullScreen, platform]);
 
-  const activeTab = activeId ? localTabs.find(t => t.id === activeId) : null;
+  const activeTab = activeId ? localTabs.find((t) => t.id === activeId) : null;
 
   return (
     <>
-      <div 
+      <div
         ref={containerRef}
         className={cn(
           'flex items-center h-9 tab-bar-draggable overflow-hidden bg-background',
-          isFullScreen ? 'pl-2 pr-2' : (
-            platform === 'darwin' ? 'pl-20 pr-2' : 'pl-2 pr-36'
-          )
+          isFullScreen
+            ? 'pl-2 pr-2'
+            : platform === 'darwin'
+              ? 'pl-20 pr-2'
+              : 'pl-2 pr-36'
         )}
         onDoubleClick={handleDoubleClick}
         onKeyDown={handleKeyDown}
         role="tablist"
         aria-label="Browser tabs"
       >
-        <div 
+        <div
           className={cn(
-            "flex items-center",
-            shouldFixButton ? "flex-1 overflow-hidden pr-2" : "overflow-hidden"
+            'flex items-center',
+            shouldFixButton ? 'flex-1 overflow-hidden pr-2' : 'overflow-hidden'
           )}
-          style={{ gap: `${gap}px`, paddingRight: shouldFixButton ? '0' : '8px' }}
+          style={{
+            gap: `${gap}px`,
+            paddingRight: shouldFixButton ? '0' : '8px',
+          }}
         >
           <DndContext
             sensors={sensors}
@@ -286,12 +358,16 @@ export function TabBar({
             onDragStart={handleDragStart}
             onDragEnd={handleDragEnd}
           >
-            <SortableContext items={visibleTabs.map(t => t.id)} strategy={horizontalListSortingStrategy}>
+            <SortableContext
+              items={visibleTabs.map((t) => t.id)}
+              strategy={horizontalListSortingStrategy}
+            >
               {visibleTabs.map((tab) => {
                 const index = visibleTabs.indexOf(tab);
                 const prevTab = index > 0 ? visibleTabs[index - 1] : null;
-                const isGroupStart = tab.group && (!prevTab || prevTab.group?.id !== tab.group.id);
-                
+                const isGroupStart =
+                  tab.group && (!prevTab || prevTab.group?.id !== tab.group.id);
+
                 return (
                   <SortableTab
                     key={tab.id}
@@ -303,15 +379,29 @@ export function TabBar({
                     width={tabWidth}
                     tabGroups={tabGroups}
                     isGroupStart={!!isGroupStart}
-                    isGroupCollapsed={tab.group?.collapsed && tab.id !== activeTabId}
+                    isGroupCollapsed={
+                      tab.group?.collapsed && tab.id !== activeTabId
+                    }
                     isAnyDragging={activeId !== null}
-                    onAssignGroup={(groupId) => onAssignGroup?.(tab.id, groupId)}
+                    onAssignGroup={(groupId) =>
+                      onAssignGroup?.(tab.id, groupId)
+                    }
                     onCreateGroupRequested={() => startCreateGroup(tab.id)}
-                    onEditGroupRequested={() => tab.group ? startEditGroup(tab.group) : undefined}
+                    onEditGroupRequested={() =>
+                      tab.group ? startEditGroup(tab.group) : undefined
+                    }
                     onMenuOpenChange={(open) => handleMenuOpenChange(open)}
                     onRemoveGroup={() => onAssignGroup?.(tab.id, null)}
-                    onDeleteGroup={() => tab.group?.id ? onRemoveTabGroup?.(tab.group.id) : undefined}
-                    onToggleCollapse={() => tab.group?.id ? onToggleGroupCollapse?.(tab.group.id) : undefined}
+                    onDeleteGroup={() =>
+                      tab.group?.id
+                        ? onRemoveTabGroup?.(tab.group.id)
+                        : undefined
+                    }
+                    onToggleCollapse={() =>
+                      tab.group?.id
+                        ? onToggleGroupCollapse?.(tab.group.id)
+                        : undefined
+                    }
                   />
                 );
               })}
@@ -333,8 +423,8 @@ export function TabBar({
             <Button
               onClick={onNewTab}
               title="New Tab (Ctrl+T)"
-              size='icon-sm'
-              variant='outline'
+              size="icon-sm"
+              variant="outline"
               className="interactive flex-shrink-0"
             >
               <Plus className="w-4 h-4" />
@@ -346,8 +436,8 @@ export function TabBar({
           <Button
             onClick={onNewTab}
             title="New Tab (Ctrl+T)"
-            size='icon-sm'
-            variant='outline'
+            size="icon-sm"
+            variant="outline"
             className="interactive flex-shrink-0"
           >
             <Plus className="w-4 h-4" />
@@ -355,12 +445,22 @@ export function TabBar({
         )}
       </div>
 
-      <Dialog open={isGroupDialogOpen} onOpenChange={handleGroupDialogOpenChange}>
-        <DialogContent className="max-w-sm" onOpenAutoFocus={(e) => e.preventDefault()}>
+      <Dialog
+        open={isGroupDialogOpen}
+        onOpenChange={handleGroupDialogOpenChange}
+      >
+        <DialogContent
+          className="max-w-sm"
+          onOpenAutoFocus={(e) => e.preventDefault()}
+        >
           <DialogHeader>
-            <DialogTitle>{editingGroupId ? 'Edit group' : 'New group'}</DialogTitle>
+            <DialogTitle>
+              {editingGroupId ? 'Edit group' : 'New group'}
+            </DialogTitle>
             <DialogDescription className="text-sm">
-              {editingGroupId ? 'Update the label and color for this group.' : 'Create a clean label and color, then assign it to the tab.'}
+              {editingGroupId
+                ? 'Update the label and color for this group.'
+                : 'Create a clean label and color, then assign it to the tab.'}
             </DialogDescription>
           </DialogHeader>
 
@@ -398,7 +498,10 @@ export function TabBar({
           </div>
 
           <DialogFooter className="mt-2">
-            <Button variant="outline" onClick={() => handleGroupDialogOpenChange(false)}>
+            <Button
+              variant="outline"
+              onClick={() => handleGroupDialogOpenChange(false)}
+            >
               Cancel
             </Button>
             <Button onClick={handleCreateGroupSubmit}>
@@ -431,14 +534,27 @@ interface SortableTabProps {
   isAnyDragging?: boolean;
 }
 
-function SortableTab({ tab, isActive, isDragging, onClick, onClose, width, tabGroups, onAssignGroup, onCreateGroupRequested, onEditGroupRequested, onMenuOpenChange, onRemoveGroup, onDeleteGroup, onToggleCollapse, isGroupStart, isGroupCollapsed, isAnyDragging }: SortableTabProps) {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-  } = useSortable({ id: tab.id });
+function SortableTab({
+  tab,
+  isActive,
+  isDragging,
+  onClick,
+  onClose,
+  width,
+  tabGroups,
+  onAssignGroup,
+  onCreateGroupRequested,
+  onEditGroupRequested,
+  onMenuOpenChange,
+  onRemoveGroup,
+  onDeleteGroup,
+  onToggleCollapse,
+  isGroupStart,
+  isGroupCollapsed,
+  isAnyDragging,
+}: SortableTabProps) {
+  const { attributes, listeners, setNodeRef, transform, transition } =
+    useSortable({ id: tab.id });
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -520,11 +636,11 @@ function SortableTab({ tab, isActive, isDragging, onClick, onClose, width, tabGr
   );
 
   return (
-    <motion.div 
+    <motion.div
       className="flex items-center gap-0.5"
-      layout={!isAnyDragging ? "position" : false}
+      layout={!isAnyDragging ? 'position' : false}
       transition={{
-        layout: { duration: 0.2, ease: "easeInOut" }
+        layout: { duration: 0.2, ease: 'easeInOut' },
       }}
     >
       {isGroupStart && tab.group && (
@@ -535,13 +651,15 @@ function SortableTab({ tab, isActive, isDragging, onClick, onClose, width, tabGr
                 e.stopPropagation();
                 onToggleCollapse?.();
               }}
-              {...(isGroupCollapsed ? { ref: setNodeRef, ...attributes, ...listeners } : {})}
+              {...(isGroupCollapsed
+                ? { ref: setNodeRef, ...attributes, ...listeners }
+                : {})}
               className={cn(
-                "flex items-center px-2 h-7 rounded-sm mr-0.5 whitespace-nowrap text-xs font-medium text-white shadow-sm transition-opacity hover:opacity-90",
-                "interactive focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-blue-500"
+                'flex items-center px-2 h-7 rounded-sm mr-0.5 whitespace-nowrap text-xs font-medium text-white shadow-sm transition-opacity hover:opacity-90',
+                'interactive focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-blue-500'
               )}
               style={{ backgroundColor: tab.group.color }}
-              title={isGroupCollapsed ? "Expand group" : "Collapse group"}
+              title={isGroupCollapsed ? 'Expand group' : 'Collapse group'}
             >
               {tab.group.name}
             </button>
@@ -575,20 +693,24 @@ function SortableTab({ tab, isActive, isDragging, onClick, onClose, width, tabGr
             >
               {/* Colored border for grouped tabs */}
               {tab.group && (
-                <div 
+                <div
                   className="absolute inset-0 rounded-xl pointer-events-none"
-                  style={{ 
+                  style={{
                     border: `2px solid ${tab.group.color}`,
                   }}
                 />
               )}
-              
+
               {/* When width <= 45 and tab is active, show only close button. Otherwise show favicon */}
               {!(width <= 45 && isActive) && <TabIcon tab={tab} />}
-              
+
               {width > 70 && (
                 <span className="flex-1 truncate text-sm min-w-0 z-10">
-                  {tab.isLoading ? <span className="text-gray-500">Loading...</span> : tab.title || 'New Tab'}
+                  {tab.isLoading ? (
+                    <span className="text-gray-500">Loading...</span>
+                  ) : (
+                    tab.title || 'New Tab'
+                  )}
                 </span>
               )}
 
@@ -657,10 +779,14 @@ function TabContent({ tab, isActive, width, isOverlay }: TabContentProps) {
           {tab.group.name}
         </span>
       )}
-      
+
       {width > 70 && (
         <span className="flex-1 truncate text-sm min-w-0">
-          {tab.isLoading ? <span className="text-gray-500">Loading...</span> : tab.title || 'New Tab'}
+          {tab.isLoading ? (
+            <span className="text-gray-500">Loading...</span>
+          ) : (
+            tab.title || 'New Tab'
+          )}
         </span>
       )}
 
@@ -685,16 +811,24 @@ function GroupBadge({ color }: { color: string }) {
 
 function TabIcon({ tab }: { tab: TabInfo }) {
   if (tab.isLoading) {
-    return <Loader2 className="w-4 h-4 flex-shrink-0 animate-spin text-muted-foreground" />;
+    return (
+      <Loader2 className="w-4 h-4 flex-shrink-0 animate-spin text-muted-foreground" />
+    );
   }
-  
+
   if (tab.favicon) {
-    if(ICON_MAP[tab.favicon]){
+    if (ICON_MAP[tab.favicon]) {
       const IconComponent = ICON_MAP[tab.favicon];
       return <IconComponent className="w-4 h-4 flex-shrink-0" />;
     }
-    return <img src={tab.favicon} alt="" className="w-4 h-4 flex-shrink-0 rounded-sm" />;
+    return (
+      <img
+        src={tab.favicon}
+        alt=""
+        className="w-4 h-4 flex-shrink-0 rounded-sm"
+      />
+    );
   }
-  
+
   return <Globe className="w-4 h-4 flex-shrink-0 text-muted-foreground" />;
 }

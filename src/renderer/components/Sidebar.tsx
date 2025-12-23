@@ -1,18 +1,19 @@
 import { useEffect, useState } from 'react';
-import { RecordedAction } from '@/shared/types';
-import AgentView from './AgentView';
-import { LiveRecordingView } from './recording';
 import { toast } from 'sonner';
 
+import AgentView from './AgentView';
+import { LiveRecordingView } from './recording';
+
+import { RecordedAction } from '@/shared/types';
 
 export function Sidebar() {
   const [actions, setActions] = useState<RecordedAction[]>([]);
   const [isRecording, setIsRecording] = useState(false);
   const [showSaveForm, setShowSaveForm] = useState(false);
-  const [recordingData, setRecordingData] = useState<{ 
-    actions: RecordedAction[]; 
-    duration: number; 
-    startUrl: string 
+  const [recordingData, setRecordingData] = useState<{
+    actions: RecordedAction[];
+    duration: number;
+    startUrl: string;
   } | null>(null);
 
   useEffect(() => {
@@ -32,35 +33,42 @@ export function Sidebar() {
       }
     });
 
-    const unsubAction = window.browserAPI.onRecordingAction((action: RecordedAction) => {
-      setActions(prev => {
-        const isDuplicate = prev.some(a => 
-          a.timestamp === action.timestamp && 
-          a.type === action.type &&
-          JSON.stringify(a.target) === JSON.stringify(action.target)
-        );
-        
-        if (isDuplicate) {
-          console.warn('Duplicate action detected, skipping:', action);
-          return prev;
-        }
-        
-        const updated = [...prev, action];
-        return updated.sort((a, b) => b.timestamp - a.timestamp);
-      });
-    });
+    const unsubAction = window.browserAPI.onRecordingAction(
+      (action: RecordedAction) => {
+        setActions((prev) => {
+          const isDuplicate = prev.some(
+            (a) =>
+              a.timestamp === action.timestamp &&
+              a.type === action.type &&
+              JSON.stringify(a.target) === JSON.stringify(action.target)
+          );
 
-    const unsubMaxActions = window.browserAPI.onRecordingMaxActionsReached(async () => {
-      console.log('Max actions limit reached, auto-stopping recording');
-      toast.warning('Maximum 150 actions recorded. Stopping recording automatically.');
-      const data = await window.browserAPI.stopRecording();
-      setIsRecording(false);
-      setRecordingData(data);
-      if (data.actions && data.actions.length > 0) {
-        setShowSaveForm(true);
+          if (isDuplicate) {
+            console.warn('Duplicate action detected, skipping:', action);
+            return prev;
+          }
+
+          const updated = [...prev, action];
+          return updated.sort((a, b) => b.timestamp - a.timestamp);
+        });
       }
-    });
-    
+    );
+
+    const unsubMaxActions = window.browserAPI.onRecordingMaxActionsReached(
+      async () => {
+        console.log('Max actions limit reached, auto-stopping recording');
+        toast.warning(
+          'Maximum 150 actions recorded. Stopping recording automatically.'
+        );
+        const data = await window.browserAPI.stopRecording();
+        setIsRecording(false);
+        setRecordingData(data);
+        if (data.actions && data.actions.length > 0) {
+          setShowSaveForm(true);
+        }
+      }
+    );
+
     return () => {
       unsubStart();
       unsubStop();
@@ -71,7 +79,11 @@ export function Sidebar() {
 
   const handleSaveRecording = async (name: string, description: string) => {
     if (recordingData) {
-      await window.browserAPI.saveRecording(name, description, recordingData.actions);
+      await window.browserAPI.saveRecording(
+        name,
+        description,
+        recordingData.actions
+      );
       setShowSaveForm(false);
       setRecordingData(null);
       setActions([]);
@@ -90,18 +102,18 @@ export function Sidebar() {
 
   return (
     <section className="h-full w-full flex flex-col overflow-hidden bg-background border-l border-l-foreground">
-        {showRecordingView ? (
-          <LiveRecordingView 
-            actions={actions} 
-            isRecording={isRecording}
-            showSaveForm={showSaveForm}
-            recordingData={recordingData}
-            onSave={handleSaveRecording}
-            onDiscard={handleDiscardRecording}
-          />
-        ) : (
-          <AgentView />
-        )}
-      </section>
+      {showRecordingView ? (
+        <LiveRecordingView
+          actions={actions}
+          isRecording={isRecording}
+          showSaveForm={showSaveForm}
+          recordingData={recordingData}
+          onSave={handleSaveRecording}
+          onDiscard={handleDiscardRecording}
+        />
+      ) : (
+        <AgentView />
+      )}
+    </section>
   );
 }

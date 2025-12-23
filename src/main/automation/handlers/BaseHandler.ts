@@ -1,9 +1,10 @@
 import { WebContentsView } from 'electron';
+
 import type { ToolExecutionResult, AutomationError } from '@/shared/types';
 
 export interface HandlerContext {
-    view: Electron.WebContentsView;
-    tabId: string;
+  view: Electron.WebContentsView;
+  tabId: string;
 }
 
 export abstract class BaseHandler {
@@ -29,11 +30,11 @@ export abstract class BaseHandler {
       toolName,
       error,
       tabId: this.tabId,
-      url: this.getUrl()
+      url: this.getUrl(),
     };
   }
 
   protected sleep(ms: number): Promise<void> {
-    return new Promise(resolve => setTimeout(resolve, ms));
+    return new Promise((resolve) => setTimeout(resolve, ms));
   }
 }

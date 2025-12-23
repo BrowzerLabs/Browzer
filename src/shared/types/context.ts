@@ -25,11 +25,11 @@ export interface InteractiveElement {
  * Form field information (extends InteractiveElement)
  */
 export interface FormField {
-    name: string;
-    type: string;
-    label?: string;
-    required: boolean;
-    selector: string;
+  name: string;
+  type: string;
+  label?: string;
+  required: boolean;
+  selector: string;
 }
 
 /**
@@ -141,7 +141,7 @@ export interface NetworkContext {
     itemCount: number;
     keys: string[]; // Key names only, not values
   };
-  
+
   sessionStorage: {
     itemCount: number;
     keys: string[];

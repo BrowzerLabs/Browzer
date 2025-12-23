@@ -13,14 +13,12 @@ export const useOnboardingStore = create<OnboardingState>()(
     (set) => ({
       hasCompletedOnboarding: false,
 
-      setHasCompletedOnboarding: (completed) => 
+      setHasCompletedOnboarding: (completed) =>
         set({ hasCompletedOnboarding: completed }),
 
-      completeOnboarding: () => 
-        set({ hasCompletedOnboarding: true }),
+      completeOnboarding: () => set({ hasCompletedOnboarding: true }),
 
-      resetOnboarding: () => 
-        set({ hasCompletedOnboarding: false }),
+      resetOnboarding: () => set({ hasCompletedOnboarding: false }),
     }),
     {
       name: 'browzer-onboarding-storage',

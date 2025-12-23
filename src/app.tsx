@@ -1,6 +1,6 @@
-import { Toaster } from "@/renderer/ui/sonner"
-import { ThemeProvider } from "@/renderer/ui/theme-provider"
-import { AppRouter } from "@/renderer/router/AppRouter"
+import { Toaster } from '@/renderer/ui/sonner';
+import { ThemeProvider } from '@/renderer/ui/theme-provider';
+import { AppRouter } from '@/renderer/router/AppRouter';
 
 function App() {
   return (
@@ -8,7 +8,7 @@ function App() {
       <AppRouter />
       <Toaster position="top-center" richColors />
     </ThemeProvider>
-  )
+  );
 }
 
-export default App
+export default App;

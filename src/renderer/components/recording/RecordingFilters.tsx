@@ -1,4 +1,5 @@
 import { Search, X, Filter, FileVideo, MousePointerClick } from 'lucide-react';
+
 import { Input } from '@/renderer/ui/input';
 import { Button } from '@/renderer/ui/button';
 
@@ -9,11 +10,11 @@ interface RecordingFiltersProps {
   onFilterChange: (filter: 'all' | 'with-video' | 'actions-only') => void;
 }
 
-export function RecordingFilters({ 
-  searchQuery, 
-  filterType, 
-  onSearchChange, 
-  onFilterChange 
+export function RecordingFilters({
+  searchQuery,
+  filterType,
+  onSearchChange,
+  onFilterChange,
 }: RecordingFiltersProps) {
   return (
     <div className="flex gap-4 mb-6">

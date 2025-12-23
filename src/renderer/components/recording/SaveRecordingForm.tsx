@@ -1,9 +1,10 @@
 import { useState } from 'react';
+import { toast } from 'sonner';
+
 import { Input } from '@/renderer/ui/input';
 import { Textarea } from '@/renderer/ui/textarea';
 import { Button } from '@/renderer/ui/button';
 import { Label } from '@/renderer/ui/label';
-import { toast } from 'sonner';
 
 interface SaveRecordingFormProps {
   actionCount: number;
@@ -12,7 +13,12 @@ interface SaveRecordingFormProps {
   onDiscard: () => void;
 }
 
-export function SaveRecordingForm({ actionCount, duration, onSave, onDiscard }: SaveRecordingFormProps) {
+export function SaveRecordingForm({
+  actionCount,
+  duration,
+  onSave,
+  onDiscard,
+}: SaveRecordingFormProps) {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [error, setError] = useState('');
@@ -41,7 +47,7 @@ export function SaveRecordingForm({ actionCount, duration, onSave, onDiscard }: 
     const seconds = Math.floor(ms / 1000);
     const minutes = Math.floor(seconds / 60);
     const remainingSeconds = seconds % 60;
-    
+
     if (minutes > 0) {
       return `${minutes}m ${remainingSeconds}s`;
     }
@@ -60,7 +66,10 @@ export function SaveRecordingForm({ actionCount, duration, onSave, onDiscard }: 
       <form onSubmit={handleSubmit} className="space-y-4">
         {/* Name Input */}
         <div>
-          <Label htmlFor="recording-name" className="block text-sm font-medium mb-2">
+          <Label
+            htmlFor="recording-name"
+            className="block text-sm font-medium mb-2"
+          >
             Recording Name <span className="text-red-500">*</span>
           </Label>
           <Input
@@ -74,14 +83,15 @@ export function SaveRecordingForm({ actionCount, duration, onSave, onDiscard }: 
             placeholder="e.g., Login Flow, Checkout Process"
             autoFocus
           />
-          {error && (
-            <p className="text-xs text-red-500 mt-1">{error}</p>
-          )}
+          {error && <p className="text-xs text-red-500 mt-1">{error}</p>}
         </div>
 
         {/* Description Input */}
         <div>
-          <Label htmlFor="recording-description" className="block text-sm font-medium mb-2">
+          <Label
+            htmlFor="recording-description"
+            className="block text-sm font-medium mb-2"
+          >
             Description (Optional)
           </Label>
           <Textarea
@@ -99,14 +109,11 @@ export function SaveRecordingForm({ actionCount, duration, onSave, onDiscard }: 
             type="button"
             variant="ghost"
             onClick={handleDiscardClick}
-            className='w-1/2'
+            className="w-1/2"
           >
             Discard
           </Button>
-          <Button
-            type="submit"
-            className='w-1/2'
-          >
+          <Button type="submit" className="w-1/2">
             Save Recording
           </Button>
         </div>

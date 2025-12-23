@@ -29,4 +29,3 @@ export interface DownloadUpdatePayload {
   downloads: DownloadItem[];
   changedId?: string;
 }
-

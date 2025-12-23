@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import Anthropic from '@anthropic-ai/sdk';
+
 import { SessionStore } from './SessionStore';
 import { ContextManager } from './ContextManager';
 import {
@@ -13,6 +14,7 @@ import {
   ContextConfig,
   ContextStats,
 } from './types';
+
 import { AutomationStatus } from '@/shared/types';
 
 export class SessionManager {
@@ -73,10 +75,10 @@ export class SessionManager {
 
   getMessagesForAPI(sessionId: string): Anthropic.MessageParam[] {
     const messages = this.store.getMessages(sessionId);
-    
-    const apiMessages: Anthropic.MessageParam[] = messages.map(msg => ({
+
+    const apiMessages: Anthropic.MessageParam[] = messages.map((msg) => ({
       role: msg.role,
-      content: msg.content
+      content: msg.content,
     }));
 
     return this.contextManager.optimizeMessagesForCaching(apiMessages);
@@ -85,7 +87,7 @@ export class SessionManager {
   getContextStats(sessionId: string): ContextStats {
     const messages = this.getMessagesForAPI(sessionId);
     const cache = this.store.getCacheMetadata(sessionId);
-    
+
     const systemPrompt = this.contextManager.buildCachedSystemPrompt(
       '',
       cache.cachedContext
@@ -100,28 +102,31 @@ export class SessionManager {
 
   private applyContextEditing(sessionId: string): void {
     const messages = this.store.getMessages(sessionId);
-    
-    const apiMessages: Anthropic.MessageParam[] = messages.map(msg => ({
+
+    const apiMessages: Anthropic.MessageParam[] = messages.map((msg) => ({
       role: msg.role,
-      content: msg.content
+      content: msg.content,
     }));
 
     const result = this.contextManager.applyContextEditing(apiMessages);
 
     if (result.clearedCount > 0) {
-
-      const keepCount = messages.length - (result.clearedCount * 2); // Each tool use = 2 messages
+      const keepCount = messages.length - result.clearedCount * 2; // Each tool use = 2 messages
       this.store.clearOldMessages(sessionId, Math.max(0, keepCount));
     }
   }
 
-  completeSession(sessionId: string, status: AutomationStatus, error?: string): void {
+  completeSession(
+    sessionId: string,
+    status: AutomationStatus,
+    error?: string
+  ): void {
     this.store.updateSession(sessionId, {
       status,
       completedAt: Date.now(),
       metadata: {
-        finalError: error
-      }
+        finalError: error,
+      },
     });
   }
 

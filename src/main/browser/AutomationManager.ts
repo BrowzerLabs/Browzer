@@ -1,7 +1,9 @@
 import { WebContentsView, dialog } from 'electron';
+
+import { Tab } from './types';
+
 import { AutomationService } from '@/main/llm';
 import { RecordingStore } from '@/main/recording';
-import { Tab } from './types';
 import { SessionManager } from '@/main/llm/session/SessionManager';
 import { AutomationProgressEvent } from '@/shared/types';
 
@@ -11,7 +13,7 @@ export class AutomationManager {
   constructor(
     private recordingStore: RecordingStore,
     private sessionManager: SessionManager,
-    private browserUIView: WebContentsView,
+    private browserUIView: WebContentsView
   ) {}
 
   public async executeAutomation(
@@ -27,22 +29,25 @@ export class AutomationManager {
       dialog.showMessageBox({
         type: 'error',
         title: 'Error',
-        message: 'No active tab or automation. At least one tab must be open.'
+        message: 'No active tab or automation. At least one tab must be open.',
       });
       return {
         success: false,
         sessionId: '',
-        message: 'No active tab or automation. At least one tab must be open.'
+        message: 'No active tab or automation. At least one tab must be open.',
       };
     }
 
     const automationService = new AutomationService(
       newTab.automationExecutor,
       this.recordingStore,
-      this.sessionManager,
+      this.sessionManager
     );
 
-    const automationPromise = automationService.executeAutomation(userGoal, recordedSessionId);
+    const automationPromise = automationService.executeAutomation(
+      userGoal,
+      recordedSessionId
+    );
 
     const sessionId = automationService.getSessionId();
 
@@ -51,29 +56,35 @@ export class AutomationManager {
       if (this.browserUIView && !this.browserUIView.webContents.isDestroyed()) {
         this.browserUIView.webContents.send('automation:progress', {
           sessionId,
-          event
+          event,
         });
       }
     });
 
     automationPromise
-      .then(result => {
-        if (this.browserUIView && !this.browserUIView.webContents.isDestroyed()) {
+      .then((result) => {
+        if (
+          this.browserUIView &&
+          !this.browserUIView.webContents.isDestroyed()
+        ) {
           this.browserUIView.webContents.send('automation:complete', {
             sessionId,
-            result
+            result,
           });
         }
 
         this.automationSessions.delete(sessionId);
       })
-      .catch(error => {
+      .catch((error) => {
         console.error('[AutomationManager] LLM automation failed:', error);
-        
-        if (this.browserUIView && !this.browserUIView.webContents.isDestroyed()) {
+
+        if (
+          this.browserUIView &&
+          !this.browserUIView.webContents.isDestroyed()
+        ) {
           this.browserUIView.webContents.send('automation:error', {
             sessionId,
-            error: error instanceof Error ? error.message : 'Unknown error'
+            error: error instanceof Error ? error.message : 'Unknown error',
           });
         }
 
@@ -83,39 +94,45 @@ export class AutomationManager {
     return {
       success: true,
       sessionId,
-      message: 'Automation started successfully 🎉'
+      message: 'Automation started successfully 🎉',
     };
   }
 
   public stopAutomation(sessionId: string): void {
     const automationService = this.automationSessions.get(sessionId);
     if (automationService) {
-      console.log(`🛑 [AutomationManager] Stopping automation session: ${sessionId}`);
+      console.log(
+        `🛑 [AutomationManager] Stopping automation session: ${sessionId}`
+      );
       automationService.stopAutomation();
     } else {
-      console.warn(`⚠️ [AutomationManager] No active automation found for session: ${sessionId}`);
+      console.warn(
+        `⚠️ [AutomationManager] No active automation found for session: ${sessionId}`
+      );
     }
   }
 
   public async loadAutomationSession(sessionId: string): Promise<any> {
     try {
       const sessionData = this.sessionManager.loadSession(sessionId);
-      
+
       if (!sessionData) {
         dialog.showMessageBox({
           type: 'error',
           title: 'Error',
-          message: 'Session not found'
+          message: 'Session not found',
         });
         return null;
       }
-      
+
       // Parse messages into individual events
       const events: any[] = [];
-      
+
       for (const msg of sessionData.messages) {
-        const content = Array.isArray(msg.content) ? msg.content : [msg.content];
-        
+        const content = Array.isArray(msg.content)
+          ? msg.content
+          : [msg.content];
+
         if (msg.role === 'assistant') {
           // Assistant messages contain text blocks and tool_use blocks
           for (const block of content) {
@@ -127,7 +144,7 @@ export class AutomationManager {
                   sessionId: sessionData.session.id,
                   type: 'text_response',
                   data: { message: block.text },
-                  timestamp: msg.createdAt
+                  timestamp: msg.createdAt,
                 });
               } else if (block.type === 'tool_use') {
                 // Tool call (step start)
@@ -139,9 +156,11 @@ export class AutomationManager {
                     toolName: block.name,
                     toolUseId: block.id,
                     input: block.input,
-                    stepNumber: events.filter(e => e.type.startsWith('step_')).length + 1
+                    stepNumber:
+                      events.filter((e) => e.type.startsWith('step_')).length +
+                      1,
                   },
-                  timestamp: msg.createdAt
+                  timestamp: msg.createdAt,
                 });
               }
             }
@@ -149,14 +168,24 @@ export class AutomationManager {
         } else if (msg.role === 'user') {
           // User messages contain tool_result blocks
           for (const block of content) {
-            if (typeof block === 'object' && block !== null && block.type === 'tool_result') {
+            if (
+              typeof block === 'object' &&
+              block !== null &&
+              block.type === 'tool_result'
+            ) {
               // Tool result (step complete or error)
               const isError = block.is_error || false;
-              const resultContent = Array.isArray(block.content) ? block.content[0] : block.content;
-              const resultText = typeof resultContent === 'object' && resultContent.type === 'text' 
-                ? resultContent.text 
-                : typeof resultContent === 'string' ? resultContent : JSON.stringify(resultContent);
-              
+              const resultContent = Array.isArray(block.content)
+                ? block.content[0]
+                : block.content;
+              const resultText =
+                typeof resultContent === 'object' &&
+                resultContent.type === 'text'
+                  ? resultContent.text
+                  : typeof resultContent === 'string'
+                    ? resultContent
+                    : JSON.stringify(resultContent);
+
               // Try to parse result as JSON to extract structured data
               let parsedResult: any = null;
               try {
@@ -164,7 +193,7 @@ export class AutomationManager {
               } catch {
                 parsedResult = { message: resultText };
               }
-              
+
               events.push({
                 id: `msg_${msg.id}_result_${block.tool_use_id}`,
                 sessionId: sessionData.session.id,
@@ -174,15 +203,16 @@ export class AutomationManager {
                   result: parsedResult,
                   success: !isError,
                   error: isError ? parsedResult : undefined,
-                  stepNumber: events.filter(e => e.type.startsWith('step_')).length
+                  stepNumber: events.filter((e) => e.type.startsWith('step_'))
+                    .length,
                 },
-                timestamp: msg.createdAt
+                timestamp: msg.createdAt,
               });
             }
           }
         }
       }
-      
+
       // Convert to format expected by renderer
       return {
         sessionId: sessionData.session.id,
@@ -193,7 +223,7 @@ export class AutomationManager {
         result: sessionData.session.metadata.finalSuccess,
         error: sessionData.session.metadata.finalError,
         startTime: sessionData.session.createdAt,
-        endTime: sessionData.session.completedAt
+        endTime: sessionData.session.completedAt,
       };
     } catch (error) {
       console.error('[AutomationManager] Failed to load session:', error);
@@ -207,8 +237,8 @@ export class AutomationManager {
   public async getAutomationSessionHistory(limit = 5): Promise<any[]> {
     try {
       const sessions = this.sessionManager.listSessions(limit, 0);
-      
-      return sessions.map(session => ({
+
+      return sessions.map((session) => ({
         sessionId: session.id,
         userGoal: session.userGoal,
         recordingId: session.recordingId,
@@ -216,10 +246,13 @@ export class AutomationManager {
         createdAt: session.createdAt,
         updatedAt: session.updatedAt,
         messageCount: session.messageCount,
-        stepCount: session.stepCount
+        stepCount: session.stepCount,
       }));
     } catch (error) {
-      console.error('[AutomationManager] Failed to load session history:', error);
+      console.error(
+        '[AutomationManager] Failed to load session history:',
+        error
+      );
       return [];
     }
   }
@@ -231,8 +264,8 @@ export class AutomationManager {
     try {
       // Get all sessions (no limit)
       const sessions = this.sessionManager.listSessions(1000, 0);
-      
-      return sessions.map(session => ({
+
+      return sessions.map((session) => ({
         sessionId: session.id,
         userGoal: session.userGoal,
         recordingId: session.recordingId,
@@ -240,7 +273,7 @@ export class AutomationManager {
         createdAt: session.createdAt,
         updatedAt: session.updatedAt,
         messageCount: session.messageCount,
-        stepCount: session.stepCount
+        stepCount: session.stepCount,
       }));
     } catch (error) {
       console.error('[AutomationManager] Failed to load sessions:', error);
@@ -254,7 +287,7 @@ export class AutomationManager {
   public async getAutomationSessionDetails(sessionId: string): Promise<any> {
     try {
       const session = this.sessionManager.getSession(sessionId);
-      
+
       if (!session) {
         throw new Error(`Session ${sessionId} not found`);
       }
@@ -262,7 +295,10 @@ export class AutomationManager {
       // Return session with all available details
       return session;
     } catch (error) {
-      console.error('[AutomationManager] Failed to load session details:', error);
+      console.error(
+        '[AutomationManager] Failed to load session details:',
+        error
+      );
       throw error;
     }
   }
@@ -274,7 +310,7 @@ export class AutomationManager {
     try {
       // Load the session
       const session = this.sessionManager.getSession(sessionId);
-      
+
       if (!session) {
         throw new Error(`Session ${sessionId} not found`);
       }
@@ -282,11 +318,11 @@ export class AutomationManager {
       // TODO: Implement resume logic
       // For now, just return the session info
       console.log('[AutomationManager] Resume session:', sessionId);
-      
+
       return {
         success: true,
         sessionId,
-        message: 'Session resume not yet implemented'
+        message: 'Session resume not yet implemented',
       };
     } catch (error) {
       console.error('[AutomationManager] Failed to resume session:', error);

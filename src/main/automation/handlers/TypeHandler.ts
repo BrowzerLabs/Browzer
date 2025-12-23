@@ -1,6 +1,6 @@
 import { BaseHandler, HandlerContext } from './BaseHandler';
-import type { ToolExecutionResult, TypeParams } from '@/shared/types';
 
+import type { ToolExecutionResult, TypeParams } from '@/shared/types';
 
 export class TypeHandler extends BaseHandler {
   constructor(context: HandlerContext) {
@@ -9,7 +9,7 @@ export class TypeHandler extends BaseHandler {
 
   async execute(params: TypeParams): Promise<ToolExecutionResult> {
     const startTime = Date.now();
-    
+
     try {
       console.log('[TypeHandler] ⌨️  Starting type execution');
 
@@ -24,14 +24,16 @@ export class TypeHandler extends BaseHandler {
               'Verify element attributes match the current page',
               'Check if input is dynamically loaded',
               'Ensure input is not inside iframe or shadow DOM',
-              'Try adding more specific attributes (id, name, placeholder)'
-            ]
-          }
+              'Try adding more specific attributes (id, name, placeholder)',
+            ],
+          },
         });
       }
 
       const { centerX, centerY } = findResult;
-      console.log(`[TypeHandler] ✅ Input found and prepared at (${centerX}, ${centerY})`);
+      console.log(
+        `[TypeHandler] ✅ Input found and prepared at (${centerX}, ${centerY})`
+      );
 
       await this.focusElement(centerX!, centerY!);
       await this.sleep(150);
@@ -50,9 +52,9 @@ export class TypeHandler extends BaseHandler {
             suggestions: [
               'Element may have lost focus',
               'Input may be disabled or readonly',
-              'Try clicking the element first'
-            ]
-          }
+              'Try clicking the element first',
+            ],
+          },
         });
       }
 
@@ -70,17 +72,16 @@ export class TypeHandler extends BaseHandler {
       return {
         success: true,
         toolName: 'type',
-        url: this.getUrl()
+        url: this.getUrl(),
       };
-
     } catch (error) {
       console.error('[TypeHandler] ❌ Type failed:', error);
       return this.createErrorResult('type', startTime, {
         code: 'EXECUTION_ERROR',
         message: `Type execution failed: ${error instanceof Error ? error.message : String(error)}`,
         details: {
-          lastError: error instanceof Error ? error.message : String(error)
-        }
+          lastError: error instanceof Error ? error.message : String(error),
+        },
       });
     }
   }
@@ -216,8 +217,8 @@ export class TypeHandler extends BaseHandler {
               
               if (elValue === targetValue) {
                 if (key === 'class') {
-                  const elClasses = (elValue || '').split(/\s+/);
-                  const targetClasses = (targetValue || '').split(/\s+/);
+                  const elClasses = (elValue || '').split(/\\s+/);
+                  const targetClasses = (targetValue || '').split(/\\s+/);
                   const matchingClasses = targetClasses.filter(c => elClasses.includes(c));
                   if (matchingClasses.length > 0) {
                     const classScore = Math.min(matchingClasses.length * 1, 4);
@@ -238,8 +239,8 @@ export class TypeHandler extends BaseHandler {
                   matchedBy.push('dyn:' + key);
                 }
               } else if (key === 'class' && elValue && targetValue) {
-                const elClasses = elValue.split(/\s+/);
-                const targetClasses = targetValue.split(/\s+/);
+                const elClasses = elValue.split(/\\s+/);
+                const targetClasses = targetValue.split(/\\s+/);
                 const matchingClasses = targetClasses.filter(c => elClasses.includes(c));
                 if (matchingClasses.length > 0) {
                   const classScore = Math.min(matchingClasses.length * 1, 4);
@@ -368,12 +369,11 @@ export class TypeHandler extends BaseHandler {
 
       const result = await this.view.webContents.executeJavaScript(script);
       return result;
-
     } catch (error) {
       console.error('[TypeHandler] ❌  find-and-prepare failed:', error);
       return {
         success: false,
-        error: error instanceof Error ? error.message : String(error)
+        error: error instanceof Error ? error.message : String(error),
       };
     }
   }
@@ -392,7 +392,7 @@ export class TypeHandler extends BaseHandler {
         x: Math.round(centerX),
         y: Math.round(centerY),
         button: 'left',
-        clickCount: 1
+        clickCount: 1,
       });
 
       await this.sleep(50);
@@ -402,7 +402,7 @@ export class TypeHandler extends BaseHandler {
         x: Math.round(centerX),
         y: Math.round(centerY),
         button: 'left',
-        clickCount: 1
+        clickCount: 1,
       });
 
       console.log('[TypeHandler] ✅ Element focused via CDP click');
@@ -419,13 +419,13 @@ export class TypeHandler extends BaseHandler {
       const cdp = this.view.webContents.debugger;
       const modifier = process.platform === 'darwin' ? 'Meta' : 'Control';
       const modifierCode = modifier === 'Meta' ? 8 : 2;
-      
+
       // Select all (Ctrl/Cmd + A)
       await cdp.sendCommand('Input.dispatchKeyEvent', {
         type: 'keyDown',
         key: 'a',
         code: 'KeyA',
-        modifiers: modifierCode
+        modifiers: modifierCode,
       });
 
       await this.sleep(50);
@@ -434,7 +434,7 @@ export class TypeHandler extends BaseHandler {
         type: 'keyUp',
         key: 'a',
         code: 'KeyA',
-        modifiers: modifierCode
+        modifiers: modifierCode,
       });
 
       await this.sleep(50);
@@ -443,7 +443,7 @@ export class TypeHandler extends BaseHandler {
       await cdp.sendCommand('Input.dispatchKeyEvent', {
         type: 'keyDown',
         key: 'Backspace',
-        code: 'Backspace'
+        code: 'Backspace',
       });
 
       await this.sleep(50);
@@ -451,7 +451,7 @@ export class TypeHandler extends BaseHandler {
       await cdp.sendCommand('Input.dispatchKeyEvent', {
         type: 'keyUp',
         key: 'Backspace',
-        code: 'Backspace'
+        code: 'Backspace',
       });
 
       console.log('[TypeHandler] ✅ Input cleared');
@@ -473,7 +473,7 @@ export class TypeHandler extends BaseHandler {
         // Key down
         await cdp.sendCommand('Input.dispatchKeyEvent', {
           type: 'keyDown',
-          text: char
+          text: char,
         });
 
         await this.sleep(30); // Slightly slower for more natural typing
@@ -481,7 +481,7 @@ export class TypeHandler extends BaseHandler {
         // Key up
         await cdp.sendCommand('Input.dispatchKeyEvent', {
           type: 'keyUp',
-          text: char
+          text: char,
         });
 
         await this.sleep(30);
@@ -505,7 +505,7 @@ export class TypeHandler extends BaseHandler {
       await cdp.sendCommand('Input.dispatchKeyEvent', {
         type: 'keyDown',
         key: key,
-        code: key === 'Enter' ? 'Enter' : key
+        code: key === 'Enter' ? 'Enter' : key,
       });
 
       await this.sleep(50);
@@ -513,9 +513,8 @@ export class TypeHandler extends BaseHandler {
       await cdp.sendCommand('Input.dispatchKeyEvent', {
         type: 'keyUp',
         key: key,
-        code: key === 'Enter' ? 'Enter' : key
+        code: key === 'Enter' ? 'Enter' : key,
       });
-
     } catch (error) {
       console.warn(`[TypeHandler] ⚠️ Press ${key} failed:`, error);
     }

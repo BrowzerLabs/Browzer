@@ -1,6 +1,5 @@
 import { AutomationStatus, ToolExecutionResult } from '@/shared/types';
 
-
 export interface AutomationStep {
   toolName: string;
   toolUseId: string;

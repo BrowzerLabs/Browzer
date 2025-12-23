@@ -1,29 +1,35 @@
 import { useEffect, useCallback, useRef } from 'react';
-import { useAuthStore } from '@/renderer/stores/authStore';
-import { SignUpCredentials, SignInCredentials, AuthResponse, UpdateProfileRequest } from '@/shared/types';
 import { toast } from 'sonner';
+
+import { useAuthStore } from '@/renderer/stores/authStore';
+import {
+  SignUpCredentials,
+  SignInCredentials,
+  AuthResponse,
+  UpdateProfileRequest,
+} from '@/shared/types';
 
 /**
  * useAuth Hook - Main authentication interface
- * 
+ *
  * Architecture:
  * - Handles all auth operations (sign in, sign up, sign out)
  * - Manages initialization lifecycle
  * - Provides stable callback references
  * - No dependency on store setters (uses getState())
- * 
+ *
  */
 
 export function useAuth() {
   // Subscribe to state (read-only)
   const state = useAuthStore();
-  
+
   // Track initialization to prevent duplicates
   const initRef = useRef(false);
 
   /**
    * Initialize authentication on mount
-   * 
+   *
    * Flow:
    * 1. Check if already initialized or in progress
    * 2. Fetch current session from main process
@@ -32,17 +38,17 @@ export function useAuth() {
    */
   const initialize = useCallback(async () => {
     if (initRef.current) return;
-    
+
     initRef.current = true;
     const store = useAuthStore.getState();
-    
+
     try {
       store.setLoading(true);
       store.setError(null);
 
       console.log('[Auth] Initializing...');
       const session = await window.authAPI.getCurrentSession();
-      
+
       if (session) {
         console.log('[Auth] Session found:', session);
         store.setAuthData(session.user, session);
@@ -51,7 +57,7 @@ export function useAuth() {
         toast.info('Welcome back 👋🏻, Please sign in to continue');
         store.clearAuth();
       }
-      
+
       store.setInitialized(true);
     } catch (error: any) {
       toast.error(error.message || 'Failed to initialize');
@@ -75,79 +81,85 @@ export function useAuth() {
   /**
    * Sign up with email/password
    */
-  const signUp = useCallback(async (credentials: SignUpCredentials): Promise<AuthResponse> => {
-    const store = useAuthStore.getState();
-    
-    try {
-      store.setLoading(true);
-      store.setError(null);
+  const signUp = useCallback(
+    async (credentials: SignUpCredentials): Promise<AuthResponse> => {
+      const store = useAuthStore.getState();
 
-      const response = await window.authAPI.signUp(credentials);
+      try {
+        store.setLoading(true);
+        store.setError(null);
 
-      if (response.success && response.user && response.session) {
-        store.setAuthData(response.user, response.session);
-        toast.success('Account created successfully');
-      } else if (response.error) {
-        store.setError(response.error.message);
-        toast.error(response.error.message);
+        const response = await window.authAPI.signUp(credentials);
+
+        if (response.success && response.user && response.session) {
+          store.setAuthData(response.user, response.session);
+          toast.success('Account created successfully');
+        } else if (response.error) {
+          store.setError(response.error.message);
+          toast.error(response.error.message);
+        }
+
+        return response;
+      } catch (error: any) {
+        const message = error.message || 'Sign up failed';
+        store.setError(message);
+        toast.error(message);
+
+        return {
+          success: false,
+          error: { code: 'SIGNUP_ERROR', message },
+        };
+      } finally {
+        store.setLoading(false);
       }
-
-      return response;
-    } catch (error: any) {
-      const message = error.message || 'Sign up failed';
-      store.setError(message);
-      toast.error(message);
-      
-      return {
-        success: false,
-        error: { code: 'SIGNUP_ERROR', message },
-      };
-    } finally {
-      store.setLoading(false);
-    }
-  }, []);
+    },
+    []
+  );
 
   /**
    * Sign in with email/password
    */
-  const signIn = useCallback(async (credentials: SignInCredentials): Promise<AuthResponse> => {
-    const store = useAuthStore.getState();
-    
-    try {
-      store.setLoading(true);
-      store.setError(null);
+  const signIn = useCallback(
+    async (credentials: SignInCredentials): Promise<AuthResponse> => {
+      const store = useAuthStore.getState();
 
-      const response = await window.authAPI.signIn(credentials);
+      try {
+        store.setLoading(true);
+        store.setError(null);
 
-      if (response.success && response.user && response.session) {
-        store.setAuthData(response.user, response.session);
-        toast.success('Signed in successfully');
-      } else if (response.error) {
-        store.setError(response.error.message);
-        toast.error(response.error.message);
+        const response = await window.authAPI.signIn(credentials);
+
+        if (response.success && response.user && response.session) {
+          store.setAuthData(response.user, response.session);
+          toast.success('Signed in successfully');
+        } else if (response.error) {
+          store.setError(response.error.message);
+          toast.error(response.error.message);
+        }
+
+        return response;
+      } catch (error: any) {
+        const message = error.message || 'Sign in failed';
+        store.setError(message);
+        toast.error(message);
+
+        return {
+          success: false,
+          error: { code: 'SIGNIN_ERROR', message },
+        };
+      } finally {
+        store.setLoading(false);
       }
-
-      return response;
-    } catch (error: any) {
-      const message = error.message || 'Sign in failed';
-      store.setError(message);
-      toast.error(message);
-      
-      return {
-        success: false,
-        error: { code: 'SIGNIN_ERROR', message },
-      };
-    } finally {
-      store.setLoading(false);
-    }
-  }, []);
+    },
+    []
+  );
 
   /**
    * Sign in with Google OAuth
    */
   const signInWithGoogle = useCallback(async (): Promise<AuthResponse> => {
     const store = useAuthStore.getState();
-    
+
     try {
       store.setLoading(true);
       store.setError(null);
@@ -167,7 +179,7 @@ export function useAuth() {
       const message = error.message || 'Google sign in failed';
       store.setError(message);
       toast.error(message);
-      
+
       return {
         success: false,
         error: { code: 'GOOGLE_SIGNIN_ERROR', message },
@@ -180,9 +192,12 @@ export function useAuth() {
   /**
    * Sign out
    */
-  const signOut = useCallback(async (): Promise<{ success: boolean; error?: string }> => {
+  const signOut = useCallback(async (): Promise<{
+    success: boolean;
+    error?: string;
+  }> => {
     const store = useAuthStore.getState();
-    
+
     try {
       store.setLoading(true);
       store.setError(null);
@@ -202,7 +217,7 @@ export function useAuth() {
       const message = error.message || 'Sign out failed';
       store.setError(message);
       toast.error(message);
-      
+
       return { success: false, error: message };
     } finally {
       store.setLoading(false);
@@ -214,7 +229,7 @@ export function useAuth() {
    */
   const refreshSession = useCallback(async (): Promise<AuthResponse> => {
     const store = useAuthStore.getState();
-    
+
     try {
       store.setLoading(true);
       store.setError(null);
@@ -232,7 +247,7 @@ export function useAuth() {
     } catch (error: any) {
       const message = error.message || 'Session refresh failed';
       store.setError(message);
-      
+
       return {
         success: false,
         error: { code: 'REFRESH_ERROR', message },
@@ -248,7 +263,7 @@ export function useAuth() {
   const updateProfile = useCallback(
     async (updates: UpdateProfileRequest): Promise<AuthResponse> => {
       const store = useAuthStore.getState();
-      
+
       try {
         store.setLoading(true);
         store.setError(null);
@@ -267,7 +282,7 @@ export function useAuth() {
         const message = error.message || 'Profile update failed';
         store.setError(message);
         toast.error(message);
-        
+
         return {
           success: false,
           error: { code: 'UPDATE_ERROR', message },

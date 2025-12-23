@@ -1,12 +1,21 @@
+import {
+  Bot,
+  Clock,
+  CheckCircle2,
+  XCircle,
+  Pause,
+  MessageSquare,
+  ListChecks,
+} from 'lucide-react';
+
 import { Card, CardContent } from '@/renderer/ui/card';
-import { Bot, Clock, CheckCircle2, XCircle, Pause, MessageSquare, ListChecks } from 'lucide-react';
 
 interface AutomationStatsProps {
   total: number;
   running: number;
   completed: number;
   failed: number;
-  stopped:number;
+  stopped: number;
   totalSteps: number;
   totalMessages: number;
 }
@@ -84,8 +93,12 @@ export function AutomationStats({
                   <Icon className={`size-6 ${stat.color}`} />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm text-gray-600 dark:text-gray-400 truncate">{stat.label}</p>
-                  <p className="text-lg font-bold text-gray-900 dark:text-white">{stat.value}</p>
+                  <p className="text-sm text-gray-600 dark:text-gray-400 truncate">
+                    {stat.label}
+                  </p>
+                  <p className="text-lg font-bold text-gray-900 dark:text-white">
+                    {stat.value}
+                  </p>
                 </div>
               </div>
             </CardContent>

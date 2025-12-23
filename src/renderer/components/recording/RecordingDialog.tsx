@@ -1,10 +1,29 @@
-import { Video, MousePointerClick, Download, Loader2Icon, Camera, FileJson } from 'lucide-react';
+import {
+  Video,
+  MousePointerClick,
+  Download,
+  Loader2Icon,
+  Camera,
+  FileJson,
+} from 'lucide-react';
+
+import { SnapshotGallery } from './SnapshotGallery';
+
 import type { RecordingSession } from '@/shared/types';
 import { Button } from '@/renderer/ui/button';
 import { Badge } from '@/renderer/ui/badge';
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/renderer/ui/dialog';
-import { formatDate, formatDuration, formatFileSize } from '@/renderer/lib/utils';
-import { SnapshotGallery } from './SnapshotGallery';
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/renderer/ui/dialog';
+import {
+  formatDate,
+  formatDuration,
+  formatFileSize,
+} from '@/renderer/lib/utils';
 
 interface RecordingDialogProps {
   recording: RecordingSession | null;
@@ -15,13 +34,13 @@ interface RecordingDialogProps {
   onExport: (id: string) => void;
 }
 
-export function RecordingDialog({ 
-  recording, 
-  videoUrl, 
-  open, 
+export function RecordingDialog({
+  recording,
+  videoUrl,
+  open,
   onOpenChange,
   onOpenVideo,
-  onExport
+  onExport,
 }: RecordingDialogProps) {
   if (!recording) return null;
 
@@ -55,11 +74,13 @@ export function RecordingDialog({
                   </video>
                 </div>
               )}
-              
+
               {recording.videoPath && !videoUrl && (
                 <div className="bg-slate-100 dark:bg-slate-800 rounded-lg p-12 text-center">
                   <Loader2Icon className="w-12 h-12 animate-spin text-blue-600 mx-auto mb-4" />
-                  <p className="text-base text-gray-600 dark:text-gray-400">Loading video...</p>
+                  <p className="text-base text-gray-600 dark:text-gray-400">
+                    Loading video...
+                  </p>
                 </div>
               )}
 
@@ -68,34 +89,66 @@ export function RecordingDialog({
 
               {/* Recording Info */}
               <div className="bg-white dark:bg-slate-800 rounded-lg border border-gray-200 dark:border-slate-700 p-6">
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Recording Details</h3>
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+                  Recording Details
+                </h3>
                 <div className="grid grid-cols-2 gap-4">
-                  <DetailItem label="Description" value={recording.description || 'No description provided'} />
+                  <DetailItem
+                    label="Description"
+                    value={recording.description || 'No description provided'}
+                  />
                   <DetailItem label="URL" value={recording.url} />
-                  <DetailItem label="Created" value={formatDate(recording.createdAt)} />
-                  <DetailItem label="Duration" value={formatDuration(recording.duration)} />
-                  <DetailItem label="Actions" value={`${recording.actionCount} recorded`} />
-                  
+                  <DetailItem
+                    label="Created"
+                    value={formatDate(recording.createdAt)}
+                  />
+                  <DetailItem
+                    label="Duration"
+                    value={formatDuration(recording.duration)}
+                  />
+                  <DetailItem
+                    label="Actions"
+                    value={`${recording.actionCount} recorded`}
+                  />
+
                   {recording.videoSize && (
                     <>
-                      <DetailItem label="Video Size" value={formatFileSize(recording.videoSize)} />
-                      <DetailItem label="Format" value={recording.videoFormat?.toUpperCase() || 'N/A'} />
+                      <DetailItem
+                        label="Video Size"
+                        value={formatFileSize(recording.videoSize)}
+                      />
+                      <DetailItem
+                        label="Format"
+                        value={recording.videoFormat?.toUpperCase() || 'N/A'}
+                      />
                     </>
                   )}
-                  
-                  { (
+
+                  {
                     <>
-                      <DetailItem label="Snapshots" value={`${recording.snapshotCount} captured`} />
+                      <DetailItem
+                        label="Snapshots"
+                        value={`${recording.snapshotCount} captured`}
+                      />
                       {recording.totalSnapshotSize && (
-                        <DetailItem label="Snapshot Size" value={formatFileSize(recording.totalSnapshotSize)} />
+                        <DetailItem
+                          label="Snapshot Size"
+                          value={formatFileSize(recording.totalSnapshotSize)}
+                        />
                       )}
                     </>
-                  )}
-                  
+                  }
+
                   {recording.tabs && recording.tabs.length > 1 && (
                     <>
-                      <DetailItem label="Tabs" value={`${recording.tabs.length} tabs`} />
-                      <DetailItem label="Tab Switches" value={`${recording.tabSwitchCount || 0} switches`} />
+                      <DetailItem
+                        label="Tabs"
+                        value={`${recording.tabs.length} tabs`}
+                      />
+                      <DetailItem
+                        label="Tab Switches"
+                        value={`${recording.tabSwitchCount || 0} switches`}
+                      />
                     </>
                   )}
                 </div>
@@ -115,7 +168,10 @@ export function RecordingDialog({
                       key={index}
                       className="flex items-start gap-3 text-sm p-3 hover:bg-slate-50 dark:hover:bg-slate-700 rounded-lg border border-gray-200 dark:border-slate-600 transition-colors"
                     >
-                      <Badge variant="outline" className="shrink-0 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400">
+                      <Badge
+                        variant="outline"
+                        className="shrink-0 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400"
+                      >
                         {index + 1}
                       </Badge>
                       <div className="flex-1 min-w-0">
@@ -155,7 +211,10 @@ export function RecordingDialog({
             Export as JSON
           </Button>
           {recording.videoPath && (
-            <Button onClick={() => onOpenVideo(recording.videoPath || '')} variant="outline">
+            <Button
+              onClick={() => onOpenVideo(recording.videoPath || '')}
+              variant="outline"
+            >
               <Download className="w-4 h-4 mr-2" />
               Open Video File
             </Button>

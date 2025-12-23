@@ -1,9 +1,20 @@
+import {
+  Eye,
+  Play,
+  Trash2,
+  Clock,
+  CheckCircle2,
+  XCircle,
+  Pause,
+  MessageSquare,
+  ListChecks,
+} from 'lucide-react';
+import { formatDistanceToNow } from 'date-fns';
+
 import { SessionListItem } from '@/renderer/stores/automationStore';
 import { Card, CardContent, CardFooter, CardHeader } from '@/renderer/ui/card';
 import { Button } from '@/renderer/ui/button';
 import { Badge } from '@/renderer/ui/badge';
-import { Eye, Play, Trash2, Clock, CheckCircle2, XCircle, Pause, MessageSquare, ListChecks } from 'lucide-react';
-import { formatDistanceToNow } from 'date-fns';
 import { AutomationStatus } from '@/shared/types';
 
 interface AutomationSessionCardProps {
@@ -13,7 +24,12 @@ interface AutomationSessionCardProps {
   onDelete: (sessionId: string) => void;
 }
 
-export function AutomationSessionCard({ session, onView, onResume, onDelete }: AutomationSessionCardProps) {
+export function AutomationSessionCard({
+  session,
+  onView,
+  onResume,
+  onDelete,
+}: AutomationSessionCardProps) {
   const getStatusIcon = () => {
     switch (session.status) {
       case 'running':
@@ -49,14 +65,19 @@ export function AutomationSessionCard({ session, onView, onResume, onDelete }: A
       <CardHeader className="pb-3">
         <div className="flex items-start justify-between gap-2">
           <div className="flex-1 min-w-0">
-            <h3 className="font-semibold text-sm text-gray-900 dark:text-white truncate" title={session.userGoal}>
+            <h3
+              className="font-semibold text-sm text-gray-900 dark:text-white truncate"
+              title={session.userGoal}
+            >
               {session.userGoal.substring(0, 20)}...
             </h3>
             <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
               {formatDistanceToNow(session.createdAt, { addSuffix: true })}
             </p>
           </div>
-          <Badge className={`${getStatusColor()} flex items-center gap-1 flex-shrink-0`}>
+          <Badge
+            className={`${getStatusColor()} flex items-center gap-1 flex-shrink-0`}
+          >
             {getStatusIcon()}
             {session.status}
           </Badge>
@@ -68,7 +89,10 @@ export function AutomationSessionCard({ session, onView, onResume, onDelete }: A
           {/* Session ID */}
           <div className="flex items-center justify-between text-xs">
             <span className="text-gray-600 dark:text-gray-400">Session ID</span>
-            <span className="font-mono text-gray-900 dark:text-white truncate ml-2 max-w-[150px]" title={session.sessionId}>
+            <span
+              className="font-mono text-gray-900 dark:text-white truncate ml-2 max-w-[150px]"
+              title={session.sessionId}
+            >
               {session.sessionId.slice(0, 8)}...
             </span>
           </div>
@@ -76,8 +100,13 @@ export function AutomationSessionCard({ session, onView, onResume, onDelete }: A
           {/* Recording ID */}
           {session.recordingId && (
             <div className="flex items-center justify-between text-xs">
-              <span className="text-gray-600 dark:text-gray-400">Recording</span>
-              <span className="font-mono text-gray-900 dark:text-white truncate ml-2 max-w-[150px]" title={session.recordingId}>
+              <span className="text-gray-600 dark:text-gray-400">
+                Recording
+              </span>
+              <span
+                className="font-mono text-gray-900 dark:text-white truncate ml-2 max-w-[150px]"
+                title={session.recordingId}
+              >
                 {session.recordingId.slice(0, 8)}...
               </span>
             </div>

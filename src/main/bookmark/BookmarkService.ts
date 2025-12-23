@@ -1,8 +1,10 @@
-import Database from 'better-sqlite3';
 import { WebContentsView, app } from 'electron';
 import { EventEmitter } from 'events';
 import path from 'path';
 import { randomUUID } from 'crypto';
+
+import Database from 'better-sqlite3';
+
 import {
   Bookmark,
   BookmarkFolder,
@@ -49,9 +51,7 @@ export class BookmarkService extends EventEmitter {
     getRecentBookmarks: Database.Statement;
   };
 
-  constructor(
-    private browserView: WebContentsView
-  ) {
+  constructor(private browserView: WebContentsView) {
     super();
     const userDataPath = app.getPath('userData');
     const dbPath = path.join(userDataPath, 'bookmarks.db');
@@ -66,7 +66,9 @@ export class BookmarkService extends EventEmitter {
 
     this.stmts = {
       getById: this.db.prepare('SELECT * FROM bookmarks WHERE id = ?'),
-      getByUrl: this.db.prepare('SELECT * FROM bookmarks WHERE url = ? AND is_folder = 0'),
+      getByUrl: this.db.prepare(
+        'SELECT * FROM bookmarks WHERE url = ? AND is_folder = 0'
+      ),
       getChildren: this.db.prepare(
         'SELECT * FROM bookmarks WHERE parent_id = ? ORDER BY idx ASC'
       ),
@@ -124,7 +126,6 @@ export class BookmarkService extends EventEmitter {
         CREATE INDEX IF NOT EXISTS idx_url ON bookmarks(url);
         CREATE INDEX IF NOT EXISTS idx_date_added ON bookmarks(date_added DESC);
       `);
-
     } catch (error) {
       console.error('[BookmarkService] Failed to create tables:', error);
     }
@@ -165,24 +166,30 @@ export class BookmarkService extends EventEmitter {
   }
 
   public createBookmark(params: CreateBookmarkParams): Bookmark {
-    const {
-      url,
-      title,
-      parentId = BOOKMARK_BAR_ID,
-      index,
-      favicon,
-    } = params;
+    const { url, title, parentId = BOOKMARK_BAR_ID, index, favicon } = params;
 
     const id = randomUUID();
     const now = Date.now();
 
     let idx = index;
     if (idx === undefined) {
-      const result = this.stmts.getMaxIndex.get(parentId) as { max_idx: number | null };
+      const result = this.stmts.getMaxIndex.get(parentId) as {
+        max_idx: number | null;
+      };
       idx = (result?.max_idx ?? -1) + 1;
     }
 
-    this.stmts.insert.run(id, title || null, url, favicon || null, parentId, idx, 0, now, now);
+    this.stmts.insert.run(
+      id,
+      title || null,
+      url,
+      favicon || null,
+      parentId,
+      idx,
+      0,
+      now,
+      now
+    );
 
     this.notifyBookmarkChanged();
 
@@ -206,7 +213,9 @@ export class BookmarkService extends EventEmitter {
 
     let idx = index;
     if (idx === undefined) {
-      const result = this.stmts.getMaxIndex.get(parentId) as { max_idx: number | null };
+      const result = this.stmts.getMaxIndex.get(parentId) as {
+        max_idx: number | null;
+      };
       idx = (result?.max_idx ?? -1) + 1;
     }
 
@@ -248,7 +257,10 @@ export class BookmarkService extends EventEmitter {
     const buildTree = (parentId: string | null): BookmarkTreeNode[] => {
       const children = parentId
         ? this.getChildren(parentId)
-        : [this.getById(BOOKMARK_BAR_ID)!, this.getById(OTHER_BOOKMARKS_ID)!].filter(Boolean);
+        : [
+            this.getById(BOOKMARK_BAR_ID)!,
+            this.getById(OTHER_BOOKMARKS_ID)!,
+          ].filter(Boolean);
 
       return children.map((node) => {
         if (node.isFolder) {
@@ -286,8 +298,8 @@ export class BookmarkService extends EventEmitter {
 
     if (title !== undefined) {
       const actualTitle = title.trim();
-      const urlValue = url === undefined ? null : (url || null);
-      
+      const urlValue = url === undefined ? null : url || null;
+
       const stmt = this.db.prepare(`
         UPDATE bookmarks 
         SET title = ?,
@@ -299,8 +311,8 @@ export class BookmarkService extends EventEmitter {
       this.notifyBookmarkChanged();
       return result.changes > 0;
     }
-    
-    const urlValue = url === undefined ? null : (url || null);
+
+    const urlValue = url === undefined ? null : url || null;
     const result = this.stmts.update.run(null, urlValue, now, id);
     this.notifyBookmarkChanged();
     return result.changes > 0;
@@ -317,7 +329,9 @@ export class BookmarkService extends EventEmitter {
     let newIndex = index;
 
     if (newIndex === undefined) {
-      const result = this.stmts.getMaxIndex.get(newParentId) as { max_idx: number | null };
+      const result = this.stmts.getMaxIndex.get(newParentId) as {
+        max_idx: number | null;
+      };
       newIndex = (result?.max_idx ?? -1) + 1;
     }
 
@@ -348,7 +362,11 @@ export class BookmarkService extends EventEmitter {
 
   public search(query: string, limit = 20): Bookmark[] {
     const searchPattern = `%${query.toLowerCase()}%`;
-    const rows = this.stmts.searchBookmarks.all(searchPattern, searchPattern, limit) as any[];
+    const rows = this.stmts.searchBookmarks.all(
+      searchPattern,
+      searchPattern,
+      limit
+    ) as any[];
     return rows.map((row) => this.rowToBookmark(row));
   }
 

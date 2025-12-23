@@ -1,10 +1,4 @@
 import { useState, useEffect } from 'react';
-import { Button } from '@/renderer/ui/button';
-import { Card } from '@/renderer/ui/card';
-import { Badge } from '@/renderer/ui/badge';
-import { Progress } from '@/renderer/ui/progress';
-import { Separator } from '@/renderer/ui/separator';
-import { Alert } from '@/renderer/ui/alert';
 import {
   Check,
   Crown,
@@ -16,16 +10,25 @@ import {
   RefreshCw,
   Loader2Icon,
 } from 'lucide-react';
+import { toast } from 'sonner';
+
+import { Button } from '@/renderer/ui/button';
+import { Card } from '@/renderer/ui/card';
+import { Badge } from '@/renderer/ui/badge';
+import { Progress } from '@/renderer/ui/progress';
+import { Separator } from '@/renderer/ui/separator';
+import { Alert } from '@/renderer/ui/alert';
 import {
   UserSubscription,
   PlanDetails,
   SubscriptionTier,
   SubscriptionStatus,
 } from '@/shared/types/subscription';
-import { toast } from 'sonner';
 
 export function SubscriptionPage() {
-  const [subscription, setSubscription] = useState<UserSubscription | null>(null);
+  const [subscription, setSubscription] = useState<UserSubscription | null>(
+    null
+  );
   const [currentPlan, setCurrentPlan] = useState<PlanDetails | null>(null);
   const [allPlans, setAllPlans] = useState<PlanDetails[]>([]);
   const [loading, setLoading] = useState(true);
@@ -159,8 +162,8 @@ export function SubscriptionPage() {
   if (loading) {
     return (
       <div className="min-h-screen flex flex-col gap-2 items-center justify-center bg-teal-50 dark:bg-slate-900 text-teal-500 dark:text-teal-400">
-        <Loader2Icon className='size-7 animate-spin' />
-        <p className='text-xs'>Loading Your Subscription...</p>
+        <Loader2Icon className="size-7 animate-spin" />
+        <p className="text-xs">Loading Your Subscription...</p>
       </div>
     );
   }
@@ -168,21 +171,24 @@ export function SubscriptionPage() {
   if (!subscription || !currentPlan) {
     return (
       <div className="min-h-screen flex flex-col gap-4 items-center justify-center bg-red-50 dark:bg-slate-900">
-        <p className="text-red-600 dark:text-red-400">Failed to load subscription. Please try again.</p>
-        <Button onClick={loadSubscription} className="mt-4" variant='outline'>Retry</Button>
+        <p className="text-red-600 dark:text-red-400">
+          Failed to load subscription. Please try again.
+        </p>
+        <Button onClick={loadSubscription} className="mt-4" variant="outline">
+          Retry
+        </Button>
       </div>
     );
   }
 
   const availableUpgrades = allPlans.filter(
     (plan) =>
-      plan.tier !== subscription.tier &&
-      plan.tier !== SubscriptionTier.FREE
+      plan.tier !== subscription.tier && plan.tier !== SubscriptionTier.FREE
   );
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-900">
-       <div className="max-w-5xl mx-auto px-6 py-8 space-y-4">
+      <div className="max-w-5xl mx-auto px-6 py-8 space-y-4">
         <div className="flex items-center justify-between">
           <div ml-2>
             <h1 className="text-2xl font-semibold mb-2">Subscription</h1>
@@ -206,7 +212,9 @@ export function SubscriptionPage() {
             <div>
               <h2 className="text-xl font-semibold">{currentPlan.name}</h2>
               <div className="flex items-center gap-2">
-                {currentPlan.actual_price_monthly != null && currentPlan.actual_price_monthly !== currentPlan.price_monthly ? (
+                {currentPlan.actual_price_monthly != null &&
+                currentPlan.actual_price_monthly !==
+                  currentPlan.price_monthly ? (
                   <>
                     <p className="text-gray-600 dark:text-gray-400 line-through text-sm">
                       ${currentPlan.price_monthly}/month
@@ -215,12 +223,21 @@ export function SubscriptionPage() {
                       ${currentPlan.actual_price_monthly}/month
                     </p>
                     <Badge className="bg-green-600 text-white text-xs">
-                      {Math.round((1 - currentPlan.actual_price_monthly / currentPlan.price_monthly) * 100)}% OFF
+                      {Math.round(
+                        (1 -
+                          currentPlan.actual_price_monthly /
+                            currentPlan.price_monthly) *
+                          100
+                      )}
+                      % OFF
                     </Badge>
                   </>
                 ) : (
                   <p className="text-gray-600 dark:text-gray-400">
-                    ${currentPlan.actual_price_monthly ?? currentPlan.price_monthly}/month
+                    $
+                    {currentPlan.actual_price_monthly ??
+                      currentPlan.price_monthly}
+                    /month
                   </p>
                 )}
               </div>
@@ -289,13 +306,13 @@ export function SubscriptionPage() {
                   className="gap-2"
                   disabled={portalLoading}
                 >
-                  {
-                    portalLoading ? (
-                      <Loader2Icon className="w-4 h-4 animate-spin" />
-                    ) : (
-                      <span className="flex items-center gap-2">Manage Billing <ExternalLink className="w-4 h-4" /></span>
-                    )
-                  }
+                  {portalLoading ? (
+                    <Loader2Icon className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <span className="flex items-center gap-2">
+                      Manage Billing <ExternalLink className="w-4 h-4" />
+                    </span>
+                  )}
                 </Button>
               </div>
             )}
@@ -305,8 +322,8 @@ export function SubscriptionPage() {
             <Alert className="mt-6 bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200">
               <AlertCircle className="h-4 w-4 text-yellow-600" />
               <p className="text-yellow-900 dark:text-yellow-100">
-                Your subscription will be canceled at the end of the current period
-                ({formatDate(subscription.current_period_end)})
+                Your subscription will be canceled at the end of the current
+                period ({formatDate(subscription.current_period_end)})
               </p>
             </Alert>
           )}
@@ -320,26 +337,31 @@ export function SubscriptionPage() {
             </h2>
             <div className="grid md:grid-cols-2 gap-6">
               {availableUpgrades.map((plan) => (
-                <Card key={plan.tier} className="m-2 p-6 hover:bg-slate-100 dark:hover:bg-slate-800 hover:z-20 hover:shadow-lg shadow-slate-200 dark:shadow-slate-800 transition-all">
-                   <div>
-                      <h3 className="text-xl font-semibold">{plan.name}</h3>
-                      <div className="flex items-center gap-2">
-                        {plan.actual_price_monthly != null && plan.actual_price_monthly !== plan.price_monthly ? (
-                          <>
-                            <p className="text-gray-600 dark:text-gray-400 line-through text-sm">
-                              ${plan.price_monthly}/month
-                            </p>
-                            <p className="text-teal-600 dark:text-teal-400 font-semibold">
-                              ${plan.actual_price_monthly}/month
-                            </p>
-                          </>
-                        ) : (
-                          <p className="text-gray-600 dark:text-gray-400">
-                            ${plan.actual_price_monthly ?? plan.price_monthly}/month
+                <Card
+                  key={plan.tier}
+                  className="m-2 p-6 hover:bg-slate-100 dark:hover:bg-slate-800 hover:z-20 hover:shadow-lg shadow-slate-200 dark:shadow-slate-800 transition-all"
+                >
+                  <div>
+                    <h3 className="text-xl font-semibold">{plan.name}</h3>
+                    <div className="flex items-center gap-2">
+                      {plan.actual_price_monthly != null &&
+                      plan.actual_price_monthly !== plan.price_monthly ? (
+                        <>
+                          <p className="text-gray-600 dark:text-gray-400 line-through text-sm">
+                            ${plan.price_monthly}/month
                           </p>
-                        )}
-                      </div>
+                          <p className="text-teal-600 dark:text-teal-400 font-semibold">
+                            ${plan.actual_price_monthly}/month
+                          </p>
+                        </>
+                      ) : (
+                        <p className="text-gray-600 dark:text-gray-400">
+                          ${plan.actual_price_monthly ?? plan.price_monthly}
+                          /month
+                        </p>
+                      )}
                     </div>
+                  </div>
 
                   <div className="mb-4 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
                     <p className="text-sm text-gray-600 dark:text-gray-400">
@@ -367,9 +389,12 @@ export function SubscriptionPage() {
                     onClick={() => handleUpgrade(plan.tier)}
                     disabled={upgrading}
                   >
-                    {
-                      (plan.actual_price_monthly ?? plan.price_monthly) > (currentPlan.actual_price_monthly ?? currentPlan.price_monthly) ? 'Upgrade' : 'Downgrade'
-                    } to {plan.name}
+                    {(plan.actual_price_monthly ?? plan.price_monthly) >
+                    (currentPlan.actual_price_monthly ??
+                      currentPlan.price_monthly)
+                      ? 'Upgrade'
+                      : 'Downgrade'}{' '}
+                    to {plan.name}
                   </Button>
                 </Card>
               ))}
@@ -383,12 +408,14 @@ export function SubscriptionPage() {
             {currentPlan.features.map((feature, index) => (
               <div key={index} className="flex items-start">
                 <Check className="w-5 h-5 text-green-500 mr-3 flex-shrink-0 mt-0.5" />
-                <span className="text-gray-700 dark:text-gray-300">{feature}</span>
+                <span className="text-gray-700 dark:text-gray-300">
+                  {feature}
+                </span>
               </div>
             ))}
           </div>
         </Card>
-       </div>
+      </div>
     </div>
   );
 }

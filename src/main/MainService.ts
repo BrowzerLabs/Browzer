@@ -1,13 +1,15 @@
+import { BaseWindow, WebContentsView, dialog } from 'electron';
+import path from 'node:path';
+
+import { ConnectionService } from './api';
+import { UpdateService } from './UpdateService';
+
 import { BrowserService } from '@/main/BrowserService';
 import { IPCHandlers } from '@/main/ipc/IPCHandlers';
 import { DeepLinkService } from '@/main/deeplink/DeepLinkService';
-import { ConnectionService } from './api';
 import { AuthService } from '@/main/auth/AuthService';
 import { AppMenu } from '@/main/menu/AppMenu';
-import { UpdateService } from './UpdateService';
 import { ThemeService } from '@/main/theme/ThemeService';
-import { BaseWindow, WebContentsView, dialog } from 'electron';
-import path from 'node:path';
 
 export class MainService {
   private browserService: BrowserService;
@@ -22,12 +24,11 @@ export class MainService {
   private sidebarVisible = true;
   private sidebarWidthPercent = 30;
   private themeService: ThemeService;
-  
 
   constructor() {
     const isMac = process.platform === 'darwin';
     const isWindows = process.platform === 'win32';
-    
+
     this.baseWindow = new BaseWindow({
       width: 1400,
       height: 900,
@@ -71,16 +72,26 @@ export class MainService {
 
     this.updateService = new UpdateService(this.browserView.webContents);
 
-    this.deepLinkService = new DeepLinkService(this.baseWindow, this.browserView.webContents);
+    this.deepLinkService = new DeepLinkService(
+      this.baseWindow,
+      this.browserView.webContents
+    );
 
-    this.connectionService = new ConnectionService(this.browserView.webContents);
+    this.connectionService = new ConnectionService(
+      this.browserView.webContents
+    );
 
     this.themeService = new ThemeService(this.baseWindow);
 
-    this.authService = new AuthService(this.browserService, this.connectionService);
-    
-    this.connectionService.setRefreshCallback(() => this.authService.refreshSession());
-    
+    this.authService = new AuthService(
+      this.browserService,
+      this.connectionService
+    );
+
+    this.connectionService.setRefreshCallback(() =>
+      this.authService.refreshSession()
+    );
+
     this.ipcHandlers = new IPCHandlers(
       this.baseWindow,
       this.browserService,
@@ -88,14 +99,17 @@ export class MainService {
       this.themeService
     );
 
-    this.appMenu = new AppMenu(this.browserService.getTabService(), this.updateService);
+    this.appMenu = new AppMenu(
+      this.browserService.getTabService(),
+      this.updateService
+    );
     this.appMenu.setupMenu();
 
     if (MAIN_WINDOW_VITE_DEV_SERVER_URL) {
       this.browserView.webContents.loadURL(MAIN_WINDOW_VITE_DEV_SERVER_URL);
     } else {
       this.browserView.webContents.loadFile(
-      path.join(__dirname, `../renderer/${MAIN_WINDOW_VITE_NAME}/index.html`),
+        path.join(__dirname, `../renderer/${MAIN_WINDOW_VITE_NAME}/index.html`)
       );
     }
 
@@ -109,12 +123,13 @@ export class MainService {
   }
 
   private setUpWindowEvents(): void {
-    if (!this.baseWindow){
+    if (!this.baseWindow) {
       console.error('❌ Base window is not initialized');
       dialog.showMessageBox({
         type: 'error',
         title: 'Application is not initialized',
-        message: 'The application is not initialized properly. Please restart the application.'
+        message:
+          'The application is not initialized properly. Please restart the application.',
       });
       this.destroy();
       return;
@@ -140,12 +155,11 @@ export class MainService {
       this.sidebarVisible = visible;
       this.updateLayout();
     });
-    
   }
 
   private updateLayout(): void {
     const bounds = this.baseWindow.getBounds();
-    const sidebarWidth = this.sidebarVisible 
+    const sidebarWidth = this.sidebarVisible
       ? Math.floor(bounds.width * (this.sidebarWidthPercent / 100))
       : 0;
 

@@ -1,11 +1,12 @@
 import Anthropic from '@anthropic-ai/sdk';
+
 import { AutomationStatus } from '@/shared/types';
 
 export interface StoredSession {
   id: string;
   userGoal: string;
   recordingId: string;
-  status: AutomationStatus
+  status: AutomationStatus;
   createdAt: number;
   updatedAt: number;
   completedAt?: number;
@@ -86,16 +87,16 @@ export interface SessionWithHistory {
 export interface ContextConfig {
   // When to trigger context editing (in tokens)
   triggerThreshold: number;
-  
+
   // How many tool uses to keep after clearing
   keepToolUses: number;
-  
+
   // Minimum tokens to clear (for cache efficiency)
   clearAtLeast: number;
-  
+
   // Tools to exclude from clearing
   excludeTools: string[];
-  
+
   // Whether to clear tool inputs along with results
   clearToolInputs: boolean;
 }

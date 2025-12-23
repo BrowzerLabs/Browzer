@@ -1,6 +1,15 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Folder, ChevronDown, ChevronRight, Edit2, Trash2, ExternalLink, ArrowRight } from 'lucide-react';
+import {
+  Folder,
+  ChevronDown,
+  ChevronRight,
+  Edit2,
+  Trash2,
+  ExternalLink,
+  ArrowRight,
+} from 'lucide-react';
 import { toast } from 'sonner';
+
 import { Button } from '@/renderer/ui/button';
 import { useBrowserViewLayer } from '@/renderer/hooks/useBrowserViewLayer';
 import {
@@ -42,7 +51,6 @@ interface EditDialogState {
   url: string;
 }
 
-
 function useBookmarkBarData() {
   const [items, setItems] = useState<BookmarkTreeNode[]>([]);
 
@@ -65,7 +73,6 @@ function useBookmarkBarData() {
 
   return items;
 }
-
 
 function useVisibleItemsCount(
   containerRef: React.RefObject<HTMLDivElement>,
@@ -112,7 +119,6 @@ function useVisibleItemsCount(
   return visibleCount;
 }
 
-
 interface FaviconProps {
   favicon?: string;
   title?: string | null;
@@ -121,16 +127,21 @@ interface FaviconProps {
 }
 
 function Favicon({ favicon, title, url, size = 'sm' }: FaviconProps) {
-  const displayChar = title?.charAt(0)?.toUpperCase() || url?.charAt(0)?.toUpperCase() || '?';
+  const displayChar =
+    title?.charAt(0)?.toUpperCase() || url?.charAt(0)?.toUpperCase() || '?';
   const sizeClass = size === 'sm' ? 'w-3.5 h-3.5' : 'w-4 h-4';
   const textSize = size === 'sm' ? 'text-[9px]' : 'text-[10px]';
 
   if (favicon) {
-    return <img src={favicon} alt="" className={`${sizeClass} rounded shrink-0`} />;
+    return (
+      <img src={favicon} alt="" className={`${sizeClass} rounded shrink-0`} />
+    );
   }
 
   return (
-    <div className={`${sizeClass} rounded bg-muted flex items-center justify-center shrink-0`}>
+    <div
+      className={`${sizeClass} rounded bg-muted flex items-center justify-center shrink-0`}
+    >
       <span className={`${textSize} text-muted-foreground`}>{displayChar}</span>
     </div>
   );
@@ -143,9 +154,14 @@ export function BookmarkBar({ onNavigate }: BookmarkBarProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const measureRef = useRef<HTMLDivElement>(null);
 
-  const visibleCount = useVisibleItemsCount(containerRef, measureRef, bookmarkItems.length);
+  const visibleCount = useVisibleItemsCount(
+    containerRef,
+    measureRef,
+    bookmarkItems.length
+  );
 
-  const { createOverlayHandler, registerOverlay, unregisterOverlay } = useBrowserViewLayer();
+  const { createOverlayHandler, registerOverlay, unregisterOverlay } =
+    useBrowserViewLayer();
 
   const [editDialog, setEditDialog] = useState<EditDialogState>({
     isOpen: false,
@@ -156,35 +172,43 @@ export function BookmarkBar({ onNavigate }: BookmarkBarProps) {
 
   const dialogOverlayId = 'edit-dialog';
 
-
-  const handleNavigate = useCallback((url: string) => {
-    onNavigate(url);
-  }, [onNavigate]);
+  const handleNavigate = useCallback(
+    (url: string) => {
+      onNavigate(url);
+    },
+    [onNavigate]
+  );
 
   const handleOpenNewTab = async (url: string) => {
     await window.browserAPI.createTab(url);
   };
 
-  const openEditDialog = useCallback((item: BookmarkTreeNode) => {
-    registerOverlay(dialogOverlayId);
-    setEditDialog({
-      isOpen: true,
-      item,
-      name: item.title || '',
-      url: item.url || '',
-    });
-  }, [registerOverlay]);
+  const openEditDialog = useCallback(
+    (item: BookmarkTreeNode) => {
+      registerOverlay(dialogOverlayId);
+      setEditDialog({
+        isOpen: true,
+        item,
+        name: item.title || '',
+        url: item.url || '',
+      });
+    },
+    [registerOverlay]
+  );
 
   const closeEditDialog = useCallback(() => {
-    setEditDialog(prev => ({ ...prev, isOpen: false, item: null }));
+    setEditDialog((prev) => ({ ...prev, isOpen: false, item: null }));
     unregisterOverlay(dialogOverlayId);
   }, [unregisterOverlay]);
 
-  const handleDialogOpenChange = useCallback((open: boolean) => {
-    if (!open) {
-      closeEditDialog();
-    }
-  }, [closeEditDialog]);
+  const handleDialogOpenChange = useCallback(
+    (open: boolean) => {
+      if (!open) {
+        closeEditDialog();
+      }
+    },
+    [closeEditDialog]
+  );
 
   const handleSaveEdit = useCallback(async () => {
     if (!editDialog.item) return;
@@ -219,7 +243,6 @@ export function BookmarkBar({ onNavigate }: BookmarkBarProps) {
     }
   }, []);
 
-
   const renderFolderContents = (children: BookmarkTreeNode[] | undefined) => {
     if (!children?.length) return null;
 
@@ -245,8 +268,15 @@ export function BookmarkBar({ onNavigate }: BookmarkBarProps) {
           onClick={() => child.url && handleNavigate(child.url)}
           className="gap-2"
         >
-          <Favicon favicon={child.favicon} title={child.title} url={child.url} size="md" />
-          {hasTitle && <span className="truncate max-w-[180px]">{child.title}</span>}
+          <Favicon
+            favicon={child.favicon}
+            title={child.title}
+            url={child.url}
+            size="md"
+          />
+          {hasTitle && (
+            <span className="truncate max-w-[180px]">{child.title}</span>
+          )}
         </DropdownMenuItem>
       );
     });
@@ -264,15 +294,24 @@ export function BookmarkBar({ onNavigate }: BookmarkBarProps) {
         title={item.title || item.url}
       >
         <Favicon favicon={item.favicon} title={item.title} url={item.url} />
-        {hasTitle && <span className="truncate max-w-[120px]">{item.title}</span>}
+        {hasTitle && (
+          <span className="truncate max-w-[120px]">{item.title}</span>
+        )}
       </Button>
     );
   };
 
-  const renderFolderButton = (item: BookmarkTreeNode, overlayHandler: (open: boolean) => void) => (
+  const renderFolderButton = (
+    item: BookmarkTreeNode,
+    overlayHandler: (open: boolean) => void
+  ) => (
     <DropdownMenu onOpenChange={overlayHandler}>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="sm" className="h-6 px-2 gap-1.5 text-xs font-normal shrink-0">
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-6 px-2 gap-1.5 text-xs font-normal shrink-0"
+        >
           <Folder className="w-3.5 h-3.5 text-yellow-500 shrink-0" />
           <span className="truncate max-w-[120px]">{item.title}</span>
           <ChevronDown className="w-3 h-3 text-muted-foreground shrink-0" />
@@ -292,7 +331,9 @@ export function BookmarkBar({ onNavigate }: BookmarkBarProps) {
             <ArrowRight className="mr-2" />
             Open in Current Tab
           </ContextMenuItem>
-          <ContextMenuItem onClick={() => item.url && handleOpenNewTab(item.url)}>
+          <ContextMenuItem
+            onClick={() => item.url && handleOpenNewTab(item.url)}
+          >
             <ExternalLink className="mr-2" />
             Open in New Tab
           </ContextMenuItem>
@@ -358,8 +399,15 @@ export function BookmarkBar({ onNavigate }: BookmarkBarProps) {
         onClick={() => item.url && handleNavigate(item.url)}
         className="gap-2"
       >
-        <Favicon favicon={item.favicon} title={item.title} url={item.url} size="md" />
-        {hasTitle && <span className="truncate max-w-[180px]">{item.title}</span>}
+        <Favicon
+          favicon={item.favicon}
+          title={item.title}
+          url={item.url}
+          size="md"
+        />
+        {hasTitle && (
+          <span className="truncate max-w-[180px]">{item.title}</span>
+        )}
       </DropdownMenuItem>
     );
   };
@@ -367,7 +415,10 @@ export function BookmarkBar({ onNavigate }: BookmarkBarProps) {
   const renderMeasureItem = (item: BookmarkTreeNode) => {
     if (item.isFolder) {
       return (
-        <div key={item.id} className="h-6 px-2 gap-1.5 text-xs font-normal shrink-0 flex items-center">
+        <div
+          key={item.id}
+          className="h-6 px-2 gap-1.5 text-xs font-normal shrink-0 flex items-center"
+        >
           <Folder className="w-3.5 h-3.5 text-yellow-500 shrink-0" />
           <span className="truncate max-w-[120px]">{item.title}</span>
           <ChevronDown className="w-3 h-3 text-muted-foreground shrink-0" />
@@ -382,11 +433,12 @@ export function BookmarkBar({ onNavigate }: BookmarkBarProps) {
         className={`h-6 gap-1.5 text-xs font-normal shrink-0 flex items-center ${hasTitle ? 'px-2' : 'px-1.5'}`}
       >
         <Favicon favicon={item.favicon} title={item.title} url={item.url} />
-        {hasTitle && <span className="truncate max-w-[120px]">{item.title}</span>}
+        {hasTitle && (
+          <span className="truncate max-w-[120px]">{item.title}</span>
+        )}
       </div>
     );
   };
-
 
   if (bookmarkItems.length === 0) {
     return null;
@@ -427,7 +479,10 @@ export function BookmarkBar({ onNavigate }: BookmarkBarProps) {
                 <ChevronRight className="w-4 h-4 text-muted-foreground" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="min-w-[200px] max-h-[400px] overflow-y-auto">
+            <DropdownMenuContent
+              align="end"
+              className="min-w-[200px] max-h-[400px] overflow-y-auto"
+            >
               {overflowItems.map(renderOverflowItem)}
             </DropdownMenuContent>
           </DropdownMenu>
@@ -452,8 +507,14 @@ export function BookmarkBar({ onNavigate }: BookmarkBarProps) {
               <Input
                 id="edit-name"
                 value={editDialog.name}
-                onChange={(e) => setEditDialog(prev => ({ ...prev, name: e.target.value }))}
-                placeholder={editDialog.item?.isFolder ? 'Folder name' : 'Bookmark name (optional)'}
+                onChange={(e) =>
+                  setEditDialog((prev) => ({ ...prev, name: e.target.value }))
+                }
+                placeholder={
+                  editDialog.item?.isFolder
+                    ? 'Folder name'
+                    : 'Bookmark name (optional)'
+                }
               />
             </div>
             {!editDialog.item?.isFolder && (
@@ -462,7 +523,9 @@ export function BookmarkBar({ onNavigate }: BookmarkBarProps) {
                 <Input
                   id="edit-url"
                   value={editDialog.url}
-                  onChange={(e) => setEditDialog(prev => ({ ...prev, url: e.target.value }))}
+                  onChange={(e) =>
+                    setEditDialog((prev) => ({ ...prev, url: e.target.value }))
+                  }
                   placeholder="https://example.com"
                 />
               </div>
@@ -472,9 +535,7 @@ export function BookmarkBar({ onNavigate }: BookmarkBarProps) {
             <Button variant="outline" onClick={closeEditDialog}>
               Cancel
             </Button>
-            <Button onClick={handleSaveEdit}>
-              Save
-            </Button>
+            <Button onClick={handleSaveEdit}>Save</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

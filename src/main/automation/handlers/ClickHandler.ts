@@ -1,4 +1,5 @@
 import { BaseHandler, HandlerContext } from './BaseHandler';
+
 import type { ToolExecutionResult, ClickParams } from '@/shared/types';
 
 export class ClickHandler extends BaseHandler {
@@ -8,38 +9,40 @@ export class ClickHandler extends BaseHandler {
 
   async execute(params: ClickParams): Promise<ToolExecutionResult> {
     const startTime = Date.now();
-    
+
     try {
       console.log('[ClickHandler] 🎯 Starting unified click execution');
 
       if (params.tag) {
         const result = await this.executeFindAndClick(params);
-        
+
         if (result.success) {
           await this.sleep(500);
           return {
             success: true,
             toolName: 'click',
-            url: this.getUrl()
+            url: this.getUrl(),
           };
         } else {
           if (params.click_position) {
-            console.warn('[ClickHandler] ⚠️  click failed, trying position fallback');
+            console.warn(
+              '[ClickHandler] ⚠️  click failed, trying position fallback'
+            );
             const positionSuccess = await this.executeClickAtPosition(
               params.click_position.x,
               params.click_position.y
             );
-            
+
             if (positionSuccess) {
               await this.sleep(500);
               return {
                 success: true,
                 toolName: 'click',
-                url: this.getUrl()
+                url: this.getUrl(),
               };
             }
           }
-          
+
           return this.createErrorResult('click', startTime, {
             code: 'ELEMENT_NOT_FOUND',
             message: result.error || 'Could not find or click element',
@@ -48,9 +51,9 @@ export class ClickHandler extends BaseHandler {
               suggestions: [
                 'Verify element attributes match the current page',
                 'Check if element is dynamically loaded',
-                'Try adding more specific attributes (id, data-testid, aria-label)'
-              ]
-            }
+                'Try adding more specific attributes (id, data-testid, aria-label)',
+              ],
+            },
           });
         }
       } else if (params.click_position) {
@@ -59,43 +62,45 @@ export class ClickHandler extends BaseHandler {
           params.click_position.x,
           params.click_position.y
         );
-        
+
         if (positionSuccess) {
           await this.sleep(500);
           return {
             success: true,
             toolName: 'click',
-            url: this.getUrl()
+            url: this.getUrl(),
           };
         }
-        
+
         return this.createErrorResult('click', startTime, {
           code: 'CLICK_FAILED',
           message: 'Failed to execute click at position',
           details: {
-            lastError: `Click failed at coordinates (${params.click_position.x}, ${params.click_position.y})`
-          }
+            lastError: `Click failed at coordinates (${params.click_position.x}, ${params.click_position.y})`,
+          },
         });
       } else {
         return this.createErrorResult('click', startTime, {
           code: 'INVALID_PARAMS',
-          message: 'Must provide either tag for element finding or click_position'
+          message:
+            'Must provide either tag for element finding or click_position',
         });
       }
-
     } catch (error) {
       console.error('[ClickHandler] ❌ Click failed:', error);
       return this.createErrorResult('click', startTime, {
         code: 'EXECUTION_ERROR',
         message: `Click execution failed: ${error instanceof Error ? error.message : String(error)}`,
         details: {
-          lastError: error instanceof Error ? error.message : String(error)
-        }
+          lastError: error instanceof Error ? error.message : String(error),
+        },
       });
     }
   }
 
-  private async executeFindAndClick(params: ClickParams): Promise<{ success: boolean; error?: string }> {
+  private async executeFindAndClick(
+    params: ClickParams
+  ): Promise<{ success: boolean; error?: string }> {
     try {
       console.log('[ClickHandler] 🔍 Executing unified find-and-click script');
 
@@ -203,8 +208,8 @@ export class ClickHandler extends BaseHandler {
               
               if (elValue === targetValue) {
                 if (key === 'class') {
-                  const elClasses = (elValue || '').split(/\s+/);
-                  const targetClasses = (targetValue || '').split(/\s+/);
+                  const elClasses = (elValue || '').split(/\\s+/);
+                  const targetClasses = (targetValue || '').split(/\\s+/);
                   const matchingClasses = targetClasses.filter(c => elClasses.includes(c));
                   if (matchingClasses.length > 0) {
                     const classScore = Math.min(matchingClasses.length * 1, 4);
@@ -225,8 +230,8 @@ export class ClickHandler extends BaseHandler {
                   matchedBy.push('dyn:' + key);
                 }
               } else if (key === 'class' && elValue && targetValue) {
-                const elClasses = elValue.split(/\s+/);
-                const targetClasses = targetValue.split(/\s+/);
+                const elClasses = elValue.split(/\\s+/);
+                const targetClasses = targetValue.split(/\\s+/);
                 const matchingClasses = targetClasses.filter(c => elClasses.includes(c));
                 if (matchingClasses.length > 0) {
                   const classScore = Math.min(matchingClasses.length * 1, 4); // Max 4 points
@@ -512,12 +517,11 @@ export class ClickHandler extends BaseHandler {
 
       const result = await this.view.webContents.executeJavaScript(script);
       return result;
-
     } catch (error) {
       console.error('[ClickHandler] ❌  click execution failed:', error);
       return {
         success: false,
-        error: error instanceof Error ? error.message : String(error)
+        error: error instanceof Error ? error.message : String(error),
       };
     }
   }
@@ -532,7 +536,9 @@ export class ClickHandler extends BaseHandler {
       const clickX = Math.round(x);
       const clickY = Math.round(y);
 
-      console.log(`[ClickHandler] 🎯 Executing CDP click at position (${clickX}, ${clickY})`);
+      console.log(
+        `[ClickHandler] 🎯 Executing CDP click at position (${clickX}, ${clickY})`
+      );
 
       // ============================================================================
       // VISUAL FEEDBACK: Show ripple effect at click position
@@ -546,7 +552,7 @@ export class ClickHandler extends BaseHandler {
         x: clickX,
         y: clickY,
         button: 'none',
-        clickCount: 0
+        clickCount: 0,
       });
 
       await this.sleep(50);
@@ -557,7 +563,7 @@ export class ClickHandler extends BaseHandler {
         x: clickX,
         y: clickY,
         button: 'left',
-        clickCount: 1
+        clickCount: 1,
       });
 
       await this.sleep(50);
@@ -568,19 +574,21 @@ export class ClickHandler extends BaseHandler {
         x: clickX,
         y: clickY,
         button: 'left',
-        clickCount: 1
+        clickCount: 1,
       });
 
       console.log('[ClickHandler] ✅ CDP position-based click executed');
-      
+
       // Keep ripple visible for a moment
       await this.sleep(300);
       await this.removeClickRipple();
-      
-      return true;
 
+      return true;
     } catch (error) {
-      console.error('[ClickHandler] ❌ CDP position-based click failed:', error);
+      console.error(
+        '[ClickHandler] ❌ CDP position-based click failed:',
+        error
+      );
       await this.removeClickRipple();
       return false;
     }

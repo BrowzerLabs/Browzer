@@ -39,8 +39,8 @@
 //         {/* LLM Provider */}
 //         <Field>
 //           <FieldLabel>Default AI Provider</FieldLabel>
-//           <Select 
-//             value={settings.defaultProvider} 
+//           <Select
+//             value={settings.defaultProvider}
 //             onValueChange={(value) => onUpdate('defaultProvider', value)}
 //           >
 //             <SelectTrigger>
@@ -157,7 +157,7 @@
 //         <Alert>
 //           <AlertCircle className='h-4 w-4' />
 //           <AlertDescription>
-//             Your API keys are stored securely on your local machine and are never sent to any 
+//             Your API keys are stored securely on your local machine and are never sent to any
 //             third-party servers except the respective AI providers.
 //           </AlertDescription>
 //         </Alert>

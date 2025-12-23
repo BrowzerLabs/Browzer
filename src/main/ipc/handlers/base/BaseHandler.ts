@@ -1,4 +1,5 @@
 import { ipcMain, IpcMainInvokeEvent } from 'electron';
+
 import { IPCContext, IIPCHandler } from './types';
 
 export abstract class BaseHandler implements IIPCHandler {
@@ -16,7 +17,7 @@ export abstract class BaseHandler implements IIPCHandler {
   abstract register(): void;
 
   cleanup(): void {
-    this.registeredChannels.forEach(channel => {
+    this.registeredChannels.forEach((channel) => {
       ipcMain.removeHandler(channel);
     });
     this.registeredChannels = [];
@@ -24,7 +25,10 @@ export abstract class BaseHandler implements IIPCHandler {
 
   protected handle<TReturn>(
     channel: string,
-    handler: (event: IpcMainInvokeEvent, ...args: unknown[]) => Promise<TReturn> | TReturn
+    handler: (
+      event: IpcMainInvokeEvent,
+      ...args: unknown[]
+    ) => Promise<TReturn> | TReturn
   ): void {
     ipcMain.handle(channel, handler);
     this.registeredChannels.push(channel);

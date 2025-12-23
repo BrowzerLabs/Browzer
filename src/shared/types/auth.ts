@@ -8,8 +8,8 @@ export interface User {
   email_verified: boolean;
   display_name: string | null;
   photo_url: string | null;
-  created_at: string;  // ISO 8601 format
-  last_sign_in_at: string;  // ISO 8601 format
+  created_at: string; // ISO 8601 format
+  last_sign_in_at: string; // ISO 8601 format
   metadata: Record<string, any> | null;
 }
 
@@ -17,7 +17,7 @@ export interface AuthSession {
   user: User;
   access_token: string;
   refresh_token: string;
-  expires_at: number;  // Unix timestamp
+  expires_at: number; // Unix timestamp
 }
 
 export interface AuthState {
@@ -58,7 +58,7 @@ export interface UpdateProfileRequest {
 
 export interface VerifyTokenHashRequest {
   token_hash: string;
-  type: string;  // 'signup' or 'recovery'
+  type: string; // 'signup' or 'recovery'
 }
 
 export interface ResendConfirmationRequest {

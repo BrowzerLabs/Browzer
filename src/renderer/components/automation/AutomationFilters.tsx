@@ -1,12 +1,21 @@
-import { Input } from '@/renderer/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/renderer/ui/select';
 import { Search } from 'lucide-react';
+
+import { Input } from '@/renderer/ui/input';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/renderer/ui/select';
 
 interface AutomationFiltersProps {
   searchQuery: string;
   filterStatus: 'all' | 'running' | 'completed' | 'failed' | 'stopped';
   onSearchChange: (query: string) => void;
-  onFilterChange: (status: 'all' | 'running' | 'completed' | 'failed' | 'stopped') => void;
+  onFilterChange: (
+    status: 'all' | 'running' | 'completed' | 'failed' | 'stopped'
+  ) => void;
 }
 
 export function AutomationFilters({

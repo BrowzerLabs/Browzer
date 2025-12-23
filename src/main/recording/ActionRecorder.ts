@@ -1,12 +1,14 @@
-import { WebContentsView } from "electron";
+import { WebContentsView } from 'electron';
+import { EventEmitter } from 'events';
+
+import { SnapshotManager } from './SnapshotManager';
+
 import { RecordedAction } from '@/shared/types';
 import { MAX_RECORDING_ACTIONS } from '@/shared/constants/limits';
-import { SnapshotManager } from './SnapshotManager';
-import { EventEmitter } from 'events';
 
 export class ActionRecorder extends EventEmitter {
   private static readonly MAX_ACTIONS = MAX_RECORDING_ACTIONS;
-  
+
   private view: WebContentsView | null = null;
   private debugger: Electron.Debugger | null = null;
   private isRecording = false;
@@ -81,14 +83,16 @@ export class ActionRecorder extends EventEmitter {
     try {
       this.isRecording = false;
       this.actions.sort((a, b) => a.timestamp - b.timestamp);
-      
+
       await this.snapshotManager.finalizeRecording();
-      console.log(`⏹️ Recording stopped. Captured ${this.actions.length} actions`);
-      
+      console.log(
+        `⏹️ Recording stopped. Captured ${this.actions.length} actions`
+      );
+
       this.currentTabId = null;
       this.currentTabUrl = null;
       this.currentTabTitle = null;
-      
+
       return [...this.actions];
     } catch (error) {
       console.error('Error stopping recording:', error);
@@ -155,7 +159,7 @@ export class ActionRecorder extends EventEmitter {
 
   private setupEventListeners(): void {
     if (!this.debugger) return;
-    
+
     this.debugger.removeAllListeners('message');
     this.debugger.removeAllListeners('detach');
 
@@ -194,13 +198,13 @@ export class ActionRecorder extends EventEmitter {
         if (params.frame.parentId === undefined) {
           const newUrl = params.frame.url;
           this.currentTabUrl = newUrl;
-          
+
           if (this.isSignificantNavigation(newUrl)) {
             this.recordNavigation(newUrl);
           }
         }
         break;
-      
+
       case 'Page.loadEventFired':
         console.log('📄 Page loaded');
         await this.injectEventTracker();
@@ -211,7 +215,9 @@ export class ActionRecorder extends EventEmitter {
 
   private async recordAction(actionData: RecordedAction): Promise<void> {
     if (this.actions.length >= ActionRecorder.MAX_ACTIONS) {
-      console.warn(`⚠️ Max actions limit (${ActionRecorder.MAX_ACTIONS}) reached, stopping recording`);
+      console.warn(
+        `⚠️ Max actions limit (${ActionRecorder.MAX_ACTIONS}) reached, stopping recording`
+      );
       this.emit('maxActionsReached');
       return;
     }
@@ -222,28 +228,31 @@ export class ActionRecorder extends EventEmitter {
       tabUrl: this.currentTabUrl || undefined,
       tabTitle: this.currentTabTitle || undefined,
     };
-    
+
     if (this.view) {
-      this.snapshotManager.captureSnapshot(this.view, enrichedAction)
-        .then(snapshotPath => {
+      this.snapshotManager
+        .captureSnapshot(this.view, enrichedAction)
+        .then((snapshotPath) => {
           if (snapshotPath) {
             enrichedAction.snapshotPath = snapshotPath;
           }
         })
-        .catch(err => console.error('Snapshot capture failed:', err));
+        .catch((err) => console.error('Snapshot capture failed:', err));
     }
-    
+
     this.actions.push(enrichedAction);
     this.emit('action', enrichedAction);
   }
 
   private recordNavigation(url: string, timestamp?: number): void {
     if (this.actions.length >= ActionRecorder.MAX_ACTIONS) {
-      console.warn(`⚠️ Max actions limit (${ActionRecorder.MAX_ACTIONS}) reached, skipping navigation`);
+      console.warn(
+        `⚠️ Max actions limit (${ActionRecorder.MAX_ACTIONS}) reached, skipping navigation`
+      );
       this.emit('maxActionsReached');
       return;
     }
-    
+
     const action: RecordedAction = {
       type: 'navigate',
       timestamp: timestamp || Date.now(),
@@ -268,12 +277,14 @@ export class ActionRecorder extends EventEmitter {
       '/tracking',
     ];
 
-    return !ignorePatterns.some(pattern => url.startsWith(pattern) || url.includes(pattern));
+    return !ignorePatterns.some(
+      (pattern) => url.startsWith(pattern) || url.includes(pattern)
+    );
   }
 
   private async updateTabTitle(): Promise<void> {
     if (!this.view) return;
-    
+
     try {
       const title = this.view.webContents.getTitle();
       if (title) {
@@ -290,11 +301,11 @@ export class ActionRecorder extends EventEmitter {
     const script = this.generateMonitoringScript();
     await this.debugger.sendCommand('Page.addScriptToEvaluateOnNewDocument', {
       source: script,
-      runImmediately: true
+      runImmediately: true,
     });
     await this.debugger.sendCommand('Runtime.evaluate', {
       expression: script,
-      includeCommandLineAPI: false
+      includeCommandLineAPI: false,
     });
     console.log('✅ Event tracker injected (CSP-proof)');
   }

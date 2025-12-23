@@ -1,10 +1,13 @@
-import Database from 'better-sqlite3';
 import { app, dialog } from 'electron';
 import path from 'path';
-import { RecordingSession } from '@/shared/types';
 import { unlink, writeFile } from 'fs/promises';
 import { existsSync } from 'fs';
+
+import Database from 'better-sqlite3';
+
 import { SystemPromptBuilder } from '../llm';
+
+import { RecordingSession } from '@/shared/types';
 
 export class RecordingStore {
   private db: Database.Database;
@@ -21,9 +24,9 @@ export class RecordingStore {
   constructor() {
     const userDataPath = app.getPath('userData');
     const dbPath = path.join(userDataPath, 'recordings.db');
-    
+
     this.db = new Database(dbPath);
-    
+
     this.db.pragma('journal_mode = WAL');
     this.db.pragma('synchronous = NORMAL');
     this.db.pragma('foreign_keys = ON');
@@ -31,9 +34,9 @@ export class RecordingStore {
     this.db.pragma('mmap_size = 30000000000');
     this.db.pragma('page_size = 4096');
     this.db.pragma('cache_size = -64000');
-    
+
     this.initializeDatabase();
-    
+
     this.stmts = {
       insert: this.db.prepare(`
         INSERT INTO recordings (
@@ -43,7 +46,9 @@ export class RecordingStore {
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `),
       getById: this.db.prepare('SELECT * FROM recordings WHERE id = ?'),
-      getAll: this.db.prepare('SELECT * FROM recordings ORDER BY created_at DESC'),
+      getAll: this.db.prepare(
+        'SELECT * FROM recordings ORDER BY created_at DESC'
+      ),
       update: this.db.prepare(`
         UPDATE recordings 
         SET name = ?, description = ?, metadata_json = ?
@@ -52,7 +57,7 @@ export class RecordingStore {
       deleteById: this.db.prepare('DELETE FROM recordings WHERE id = ?'),
       clearAll: this.db.prepare('DELETE FROM recordings'),
     };
-    
+
     console.log('RecordingStore initialized with SQLite at:', dbPath);
   }
 
@@ -133,7 +138,7 @@ export class RecordingStore {
     if (row.video_duration) base.videoDuration = row.video_duration;
     if (row.start_url) base.url = row.start_url;
     if (row.tabs_json) base.tabs = JSON.parse(row.tabs_json);
-    
+
     if (row.metadata_json) {
       const metadata = JSON.parse(row.metadata_json);
       Object.assign(base, metadata);
@@ -144,8 +149,22 @@ export class RecordingStore {
 
   saveRecording(session: RecordingSession): void {
     try {
-      const { id, name, description, actions, createdAt, duration, actionCount,
-              videoPath, videoSize, videoFormat, videoDuration, url, tabs, ...metadata } = session;
+      const {
+        id,
+        name,
+        description,
+        actions,
+        createdAt,
+        duration,
+        actionCount,
+        videoPath,
+        videoSize,
+        videoFormat,
+        videoDuration,
+        url,
+        tabs,
+        ...metadata
+      } = session;
 
       this.stmts.insert.run(
         id,
@@ -174,7 +193,7 @@ export class RecordingStore {
   getAllRecordings(): RecordingSession[] {
     try {
       const rows = this.stmts.getAll.all();
-      return rows.map(row => this.rowToSession(row));
+      return rows.map((row) => this.rowToSession(row));
     } catch (error) {
       console.error('Error getting all recordings:', error);
       return [];
@@ -200,25 +219,28 @@ export class RecordingStore {
         ORDER BY r.created_at DESC
         LIMIT ?
       `;
-      
+
       const rows = this.db.prepare(sql).all(query, limit);
-      return rows.map(row => this.rowToSession(row));
+      return rows.map((row) => this.rowToSession(row));
     } catch (error) {
       console.error('Error searching recordings:', error);
       return [];
     }
   }
 
-  getRecordingsByDateRange(startTime: number, endTime: number): RecordingSession[] {
+  getRecordingsByDateRange(
+    startTime: number,
+    endTime: number
+  ): RecordingSession[] {
     try {
       const sql = `
         SELECT * FROM recordings 
         WHERE created_at >= ? AND created_at <= ?
         ORDER BY created_at DESC
       `;
-      
+
       const rows = this.db.prepare(sql).all(startTime, endTime);
-      return rows.map(row => this.rowToSession(row));
+      return rows.map((row) => this.rowToSession(row));
     } catch (error) {
       console.error('Error getting recordings by date range:', error);
       return [];
@@ -232,29 +254,31 @@ export class RecordingStore {
         ORDER BY created_at DESC 
         LIMIT ?
       `;
-      
+
       const rows = this.db.prepare(sql).all(limit);
-      return rows.map(row => this.rowToSession(row));
+      return rows.map((row) => this.rowToSession(row));
     } catch (error) {
       console.error('Error getting recent recordings:', error);
       return [];
     }
   }
 
-  async exportRecording(id: string): Promise<{ success: boolean; filePath?: string; error?: string }> {
+  async exportRecording(
+    id: string
+  ): Promise<{ success: boolean; filePath?: string; error?: string }> {
     try {
       const recording = this.getRecording(id);
-      
+
       if (!recording) {
         return { success: false, error: 'Recording not found' };
       }
 
-      const xmlString = SystemPromptBuilder.formatRecordedSession(recording)
+      const xmlString = SystemPromptBuilder.formatRecordedSession(recording);
       const fileName = `${recording.name.replace(/[^a-z0-9]/gi, '-').toLowerCase()}-${Date.now()}.xml`;
 
       const { filePath } = await dialog.showSaveDialog({
         title: 'Export Recording',
-        defaultPath: fileName
+        defaultPath: fileName,
       });
 
       if (filePath) {
@@ -272,22 +296,22 @@ export class RecordingStore {
   async deleteRecording(id: string): Promise<boolean> {
     try {
       const recording = this.getRecording(id);
-      
+
       if (!recording) {
         return false;
       }
-      
+
       if (recording.videoPath) {
         await this.deleteVideoFile(recording.videoPath);
       }
-      
+
       const result = this.stmts.deleteById.run(id);
       const deleted = result.changes > 0;
-      
+
       if (deleted) {
         console.log('🗑️ Recording deleted:', id);
       }
-      
+
       return deleted;
     } catch (error) {
       console.error('Error deleting recording:', error);
@@ -304,11 +328,11 @@ export class RecordingStore {
         for (const id of recordingIds) {
           const recording = this.getRecording(id);
           if (recording?.videoPath) {
-            this.deleteVideoFile(recording.videoPath).catch(err => 
+            this.deleteVideoFile(recording.videoPath).catch((err) =>
               console.error('Failed to delete video:', err)
             );
           }
-          
+
           const result = this.stmts.deleteById.run(id);
           count += result.changes;
         }
@@ -325,25 +349,44 @@ export class RecordingStore {
   updateRecording(id: string, updates: Partial<RecordingSession>): boolean {
     try {
       const recording = this.getRecording(id);
-      
+
       if (!recording) {
         return false;
       }
 
       const name = updates.name !== undefined ? updates.name : recording.name;
-      const description = updates.description !== undefined ? updates.description : recording.description;
-      
-      const { id: _id, name: _name, description: _desc, actions, createdAt, duration, actionCount,
-              videoPath, videoSize, videoFormat, videoDuration, url, tabs, ...currentMetadata } = recording;
-      
+      const description =
+        updates.description !== undefined
+          ? updates.description
+          : recording.description;
+
+      const {
+        id: _id,
+        name: _name,
+        description: _desc,
+        actions,
+        createdAt,
+        duration,
+        actionCount,
+        videoPath,
+        videoSize,
+        videoFormat,
+        videoDuration,
+        url,
+        tabs,
+        ...currentMetadata
+      } = recording;
+
       const { name: _uName, description: _uDesc, ...updateMetadata } = updates;
-      
+
       const mergedMetadata = { ...currentMetadata, ...updateMetadata };
 
       this.stmts.update.run(
         name,
         description || null,
-        Object.keys(mergedMetadata).length > 0 ? JSON.stringify(mergedMetadata) : null,
+        Object.keys(mergedMetadata).length > 0
+          ? JSON.stringify(mergedMetadata)
+          : null,
         id
       );
 
@@ -358,13 +401,13 @@ export class RecordingStore {
   async clearAll(): Promise<void> {
     try {
       const recordings = this.getAllRecordings();
-      
+
       for (const recording of recordings) {
         if (recording.videoPath) {
           await this.deleteVideoFile(recording.videoPath);
         }
       }
-      
+
       this.stmts.clearAll.run();
       console.log('🗑️ All recordings cleared');
     } catch (error) {
@@ -373,16 +416,18 @@ export class RecordingStore {
     }
   }
 
-  getStats(): { 
-    count: number; 
-    totalActions: number; 
-    totalSize: number; 
+  getStats(): {
+    count: number;
+    totalActions: number;
+    totalSize: number;
     totalVideoSize: number;
     totalDuration: number;
     avgActionsPerRecording: number;
   } {
     try {
-      const stats = this.db.prepare(`
+      const stats = this.db
+        .prepare(
+          `
         SELECT 
           COUNT(*) as count,
           SUM(action_count) as totalActions,
@@ -390,7 +435,9 @@ export class RecordingStore {
           SUM(duration) as totalDuration,
           AVG(action_count) as avgActions
         FROM recordings
-      `).get() as {
+      `
+        )
+        .get() as {
         count: number;
         totalActions: number | null;
         totalVideoSize: number | null;
@@ -449,9 +496,9 @@ export class RecordingStore {
         ORDER BY action_count DESC 
         LIMIT ?
       `;
-      
+
       const rows = this.db.prepare(sql).all(limit);
-      return rows.map(row => this.rowToSession(row));
+      return rows.map((row) => this.rowToSession(row));
     } catch (error) {
       console.error('Error getting top recordings:', error);
       return [];
@@ -473,13 +520,13 @@ export class RecordingStore {
     try {
       const { readdir } = await import('fs/promises');
       const files = await readdir(videosDirectory);
-      
+
       const recordings = this.getAllRecordings();
       const validVideoPaths = new Set(
         recordings
-          .map(r => r.videoPath)
+          .map((r) => r.videoPath)
           .filter(Boolean)
-          .map(p => path.basename(p!))
+          .map((p) => path.basename(p!))
       );
 
       let deletedCount = 0;
@@ -527,9 +574,13 @@ export class RecordingStore {
     walSize: number;
   } {
     try {
-      const pageCount = this.db.pragma('page_count', { simple: true }) as number;
+      const pageCount = this.db.pragma('page_count', {
+        simple: true,
+      }) as number;
       const pageSize = this.db.pragma('page_size', { simple: true }) as number;
-      const walSize = this.db.pragma('wal_checkpoint', { simple: true }) as number;
+      const walSize = this.db.pragma('wal_checkpoint', {
+        simple: true,
+      }) as number;
 
       return {
         size: pageCount * pageSize,

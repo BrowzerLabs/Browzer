@@ -2,6 +2,8 @@
 dist/
 .vite/
 out/
+build/
+.husky/
 
 # Vite config files (they use bundler moduleResolution)
 vite.*.config.ts

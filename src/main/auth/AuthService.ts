@@ -1,4 +1,7 @@
 import { BrowserWindow, app } from 'electron';
+
+import { tokenManager } from './TokenManager';
+
 import {
   User,
   AuthSession,
@@ -9,9 +12,7 @@ import {
   SimpleResponse,
 } from '@/shared/types';
 import { BrowserService } from '@/main/BrowserService';
-import { api } from '@/main/api';
-import { tokenManager } from './TokenManager';
-import { ConnectionService } from '@/main/api';
+import { api, ConnectionService } from '@/main/api';
 
 export class AuthService {
   private currentUser: User | null = null;
@@ -21,30 +22,27 @@ export class AuthService {
 
   constructor(
     browserService: BrowserService,
-    connectionService: ConnectionService,
+    connectionService: ConnectionService
   ) {
     this.browserService = browserService;
     this.connectionService = connectionService;
-    
+
     tokenManager.on('token-refresh-needed', () => {
       this.handleTokenRefresh();
     });
 
-    this.restoreSession().catch(err => {
+    this.restoreSession().catch((err) => {
       console.error('Failed to initialize AuthService:', err);
     });
   }
 
   async signUp(credentials: SignUpCredentials): Promise<AuthResponse> {
     try {
-      const response = await api.post<AuthResponse>(
-        '/auth/signup',
-        {
-          email: credentials.email,
-          password: credentials.password,
-          display_name: credentials.display_name || null,
-        }
-      );
+      const response = await api.post<AuthResponse>('/auth/signup', {
+        email: credentials.email,
+        password: credentials.password,
+        display_name: credentials.display_name || null,
+      });
 
       if (!response.success) {
         return {
@@ -62,7 +60,8 @@ export class AuthService {
         success: false,
         error: {
           code: 'SIGNUP_EXCEPTION',
-          message: error.message || 'An unexpected error occurred during sign up',
+          message:
+            error.message || 'An unexpected error occurred during sign up',
         },
       };
     }
@@ -70,13 +69,10 @@ export class AuthService {
 
   async signIn(credentials: SignInCredentials): Promise<AuthResponse> {
     try {
-      const response = await api.post<AuthResponse>(
-        '/auth/signin',
-        {
-          email: credentials.email,
-          password: credentials.password,
-        }
-      );
+      const response = await api.post<AuthResponse>('/auth/signin', {
+        email: credentials.email,
+        password: credentials.password,
+      });
 
       if (!response.success || !response.data) {
         return {
@@ -101,7 +97,8 @@ export class AuthService {
         success: false,
         error: {
           code: 'SIGNIN_EXCEPTION',
-          message: error.message || 'An unexpected error occurred during sign in',
+          message:
+            error.message || 'An unexpected error occurred during sign in',
         },
       };
     }
@@ -109,13 +106,14 @@ export class AuthService {
 
   async signInWithGoogle(): Promise<AuthResponse> {
     try {
-      const urlResponse = await api.post<{ success: boolean; url?: string; error?: string }>(
-        '/auth/oauth/url',
-        {
-          provider: 'google',
-          redirect_url: 'browzer://auth/callback',
-        }
-      );
+      const urlResponse = await api.post<{
+        success: boolean;
+        url?: string;
+        error?: string;
+      }>('/auth/oauth/url', {
+        provider: 'google',
+        redirect_url: 'browzer://auth/callback',
+      });
 
       if (!urlResponse.success || !urlResponse.data || !urlResponse.data.url) {
         return {
@@ -128,7 +126,7 @@ export class AuthService {
       }
 
       let oauthUrl = urlResponse.data.url;
-      
+
       const urlObj = new URL(oauthUrl);
       urlObj.searchParams.set('prompt', 'select_account');
       oauthUrl = urlObj.toString();
@@ -204,7 +202,6 @@ export class AuthService {
     url: string,
     resolve: (value: AuthResponse) => void
   ): Promise<void> {
-
     try {
       const urlObj = new URL(url);
       const code = urlObj.searchParams.get('code');
@@ -236,7 +233,9 @@ export class AuthService {
         return;
       }
 
-      const response = await api.post<AuthResponse>('/auth/oauth/callback', { code });
+      const response = await api.post<AuthResponse>('/auth/oauth/callback', {
+        code,
+      });
 
       if (!response.success || !response.data) {
         this.authWindow?.close();
@@ -276,7 +275,7 @@ export class AuthService {
   async signOut(): Promise<{ success: boolean; error?: string }> {
     try {
       const accessToken = tokenManager.getAccessToken();
-      
+
       if (accessToken) {
         // Call backend signout endpoint
         await api.post<SimpleResponse>('/auth/signout');
@@ -297,14 +296,14 @@ export class AuthService {
   async getCurrentSession(): Promise<AuthSession | null> {
     try {
       const accessToken = tokenManager.getAccessToken();
-      
+
       if (!accessToken) {
         return null;
       }
 
       // Validate session with backend
       const user = await this.getCurrentUser();
-      
+
       if (!user) {
         this.clearSession();
         return null;
@@ -313,7 +312,7 @@ export class AuthService {
       // Reconstruct session from tokenManager and current user
       const refreshToken = tokenManager.getRefreshToken();
       const expiresAt = tokenManager.getExpiresAt();
-      
+
       if (!refreshToken || !expiresAt) {
         return null;
       }
@@ -338,7 +337,7 @@ export class AuthService {
       }
 
       const accessToken = tokenManager.getAccessToken();
-      
+
       if (!accessToken) {
         return null;
       }
@@ -360,7 +359,7 @@ export class AuthService {
   async refreshSession(): Promise<boolean> {
     try {
       const refreshToken = tokenManager.getRefreshToken();
-      
+
       if (!refreshToken) {
         console.error('[AuthService] No refresh token available');
         return false;
@@ -368,12 +367,9 @@ export class AuthService {
 
       console.log('[AuthService] Refreshing session...');
 
-      const response = await api.post<AuthResponse>(
-        '/auth/refresh',
-        {
-          refresh_token: refreshToken,
-        }
-      );
+      const response = await api.post<AuthResponse>('/auth/refresh', {
+        refresh_token: refreshToken,
+      });
 
       if (!response.success || !response.data) {
         console.error('[AuthService] Refresh failed:', response.error);
@@ -401,7 +397,7 @@ export class AuthService {
   private async handleTokenRefresh(): Promise<void> {
     console.log('[AuthService] Automatic token refresh triggered');
     const success = await this.refreshSession();
-    
+
     if (!success) {
       console.error('[AuthService] Automatic token refresh failed');
       // Optionally notify user that they need to sign in again
@@ -410,10 +406,7 @@ export class AuthService {
 
   async updateProfile(updates: UpdateProfileRequest): Promise<AuthResponse> {
     try {
-      const response = await api.put<AuthResponse>(
-        '/auth/profile',
-        updates
-      );
+      const response = await api.put<AuthResponse>('/auth/profile', updates);
 
       if (!response.success || !response.data) {
         return {
@@ -431,7 +424,9 @@ export class AuthService {
         success: false,
         error: {
           code: 'UPDATE_EXCEPTION',
-          message: error.message || 'An unexpected error occurred during profile update',
+          message:
+            error.message ||
+            'An unexpected error occurred during profile update',
         },
       };
     }
@@ -439,13 +434,10 @@ export class AuthService {
 
   async verifyToken(tokenHash: string, type: string): Promise<AuthResponse> {
     try {
-      const response = await api.post<AuthResponse>(
-        '/auth/verify-token',
-        {
-          token_hash: tokenHash,
-          type,
-        }
-      );
+      const response = await api.post<AuthResponse>('/auth/verify-token', {
+        token_hash: tokenHash,
+        type,
+      });
 
       if (!response.success || !response.data) {
         return {
@@ -470,13 +462,16 @@ export class AuthService {
         success: false,
         error: {
           code: 'VERIFY_EXCEPTION',
-          message: error.message || 'An unexpected error occurred during verification',
+          message:
+            error.message || 'An unexpected error occurred during verification',
         },
       };
     }
   }
 
-  async resendConfirmation(email: string): Promise<{ success: boolean; error?: string }> {
+  async resendConfirmation(
+    email: string
+  ): Promise<{ success: boolean; error?: string }> {
     try {
       const response = await api.post<SimpleResponse>(
         '/auth/resend-confirmation',
@@ -497,17 +492,20 @@ export class AuthService {
     } catch (error: any) {
       return {
         success: false,
-        error: error.message || 'An unexpected error occurred while resending confirmation',
+        error:
+          error.message ||
+          'An unexpected error occurred while resending confirmation',
       };
     }
   }
 
-  async sendPasswordReset(email: string): Promise<{ success: boolean; error?: string }> {
+  async sendPasswordReset(
+    email: string
+  ): Promise<{ success: boolean; error?: string }> {
     try {
-      const response = await api.post<SimpleResponse>(
-        '/auth/password-reset',
-        { email }
-      );
+      const response = await api.post<SimpleResponse>('/auth/password-reset', {
+        email,
+      });
 
       if (!response.success || !response.data) {
         return {
@@ -523,7 +521,9 @@ export class AuthService {
     } catch (error: any) {
       return {
         success: false,
-        error: error.message || 'An unexpected error occurred while sending reset link',
+        error:
+          error.message ||
+          'An unexpected error occurred while sending reset link',
       };
     }
   }
@@ -566,7 +566,9 @@ export class AuthService {
         success: false,
         error: {
           code: 'UPDATE_EXCEPTION',
-          message: error.message || 'An unexpected error occurred during password update',
+          message:
+            error.message ||
+            'An unexpected error occurred during password update',
         },
       };
     }
@@ -578,39 +580,40 @@ export class AuthService {
       session.refresh_token,
       session.expires_at
     );
-    
+
     this.currentUser = session.user;
-    
-    await this.connectionService.reconnectSSEWithAuth().catch(err => {
+
+    await this.connectionService.reconnectSSEWithAuth().catch((err) => {
       console.error('[AuthService] Failed to reconnect SSE:', err);
     });
   }
 
-
   public async restoreSession(): Promise<void> {
     try {
       await tokenManager.restoreTokens();
-      
+
       const refreshToken = tokenManager.getRefreshToken();
       const isTokenAlreadyExpired = tokenManager.isTokenAlreadyExpired();
-      
+
       // If token is already expired but refresh token exists, attempt refresh
       if (isTokenAlreadyExpired && refreshToken) {
-        console.log('[AuthService] Token already expired on startup, attempting refresh...');
+        console.log(
+          '[AuthService] Token already expired on startup, attempting refresh...'
+        );
         const refreshSuccess = await this.refreshSession();
-        
+
         if (!refreshSuccess) {
           console.log('[AuthService] Refresh failed, clearing session');
           this.clearSession();
           return;
         }
       }
-      
+
       // Now validate the session
       const currentAccessToken = tokenManager.getAccessToken();
       if (currentAccessToken) {
         const user = await this.getCurrentUser();
-        
+
         if (!user) {
           console.log('[AuthService] Session invalid, clearing');
           this.clearSession();

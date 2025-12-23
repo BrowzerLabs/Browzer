@@ -1,17 +1,26 @@
 import { WebContentsView, dialog } from 'electron';
-import { ActionRecorder, VideoRecorder, RecordingStore } from '@/main/recording';
-import { RecordedAction, RecordingSession, RecordingTabInfo } from '@/shared/types';
 import { stat } from 'fs/promises';
-import { Tab, RecordingState } from './types';
 import { EventEmitter } from 'events';
 
+import { Tab, RecordingState } from './types';
+
+import {
+  ActionRecorder,
+  VideoRecorder,
+  RecordingStore,
+} from '@/main/recording';
+import {
+  RecordedAction,
+  RecordingSession,
+  RecordingTabInfo,
+} from '@/shared/types';
 
 export class RecordingService extends EventEmitter {
   private recordingState: RecordingState = {
     isRecording: false,
     recordingId: null,
     startTime: 0,
-    startUrl: ''
+    startUrl: '',
   };
 
   private centralRecorder: ActionRecorder;
@@ -40,18 +49,18 @@ export class RecordingService extends EventEmitter {
     try {
       this.recordingState.recordingId = `rec-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
       this.recordingTabs.clear();
-      
+
       this.recordingTabs.set(activeTab.id, {
         tabId: activeTab.id,
         title: activeTab.info.title,
         url: activeTab.info.url,
         firstActiveAt: Date.now(),
         lastActiveAt: Date.now(),
-        actionCount: 0
+        actionCount: 0,
       });
 
       this.centralRecorder.setView(activeTab.view);
-      this.setupRecorderEventListeners(activeTab.id); 
+      this.setupRecorderEventListeners(activeTab.id);
 
       await this.centralRecorder.startRecording(
         activeTab.id,
@@ -59,31 +68,39 @@ export class RecordingService extends EventEmitter {
         activeTab.info.title,
         this.recordingState.recordingId
       );
-      
+
       this.activeVideoRecorder = activeTab.videoRecorder;
-      const videoStarted = await this.activeVideoRecorder.startRecording(this.recordingState.recordingId);
-      
+      const videoStarted = await this.activeVideoRecorder.startRecording(
+        this.recordingState.recordingId
+      );
+
       if (!videoStarted) {
-        dialog.showMessageBox({
-          type: 'warning',
-          title: 'Video Recording Failed',
-          message: 'Video recording failed to start. Please ensure to provide Screen Recording permissions in System Preferences > Security & Privacy > Privacy > Screen Recording for Browzer.',
-          buttons: ['OK']
-        }).then(() => {
-          this.activeVideoRecorder = null;
-        });
+        dialog
+          .showMessageBox({
+            type: 'warning',
+            title: 'Video Recording Failed',
+            message:
+              'Video recording failed to start. Please ensure to provide Screen Recording permissions in System Preferences > Security & Privacy > Privacy > Screen Recording for Browzer.',
+            buttons: ['OK'],
+          })
+          .then(() => {
+            this.activeVideoRecorder = null;
+          });
       }
-      
+
       this.recordingState.isRecording = true;
       this.recordingState.startTime = Date.now();
       this.recordingState.startUrl = activeTab.info.url;
-      
-      console.log('🎬 Recording started (actions + video) on tab:', activeTab.id);
-      
+
+      console.log(
+        '🎬 Recording started (actions + video) on tab:',
+        activeTab.id
+      );
+
       if (this.browserUIView && !this.browserUIView.webContents.isDestroyed()) {
         this.browserUIView.webContents.send('recording:started');
       }
-      
+
       return true;
     } catch (error) {
       console.error('Failed to start recording:', error);
@@ -91,7 +108,9 @@ export class RecordingService extends EventEmitter {
     }
   }
 
-  public async stopRecording(tabs: Map<string, Tab>): Promise<RecordedAction[]> {
+  public async stopRecording(
+    tabs: Map<string, Tab>
+  ): Promise<RecordedAction[]> {
     if (!this.recordingState.isRecording) {
       console.warn('No recording in progress');
       return [];
@@ -107,25 +126,33 @@ export class RecordingService extends EventEmitter {
     } else {
       console.warn('⚠️ No active video recorder to stop');
     }
-    
+
     if (!videoPath && this.recordingState.recordingId) {
       for (const tab of tabs.values()) {
         const tabVideoPath = tab.videoRecorder?.getVideoPath();
-        if (tabVideoPath && tabVideoPath.includes(this.recordingState.recordingId)) {
+        if (
+          tabVideoPath &&
+          tabVideoPath.includes(this.recordingState.recordingId)
+        ) {
           videoPath = tabVideoPath;
           console.log('📹 Found video path from tab recorder:', videoPath);
           break;
         }
       }
     }
-    
+
     this.recordingState.isRecording = false;
-    
+
     const duration = Date.now() - this.recordingState.startTime;
-    console.log('⏹️ Recording stopped. Duration:', duration, 'ms, Actions:', actions.length);
+    console.log(
+      '⏹️ Recording stopped. Duration:',
+      duration,
+      'ms, Actions:',
+      actions.length
+    );
 
     const tabSwitchCount = this.countTabSwitchActions(actions);
-    
+
     if (this.browserUIView && !this.browserUIView.webContents.isDestroyed()) {
       this.browserUIView.webContents.send('recording:stopped', {
         actions,
@@ -133,10 +160,10 @@ export class RecordingService extends EventEmitter {
         startUrl: this.recordingState.startUrl,
         videoPath,
         tabs: Array.from(this.recordingTabs.values()),
-        tabSwitchCount
+        tabSwitchCount,
       });
     }
-    
+
     return actions;
   }
 
@@ -147,11 +174,14 @@ export class RecordingService extends EventEmitter {
     tabs: Map<string, Tab>
   ): Promise<string> {
     let videoPath = this.activeVideoRecorder?.getVideoPath();
-    
+
     if (!videoPath && this.recordingState.recordingId) {
       for (const tab of tabs.values()) {
         const tabVideoPath = tab.videoRecorder?.getVideoPath();
-        if (tabVideoPath && tabVideoPath.includes(this.recordingState.recordingId)) {
+        if (
+          tabVideoPath &&
+          tabVideoPath.includes(this.recordingState.recordingId)
+        ) {
           videoPath = tabVideoPath;
           console.log('📹 Found video path from tab recorder:', videoPath);
           break;
@@ -161,7 +191,7 @@ export class RecordingService extends EventEmitter {
 
     let videoSize: number | undefined;
     let videoDuration: number | undefined;
-    
+
     if (videoPath) {
       try {
         const stats = await stat(videoPath);
@@ -175,9 +205,11 @@ export class RecordingService extends EventEmitter {
     const snapshotStats = await this.centralRecorder.getSnapshotStats();
     const tabSwitchCount = this.countTabSwitchActions(actions);
     const firstTab = this.recordingTabs.values().next().value;
-    
+
     const session: RecordingSession = {
-      id: this.recordingState.recordingId || `rec-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      id:
+        this.recordingState.recordingId ||
+        `rec-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
       name,
       description,
       actions,
@@ -189,43 +221,62 @@ export class RecordingService extends EventEmitter {
       startTabId: firstTab?.tabId,
       tabs: Array.from(this.recordingTabs.values()),
       tabSwitchCount,
-      
+
       videoPath,
       videoSize,
       videoFormat: videoPath ? 'webm' : undefined,
       videoDuration,
-      
+
       snapshotCount: snapshotStats.count,
       snapshotsDirectory: snapshotStats.directory,
-      totalSnapshotSize: snapshotStats.totalSize
+      totalSnapshotSize: snapshotStats.totalSize,
     };
 
     this.recordingStore.saveRecording(session);
     console.log('💾 Recording saved:', session.id, session.name);
-    console.log('📊 Multi-tab session:', this.recordingTabs.size, 'tabs,', tabSwitchCount, 'switches');
+    console.log(
+      '📊 Multi-tab session:',
+      this.recordingTabs.size,
+      'tabs,',
+      tabSwitchCount,
+      'switches'
+    );
     if (videoPath && videoSize) {
-      console.log('🎥 Video included:', videoPath, `(${(videoSize / 1024 / 1024).toFixed(2)} MB)`);
+      console.log(
+        '🎥 Video included:',
+        videoPath,
+        `(${(videoSize / 1024 / 1024).toFixed(2)} MB)`
+      );
     }
     if (snapshotStats.count > 0) {
-      console.log('📸 Snapshots captured:', snapshotStats.count, `(${(snapshotStats.totalSize / 1024 / 1024).toFixed(2)} MB)`);
+      console.log(
+        '📸 Snapshots captured:',
+        snapshotStats.count,
+        `(${(snapshotStats.totalSize / 1024 / 1024).toFixed(2)} MB)`
+      );
     }
-    
+
     if (this.browserUIView && !this.browserUIView.webContents.isDestroyed()) {
       this.browserUIView.webContents.send('recording:saved', session);
     }
-    
+
     this.recordingState.recordingId = null;
     this.recordingTabs.clear();
-    
+
     return session.id;
   }
 
-  public async handleTabSwitch(previousTabId: string | null, newTab: Tab): Promise<void> {
+  public async handleTabSwitch(
+    previousTabId: string | null,
+    newTab: Tab
+  ): Promise<void> {
     if (!this.recordingState.isRecording) return;
 
     try {
-      console.log(`🔄 Tab switch detected during recording: ${previousTabId} -> ${newTab.id}`);
-      
+      console.log(
+        `🔄 Tab switch detected during recording: ${previousTabId} -> ${newTab.id}`
+      );
+
       const tabSwitchAction: RecordedAction = {
         type: 'tab-switch',
         timestamp: Date.now(),
@@ -234,12 +285,12 @@ export class RecordingService extends EventEmitter {
         tabTitle: newTab.info.title,
         metadata: {
           previousTabId: previousTabId,
-        }
+        },
       };
-      
+
       this.centralRecorder.addAction(tabSwitchAction);
       this.handleActionCaptured(tabSwitchAction);
-      
+
       const now = Date.now();
       if (!this.recordingTabs.has(newTab.id)) {
         this.recordingTabs.set(newTab.id, {
@@ -248,7 +299,7 @@ export class RecordingService extends EventEmitter {
           url: newTab.info.url,
           firstActiveAt: now,
           lastActiveAt: now,
-          actionCount: 0
+          actionCount: 0,
         });
       } else {
         const tabInfo = this.recordingTabs.get(newTab.id);
@@ -258,7 +309,7 @@ export class RecordingService extends EventEmitter {
           tabInfo.url = newTab.info.url;
         }
       }
-      
+
       await this.centralRecorder.switchWebContents(
         newTab.view,
         newTab.id,
@@ -284,20 +335,22 @@ export class RecordingService extends EventEmitter {
 
   public async deleteRecording(id: string): Promise<boolean> {
     const success = await this.recordingStore.deleteRecording(id);
-    
-    if (success && this.browserUIView && !this.browserUIView.webContents.isDestroyed()) {
+
+    if (
+      success &&
+      this.browserUIView &&
+      !this.browserUIView.webContents.isDestroyed()
+    ) {
       this.browserUIView.webContents.send('recording:deleted', id);
     }
     return success;
   }
 
   private countTabSwitchActions(actions: RecordedAction[]): number {
-    return actions.filter(action => action.type === 'tab-switch').length;
+    return actions.filter((action) => action.type === 'tab-switch').length;
   }
 
-  public handleContextMenuAction(
-   action: RecordedAction
-  ): void {
+  public handleContextMenuAction(action: RecordedAction): void {
     if (!this.recordingState.isRecording) return;
 
     this.centralRecorder.addAction(action);
@@ -316,7 +369,10 @@ export class RecordingService extends EventEmitter {
     });
   }
 
-  private handleActionCaptured(action: RecordedAction, defaultTabId?: string): void {
+  private handleActionCaptured(
+    action: RecordedAction,
+    defaultTabId?: string
+  ): void {
     const tabInfo = this.recordingTabs.get(action.tabId || defaultTabId || '');
     if (tabInfo) {
       tabInfo.actionCount++;
@@ -324,14 +380,16 @@ export class RecordingService extends EventEmitter {
     this.browserUIView?.webContents.send('recording:action-captured', action);
   }
   private handleMaxActionsReached(): void {
-    dialog.showMessageBox({
-      type: 'warning',
-      title: 'Recording Limit Reached',
-      message: 'Maximum actions limit reached. Please stop the recording.',
-      buttons: ['OK']
-    }).then(() => {
-     this.browserUIView?.webContents.send('recording:max-actions-reached');
-    });
+    dialog
+      .showMessageBox({
+        type: 'warning',
+        title: 'Recording Limit Reached',
+        message: 'Maximum actions limit reached. Please stop the recording.',
+        buttons: ['OK'],
+      })
+      .then(() => {
+        this.browserUIView?.webContents.send('recording:max-actions-reached');
+      });
   }
 
   public destroy(): void {

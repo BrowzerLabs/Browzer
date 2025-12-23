@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import Anthropic from '@anthropic-ai/sdk';
+
 import { ExecutedStep, ParsedAutomationPlan } from '../core/types';
 
 export class MessageBuilder {
@@ -13,14 +14,14 @@ export class MessageBuilder {
       toolResultBlocks.push({
         type: 'tool_result',
         tool_use_id: plan.metadataToolUseId,
-        content: `recorded planType: ${plan.planType}`
+        content: `recorded planType: ${plan.planType}`,
       });
     }
 
     for (let i = 0; i < plan.steps.length; i++) {
       const planStep = plan.steps[i];
       const executedStep = executedSteps.find(
-        es => es.toolName === planStep.toolName && es.result
+        (es) => es.toolName === planStep.toolName && es.result
       );
 
       if (!executedStep || !executedStep.result) {
@@ -31,17 +32,24 @@ export class MessageBuilder {
       const result = executedStep.result;
 
       // For extract_context and take_snapshot, include full context/snapshot data
-      if (planStep.toolName === 'extract_context' || planStep.toolName === 'take_snapshot') {
+      if (
+        planStep.toolName === 'extract_context' ||
+        planStep.toolName === 'take_snapshot'
+      ) {
         // extract_context returns 'context', take_snapshot returns 'data'
-        const contextData = result.context || (result as any).data || (result as any).snapshot || result.value;
+        const contextData =
+          result.context ||
+          (result as any).data ||
+          (result as any).snapshot ||
+          result.value;
         toolResultBlocks.push({
           type: 'tool_result',
           tool_use_id: planStep.toolUseId,
-          content: JSON.stringify(contextData, null, 2)
+          content: JSON.stringify(contextData, null, 2),
         });
       } else {
         // For other tools, simple success message
-         toolResultBlocks.push({
+        toolResultBlocks.push({
           type: 'tool_result',
           tool_use_id: planStep.toolUseId,
           content: `✅ ${planStep.toolName} executed successfully`,
@@ -72,7 +80,7 @@ export class MessageBuilder {
       toolResults.push({
         type: 'tool_result',
         tool_use_id: plan.metadataToolUseId,
-        content: `recorded planType: ${plan.planType}`
+        content: `recorded planType: ${plan.planType}`,
       });
     }
 
@@ -94,8 +102,11 @@ export class MessageBuilder {
             content: executedStep.success
               ? `✅ ${step.toolName} executed successfully`
               : JSON.stringify({
-                  error: executedStep.error || executedStep.result?.error?.message || '❌ Unknown error',
-                  toolName: step.toolName
+                  error:
+                    executedStep.error ||
+                    executedStep.result?.error?.message ||
+                    '❌ Unknown error',
+                  toolName: step.toolName,
                 }),
           });
           executedCount++;
@@ -112,7 +123,7 @@ export class MessageBuilder {
         toolResults.push({
           type: 'tool_result',
           tool_use_id: step.toolUseId,
-          content: `❌ Not executed - automation stopped before reaching this step`
+          content: `❌ Not executed - automation stopped before reaching this step`,
         });
       }
     }
@@ -125,7 +136,7 @@ export class MessageBuilder {
   ): Anthropic.MessageParam {
     return {
       role: 'user',
-      content: toolResults
+      content: toolResults,
     };
   }
 
@@ -139,9 +150,9 @@ export class MessageBuilder {
         ...toolResults,
         {
           type: 'text',
-          text: textPrompt
-        }
-      ]
+          text: textPrompt,
+        },
+      ],
     };
   }
 }

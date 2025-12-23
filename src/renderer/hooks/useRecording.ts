@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect } from 'react';
-import { useSidebarStore } from '../store/useSidebarStore';
 import { toast } from 'sonner';
+
+import { useSidebarStore } from '../store/useSidebarStore';
 import { RecordedAction } from '../../shared/types';
 
 /**
@@ -19,15 +20,15 @@ export function useRecording() {
 
   const startRecording = useCallback(async () => {
     setIsLoading(true);
-    
+
     const promise = window.browserAPI.startRecording();
-    
+
     toast.promise(promise, {
       loading: 'Starting recording...',
       success: 'Recording started successfully',
       error: 'Failed to start recording',
     });
-    
+
     try {
       const success = await promise;
       if (success) {
@@ -43,15 +44,15 @@ export function useRecording() {
 
   const stopRecording = useCallback(async () => {
     setIsLoading(true);
-    
+
     const promise = window.browserAPI.stopRecording();
-    
+
     toast.promise(promise, {
       loading: 'Stopping recording...',
       success: 'Recording stopped successfully',
       error: 'Failed to stop recording',
     });
-    
+
     try {
       const recordedActions = await promise;
       setIsRecording(false);
