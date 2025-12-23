@@ -242,15 +242,15 @@ jobs:
           
           # Create latest.yml in electron-updater format
           cat > release-files/latest.yml <<EOF
-version: ${VERSION_NUMBER}
-files:
-  - url: ${FILENAME_X64}
-    sha512: ${SHA512_X64}
-    size: ${SIZE_X64}
-path: ${FILENAME_X64}
-sha512: ${SHA512_X64}
-releaseDate: '${RELEASE_DATE}'
-EOF
+          version: ${VERSION_NUMBER}
+          files:
+            - url: ${FILENAME_X64}
+              sha512: ${SHA512_X64}
+              size: ${SIZE_X64}
+          path: ${FILENAME_X64}
+          sha512: ${SHA512_X64}
+          releaseDate: '${RELEASE_DATE}'
+          EOF
           
           # If arm64 exists, add it to the files list
           if [ -n "$SETUP_ARM64" ] && [ -f "$SETUP_ARM64" ]; then
@@ -260,18 +260,18 @@ EOF
             
             # Recreate with both architectures
             cat > release-files/latest.yml <<EOF
-version: ${VERSION_NUMBER}
-files:
-  - url: ${FILENAME_X64}
-    sha512: ${SHA512_X64}
-    size: ${SIZE_X64}
-  - url: ${FILENAME_ARM64}
-    sha512: ${SHA512_ARM64}
-    size: ${SIZE_ARM64}
-path: ${FILENAME_X64}
-sha512: ${SHA512_X64}
-releaseDate: '${RELEASE_DATE}'
-EOF
+            version: ${VERSION_NUMBER}
+            files:
+              - url: ${FILENAME_X64}
+                sha512: ${SHA512_X64}
+                size: ${SIZE_X64}
+              - url: ${FILENAME_ARM64}
+                sha512: ${SHA512_ARM64}
+                size: ${SIZE_ARM64}
+            path: ${FILENAME_X64}
+            sha512: ${SHA512_X64}
+            releaseDate: '${RELEASE_DATE}'
+            EOF
           fi
           
           echo "Generated latest.yml:"
