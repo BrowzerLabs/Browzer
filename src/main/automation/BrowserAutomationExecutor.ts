@@ -9,14 +9,11 @@ import { NavigationHandler } from './handlers/NavigationHandler';
 import { InteractionHandler } from './handlers/InteractionHandler';
 import { HandlerContext } from './handlers/BaseHandler';
 
-import { BrowserContextExtractor } from '@/main/context/BrowserContextExtractor';
-import type { ToolExecutionResult } from '@/shared/types';
-
 export class BrowserAutomationExecutor {
   private view: WebContentsView;
   private tabId: string;
-  
-  private contextExtractor:XMLExtractor;
+
+  private contextExtractor: XMLExtractor;
   private snapshotCapture: ViewportSnapshotCapture;
 
   private clickHandler: ClickHandler;
@@ -28,7 +25,7 @@ export class BrowserAutomationExecutor {
   constructor(view: WebContentsView, tabId: string) {
     this.view = view;
     this.tabId = tabId;
-    
+
     this.contextExtractor = new XMLExtractor(view);
     this.snapshotCapture = new ViewportSnapshotCapture(view);
 
@@ -97,14 +94,15 @@ export class BrowserAutomationExecutor {
     }
   }
 
-
-  private async extractContext(params: XMLContextOptions): Promise<ToolExecutionResult> {
+  private async extractContext(
+    params: XMLContextOptions
+  ): Promise<ToolExecutionResult> {
     const startTime = Date.now();
     const result = await this.contextExtractor.extractXMLContext({
       maxElements: params.maxElements || 100,
       tags: params.tags || [],
       viewport: params.viewport || 'current',
-      attributes: params.attributes || {}
+      attributes: params.attributes || {},
     });
 
     if (result.xml && !result.error) {
@@ -123,9 +121,9 @@ export class BrowserAutomationExecutor {
         lastError: result.error,
         suggestions: [
           'Page may still be loading',
-          'Verify elementTags filter is correct (e.g., ["button", "input"])'
-        ]
-      }
+          'Verify elementTags filter is correct (e.g., ["button", "input"])',
+        ],
+      },
     });
   }
 
@@ -147,7 +145,7 @@ export class BrowserAutomationExecutor {
     const scrollTo = params.scrollTo || 'current';
     const result = await this.snapshotCapture.captureSnapshot(scrollTo);
     const executionTime = Date.now() - startTime;
-    
+
     if (!result.error && result.image) {
       return {
         success: true,
@@ -158,7 +156,7 @@ export class BrowserAutomationExecutor {
           source: {
             type: 'base64',
             media_type: 'image/jpeg',
-            data: result.image
+            data: result.image,
           },
         },
         timestamp: Date.now(),
@@ -172,12 +170,16 @@ export class BrowserAutomationExecutor {
       message: result.error || 'Failed to capture viewport snapshot',
       details: {
         lastError: result.error,
-        suggestions: []
-      }
+        suggestions: [],
+      },
     });
   }
 
-  private createErrorResult(toolName: string, startTime: number, error: any): ToolExecutionResult {
+  private createErrorResult(
+    toolName: string,
+    startTime: number,
+    error: any
+  ): ToolExecutionResult {
     return {
       success: false,
       toolName,

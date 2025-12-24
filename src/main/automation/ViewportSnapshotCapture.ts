@@ -1,10 +1,9 @@
 import { WebContentsView } from 'electron';
 
 export class ViewportSnapshotCapture {
-  
   private readonly JPEG_QUALITY = 70;
   private readonly MAX_DIMENSION = 1024;
-  
+
   constructor(private view: WebContentsView) {}
 
   public async captureSnapshot(
@@ -25,13 +24,14 @@ export class ViewportSnapshotCapture {
       }
 
       const image = await this.view.webContents.capturePage();
-      
+
       const originalSize = image.getSize();
       let width = originalSize.width;
       let height = originalSize.height;
-      
-      const needsResize = width > this.MAX_DIMENSION || height > this.MAX_DIMENSION;
-      
+
+      const needsResize =
+        width > this.MAX_DIMENSION || height > this.MAX_DIMENSION;
+
       if (needsResize) {
         const aspectRatio = width / height;
 
@@ -42,18 +42,18 @@ export class ViewportSnapshotCapture {
           height = this.MAX_DIMENSION;
           width = Math.round(height * aspectRatio);
         }
-        
+
         const resized = image.resize({ width, height, quality: 'good' });
         const jpeg = resized.toJPEG(this.JPEG_QUALITY);
         const base64Data = jpeg.toString('base64');
-        
+
         return {
           image: base64Data,
         };
       } else {
         const jpeg = image.toJPEG(this.JPEG_QUALITY);
         const base64Data = jpeg.toString('base64');
-        
+
         return {
           image: base64Data,
         };
@@ -61,7 +61,7 @@ export class ViewportSnapshotCapture {
     } catch (error) {
       console.error('Failed to capture snapshot:', error);
       return {
-        error: error instanceof Error ? error.message : String(error)
+        error: error instanceof Error ? error.message : String(error),
       };
     }
   }
@@ -115,7 +115,6 @@ export class ViewportSnapshotCapture {
       console.log(`✅ Scrolled to element: ${result.usedSelector}`);
     }
   }
-
 
   private sleep(ms: number): Promise<void> {
     return new Promise((resolve) => setTimeout(resolve, ms));
