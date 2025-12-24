@@ -4,18 +4,22 @@ import { XMLContextOptions, XMLContextResult } from '@/shared/types/context';
 export class XMLExtractor {
   constructor(private view: WebContentsView) {}
 
-  public async extractXMLContext(options: XMLContextOptions): Promise<XMLContextResult> {
+  public async extractXMLContext(
+    options: XMLContextOptions
+  ): Promise<XMLContextResult> {
     try {
       const result = await this.executeScript(options);
       return result;
     } catch (error) {
       return {
-        error: (error as Error).message
+        error: (error as Error).message,
       };
     }
   }
 
-  private async executeScript(options: XMLContextOptions): Promise<XMLContextResult> {
+  private async executeScript(
+    options: XMLContextOptions
+  ): Promise<XMLContextResult> {
     try {
       const script = `
         (function() {
@@ -39,10 +43,10 @@ export class XMLExtractor {
             attrs.push('width="' + Math.round(rect.width) + '"');
             attrs.push('height="' + Math.round(rect.height) + '"');
             
-            const PRIORITY_ATTRS = ['id', 'name', 'type', 'href', 'aria-label', 'data-testid', 'data-test-id', 'placeholder', 'value', 'role', 'title'];
+            const PRIORITY_ATTRS = ['id', 'name', 'type', 'href', 'aria-label', 'aria-describedby', 'data-testid', 'data-test-id', 'placeholder', 'value', 'role', 'title', 'alt'];
             
             for (const attrName of PRIORITY_ATTRS) {
-              if (attrs.length >= 14) break;
+              if (attrs.length >= 18) break;
               const value = el.getAttribute(attrName);
               if (!value || IGNORE_ATTRS.has(attrName) || (value && IGNORE_VALUES.has(value?.toLowerCase()))) continue;
               
@@ -50,17 +54,27 @@ export class XMLExtractor {
               if (attrName === 'href' && value.length > 100) finalValue = value.substring(0, 100);
               else if (value.length > 50) finalValue = value.substring(0, 50);
               
-              attrs.push(attrName + '="' + finalValue.replace(/"/g, '&quot;') + '"');
+              attrs.push(attrName + '="' + finalValue.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;') + '"');
             }
             
-            if (attrs.length === 4) {
-              let text = (el.innerText || el.textContent || '').trim().replace(/\s+/g, ' ').substring(0, 40);
-              if (text) attrs.push('text="' + text.replace(/"/g, '&quot;') + '"');
+            let text = (el.innerText || '').trim().replace(/\\s+/g, ' ');
+            if (!text) {
+              text = (el.textContent || '').trim().replace(/\\s+/g, ' ');
+            }
+            if (!text && el.getAttribute('aria-label')) {
+              text = el.getAttribute('aria-label');
+            }
+            if (!text && el.title) {
+              text = el.title;
+            }
+            if (text && text.length > 0) {
+              text = text.substring(0, 60);
+              attrs.push('text="' + text.replace(/"/g, '&quot;') + '"');
             }
             
-            if (attrs.length < 14) {
+            if (attrs.length < 18) {
               for (const attr of el.attributes) {
-                if (attrs.length >= 14) break;
+                if (attrs.length >= 18) break;
                 const name = attr.name;
                 const value = attr.value;
                 if (PRIORITY_ATTRS.includes(name) || IGNORE_ATTRS.has(name) || IGNORE_VALUES.has(value) || !value || value.length > 100 || value.trim() === '') continue;
@@ -121,8 +135,11 @@ export class XMLExtractor {
             xmlElements.push({ tag, attrs });
           }
           
-          const parts = ['<page>', '  <url>' + window.location.href + '</url>', '  <title>' + document.title.replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</title>', '  <elements>'];
-          
+          function escapeXml(str){
+            return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+          }
+          const parts = ['<page>', '  <url>' + escapeXml(window.location.href) + '</url>', '  <title>' + escapeXml(document.title) + '</title>', '  <elements>'];
+
           for (const { tag, attrs } of xmlElements) {
             parts.push('    <' + tag + ' ' + attrs + '/>');
           }
