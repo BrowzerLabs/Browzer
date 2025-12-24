@@ -1,5 +1,6 @@
 import { WebContentsView } from 'electron';
-
+import type { ToolExecutionResult, XMLContextOptions } from '@/shared/types';
+import { XMLExtractor } from '../context';
 import { ViewportSnapshotCapture } from './ViewportSnapshotCapture';
 import { ClickHandler } from './handlers/ClickHandler';
 import { TypeHandler } from './handlers/TypeHandler';
@@ -8,14 +9,11 @@ import { NavigationHandler } from './handlers/NavigationHandler';
 import { InteractionHandler } from './handlers/InteractionHandler';
 import { HandlerContext } from './handlers/BaseHandler';
 
-import { BrowserContextExtractor } from '@/main/context/BrowserContextExtractor';
-import type { ToolExecutionResult } from '@/shared/types';
-
 export class BrowserAutomationExecutor {
   private view: WebContentsView;
   private tabId: string;
 
-  private contextExtractor: BrowserContextExtractor;
+  private contextExtractor: XMLExtractor;
   private snapshotCapture: ViewportSnapshotCapture;
 
   private clickHandler: ClickHandler;
@@ -28,7 +26,7 @@ export class BrowserAutomationExecutor {
     this.view = view;
     this.tabId = tabId;
 
-    this.contextExtractor = new BrowserContextExtractor(view);
+    this.contextExtractor = new XMLExtractor(view);
     this.snapshotCapture = new ViewportSnapshotCapture(view);
 
     const context: HandlerContext = { view, tabId };
@@ -96,28 +94,22 @@ export class BrowserAutomationExecutor {
     }
   }
 
-  private async extractContext(params: {
-    full?: boolean;
-    scrollTo?: 'current' | 'top' | 'bottom' | number;
-    elementTags?: string[];
-    maxElements?: number;
-  }): Promise<ToolExecutionResult> {
+  private async extractContext(
+    params: XMLContextOptions
+  ): Promise<ToolExecutionResult> {
     const startTime = Date.now();
-
-    // Use context extraction
-    const result = await this.contextExtractor.extractContext({
-      tabId: this.tabId,
-      full: params.full,
-      scrollTo: params.scrollTo,
-      elementTags: params.elementTags,
-      maxElements: params.maxElements,
+    const result = await this.contextExtractor.extractXMLContext({
+      maxElements: params.maxElements || 100,
+      tags: params.tags || [],
+      viewport: params.viewport || 'current',
+      attributes: params.attributes || {},
     });
 
-    if (result.success && result.context) {
+    if (result.xml && !result.error) {
       return {
         success: true,
         toolName: 'extract_context',
-        context: result.context,
+        context: result.xml,
         url: this.view.webContents.getURL(),
       };
     }
@@ -129,9 +121,7 @@ export class BrowserAutomationExecutor {
         lastError: result.error,
         suggestions: [
           'Page may still be loading',
-          'Try with full=true for complete page context',
-          'Check if page has JavaScript errors',
-          'Verify elementTags filter is correct (e.g., ["BUTTON", "INPUT"])',
+          'Verify elementTags filter is correct (e.g., ["button", "input"])',
         ],
       },
     });
@@ -156,7 +146,7 @@ export class BrowserAutomationExecutor {
     const result = await this.snapshotCapture.captureSnapshot(scrollTo);
     const executionTime = Date.now() - startTime;
 
-    if (result.success && result.image) {
+    if (!result.error && result.image) {
       return {
         success: true,
         toolName: 'take_snapshot',
@@ -165,15 +155,8 @@ export class BrowserAutomationExecutor {
           type: 'image',
           source: {
             type: 'base64',
-            media_type: result.image.mediaType,
-            data: result.image.data,
-          },
-          metadata: {
-            width: result.image.width,
-            height: result.image.height,
-            sizeBytes: result.image.sizeBytes,
-            estimatedTokens: result.image.estimatedTokens,
-            viewport: result.viewport,
+            media_type: 'image/jpeg',
+            data: result.image,
           },
         },
         timestamp: Date.now(),
@@ -187,19 +170,11 @@ export class BrowserAutomationExecutor {
       message: result.error || 'Failed to capture viewport snapshot',
       details: {
         lastError: result.error,
-        suggestions: [
-          'Page may still be loading',
-          'If scrolling to element, verify selector is correct',
-          'Try with scrollTo: "current" to capture without scrolling',
-          'Check if page has rendering issues',
-        ],
+        suggestions: [],
       },
     });
   }
 
-  /**
-   * Helper to create error results
-   */
   private createErrorResult(
     toolName: string,
     startTime: number,
