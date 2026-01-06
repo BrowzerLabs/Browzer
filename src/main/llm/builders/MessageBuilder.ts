@@ -1,20 +1,20 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import Anthropic from '@anthropic-ai/sdk';
 
-import { ExecutedStep, ParsedAutomationPlan } from '../core/types';
+import { ExecutedStep, AutomationPlan } from '../core/types';
 
 export class MessageBuilder {
   public static buildToolResultsForPlan(
-    plan: ParsedAutomationPlan,
+    plan: AutomationPlan,
     executedSteps: ExecutedStep[]
   ): Anthropic.Messages.ToolResultBlockParam[] {
     const toolResultBlocks: Anthropic.Messages.ToolResultBlockParam[] = [];
 
-    if (plan.metadataToolUseId) {
+    if (plan.planTypeToolId) {
       toolResultBlocks.push({
         type: 'tool_result',
-        tool_use_id: plan.metadataToolUseId,
-        content: `recorded planType: ${plan.planType}`,
+        tool_use_id: plan.planTypeToolId,
+        content: `✅`,
       });
     }
 
@@ -45,14 +45,14 @@ export class MessageBuilder {
         toolResultBlocks.push({
           type: 'tool_result',
           tool_use_id: planStep.toolUseId,
-          content: JSON.stringify(contextData, null, 2),
+          content: contextData.toString(),
         });
       } else {
         // For other tools, simple success message
         toolResultBlocks.push({
           type: 'tool_result',
           tool_use_id: planStep.toolUseId,
-          content: `✅ ${planStep.toolName} executed successfully`,
+          content: `✅`,
         });
       }
     }
@@ -61,7 +61,7 @@ export class MessageBuilder {
   }
 
   public static buildToolResultsForErrorRecovery(
-    plan: ParsedAutomationPlan,
+    plan: AutomationPlan,
     executedSteps: ExecutedStep[]
   ): Array<{
     type: 'tool_result';
@@ -76,11 +76,11 @@ export class MessageBuilder {
       is_error?: boolean;
     }> = [];
 
-    if (plan.metadataToolUseId) {
+    if(plan.planTypeToolId){
       toolResults.push({
         type: 'tool_result',
-        tool_use_id: plan.metadataToolUseId,
-        content: `recorded planType: ${plan.planType}`,
+        tool_use_id: plan.planTypeToolId,
+        content: `✅`,
       });
     }
 
@@ -100,7 +100,7 @@ export class MessageBuilder {
             type: 'tool_result',
             tool_use_id: step.toolUseId,
             content: executedStep.success
-              ? `✅ ${step.toolName} executed successfully`
+              ? `✅`
               : JSON.stringify({
                   error:
                     executedStep.error ||
@@ -115,7 +115,7 @@ export class MessageBuilder {
           toolResults.push({
             type: 'tool_result',
             tool_use_id: step.toolUseId,
-            content: `❌ Not executed - automation stopped before reaching this step`,
+            content: `❌ - automation stopped before reaching this step`,
           });
         }
       } else {
@@ -123,7 +123,7 @@ export class MessageBuilder {
         toolResults.push({
           type: 'tool_result',
           tool_use_id: step.toolUseId,
-          content: `❌ Not executed - automation stopped before reaching this step`,
+          content: `❌ - automation stopped before reaching this step`,
         });
       }
     }
