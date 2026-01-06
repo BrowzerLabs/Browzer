@@ -7,14 +7,7 @@ export class XMLExtractor {
   public async extractXMLContext(
     options: XMLContextOptions
   ): Promise<XMLContextResult> {
-    try {
-      const result = await this.executeScript(options);
-      return result;
-    } catch (error) {
-      return {
-        error: (error as Error).message,
-      };
-    }
+    return await this.executeScript(options);
   }
 
   private async executeScript(
