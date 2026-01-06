@@ -110,8 +110,6 @@ export interface ToolExecutionResult {
   success: boolean;
   toolName: string;
   value?: any; // Return value (e.g., extracted text, attribute value)
-  context?: any; // Return value (e.g., extracted text, attribute value)
   tabId?: string;
-  url: string;
   error?: AutomationError;
 }

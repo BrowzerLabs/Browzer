@@ -109,8 +109,7 @@ export class BrowserAutomationExecutor {
       return {
         success: true,
         toolName: 'extract_context',
-        context: result.xml,
-        url: this.view.webContents.getURL(),
+        value: result.xml,
       };
     }
 
@@ -144,25 +143,14 @@ export class BrowserAutomationExecutor {
     const startTime = Date.now();
     const scrollTo = params.scrollTo || 'current';
     const result = await this.snapshotCapture.captureSnapshot(scrollTo);
-    const executionTime = Date.now() - startTime;
 
     if (!result.error && result.image) {
       return {
         success: true,
         toolName: 'take_snapshot',
-        executionTime,
-        data: {
-          type: 'image',
-          source: {
-            type: 'base64',
-            media_type: 'image/jpeg',
-            data: result.image,
-          },
-        },
-        timestamp: Date.now(),
+        value: result.image,
         tabId: this.tabId,
-        url: this.view.webContents.getURL(),
-      } as ToolExecutionResult;
+      };
     }
 
     return this.createErrorResult('take_snapshot', startTime, {
@@ -184,7 +172,6 @@ export class BrowserAutomationExecutor {
       success: false,
       toolName,
       error,
-      url: this.view.webContents.getURL(),
     };
   }
 }

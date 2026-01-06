@@ -44,48 +44,23 @@ You have successfully executed your intermediate plan. Now:
       details?: unknown;
       suggestions?: string[];
     };
-    userGoal: string;
-    failedStep: {
-      stepNumber: number;
-      toolName: string;
-      params: unknown;
-    };
-    successfullyExecutedSteps: number;
-    currentUrl?: string;
   }): string {
     const {
       errorInfo,
-      userGoal,
-      failedStep,
-      successfullyExecutedSteps,
-      currentUrl,
     } = params;
 
     return `**AUTOMATION ERROR ENCOUNTERED**
-
-**Original Goal:**
-${userGoal}
-
-**Failed Step:**
-- Step ${failedStep.stepNumber}: ${failedStep.toolName}
-- Parameters: ${JSON.stringify(failedStep.params, null, 2)}
-
 **Error Details:**
 - Message: ${errorInfo.message}
 ${errorInfo.code ? `- Code: ${errorInfo.code}` : ''}
 ${errorInfo.details ? `- Details: ${JSON.stringify(errorInfo.details, null, 2)}` : ''}
-${errorInfo.suggestions ? `- Suggestions: ${errorInfo.suggestions.join(', ')}` : ''}
-
-**Current State:**
-${currentUrl ? `- Current URL: ${currentUrl}` : '- URL unknown'}
 
 **Your Task:**
-1. Analyze what went wrong and why, you may use the analysis tools (extract_context, & take_snapshot)
+1. Analyze what went wrong and why.
 2. Generate a NEW complete automation plan that:
    - Starts from the CURRENT state (don't repeat successful steps)
    - Completes the remaining work to achieve the goal
-
-Remember: The automation has already completed ${successfullyExecutedSteps} steps successfully. Focus on what remains to achieve the goal.`;
+   - Focus on what remains to achieve the goal.`;
   }
 
   public static formatRecordedSession(session: RecordingSession): string {
