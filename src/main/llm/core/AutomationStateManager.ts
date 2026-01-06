@@ -6,14 +6,14 @@ import { SystemPromptBuilder } from '../builders/SystemPromptBuilder';
 import { SessionManager } from '../session/SessionManager';
 import { ContextWindowManager } from '../utils/ContextWindowManager';
 import { MessageCompressionManager } from '../utils/MessageCompressionManager';
-import { AutomationClient, AutomationPlanParser, MessageBuilder } from '..';
+import { AutomationClient, MessageBuilder } from '..';
 
 import {
   ExecutedStep,
   CompletedPlan,
-  ParsedAutomationPlan,
   PlanExecutionResult,
   AutomationStep,
+  AutomationPlan,
 } from './types';
 
 import {
@@ -34,7 +34,7 @@ export class AutomationStateManager extends EventEmitter {
   private session_manager: SessionManager;
 
   private messages: Anthropic.MessageParam[] = [];
-  private current_plan: ParsedAutomationPlan | null = null;
+  private current_plan: AutomationPlan | null = null;
   private executed_steps: ExecutedStep[] = [];
   private phase_number = 1;
   private completed_plans: CompletedPlan[] = [];
@@ -94,7 +94,7 @@ export class AutomationStateManager extends EventEmitter {
       this.cached_context,
       this.user_goal
     );
-    const plan = AutomationPlanParser.parsePlan(response);
+    const plan = this.parsePlan(response);
     this.current_plan = plan;
     this.addMessage({
       role: 'assistant',
@@ -189,7 +189,7 @@ export class AutomationStateManager extends EventEmitter {
 
         this.compressMessages();
 
-        const newPlan = AutomationPlanParser.parsePlan(response);
+        const newPlan = this.parsePlan(response);
         this.setCurrentPlan(newPlan);
 
         return {
@@ -238,7 +238,7 @@ export class AutomationStateManager extends EventEmitter {
 
       this.compressMessages();
 
-      const newPlan = AutomationPlanParser.parsePlan(response);
+      const newPlan = this.parsePlan(response);
 
       this.setCurrentPlan(newPlan);
       this.exitRecoveryMode();
@@ -286,7 +286,7 @@ export class AutomationStateManager extends EventEmitter {
 
       this.compressMessages();
 
-      const newPlan = AutomationPlanParser.parsePlan(response);
+      const newPlan = this.parsePlan(response);
       this.setCurrentPlan(newPlan);
 
       return {
@@ -449,7 +449,7 @@ export class AutomationStateManager extends EventEmitter {
     });
     this.compressMessages();
 
-    const newPlan = AutomationPlanParser.parsePlan(response);
+    const newPlan = this.parsePlan(response);
     this.setCurrentPlan(newPlan);
     this.enterRecoveryMode();
 
@@ -464,7 +464,7 @@ export class AutomationStateManager extends EventEmitter {
     return this.session_id;
   }
 
-  public setCurrentPlan(plan: ParsedAutomationPlan): void {
+  public setCurrentPlan(plan: AutomationPlan): void {
     this.current_plan = plan;
   }
 
@@ -524,7 +524,7 @@ export class AutomationStateManager extends EventEmitter {
       this.completed_plans.push({
         phaseNumber: this.phase_number,
         plan: this.current_plan,
-        stepsExecuted: this.current_plan.totalSteps,
+        stepsExecuted: this.current_plan.steps.length,
       });
       this.phase_number++;
 
@@ -560,7 +560,7 @@ export class AutomationStateManager extends EventEmitter {
     return result.optimizedMessages;
   }
 
-  public getCurrentPlan(): ParsedAutomationPlan | undefined {
+  public getCurrentPlan(): AutomationPlan | null {
     return this.current_plan;
   }
 
@@ -609,5 +609,34 @@ export class AutomationStateManager extends EventEmitter {
     if (result.compressedCount > 0) {
       this.messages = result.compressedMessages;
     }
+  }
+
+  private parsePlan(response: Anthropic.Message): AutomationPlan {
+    const steps: AutomationStep[] = [];
+    let stepOrder = 0;
+    let planType: 'intermediate' | 'final' = 'final';
+    let planTypeToolId: string | undefined = undefined;
+
+    for (const block of response.content) {
+      if (block.type === 'text') {
+        this.emitProgress('text_response', {
+          message: block.text,
+        });
+      } else if (block.type === 'tool_use') {
+        if (block.name === 'declare_plan_metadata') {
+          planType = (block.input as any).planType ?? 'final';
+          planTypeToolId = block.id;
+        } else {
+          steps.push({
+            toolName: block.name,
+            toolUseId: block.id,
+            input: block.input,
+            order: stepOrder++,
+          });
+        }
+      }
+    }
+
+    return { steps, planType, planTypeToolId };
   }
 }

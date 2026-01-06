@@ -7,12 +7,10 @@ export interface AutomationStep {
   order: number;
 }
 
-export interface ParsedAutomationPlan {
+export interface AutomationPlan {
   steps: AutomationStep[];
-  analysis?: string;
-  totalSteps: number;
   planType: 'intermediate' | 'final';
-  metadataToolUseId?: string;
+  planTypeToolId?: string;
 }
 
 export interface ExecutedStep {
@@ -25,7 +23,7 @@ export interface ExecutedStep {
 
 export interface CompletedPlan {
   phaseNumber: number;
-  plan: ParsedAutomationPlan;
+  plan: AutomationPlan;
   stepsExecuted: number;
 }
 
@@ -37,7 +35,7 @@ export interface PlanExecutionResult {
 
 export interface IterativeAutomationResult {
   success: boolean;
-  plan?: ParsedAutomationPlan;
+  plan?: AutomationPlan;
   executionResults: any[];
   error?: string;
   analysis?: string;
