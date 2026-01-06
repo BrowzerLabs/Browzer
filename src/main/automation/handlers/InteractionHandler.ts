@@ -63,7 +63,6 @@ export class InteractionHandler extends BaseHandler {
       return {
         success: true,
         toolName: 'keyPress',
-        url: this.getUrl(),
       };
     } catch (error) {
       console.error('[InteractionHandler] ❌ Key press failed:', error);
@@ -132,7 +131,6 @@ export class InteractionHandler extends BaseHandler {
       return {
         success: true,
         toolName: 'scroll',
-        url: this.getUrl(),
       };
     } catch (error) {
       console.error('[InteractionHandler] ❌ Scroll failed:', error);

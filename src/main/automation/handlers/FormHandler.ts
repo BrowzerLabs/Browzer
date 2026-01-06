@@ -46,7 +46,6 @@ export class FormHandler extends BaseHandler {
         success: true,
         toolName: 'select',
         value: result.selectedValue,
-        url: this.getUrl(),
       };
     } catch (error) {
       console.error('[FormHandler] ❌ Select failed:', error);
@@ -261,7 +260,6 @@ export class FormHandler extends BaseHandler {
         success: true,
         toolName: 'checkbox',
         value: result.checked,
-        url: this.getUrl(),
       };
     } catch (error) {
       console.error('[FormHandler] ❌ Checkbox failed:', error);
@@ -449,7 +447,6 @@ export class FormHandler extends BaseHandler {
       return {
         success: true,
         toolName: 'submit',
-        url: this.getUrl(),
       };
     } catch (error) {
       console.error('[FormHandler] ❌ Submit failed:', error);

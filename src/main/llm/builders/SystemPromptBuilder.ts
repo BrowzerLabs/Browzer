@@ -108,7 +108,7 @@ ${errorInfo.details ? `- Details: ${JSON.stringify(errorInfo.details, null, 2)}`
   private static formatElementInline(target: ElementTarget): string {
     const attrs = target.attributes || {};
 
-    let element = `    <element tag="${this.escapeXml(target.tagName)}"`;
+    let element = `    <${this.escapeXml(target.tagName).toLowerCase()} `;
 
     if (target.boundingBox !== undefined) {
       const bb = target.boundingBox;
