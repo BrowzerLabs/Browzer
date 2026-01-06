@@ -1,1 +1,1 @@
-export { BrowserContextExtractor } from './BrowserContextExtractor';
+export { XMLExtractor } from './XMLExtractor';

@@ -1,6 +1,3 @@
-/**
- * Interactive element information for automation
- */
 export interface InteractiveElement {
   selector: string;
   tagName: string;
@@ -21,9 +18,6 @@ export interface InteractiveElement {
   attributes: Record<string, string>;
 }
 
-/**
- * Form field information (extends InteractiveElement)
- */
 export interface FormField {
   name: string;
   type: string;
@@ -32,9 +26,6 @@ export interface FormField {
   selector: string;
 }
 
-/**
- * DOM structure with semantic annotations
- */
 export interface DOMContext {
   forms: Array<{
     action?: string;
@@ -50,9 +41,6 @@ export interface DOMContext {
   };
 }
 
-/**
- * Accessibility tree for better element understanding
- */
 export interface AccessibilityContext {
   focusedElement?: {
     role: string;
@@ -65,7 +53,7 @@ export interface AccessibilityContext {
     description?: string;
     value?: string;
     selector?: string;
-    children?: number; // Number of children
+    children?: number;
   }>;
   liveRegions: Array<{
     politeness: 'polite' | 'assertive' | 'off';
@@ -74,9 +62,6 @@ export interface AccessibilityContext {
   }>;
 }
 
-/**
- * Visual and layout context
- */
 export interface VisualContext {
   viewport: {
     width: number;
@@ -101,14 +86,11 @@ export interface VisualContext {
   }>;
 }
 
-/**
- * JavaScript execution context
- */
 export interface JavaScriptContext {
   frameworks: Array<{
     name: string;
     version?: string;
-    confidence: number; // 0-100
+    confidence: number;
   }>;
   globalVariables: string[];
   readyState: 'loading' | 'interactive' | 'complete';
@@ -124,9 +106,6 @@ export interface JavaScriptContext {
   };
 }
 
-/**
- * Network and resource context
- */
 export interface NetworkContext {
   activeRequests: number;
   recentRequests: Array<{
@@ -139,7 +118,7 @@ export interface NetworkContext {
   cookieCount: number;
   localStorage: {
     itemCount: number;
-    keys: string[]; // Key names only, not values
+    keys: string[];
   };
 
   sessionStorage: {
@@ -148,9 +127,6 @@ export interface NetworkContext {
   };
 }
 
-/**
- * Page metadata
- */
 export interface PageMetadata {
   title: string;
   description?: string;
@@ -165,34 +141,35 @@ export interface PageMetadata {
   favicon?: string;
 }
 
-/**
- * Complete browser context
- */
 export interface BrowserContext {
   extractedAt: number;
-  tabId: string;
   url: string;
   title: string;
   dom: DOMContext;
 }
 
-/**
- * Context extraction options
- */
 export interface ContextExtractionOptions {
-  tabId: string; // Required: Tab identifier
-  full?: boolean; // Extract full page (overrides scrollTo)
-  scrollTo?: 'current' | 'top' | 'bottom' | number; // Scroll position before extraction
-  elementTags?: string[]; // Filter: only extract these element types (e.g., ['BUTTON', 'INPUT'])
-  maxElements?: number; // Limit number of elements (default: 200)
+  full?: boolean;
+  scrollTo?: 'current' | 'top' | 'bottom' | number;
+  elementTags?: string[];
+  maxElements?: number;
 }
 
-/**
- * Context extraction result
- */
 export interface ContextExtractionResult {
   success: boolean;
   context?: BrowserContext;
   error?: string;
-  duration: number; // Extraction time in ms
+  duration: number;
+}
+
+export interface XMLContextOptions {
+  viewport: 'current' | 'full';
+  tags: string[];
+  maxElements: number;
+  attributes: Record<string, string>;
+}
+
+export interface XMLContextResult {
+  xml?: string;
+  error?: string;
 }
