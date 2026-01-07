@@ -12,8 +12,6 @@ export class InteractionHandler extends BaseHandler {
   }
 
   async executeKeyPress(params: KeyPressParams): Promise<ToolExecutionResult> {
-    const startTime = Date.now();
-
     try {
       if (params.focusElement) {
         const focusResult = await this.findAndFocusElement(params.focusElement);
@@ -60,28 +58,17 @@ export class InteractionHandler extends BaseHandler {
 
       await this.sleep(300);
 
-      return {
-        success: true,
-        toolName: 'keyPress',
-      };
+      return { success: true };
     } catch (error) {
       console.error('[InteractionHandler] ❌ Key press failed:', error);
-      return this.createErrorResult('keyPress', startTime, {
+      return this.createErrorResult({
         code: 'EXECUTION_ERROR',
         message: `Key press failed: ${error instanceof Error ? error.message : String(error)}`,
-        details: {
-          lastError: error instanceof Error ? error.message : String(error),
-          suggestions: [
-            'Verify the key name is correct (e.g., "Enter", "Escape", "Tab")',
-            'Check if modifiers are supported',
-          ],
-        },
       });
     }
   }
 
   async executeScroll(params: ScrollParams): Promise<ToolExecutionResult> {
-    const startTime = Date.now();
     console.log(`[InteractionHandler] 📜 Scroll:`, params);
 
     try {
@@ -99,12 +86,9 @@ export class InteractionHandler extends BaseHandler {
           await this.view.webContents.executeJavaScript(scrollScript);
 
         if (!result.success) {
-          return this.createErrorResult('scroll', startTime, {
+          return this.createErrorResult({
             code: 'ELEMENT_NOT_FOUND',
             message: result.error || 'Could not find element to scroll to',
-            details: {
-              suggestions: ['Verify the element selector is correct'],
-            },
           });
         }
       } else {
@@ -128,18 +112,12 @@ export class InteractionHandler extends BaseHandler {
 
       await this.sleep(500);
 
-      return {
-        success: true,
-        toolName: 'scroll',
-      };
+      return { success: true };
     } catch (error) {
       console.error('[InteractionHandler] ❌ Scroll failed:', error);
-      return this.createErrorResult('scroll', startTime, {
+      return this.createErrorResult({
         code: 'EXECUTION_ERROR',
         message: `Scroll failed: ${error instanceof Error ? error.message : String(error)}`,
-        details: {
-          lastError: error instanceof Error ? error.message : String(error),
-        },
       });
     }
   }

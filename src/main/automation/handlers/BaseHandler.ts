@@ -20,14 +20,9 @@ export abstract class BaseHandler {
     return this.view.webContents.getURL();
   }
 
-  protected createErrorResult(
-    toolName: string,
-    startTime: number,
-    error: AutomationError
-  ): ToolExecutionResult {
+  protected createErrorResult(error: AutomationError): ToolExecutionResult {
     return {
       success: false,
-      toolName,
       error,
       tabId: this.tabId,
     };

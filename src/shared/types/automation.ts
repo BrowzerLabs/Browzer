@@ -97,10 +97,6 @@ export interface AutomationError {
     | 'EXECUTION_ERROR'
     | 'UNKNOWN_ERROR';
   message: string;
-  details?: {
-    lastError?: string; // Last error message from CDP/execution
-    suggestions?: string[]; // Suggestions for the model to retry
-  };
 }
 
 /**
@@ -108,8 +104,7 @@ export interface AutomationError {
  */
 export interface ToolExecutionResult {
   success: boolean;
-  toolName: string;
-  value?: any; // Return value (e.g., extracted text, attribute value)
+  value?: any;
   tabId?: string;
   error?: AutomationError;
 }

@@ -352,8 +352,6 @@ export class AutomationStateManager extends EventEmitter {
       errorInfo: {
         message: result.error?.message || 'Unknown error',
         code: result.error?.code,
-        details: result.error?.details,
-        suggestions: result.error?.details?.suggestions,
       },
     });
 

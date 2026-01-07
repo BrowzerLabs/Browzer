@@ -8,8 +8,6 @@ export class ClickHandler extends BaseHandler {
   }
 
   async execute(params: ClickParams): Promise<ToolExecutionResult> {
-    const startTime = Date.now();
-
     try {
       console.log('[ClickHandler] 🎯 Starting unified click execution');
 
@@ -18,40 +16,11 @@ export class ClickHandler extends BaseHandler {
 
         if (result.success) {
           await this.sleep(500);
-          return {
-            success: true,
-            toolName: 'click',
-          };
+          return { success: true };
         } else {
-          if (params.click_position) {
-            console.warn(
-              '[ClickHandler] ⚠️  click failed, trying position fallback'
-            );
-            const positionSuccess = await this.executeClickAtPosition(
-              params.click_position.x,
-              params.click_position.y
-            );
-
-            if (positionSuccess) {
-              await this.sleep(500);
-              return {
-                success: true,
-                toolName: 'click',
-              };
-            }
-          }
-
-          return this.createErrorResult('click', startTime, {
+          return this.createErrorResult({
             code: 'ELEMENT_NOT_FOUND',
             message: result.error || 'Could not find or click element',
-            details: {
-              lastError: result.error,
-              suggestions: [
-                'Verify element attributes match the current page',
-                'Check if element is dynamically loaded',
-                'Try adding more specific attributes (id, data-testid, aria-label)',
-              ],
-            },
           });
         }
       } else if (params.click_position) {
@@ -63,21 +32,15 @@ export class ClickHandler extends BaseHandler {
 
         if (positionSuccess) {
           await this.sleep(500);
-          return {
-            success: true,
-            toolName: 'click',
-          };
+          return { success: true };
         }
 
-        return this.createErrorResult('click', startTime, {
+        return this.createErrorResult({
           code: 'CLICK_FAILED',
-          message: 'Failed to execute click at position',
-          details: {
-            lastError: `Click failed at coordinates (${params.click_position.x}, ${params.click_position.y})`,
-          },
+          message: `Click failed at coordinates (${params.click_position.x}, ${params.click_position.y})`,
         });
       } else {
-        return this.createErrorResult('click', startTime, {
+        return this.createErrorResult({
           code: 'INVALID_PARAMS',
           message:
             'Must provide either tag for element finding or click_position',
@@ -85,12 +48,9 @@ export class ClickHandler extends BaseHandler {
       }
     } catch (error) {
       console.error('[ClickHandler] ❌ Click failed:', error);
-      return this.createErrorResult('click', startTime, {
+      return this.createErrorResult({
         code: 'EXECUTION_ERROR',
         message: `Click execution failed: ${error instanceof Error ? error.message : String(error)}`,
-        details: {
-          lastError: error instanceof Error ? error.message : String(error),
-        },
       });
     }
   }
@@ -278,44 +238,6 @@ export class ClickHandler extends BaseHandler {
               matchedBy.push('visible');
             }
             
-            // Modal/Dialog priority bonus (20 points)
-            let current = el;
-            let depth = 0;
-            let isInModal = false;
-            
-            while (current && depth < 10) {
-              const role = current.getAttribute('role');
-              const ariaModal = current.getAttribute('aria-modal');
-              const className = current.className?.toString().toLowerCase() || '';
-              
-              // Check for modal/dialog indicators
-              if (role === 'dialog' || 
-                  role === 'alertdialog' || 
-                  ariaModal === 'true' ||
-                  className.includes('modal') ||
-                  className.includes('dialog') ||
-                  className.includes('overlay') ||
-                  className.includes('popup')) {
-                
-                // Verify it's actually visible and on top
-                const modalStyle = window.getComputedStyle(current);
-                const zIndex = parseInt(modalStyle.zIndex) || 0;
-                
-                if (zIndex > 50) {
-                  console.log('[Click] Found modal with zIndex:', zIndex);
-                  isInModal = true;
-                  break;
-                }
-              }
-              
-              current = current.parentElement;
-              depth++;
-            }
-            
-            if (isInModal) {
-              score += 20;
-              matchedBy.push('in-modal');
-            }
             
             return { element: el, score, matchedBy };
           });
@@ -378,14 +300,12 @@ export class ClickHandler extends BaseHandler {
           // ============================================================================
           if (typeof element.focus === 'function') {
             element.focus();
-            console.log('[Click] ✅ Element focused');
           }
           
           // ============================================================================
           // STEP 5: SCROLL INTO VIEW
           // ============================================================================
           element.scrollIntoView({ behavior: 'auto', block: 'center', inline: 'center' });
-          console.log('[Click] 📍 Scrolling element into view...');
           await new Promise(resolve => setTimeout(resolve, 600));
           
           // ============================================================================
@@ -395,8 +315,7 @@ export class ClickHandler extends BaseHandler {
           const originalOutlineOffset = element.style.outlineOffset;
           element.style.border = '3px solid #00ff00';
           element.style.outlineOffset = '2px';
-          console.log('[Click] ✅ Element highlighted');
-          await new Promise(resolve => setTimeout(resolve, 300));
+          await new Promise(resolve => setTimeout(resolve, 100));
           
           // ============================================================================
           // STEP 7: VERIFY IN VIEWPORT
@@ -575,9 +494,6 @@ export class ClickHandler extends BaseHandler {
       });
 
       console.log('[ClickHandler] ✅ CDP position-based click executed');
-
-      // Keep ripple visible for a moment
-      await this.sleep(300);
       await this.removeClickRipple();
 
       return true;

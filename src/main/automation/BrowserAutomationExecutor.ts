@@ -1,5 +1,9 @@
 import { WebContentsView } from 'electron';
-import type { ToolExecutionResult, XMLContextOptions } from '@/shared/types';
+import type {
+  AutomationError,
+  ToolExecutionResult,
+  XMLContextOptions,
+} from '@/shared/types';
 import { XMLExtractor } from '../context';
 import { ViewportSnapshotCapture } from './ViewportSnapshotCapture';
 import { ClickHandler } from './handlers/ClickHandler';
@@ -81,17 +85,9 @@ export class BrowserAutomationExecutor {
         return this.captureViewportSnapshot(params);
 
       default:
-        return this.createErrorResult(toolName, Date.now(), {
+        return this.createErrorResult({
           code: 'EXECUTION_ERROR',
           message: `Unknown tool: ${toolName}`,
-          details: {
-            lastError: `Unknown tool: ${toolName}`,
-            suggestions: [
-              'Check tool name for typos',
-              'Verify tool is supported by the current browser',
-              'Check if page has JavaScript errors',
-            ],
-          },
         });
     }
   }
@@ -99,14 +95,12 @@ export class BrowserAutomationExecutor {
   private handlePlan(): ToolExecutionResult {
     return {
       success: true,
-      toolName: 'declare_plan_metadata'
-    }
+    };
   }
 
   private async extractContext(
     params: XMLContextOptions
   ): Promise<ToolExecutionResult> {
-    const startTime = Date.now();
     const result = await this.contextExtractor.extractXMLContext({
       maxElements: params.maxElements || 100,
       tags: params.tags || [],
@@ -117,27 +111,16 @@ export class BrowserAutomationExecutor {
     if (result.xml && !result.error) {
       return {
         success: true,
-        toolName: 'extract_context',
         value: result.xml,
       };
     }
 
-    return this.createErrorResult('extract_context', startTime, {
+    return this.createErrorResult({
       code: 'EXECUTION_ERROR',
       message: result.error || 'Failed to extract context',
-      details: {
-        lastError: result.error,
-        suggestions: [
-          'Page may still be loading',
-          'Verify elementTags filter is correct (e.g., ["button", "input"])',
-        ],
-      },
     });
   }
 
-  /**
-   * Capture viewport snapshot - Visual screenshot for Claude vision analysis
-   */
   private async captureViewportSnapshot(params: {
     scrollTo?:
       | 'current'
@@ -149,38 +132,28 @@ export class BrowserAutomationExecutor {
           backupSelectors: string[];
         };
   }): Promise<ToolExecutionResult> {
-    const startTime = Date.now();
     const scrollTo = params.scrollTo || 'current';
     const result = await this.snapshotCapture.captureSnapshot(scrollTo);
 
     if (!result.error && result.image) {
       return {
         success: true,
-        toolName: 'take_snapshot',
         value: result.image,
         tabId: this.tabId,
       };
     }
 
-    return this.createErrorResult('take_snapshot', startTime, {
+    return this.createErrorResult({
       code: 'EXECUTION_ERROR',
       message: result.error || 'Failed to capture viewport snapshot',
-      details: {
-        lastError: result.error,
-        suggestions: [],
-      },
     });
   }
 
-  private createErrorResult(
-    toolName: string,
-    startTime: number,
-    error: any
-  ): ToolExecutionResult {
+  private createErrorResult(error: AutomationError): ToolExecutionResult {
     return {
       success: false,
-      toolName,
       error,
+      tabId: this.tabId,
     };
   }
 }

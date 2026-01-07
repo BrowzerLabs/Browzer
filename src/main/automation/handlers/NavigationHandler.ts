@@ -13,21 +13,11 @@ export class NavigationHandler extends BaseHandler {
     try {
       await this.view.webContents.loadURL(params.url);
 
-      return {
-        success: true,
-        toolName: 'navigate',
-      };
+      return { success: true };
     } catch (error) {
-      return this.createErrorResult('navigate', startTime, {
+      return this.createErrorResult({
         code: 'NAVIGATION_FAILED',
         message: `Failed to navigate to ${params.url}`,
-        details: {
-          lastError: error instanceof Error ? error.message : String(error),
-          suggestions: [
-            'Check if the URL is valid',
-            'Verify network connectivity',
-          ],
-        },
       });
     }
   }
@@ -47,9 +37,6 @@ export class NavigationHandler extends BaseHandler {
       `[NavigationHandler] ✅ Wait completed after ${executionTime}ms`
     );
 
-    return {
-      success: true,
-      toolName: 'wait',
-    };
+    return { success: true };
   }
 }

@@ -40,18 +40,14 @@ You have successfully executed your intermediate plan. Now:
   public static buildErrorRecoveryPrompt(params: {
     errorInfo: {
       message: string;
-      code?: string;
-      details?: unknown;
-      suggestions?: string[];
+      code: string;
     };
   }): string {
     const { errorInfo } = params;
 
     return `**AUTOMATION ERROR ENCOUNTERED**
-**Error Details:**
 - Message: ${errorInfo.message}
 ${errorInfo.code ? `- Code: ${errorInfo.code}` : ''}
-${errorInfo.details ? `- Details: ${JSON.stringify(errorInfo.details, null, 2)}` : ''}
 
 **Your Task:**
 1. Analyze what went wrong and why.

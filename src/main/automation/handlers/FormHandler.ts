@@ -23,20 +23,11 @@ export class FormHandler extends BaseHandler {
       const result = await this.executeFindAndSelect(params);
 
       if (!result.success) {
-        return this.createErrorResult('select', startTime, {
+        return this.createErrorResult({
           code: result.error?.includes('not found')
             ? 'ELEMENT_NOT_FOUND'
             : 'EXECUTION_ERROR',
           message: result.error || 'Failed to select option',
-          details: {
-            lastError: result.error,
-            suggestions: [
-              'Verify the select element attributes',
-              'Check if the dropdown is dynamically loaded',
-              'Verify the value/label/index matches an available option',
-              'Ensure page has finished loading',
-            ],
-          },
         });
       }
 
@@ -44,17 +35,13 @@ export class FormHandler extends BaseHandler {
 
       return {
         success: true,
-        toolName: 'select',
         value: result.selectedValue,
       };
     } catch (error) {
       console.error('[FormHandler] ❌ Select failed:', error);
-      return this.createErrorResult('select', startTime, {
+      return this.createErrorResult({
         code: 'EXECUTION_ERROR',
         message: `Select failed: ${error instanceof Error ? error.message : String(error)}`,
-        details: {
-          lastError: error instanceof Error ? error.message : String(error),
-        },
       });
     }
   }
@@ -238,19 +225,11 @@ export class FormHandler extends BaseHandler {
       const result = await this.executeFindAndToggleCheckbox(params);
 
       if (!result.success) {
-        return this.createErrorResult('checkbox', startTime, {
+        return this.createErrorResult({
           code: result.error?.includes('not found')
             ? 'ELEMENT_NOT_FOUND'
             : 'EXECUTION_ERROR',
           message: result.error || 'Failed to toggle checkbox',
-          details: {
-            lastError: result.error,
-            suggestions: [
-              'Verify the checkbox element attributes',
-              'Check if the checkbox is visible',
-              'Ensure type="checkbox" or type="radio"',
-            ],
-          },
         });
       }
 
@@ -258,17 +237,13 @@ export class FormHandler extends BaseHandler {
 
       return {
         success: true,
-        toolName: 'checkbox',
         value: result.checked,
       };
     } catch (error) {
       console.error('[FormHandler] ❌ Checkbox failed:', error);
-      return this.createErrorResult('checkbox', startTime, {
+      return this.createErrorResult({
         code: 'EXECUTION_ERROR',
         message: `Checkbox failed: ${error instanceof Error ? error.message : String(error)}`,
-        details: {
-          lastError: error instanceof Error ? error.message : String(error),
-        },
       });
     }
   }
@@ -428,34 +403,20 @@ export class FormHandler extends BaseHandler {
       const result = await this.executeFindAndSubmitForm(params);
 
       if (!result.success) {
-        return this.createErrorResult('submit', startTime, {
+        return this.createErrorResult({
           code: 'ELEMENT_NOT_FOUND',
           message: result.error || 'Form not found',
-          details: {
-            lastError: result.error,
-            suggestions: [
-              'Verify a form element exists on the page',
-              'Try specifying form parameters',
-              'Consider using submitButton to click the submit button instead',
-            ],
-          },
         });
       }
 
       await this.sleep(500);
 
-      return {
-        success: true,
-        toolName: 'submit',
-      };
+      return { success: true };
     } catch (error) {
       console.error('[FormHandler] ❌ Submit failed:', error);
-      return this.createErrorResult('submit', startTime, {
+      return this.createErrorResult({
         code: 'EXECUTION_ERROR',
         message: `Submit failed: ${error instanceof Error ? error.message : String(error)}`,
-        details: {
-          lastError: error instanceof Error ? error.message : String(error),
-        },
       });
     }
   }

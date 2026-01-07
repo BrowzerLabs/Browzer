@@ -8,25 +8,14 @@ export class TypeHandler extends BaseHandler {
   }
 
   async execute(params: TypeParams): Promise<ToolExecutionResult> {
-    const startTime = Date.now();
-
     try {
       console.log('[TypeHandler] ⌨️  Starting type execution');
 
       const findResult = await this.executeFindAndPrepare(params);
       if (!findResult.success) {
-        return this.createErrorResult('type', startTime, {
+        return this.createErrorResult({
           code: 'ELEMENT_NOT_FOUND',
           message: findResult.error || 'Could not find input element',
-          details: {
-            lastError: findResult.error,
-            suggestions: [
-              'Verify element attributes match the current page',
-              'Check if input is dynamically loaded',
-              'Ensure input is not inside iframe or shadow DOM',
-              'Try adding more specific attributes (id, name, placeholder)',
-            ],
-          },
         });
       }
 
@@ -45,16 +34,9 @@ export class TypeHandler extends BaseHandler {
 
       const typeSuccess = await this.typeText(params.text);
       if (!typeSuccess) {
-        return this.createErrorResult('type', startTime, {
+        return this.createErrorResult({
           code: 'EXECUTION_ERROR',
           message: 'Failed to type text',
-          details: {
-            suggestions: [
-              'Element may have lost focus',
-              'Input may be disabled or readonly',
-              'Try clicking the element first',
-            ],
-          },
         });
       }
 
@@ -66,21 +48,12 @@ export class TypeHandler extends BaseHandler {
 
       await this.sleep(300);
 
-      const executionTime = Date.now() - startTime;
-      console.log(`[TypeHandler] ✅ Typing completed in ${executionTime}ms`);
-
-      return {
-        success: true,
-        toolName: 'type',
-      };
+      return { success: true };
     } catch (error) {
       console.error('[TypeHandler] ❌ Type failed:', error);
-      return this.createErrorResult('type', startTime, {
+      return this.createErrorResult({
         code: 'EXECUTION_ERROR',
         message: `Type execution failed: ${error instanceof Error ? error.message : String(error)}`,
-        details: {
-          lastError: error instanceof Error ? error.message : String(error),
-        },
       });
     }
   }
