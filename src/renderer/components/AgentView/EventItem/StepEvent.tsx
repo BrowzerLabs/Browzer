@@ -127,8 +127,8 @@ export function StepEvent({ event, isLatest }: EventItemProps) {
             </div>
           )}
 
-          {/* Result Details (collapsible) */}
-          {event.data && event.data?.result && !event.data.result.summary && (
+          {/* Commented out to avoid showing result details, which is no useful */}
+          {/* {event.data && event.data?.result && !event.data.result.summary && (
             <div className="mt-2 text-xs">
               <details className="cursor-pointer">
                 <summary className="font-medium text-muted-foreground hover:text-foreground">
@@ -139,7 +139,7 @@ export function StepEvent({ event, isLatest }: EventItemProps) {
                 </pre>
               </details>
             </div>
-          )}
+          )} */}
         </div>
       </div>
     </Card>

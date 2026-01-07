@@ -42,6 +42,8 @@ export class BrowserAutomationExecutor {
     params: any
   ): Promise<ToolExecutionResult> {
     switch (toolName) {
+      case 'declare_plan_metadata':
+        return this.handlePlan();
       // Navigation operations
       case 'navigate':
         return this.navigationHandler.executeNavigate(params);
@@ -91,6 +93,13 @@ export class BrowserAutomationExecutor {
             ],
           },
         });
+    }
+  }
+
+  private handlePlan(): ToolExecutionResult {
+    return {
+      success: true,
+      toolName: 'declare_plan_metadata'
     }
   }
 

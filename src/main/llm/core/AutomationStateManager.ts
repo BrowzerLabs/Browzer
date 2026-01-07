@@ -4,7 +4,6 @@ import Anthropic from '@anthropic-ai/sdk';
 
 import { SystemPromptBuilder } from '../builders/SystemPromptBuilder';
 import { SessionManager } from '../session/SessionManager';
-import { ContextWindowManager } from '../utils/ContextWindowManager';
 import { AutomationClient } from '..';
 
 import {
@@ -81,10 +80,7 @@ export class AutomationStateManager extends EventEmitter {
 
   public async generateInitialPlan(): Promise<void> {
     setTimeout(() => {
-      this.emitProgress('thinking', {
-        message:
-          'Analyzing recorded session & goal to generate initial plan...',
-      });
+      this.emitProgress('thinking', { message: 'Browzer is thinking...' });
     }, 400);
     this.addMessage({
       role: 'user',
@@ -151,7 +147,7 @@ export class AutomationStateManager extends EventEmitter {
 
         const response = await this.automationClient.continueConversation(
           SystemPromptType.AUTOMATION_CONTINUATION,
-          this.optimizedMessages(),
+          this.getMessages(),
           this.cached_context
         );
 
@@ -187,7 +183,7 @@ export class AutomationStateManager extends EventEmitter {
 
       const response = await this.automationClient.continueConversation(
         SystemPromptType.AUTOMATION_ERROR_RECOVERY,
-        this.optimizedMessages(),
+        this.getMessages(),
         this.cached_context
       );
 
@@ -218,7 +214,7 @@ export class AutomationStateManager extends EventEmitter {
 
       const response = await this.automationClient.continueConversation(
         SystemPromptType.AUTOMATION_CONTINUATION,
-        this.optimizedMessages(),
+        this.getMessages(),
         this.cached_context
       );
 
@@ -374,7 +370,7 @@ export class AutomationStateManager extends EventEmitter {
 
     const response = await this.automationClient.continueConversation(
       SystemPromptType.AUTOMATION_ERROR_RECOVERY,
-      this.optimizedMessages(),
+      this.getMessages(),
       this.cached_context
     );
 
@@ -479,19 +475,6 @@ export class AutomationStateManager extends EventEmitter {
     return this.messages;
   }
 
-  public optimizedMessages(): Anthropic.MessageParam[] {
-    const result = ContextWindowManager.optimizeMessages(
-      this.messages,
-      this.user_goal
-    );
-
-    if (result.compressionApplied) {
-      this.messages = result.optimizedMessages;
-    }
-
-    return result.optimizedMessages;
-  }
-
   public getCurrentPlan(): AutomationPlan | null {
     return this.current_plan;
   }
@@ -543,7 +526,6 @@ export class AutomationStateManager extends EventEmitter {
     const steps: AutomationStep[] = [];
     let stepOrder = 0;
     let planType: 'intermediate' | 'final' = 'final';
-    let planTypeToolId: string | undefined = undefined;
 
     for (const block of response.content) {
       if (block.type === 'text') {
@@ -551,21 +533,16 @@ export class AutomationStateManager extends EventEmitter {
           message: block.text,
         });
       } else if (block.type === 'tool_use') {
-        if (block.name === 'declare_plan_metadata') {
-          planType = (block.input as any).planType ?? 'final';
-          planTypeToolId = block.id;
-        } else {
-          steps.push({
-            toolName: block.name,
-            toolUseId: block.id,
-            input: block.input,
-            order: stepOrder++,
-          });
-        }
+        steps.push({
+          toolName: block.name,
+          toolUseId: block.id,
+          input: block.input,
+          order: stepOrder++,
+        });
       }
     }
 
-    return { steps, planType, planTypeToolId };
+    return { steps, planType };
   }
 
   private buildToolResultsForPlan(
@@ -573,14 +550,6 @@ export class AutomationStateManager extends EventEmitter {
     executedSteps: ExecutedStep[]
   ): Anthropic.Messages.ToolResultBlockParam[] {
     const toolResultBlocks: Anthropic.Messages.ToolResultBlockParam[] = [];
-
-    if (plan.planTypeToolId) {
-      toolResultBlocks.push({
-        type: 'tool_result',
-        tool_use_id: plan.planTypeToolId,
-        content: `✅`,
-      });
-    }
 
     for (let i = 0; i < plan.steps.length; i++) {
       const planStep = plan.steps[i];
@@ -645,14 +614,6 @@ export class AutomationStateManager extends EventEmitter {
       content: string;
       is_error?: boolean;
     }> = [];
-
-    if (plan.planTypeToolId) {
-      toolResults.push({
-        type: 'tool_result',
-        tool_use_id: plan.planTypeToolId,
-        content: `✅`,
-      });
-    }
 
     let executedCount = 0;
 
