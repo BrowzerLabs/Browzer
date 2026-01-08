@@ -90,9 +90,10 @@ ${errorInfo.code ? `- Code: ${errorInfo.code}` : ''}
         formatted += `    <input_value>${this.escapeXml(String(action.value))}</input_value>\n`;
       }
 
-      if (action.position) {
-        formatted += `    <click_pos x="${action.position.x}" y="${action.position.y}" />\n`;
-      }
+      // commented as click position of element during recording is not reliable in automation.
+      // if (action.position) {
+      //   formatted += `    <click_pos x="${action.position.x}" y="${action.position.y}" />\n`;
+      // }
 
       formatted += `  </action>\n`;
     });

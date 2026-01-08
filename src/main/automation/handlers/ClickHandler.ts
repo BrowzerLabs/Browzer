@@ -9,35 +9,21 @@ export class ClickHandler extends BaseHandler {
 
   async execute(params: ClickParams): Promise<ToolExecutionResult> {
     try {
-      console.log('[ClickHandler] 🎯 Starting unified click execution');
-
-      if (params.tag) {
-        const result = await this.executeFindAndClick(params);
-
-        if (result.success) {
-          await this.sleep(500);
-          return { success: true };
-        } else {
-          return this.createErrorResult({
-            code: 'ELEMENT_NOT_FOUND',
-            message: result.error || 'Could not find or click element',
-          });
-        }
-      } else if (params.click_position) {
-        console.log('[ClickHandler] 📍 Using direct click_position');
+      if (params.click_position) {
         const positionSuccess = await this.executeClickAtPosition(
           params.click_position.x,
           params.click_position.y
         );
 
-        if (positionSuccess) {
-          await this.sleep(500);
-          return { success: true };
-        }
-
-        return this.createErrorResult({
+        return positionSuccess ? { success: true } : this.createErrorResult({
           code: 'CLICK_FAILED',
-          message: `Click failed at coordinates (${params.click_position.x}, ${params.click_position.y})`,
+          message: `Click at position (${params.click_position.x},${params.click_position.y}) failed`,
+        });
+      } else if (params.tag) {
+        const result = await this.executeFindAndClick(params);
+        return result.success ? { success : true } : this.createErrorResult({
+            code: 'ELEMENT_NOT_FOUND',
+            message: result.error || 'Could not find or click element',
         });
       } else {
         return this.createErrorResult({

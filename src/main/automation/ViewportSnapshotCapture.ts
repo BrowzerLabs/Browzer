@@ -2,7 +2,7 @@ import { WebContentsView } from 'electron';
 
 export class ViewportSnapshotCapture {
   private readonly JPEG_QUALITY = 70;
-  private readonly MAX_DIMENSION = 1024;
+  private readonly MAX_DIMENSION = 900;
 
   constructor(private view: WebContentsView) {}
 
