@@ -72,7 +72,6 @@ export class TypeHandler extends BaseHandler {
       return {
         success: true,
         toolName: 'type',
-        url: this.getUrl(),
       };
     } catch (error) {
       console.error('[TypeHandler] ❌ Type failed:', error);

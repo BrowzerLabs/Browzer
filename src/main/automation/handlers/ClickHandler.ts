@@ -21,7 +21,6 @@ export class ClickHandler extends BaseHandler {
           return {
             success: true,
             toolName: 'click',
-            url: this.getUrl(),
           };
         } else {
           if (params.click_position) {
@@ -38,7 +37,6 @@ export class ClickHandler extends BaseHandler {
               return {
                 success: true,
                 toolName: 'click',
-                url: this.getUrl(),
               };
             }
           }
@@ -68,7 +66,6 @@ export class ClickHandler extends BaseHandler {
           return {
             success: true,
             toolName: 'click',
-            url: this.getUrl(),
           };
         }
 

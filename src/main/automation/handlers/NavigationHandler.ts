@@ -16,7 +16,6 @@ export class NavigationHandler extends BaseHandler {
       return {
         success: true,
         toolName: 'navigate',
-        url: this.getUrl(),
       };
     } catch (error) {
       return this.createErrorResult('navigate', startTime, {
@@ -51,7 +50,6 @@ export class NavigationHandler extends BaseHandler {
     return {
       success: true,
       toolName: 'wait',
-      url: this.getUrl(),
     };
   }
 }

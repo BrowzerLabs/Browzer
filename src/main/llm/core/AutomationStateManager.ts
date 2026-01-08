@@ -5,15 +5,14 @@ import Anthropic from '@anthropic-ai/sdk';
 import { SystemPromptBuilder } from '../builders/SystemPromptBuilder';
 import { SessionManager } from '../session/SessionManager';
 import { ContextWindowManager } from '../utils/ContextWindowManager';
-import { MessageCompressionManager } from '../utils/MessageCompressionManager';
-import { AutomationClient, AutomationPlanParser, MessageBuilder } from '..';
+import { AutomationClient } from '..';
 
 import {
   ExecutedStep,
   CompletedPlan,
-  ParsedAutomationPlan,
   PlanExecutionResult,
   AutomationStep,
+  AutomationPlan,
 } from './types';
 
 import {
@@ -26,6 +25,7 @@ import {
 } from '@/shared/types';
 import { MAX_AUTOMATION_STEPS } from '@/shared/constants/limits';
 import { BrowserAutomationExecutor } from '@/main/automation';
+import { ContextWindowService } from './ContextWindowService';
 
 export class AutomationStateManager extends EventEmitter {
   private session_id: string;
@@ -34,7 +34,7 @@ export class AutomationStateManager extends EventEmitter {
   private session_manager: SessionManager;
 
   private messages: Anthropic.MessageParam[] = [];
-  private current_plan: ParsedAutomationPlan | null = null;
+  private current_plan: AutomationPlan | null = null;
   private executed_steps: ExecutedStep[] = [];
   private phase_number = 1;
   private completed_plans: CompletedPlan[] = [];
@@ -94,22 +94,8 @@ export class AutomationStateManager extends EventEmitter {
       this.cached_context,
       this.user_goal
     );
-    const plan = AutomationPlanParser.parsePlan(response);
-    this.current_plan = plan;
-    this.addMessage({
-      role: 'assistant',
-      content: response.content,
-    });
-    const thinkingText = response.content
-      .filter((block: Anthropic.ContentBlock) => block.type === 'text')
-      .map((block: Anthropic.TextBlock) => block.text)
-      .join('\n');
-
-    if (thinkingText) {
-      this.emitProgress('text_response', {
-        message: thinkingText,
-      });
-    }
+    this.current_plan = this.parsePlan(response);
+    this.addMessage({ role: 'assistant', content: response.content });
   }
 
   public async executePlanWithRecovery(): Promise<PlanExecutionResult> {
@@ -157,13 +143,11 @@ export class AutomationStateManager extends EventEmitter {
       }
 
       if (this.isAnalysisTool(step.toolName) && isLastStep) {
-        const toolResultBlocks = MessageBuilder.buildToolResultsForPlan(
+        const toolResultBlocks = this.buildToolResultsForPlan(
           this.current_plan,
           this.executed_steps
         );
-        this.addMessage(
-          MessageBuilder.buildUserMessageWithToolResults(toolResultBlocks)
-        );
+        this.addMessage({ role: 'user', content: toolResultBlocks });
 
         const response = await this.automationClient.continueConversation(
           SystemPromptType.AUTOMATION_CONTINUATION,
@@ -176,20 +160,9 @@ export class AutomationStateManager extends EventEmitter {
           content: response.content,
         });
 
-        const thinkingText = response.content
-          .filter((block: Anthropic.ContentBlock) => block.type === 'text')
-          .map((block: Anthropic.TextBlock) => block.text)
-          .join('\n');
-
-        if (thinkingText) {
-          this.emitProgress('text_response', {
-            message: thinkingText,
-          });
-        }
-
         this.compressMessages();
 
-        const newPlan = AutomationPlanParser.parsePlan(response);
+        const newPlan = this.parsePlan(response);
         this.setCurrentPlan(newPlan);
 
         return {
@@ -199,14 +172,12 @@ export class AutomationStateManager extends EventEmitter {
       }
     }
 
-    const toolResultBlocks = MessageBuilder.buildToolResultsForPlan(
+    const toolResultBlocks = this.buildToolResultsForPlan(
       this.current_plan,
       this.executed_steps
     );
 
-    this.addMessage(
-      MessageBuilder.buildUserMessageWithToolResults(toolResultBlocks)
-    );
+    this.addMessage({ role: 'user', content: toolResultBlocks });
 
     if (this.is_in_recovery) {
       if (this.current_plan.planType === 'final') {
@@ -220,25 +191,11 @@ export class AutomationStateManager extends EventEmitter {
         this.cached_context
       );
 
-      this.addMessage({
-        role: 'assistant',
-        content: response.content,
-      });
-
-      const thinkingText = response.content
-        .filter((block: Anthropic.ContentBlock) => block.type === 'text')
-        .map((block: Anthropic.TextBlock) => block.text)
-        .join('\n');
-
-      if (thinkingText) {
-        this.emitProgress('text_response', {
-          message: thinkingText,
-        });
-      }
+      this.addMessage({ role: 'assistant', content: response.content });
 
       this.compressMessages();
 
-      const newPlan = AutomationPlanParser.parsePlan(response);
+      const newPlan = this.parsePlan(response);
 
       this.setCurrentPlan(newPlan);
       this.exitRecoveryMode();
@@ -257,10 +214,7 @@ export class AutomationStateManager extends EventEmitter {
           currentUrl: this.current_url,
         });
 
-      this.addMessage({
-        role: 'user',
-        content: continuationPrompt,
-      });
+      this.addMessage({ role: 'user', content: continuationPrompt });
 
       const response = await this.automationClient.continueConversation(
         SystemPromptType.AUTOMATION_CONTINUATION,
@@ -268,25 +222,11 @@ export class AutomationStateManager extends EventEmitter {
         this.cached_context
       );
 
-      this.addMessage({
-        role: 'assistant',
-        content: response.content,
-      });
-
-      const thinkingText = response.content
-        .filter((block: Anthropic.ContentBlock) => block.type === 'text')
-        .map((block: Anthropic.TextBlock) => block.text)
-        .join('\n');
-
-      if (thinkingText) {
-        this.emitProgress('text_response', {
-          message: thinkingText,
-        });
-      }
+      this.addMessage({ role: 'assistant', content: response.content });
 
       this.compressMessages();
 
-      const newPlan = AutomationPlanParser.parsePlan(response);
+      const newPlan = this.parsePlan(response);
       this.setCurrentPlan(newPlan);
 
       return {
@@ -407,7 +347,7 @@ export class AutomationStateManager extends EventEmitter {
     failedStep: any,
     result: ToolExecutionResult
   ): Promise<PlanExecutionResult> {
-    const toolResults = MessageBuilder.buildToolResultsForErrorRecovery(
+    const toolResults = this.buildToolResultsForErrorRecovery(
       this.current_plan,
       this.executed_steps
     );
@@ -419,23 +359,18 @@ export class AutomationStateManager extends EventEmitter {
         details: result.error?.details,
         suggestions: result.error?.details?.suggestions,
       },
-      userGoal: this.user_goal,
-      failedStep: {
-        stepNumber: this.executed_steps.length,
-        toolName: failedStep.toolName,
-        params: failedStep.input,
-      },
-      successfullyExecutedSteps: this.executed_steps.filter((s) => s.success)
-        .length,
-      currentUrl: result.url,
     });
 
-    this.addMessage(
-      MessageBuilder.buildUserMessageWithToolResultsAndText(
-        toolResults,
-        errorPrompt
-      )
-    );
+    this.addMessage({
+      role: 'user',
+      content: [
+        ...toolResults,
+        {
+          type: 'text',
+          text: errorPrompt,
+        },
+      ],
+    });
 
     const response = await this.automationClient.continueConversation(
       SystemPromptType.AUTOMATION_ERROR_RECOVERY,
@@ -443,13 +378,10 @@ export class AutomationStateManager extends EventEmitter {
       this.cached_context
     );
 
-    this.addMessage({
-      role: 'assistant',
-      content: response.content,
-    });
+    this.addMessage({ role: 'assistant', content: response.content });
     this.compressMessages();
 
-    const newPlan = AutomationPlanParser.parsePlan(response);
+    const newPlan = this.parsePlan(response);
     this.setCurrentPlan(newPlan);
     this.enterRecoveryMode();
 
@@ -464,7 +396,7 @@ export class AutomationStateManager extends EventEmitter {
     return this.session_id;
   }
 
-  public setCurrentPlan(plan: ParsedAutomationPlan): void {
+  public setCurrentPlan(plan: AutomationPlan): void {
     this.current_plan = plan;
   }
 
@@ -524,7 +456,7 @@ export class AutomationStateManager extends EventEmitter {
       this.completed_plans.push({
         phaseNumber: this.phase_number,
         plan: this.current_plan,
-        stepsExecuted: this.current_plan.totalSteps,
+        stepsExecuted: this.current_plan.steps.length,
       });
       this.phase_number++;
 
@@ -560,7 +492,7 @@ export class AutomationStateManager extends EventEmitter {
     return result.optimizedMessages;
   }
 
-  public getCurrentPlan(): ParsedAutomationPlan | undefined {
+  public getCurrentPlan(): AutomationPlan | null {
     return this.current_plan;
   }
 
@@ -604,10 +536,171 @@ export class AutomationStateManager extends EventEmitter {
   }
 
   public compressMessages(): void {
-    const result = MessageCompressionManager.compressMessages(this.messages);
+    this.messages = ContextWindowService.compressMessages(this.messages);
+  }
 
-    if (result.compressedCount > 0) {
-      this.messages = result.compressedMessages;
+  private parsePlan(response: Anthropic.Message): AutomationPlan {
+    const steps: AutomationStep[] = [];
+    let stepOrder = 0;
+    let planType: 'intermediate' | 'final' = 'final';
+    let planTypeToolId: string | undefined = undefined;
+
+    for (const block of response.content) {
+      if (block.type === 'text') {
+        this.emitProgress('text_response', {
+          message: block.text,
+        });
+      } else if (block.type === 'tool_use') {
+        if (block.name === 'declare_plan_metadata') {
+          planType = (block.input as any).planType ?? 'final';
+          planTypeToolId = block.id;
+        } else {
+          steps.push({
+            toolName: block.name,
+            toolUseId: block.id,
+            input: block.input,
+            order: stepOrder++,
+          });
+        }
+      }
     }
+
+    return { steps, planType, planTypeToolId };
+  }
+
+  private buildToolResultsForPlan(
+    plan: AutomationPlan,
+    executedSteps: ExecutedStep[]
+  ): Anthropic.Messages.ToolResultBlockParam[] {
+    const toolResultBlocks: Anthropic.Messages.ToolResultBlockParam[] = [];
+
+    if (plan.planTypeToolId) {
+      toolResultBlocks.push({
+        type: 'tool_result',
+        tool_use_id: plan.planTypeToolId,
+        content: `✅`,
+      });
+    }
+
+    let executedIndex = 0;
+    for (let i = 0; i < plan.steps.length; i++) {
+      const planStep = plan.steps[i];
+      if (executedIndex >= executedSteps.length) {
+        break;
+      }
+      const executedStep = executedSteps[executedIndex];
+
+      if (!executedStep.result || executedStep.toolName !== planStep.toolName) {
+        break;
+      }
+      executedIndex++;
+
+      const result = executedStep.result;
+
+      if (planStep.toolName === 'extract_context') {
+        toolResultBlocks.push({
+          type: 'tool_result',
+          tool_use_id: planStep.toolUseId,
+          content: result.value.toString(),
+        });
+      } else if (
+        planStep.toolName === 'take_snapshot' &&
+        typeof result.value === 'string'
+      ) {
+        toolResultBlocks.push({
+          type: 'tool_result',
+          tool_use_id: planStep.toolUseId,
+          content: [
+            {
+              type: 'image',
+              source: {
+                type: 'base64',
+                media_type: 'image/jpeg',
+                data: result.value,
+              },
+            },
+          ],
+        });
+      } else {
+        toolResultBlocks.push({
+          type: 'tool_result',
+          tool_use_id: planStep.toolUseId,
+          content: `✅`,
+        });
+      }
+    }
+
+    return toolResultBlocks;
+  }
+
+  public buildToolResultsForErrorRecovery(
+    plan: AutomationPlan,
+    executedSteps: ExecutedStep[]
+  ): Array<{
+    type: 'tool_result';
+    tool_use_id: string;
+    content: string;
+    is_error?: boolean;
+  }> {
+    const toolResults: Array<{
+      type: 'tool_result';
+      tool_use_id: string;
+      content: string;
+      is_error?: boolean;
+    }> = [];
+
+    if (plan.planTypeToolId) {
+      toolResults.push({
+        type: 'tool_result',
+        tool_use_id: plan.planTypeToolId,
+        content: `✅`,
+      });
+    }
+
+    let executedCount = 0;
+
+    for (let i = 0; i < plan.steps.length; i++) {
+      const step = plan.steps[i];
+
+      // Check if this step was executed
+      if (executedCount < executedSteps.length) {
+        const executedStep = executedSteps[executedCount];
+
+        // Verify this is the right step (match by tool name)
+        if (executedStep.toolName === step.toolName) {
+          // Add tool result for this executed step
+          toolResults.push({
+            type: 'tool_result',
+            tool_use_id: step.toolUseId,
+            content: executedStep.success
+              ? `✅`
+              : JSON.stringify({
+                  error:
+                    executedStep.error ||
+                    executedStep.result?.error?.message ||
+                    '❌ Unknown error',
+                  toolName: step.toolName,
+                }),
+          });
+          executedCount++;
+        } else {
+          // Mismatch - this step wasn't executed
+          toolResults.push({
+            type: 'tool_result',
+            tool_use_id: step.toolUseId,
+            content: `❌ automation stopped before reaching this step`,
+          });
+        }
+      } else {
+        // This step wasn't executed yet
+        toolResults.push({
+          type: 'tool_result',
+          tool_use_id: step.toolUseId,
+          content: `❌ automation stopped before reaching this step`,
+        });
+      }
+    }
+
+    return toolResults;
   }
 }

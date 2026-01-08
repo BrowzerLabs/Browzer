@@ -30,7 +30,6 @@ export abstract class BaseHandler {
       toolName,
       error,
       tabId: this.tabId,
-      url: this.getUrl(),
     };
   }
 
