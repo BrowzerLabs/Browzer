@@ -2,17 +2,87 @@ import { BaseHandler, HandlerContext } from './BaseHandler';
 
 import type { ToolExecutionResult, ClickParams } from '@/shared/types';
 
+export interface CDPClickParams extends ClickParams {
+  backend_node_id?: number;
+}
+
 export class ClickHandler extends BaseHandler {
   constructor(context: HandlerContext) {
     super(context);
   }
 
-  async execute(params: ClickParams): Promise<ToolExecutionResult> {
+  async execute(params: CDPClickParams): Promise<ToolExecutionResult> {
     const startTime = Date.now();
 
     try {
       console.log('[ClickHandler] 🎯 Starting unified click execution');
 
+      // Priority 1: Use backend_node_id if provided (CDP-based click)
+      if (params.backend_node_id !== undefined) {
+        console.log(
+          `[ClickHandler] 🔗 Using backend_node_id: ${params.backend_node_id}`
+        );
+        const result = await this.executeClickByBackendNodeId(
+          params.backend_node_id
+        );
+
+        if (result.success) {
+          await this.sleep(500);
+          return {
+            success: true,
+            toolName: 'click',
+            url: this.getUrl(),
+          };
+        } else {
+          // Fallback to tag-based or position-based click
+          if (params.tag) {
+            console.warn(
+              '[ClickHandler] ⚠️ CDP click failed, trying tag-based fallback'
+            );
+            const tagResult = await this.executeFindAndClick(params);
+            if (tagResult.success) {
+              await this.sleep(500);
+              return {
+                success: true,
+                toolName: 'click',
+                url: this.getUrl(),
+              };
+            }
+          }
+
+          if (params.click_position) {
+            console.warn('[ClickHandler] ⚠️ Trying position fallback');
+            const positionSuccess = await this.executeClickAtPosition(
+              params.click_position.x,
+              params.click_position.y
+            );
+            if (positionSuccess) {
+              await this.sleep(500);
+              return {
+                success: true,
+                toolName: 'click',
+                url: this.getUrl(),
+              };
+            }
+          }
+
+          return this.createErrorResult('click', startTime, {
+            code: 'ELEMENT_NOT_FOUND',
+            message:
+              result.error || 'Could not click element by backend_node_id',
+            details: {
+              lastError: result.error,
+              suggestions: [
+                'Element may have been removed from DOM',
+                'Try extracting context again to get fresh backend_node_ids',
+                'Use tag-based fallback if element structure changed',
+              ],
+            },
+          });
+        }
+      }
+
+      // Priority 2: Use tag-based element finding
       if (params.tag) {
         const result = await this.executeFindAndClick(params);
 
@@ -83,7 +153,7 @@ export class ClickHandler extends BaseHandler {
         return this.createErrorResult('click', startTime, {
           code: 'INVALID_PARAMS',
           message:
-            'Must provide either tag for element finding or click_position',
+            'Must provide backend_node_id, tag for element finding, or click_position',
         });
       }
     } catch (error) {
@@ -95,6 +165,113 @@ export class ClickHandler extends BaseHandler {
           lastError: error instanceof Error ? error.message : String(error),
         },
       });
+    }
+  }
+
+  private async executeClickByBackendNodeId(
+    backendNodeId: number
+  ): Promise<{ success: boolean; error?: string }> {
+    try {
+      const cdp = this.view.webContents.debugger;
+
+      if (!cdp.isAttached()) {
+        cdp.attach('1.3');
+      }
+
+      console.log(
+        `[ClickHandler] 🔍 Resolving backend_node_id: ${backendNodeId}`
+      );
+
+      try {
+        await cdp.sendCommand('DOM.scrollIntoViewIfNeeded', { backendNodeId });
+        await this.sleep(300);
+      } catch (scrollError) {
+        console.warn(
+          '[ClickHandler] ⚠️ scrollIntoViewIfNeeded failed:',
+          scrollError
+        );
+      }
+
+      let centerX: number;
+      let centerY: number;
+
+      try {
+        const boxModel = await cdp.sendCommand('DOM.getBoxModel', {
+          backendNodeId,
+        });
+        const content = (boxModel as any).model.content;
+
+        centerX = (content[0] + content[2]) / 2;
+        centerY = (content[1] + content[5]) / 2;
+
+        console.log(
+          `[ClickHandler] 📍 Element center: (${centerX}, ${centerY})`
+        );
+      } catch (boxError) {
+        console.error('[ClickHandler] ❌ Failed to get box model:', boxError);
+        return {
+          success: false,
+          error: `Failed to get element position: ${boxError instanceof Error ? boxError.message : String(boxError)}`,
+        };
+      }
+
+      try {
+        await cdp.sendCommand('DOM.focus', { backendNodeId });
+        await this.sleep(50);
+      } catch (focusError) {
+        console.warn(
+          '[ClickHandler] ⚠️ Focus failed (non-critical):',
+          focusError
+        );
+      }
+
+      await this.showClickRipple(centerX, centerY);
+      await this.sleep(200);
+
+      await cdp.sendCommand('Input.dispatchMouseEvent', {
+        type: 'mouseMoved',
+        x: centerX,
+        y: centerY,
+        button: 'none',
+        clickCount: 0,
+      });
+
+      await this.sleep(50);
+
+      await cdp.sendCommand('Input.dispatchMouseEvent', {
+        type: 'mousePressed',
+        x: centerX,
+        y: centerY,
+        button: 'left',
+        clickCount: 1,
+      });
+
+      await this.sleep(50);
+
+      await cdp.sendCommand('Input.dispatchMouseEvent', {
+        type: 'mouseReleased',
+        x: centerX,
+        y: centerY,
+        button: 'left',
+        clickCount: 1,
+      });
+
+      console.log('[ClickHandler] ✅ CDP click executed successfully');
+
+      await this.sleep(300);
+      await this.removeClickRipple();
+
+      return { success: true };
+    } catch (error) {
+      console.error(
+        '[ClickHandler] ❌ CDP backend_node_id click failed:',
+        error
+      );
+      await this.removeClickRipple();
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : String(error),
+      };
     }
   }
 

@@ -2,40 +2,99 @@ import { BaseHandler, HandlerContext } from './BaseHandler';
 
 import type { ToolExecutionResult, TypeParams } from '@/shared/types';
 
+export interface CDPTypeParams extends TypeParams {
+  backend_node_id?: number;
+}
+
 export class TypeHandler extends BaseHandler {
   constructor(context: HandlerContext) {
     super(context);
   }
 
-  async execute(params: TypeParams): Promise<ToolExecutionResult> {
+  async execute(params: CDPTypeParams): Promise<ToolExecutionResult> {
     const startTime = Date.now();
 
     try {
       console.log('[TypeHandler] ⌨️  Starting type execution');
 
-      const findResult = await this.executeFindAndPrepare(params);
-      if (!findResult.success) {
-        return this.createErrorResult('type', startTime, {
-          code: 'ELEMENT_NOT_FOUND',
-          message: findResult.error || 'Could not find input element',
-          details: {
-            lastError: findResult.error,
-            suggestions: [
-              'Verify element attributes match the current page',
-              'Check if input is dynamically loaded',
-              'Ensure input is not inside iframe or shadow DOM',
-              'Try adding more specific attributes (id, name, placeholder)',
-            ],
-          },
-        });
+      let centerX: number;
+      let centerY: number;
+
+      if (params.backend_node_id !== undefined) {
+        console.log(
+          `[TypeHandler] 🔗 Using backend_node_id: ${params.backend_node_id}`
+        );
+        const cdpResult = await this.prepareByBackendNodeId(
+          params.backend_node_id
+        );
+
+        if (!cdpResult.success) {
+          if (params.tag) {
+            console.warn(
+              '[TypeHandler] ⚠️ CDP lookup failed, trying tag-based fallback'
+            );
+            const findResult = await this.executeFindAndPrepare(params);
+            if (!findResult.success) {
+              return this.createErrorResult('type', startTime, {
+                code: 'ELEMENT_NOT_FOUND',
+                message: cdpResult.error || 'Could not find input element',
+                details: {
+                  lastError: cdpResult.error,
+                  suggestions: [
+                    'Element may have been removed from DOM',
+                    'Try extracting context again to get fresh backend_node_ids',
+                    'Use tag-based fallback if element structure changed',
+                  ],
+                },
+              });
+            }
+            centerX = findResult.centerX!;
+            centerY = findResult.centerY!;
+          } else {
+            return this.createErrorResult('type', startTime, {
+              code: 'ELEMENT_NOT_FOUND',
+              message:
+                cdpResult.error ||
+                'Could not find input element by backend_node_id',
+              details: {
+                lastError: cdpResult.error,
+                suggestions: [
+                  'Element may have been removed from DOM',
+                  'Try extracting context again to get fresh backend_node_ids',
+                ],
+              },
+            });
+          }
+        } else {
+          centerX = cdpResult.centerX!;
+          centerY = cdpResult.centerY!;
+        }
+      } else {
+        const findResult = await this.executeFindAndPrepare(params);
+        if (!findResult.success) {
+          return this.createErrorResult('type', startTime, {
+            code: 'ELEMENT_NOT_FOUND',
+            message: findResult.error || 'Could not find input element',
+            details: {
+              lastError: findResult.error,
+              suggestions: [
+                'Verify element attributes match the current page',
+                'Check if input is dynamically loaded',
+                'Ensure input is not inside iframe or shadow DOM',
+                'Try adding more specific attributes (id, name, placeholder)',
+              ],
+            },
+          });
+        }
+        centerX = findResult.centerX!;
+        centerY = findResult.centerY!;
       }
 
-      const { centerX, centerY } = findResult;
       console.log(
         `[TypeHandler] ✅ Input found and prepared at (${centerX}, ${centerY})`
       );
 
-      await this.focusElement(centerX!, centerY!);
+      await this.focusElement(centerX, centerY);
       await this.sleep(150);
 
       if (params.clearFirst !== false) {
@@ -83,6 +142,78 @@ export class TypeHandler extends BaseHandler {
           lastError: error instanceof Error ? error.message : String(error),
         },
       });
+    }
+  }
+
+  private async prepareByBackendNodeId(
+    backendNodeId: number
+  ): Promise<{
+    success: boolean;
+    error?: string;
+    centerX?: number;
+    centerY?: number;
+  }> {
+    try {
+      const cdp = this.view.webContents.debugger;
+
+      if (!cdp.isAttached()) {
+        cdp.attach('1.3');
+      }
+
+      console.log(
+        `[TypeHandler] 🔍 Resolving backend_node_id: ${backendNodeId}`
+      );
+
+      try {
+        await cdp.sendCommand('DOM.scrollIntoViewIfNeeded', { backendNodeId });
+        await this.sleep(300);
+      } catch (scrollError) {
+        console.warn(
+          '[TypeHandler] ⚠️ scrollIntoViewIfNeeded failed:',
+          scrollError
+        );
+      }
+
+      try {
+        const boxModel = await cdp.sendCommand('DOM.getBoxModel', {
+          backendNodeId,
+        });
+        const content = (boxModel as any).model.content;
+
+        const centerX = (content[0] + content[2]) / 2;
+        const centerY = (content[1] + content[5]) / 2;
+
+        console.log(
+          `[TypeHandler] 📍 Element center: (${centerX}, ${centerY})`
+        );
+
+        try {
+          await cdp.sendCommand('DOM.focus', { backendNodeId });
+          await this.sleep(50);
+        } catch (focusError) {
+          console.warn(
+            '[TypeHandler] ⚠️ CDP focus failed (will retry with click):',
+            focusError
+          );
+        }
+
+        return { success: true, centerX, centerY };
+      } catch (boxError) {
+        console.error('[TypeHandler] ❌ Failed to get box model:', boxError);
+        return {
+          success: false,
+          error: `Failed to get element position: ${boxError instanceof Error ? boxError.message : String(boxError)}`,
+        };
+      }
+    } catch (error) {
+      console.error(
+        '[TypeHandler] ❌ CDP backend_node_id lookup failed:',
+        error
+      );
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : String(error),
+      };
     }
   }
 
