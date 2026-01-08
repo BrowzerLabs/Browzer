@@ -54,27 +54,38 @@ export class ContextWindowService {
     messages: Anthropic.MessageParam[]
   ): Anthropic.MessageParam[] {
     const observationTools = new Set(['wait']);
-    const observationToolIds = new Set<string>();
+    const toolUseIds = new Set<string>();
+    const toolResultIds = new Set<string>();
 
     messages.forEach((message) => {
       if (Array.isArray(message.content)) {
         message.content.forEach((block) => {
           if (block.type === 'tool_use' && observationTools.has(block.name)) {
-            observationToolIds.add(block.id);
+            toolUseIds.add(block.id);
+          }
+          if (block.type === 'tool_result') {
+            toolResultIds.add(block.tool_use_id);
           }
         });
+      }
+    });
+
+    const completeToolIds = new Set<string>();
+    toolUseIds.forEach((id) => {
+      if (toolResultIds.has(id)) {
+        completeToolIds.add(id);
       }
     });
 
     return messages.map((message) => {
       if (Array.isArray(message.content)) {
         const filteredContent = message.content.filter((block) => {
-          if (block.type === 'tool_use' && observationTools.has(block.name)) {
+          if (block.type === 'tool_use' && completeToolIds.has(block.id)) {
             return false;
           }
           if (
             block.type === 'tool_result' &&
-            observationToolIds.has(block.tool_use_id)
+            completeToolIds.has(block.tool_use_id)
           ) {
             return false;
           }

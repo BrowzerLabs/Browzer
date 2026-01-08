@@ -582,18 +582,15 @@ export class AutomationStateManager extends EventEmitter {
       });
     }
 
-    let executedIndex = 0;
     for (let i = 0; i < plan.steps.length; i++) {
       const planStep = plan.steps[i];
-      if (executedIndex >= executedSteps.length) {
-        break;
-      }
-      const executedStep = executedSteps[executedIndex];
+      const executedStep = executedSteps.find(
+        (es) => es.toolName === planStep.toolName && es.result
+      );
 
-      if (!executedStep.result || executedStep.toolName !== planStep.toolName) {
+      if (!executedStep || !executedStep.result) {
         break;
       }
-      executedIndex++;
 
       const result = executedStep.result;
 
