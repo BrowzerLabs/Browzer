@@ -9,27 +9,40 @@ export class ClickHandler extends BaseHandler {
 
   async execute(params: ClickParams): Promise<ToolExecutionResult> {
     try {
-      if (params.click_position) {
+      if (params.nodeId) {
+        console.log('[ClickHandler] 🎯 Using CDP node ID for reliable click');
+        const success = await this.executeClickByCDPNodeId(params.nodeId);
+        if (success) return { success: true };
+
+        return this.createErrorResult({
+          code: 'CLICK_FAILED',
+          message: 'Failed to click using CDP node ID',
+        });
+      } else if (params.click_position) {
         const positionSuccess = await this.executeClickAtPosition(
           params.click_position.x,
           params.click_position.y
         );
 
-        return positionSuccess ? { success: true } : this.createErrorResult({
-          code: 'CLICK_FAILED',
-          message: `Click at position (${params.click_position.x},${params.click_position.y}) failed`,
-        });
+        return positionSuccess
+          ? { success: true }
+          : this.createErrorResult({
+              code: 'CLICK_FAILED',
+              message: `Click at position (${params.click_position.x},${params.click_position.y}) failed`,
+            });
       } else if (params.tag) {
         const result = await this.executeFindAndClick(params);
-        return result.success ? { success : true } : this.createErrorResult({
-            code: 'ELEMENT_NOT_FOUND',
-            message: result.error || 'Could not find or click element',
-        });
+        return result.success
+          ? { success: true }
+          : this.createErrorResult({
+              code: 'ELEMENT_NOT_FOUND',
+              message: result.error || 'Could not find or click element',
+            });
       } else {
         return this.createErrorResult({
           code: 'INVALID_PARAMS',
           message:
-            'Must provide either tag for element finding or click_position',
+            'Must provide either nodeId, tag for element finding, or click_position',
         });
       }
     } catch (error) {
@@ -620,6 +633,94 @@ export class ClickHandler extends BaseHandler {
       await this.view.webContents.executeJavaScript(script);
     } catch (error) {
       console.warn('[ClickHandler] ⚠️ Failed to remove ripple:', error);
+    }
+  }
+
+  private async executeClickByCDPNodeId(nodeId: number): Promise<boolean> {
+    try {
+      const cdp = this.view.webContents.debugger;
+      await cdp.sendCommand('DOM.scrollIntoViewIfNeeded', { nodeId });
+      await this.sleep(150);
+      const { model } = await cdp.sendCommand('DOM.getBoxModel', { nodeId });
+
+      if (!model || !model.content || model.content.length < 8) {
+        console.error('[ClickHandler] Invalid box model for node', nodeId);
+        return false;
+      }
+
+      const [x1, y1, x2, y2, x3, y3, x4, y4] = model.content;
+      const centerX = Math.round((x1 + x2 + x3 + x4) / 4);
+      const centerY = Math.round((y1 + y2 + y3 + y4) / 4);
+
+      console.log(
+        `[ClickHandler] 🎯 Clicking CDP node ${nodeId} at (${centerX}, ${centerY})`
+      );
+
+      await this.showClickRipple(centerX, centerY);
+      await this.sleep(300);
+
+      await cdp.sendCommand('Input.dispatchMouseEvent', {
+        type: 'mouseMoved',
+        x: centerX,
+        y: centerY,
+        button: 'none',
+        clickCount: 0,
+      });
+
+      await this.sleep(50);
+
+      await cdp.sendCommand('Input.dispatchMouseEvent', {
+        type: 'mousePressed',
+        x: centerX,
+        y: centerY,
+        button: 'left',
+        clickCount: 1,
+      });
+
+      await this.sleep(50);
+
+      await cdp.sendCommand('Input.dispatchMouseEvent', {
+        type: 'mouseReleased',
+        x: centerX,
+        y: centerY,
+        button: 'left',
+        clickCount: 1,
+      });
+
+      console.log(`[ClickHandler] ✅ Clicked CDP node ${nodeId} successfully`);
+      await this.removeClickRipple();
+      return true;
+    } catch (error) {
+      console.error('[ClickHandler] ❌ CDP node click failed:', error);
+      await this.removeClickRipple();
+      return false;
+    }
+  }
+
+  private async executeClickByCDPBackendNodeId(
+    backendNodeId: number
+  ): Promise<boolean> {
+    try {
+      const cdp = this.view.webContents.debugger;
+      const { nodeIds } = await cdp.sendCommand(
+        'DOM.pushNodesByBackendIdsToFrontend',
+        {
+          backendNodeIds: [backendNodeId],
+        }
+      );
+
+      if (!nodeIds || nodeIds.length === 0) {
+        console.error(
+          '[ClickHandler] Failed to resolve backend node ID',
+          backendNodeId
+        );
+        return false;
+      }
+
+      return await this.executeClickByCDPNodeId(nodeIds[0]);
+    } catch (error) {
+      console.error('[ClickHandler] ❌ CDP backend node click failed:', error);
+      return false;
     }
   }
 }

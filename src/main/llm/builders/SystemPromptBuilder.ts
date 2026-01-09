@@ -3,6 +3,7 @@ import {
   RecordedAction,
   RecordingSession,
 } from '@/shared/types';
+import { escapeXml } from '@/shared/utils';
 
 export class SystemPromptBuilder {
   public static buildIntermediatePlanContinuationPrompt(params: {
@@ -60,7 +61,7 @@ ${errorInfo.code ? `- Code: ${errorInfo.code}` : ''}
   public static formatRecordedSession(session: RecordingSession): string {
     const actions = session.actions || [];
 
-    let formatted = `<rec name="${this.escapeXml(session.name)}" desc="${this.escapeXml(session.description)}" dur="${Math.round(session.duration / 1000)}" start_url="${this.escapeXml(session.url || session.tabs?.[0]?.url || '')}">
+    let formatted = `<rec name="${escapeXml(session.name)}" desc="${escapeXml(session.description)}" dur="${Math.round(session.duration / 1000)}" start_url="${escapeXml(session.url || session.tabs?.[0]?.url || '')}">
 <actions>\n`;
 
     let previousTimestamp: number | null = null;
@@ -73,7 +74,7 @@ ${errorInfo.code ? `- Code: ${errorInfo.code}` : ''}
 
       previousTimestamp = action.timestamp;
 
-      formatted += `  <action id="${index + 1}" type="${action.type}" url="${this.escapeXml(action.tabUrl || '')}" gap="${gap}">\n`;
+      formatted += `  <action id="${index + 1}" type="${action.type}" url="${escapeXml(action.tabUrl || '')}" gap="${gap}">\n`;
 
       if (action.target) {
         formatted += this.formatElementInline(action.target);
@@ -87,7 +88,7 @@ ${errorInfo.code ? `- Code: ${errorInfo.code}` : ''}
           !action.target?.value);
 
       if (shouldOutputValue) {
-        formatted += `    <input_value>${this.escapeXml(String(action.value))}</input_value>\n`;
+        formatted += `    <input_value>${escapeXml(String(action.value))}</input_value>\n`;
       }
 
       // commented as click position of element during recording is not reliable in automation.
@@ -105,7 +106,7 @@ ${errorInfo.code ? `- Code: ${errorInfo.code}` : ''}
   private static formatElementInline(target: ElementTarget): string {
     const attrs = target.attributes || {};
 
-    let element = `    <${this.escapeXml(target.tagName).toLowerCase()} `;
+    let element = `    <${escapeXml(target.tagName).toLowerCase()} `;
 
     if (target.boundingBox !== undefined) {
       const bb = target.boundingBox;
@@ -113,11 +114,11 @@ ${errorInfo.code ? `- Code: ${errorInfo.code}` : ''}
     }
 
     if (target.value !== undefined) {
-      element += ` value="${this.escapeXml(target.value)}"`;
+      element += ` value="${escapeXml(target.value)}"`;
     }
 
     if (target.text) {
-      element += ` text="${this.escapeXml(target.text.slice(0, 120))}"`;
+      element += ` text="${escapeXml(target.text.slice(0, 120))}"`;
     }
 
     if (target.elementIndex !== undefined) {
@@ -150,21 +151,11 @@ ${errorInfo.code ? `- Code: ${errorInfo.code}` : ''}
         finalValue = this.normalizeGoogleSearchUrl(finalValue);
       }
 
-      element += `      ${this.escapeXml(key)}="${this.escapeXml(finalValue)}"\n`;
+      element += `      ${escapeXml(key)}="${escapeXml(finalValue)}"\n`;
     });
 
     element += `    />\n`;
     return element;
-  }
-
-  private static escapeXml(str: string): string {
-    if (!str) return '';
-    return str
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&apos;');
   }
 
   private static normalizeGoogleSearchUrl(rawUrl: string): string {

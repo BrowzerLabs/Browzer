@@ -256,7 +256,6 @@ export const useAutomationStore = create<AutomationStore>()(
           return;
         }
 
-        await window.browserAPI.stopAutomation(sessionId);
         set({
           currentSession: {
             ...currentSession,
@@ -264,6 +263,10 @@ export const useAutomationStore = create<AutomationStore>()(
             error: 'Automation stopped by user',
             endTime: Date.now(),
           },
+        });
+
+        window.browserAPI.stopAutomation(sessionId).catch((error: any) => {
+          console.error('[AutomationStore] Failed to stop automation:', error);
         });
       },
 
