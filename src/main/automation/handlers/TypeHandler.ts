@@ -8,6 +8,7 @@ export class TypeHandler extends BaseHandler {
   }
 
   async execute(params: TypeParams): Promise<ToolExecutionResult> {
+    const cdp = this.view.webContents.debugger;
     try {
       console.log('[TypeHandler] ⌨️  Starting type execution');
 
@@ -19,17 +20,38 @@ export class TypeHandler extends BaseHandler {
         });
       }
 
-      const { centerX, centerY } = findResult;
+      const { centerX, centerY, isContentEditable } = findResult;
       console.log(
-        `[TypeHandler] ✅ Input found and prepared at (${centerX}, ${centerY})`
+        `[TypeHandler] ✅ Input found and prepared at (${centerX}, ${centerY}), contentEditable: ${isContentEditable}`
       );
 
-      await this.focusElement(centerX!, centerY!);
-      await this.sleep(150);
+      if (isContentEditable) {
+        const x = Math.round(centerX);
+        const y = Math.round(centerY);
+        await cdp.sendCommand('Input.dispatchMouseEvent', {
+          type: 'mousePressed',
+          x,
+          y,
+          button: 'left',
+          clickCount: 1,
+        });
+        await this.sleep(10);
+        await cdp.sendCommand('Input.dispatchMouseEvent', {
+          type: 'mouseReleased',
+          x,
+          y,
+          button: 'left',
+          clickCount: 1,
+        });
+        await this.sleep(10);
+      } else {
+        await this.focusElement(centerX!, centerY!);
+        await this.sleep(50);
+      }
 
       if (params.clearFirst !== false) {
         await this.clearInput();
-        await this.sleep(100);
+        await this.sleep(10);
       }
 
       const typeSuccess = await this.typeText(params.text);
@@ -41,12 +63,27 @@ export class TypeHandler extends BaseHandler {
       }
 
       if (params.pressEnter) {
-        await this.sleep(100);
-        await this.pressKey('Enter');
+        await cdp.sendCommand('Input.dispatchKeyEvent', {
+          type: 'rawKeyDown',
+          key: 'Enter',
+          code: 'Enter',
+          windowsVirtualKeyCode: 13,
+          nativeVirtualKeyCode: 13,
+        });
+
+        await this.sleep(10);
+
+        await cdp.sendCommand('Input.dispatchKeyEvent', {
+          type: 'keyUp',
+          key: 'Enter',
+          code: 'Enter',
+          windowsVirtualKeyCode: 13,
+          nativeVirtualKeyCode: 13,
+        });
         console.log('[TypeHandler] ↵ Pressed Enter');
       }
 
-      await this.sleep(300);
+      await this.sleep(30);
 
       return { success: true };
     } catch (error) {
@@ -63,6 +100,7 @@ export class TypeHandler extends BaseHandler {
     error?: string;
     centerX?: number;
     centerY?: number;
+    isContentEditable?: boolean;
   }> {
     try {
       console.log('[TypeHandler] 🔍 Executing find-and-prepare script');
@@ -327,14 +365,19 @@ export class TypeHandler extends BaseHandler {
           const centerX = rect.left + rect.width / 2;
           const centerY = rect.top + rect.height / 2;
           
+          // Check if element is contentEditable
+          const isContentEditable = element.contentEditable === 'true' || 
+                                   element.getAttribute('contenteditable') === 'true' ||
+                                   element.hasAttribute('contenteditable');
+          
           // Restore outline after a moment
           setTimeout(() => {
             element.style.outline = originalOutline;
             element.style.outlineOffset = originalOutlineOffset;
           }, 1000);
           
-          console.log('[Type] ✅ Input prepared successfully');
-          return { success: true, centerX, centerY };
+          console.log('[Type] ✅ Input prepared successfully, contentEditable:', isContentEditable);
+          return { success: true, centerX, centerY, isContentEditable };
           
         })();
       `;
@@ -383,9 +426,6 @@ export class TypeHandler extends BaseHandler {
     }
   }
 
-  /**
-   * Clear input using Ctrl+A (Cmd+A on Mac) + Backspace
-   */
   private async clearInput(): Promise<void> {
     try {
       const cdp = this.view.webContents.debugger;
@@ -432,9 +472,6 @@ export class TypeHandler extends BaseHandler {
     }
   }
 
-  /**
-   * Type text character by character using CDP
-   */
   private async typeText(text: string): Promise<boolean> {
     try {
       const cdp = this.view.webContents.debugger;
@@ -442,21 +479,37 @@ export class TypeHandler extends BaseHandler {
       console.log(`[TypeHandler] ⌨️  Typing: "${text}"`);
 
       for (const char of text) {
-        // Key down
+        if (char === '\n') {
+          await cdp.sendCommand('Input.dispatchKeyEvent', {
+            type: 'rawKeyDown',
+            key: 'Enter',
+            code: 'Enter',
+            windowsVirtualKeyCode: 13,
+            nativeVirtualKeyCode: 13,
+          });
+
+          await cdp.sendCommand('Input.dispatchKeyEvent', {
+            type: 'keyUp',
+            key: 'Enter',
+            code: 'Enter',
+            windowsVirtualKeyCode: 13,
+            nativeVirtualKeyCode: 13,
+          });
+
+          continue;
+        }
+
         await cdp.sendCommand('Input.dispatchKeyEvent', {
           type: 'keyDown',
           text: char,
         });
 
-        await this.sleep(30); // Slightly slower for more natural typing
-
-        // Key up
         await cdp.sendCommand('Input.dispatchKeyEvent', {
           type: 'keyUp',
           text: char,
         });
 
-        await this.sleep(30);
+        await this.sleep(1);
       }
 
       console.log('[TypeHandler] ✅ Text typed successfully');
@@ -467,28 +520,4 @@ export class TypeHandler extends BaseHandler {
     }
   }
 
-  /**
-   * Press a special key (Enter, Tab, etc.)
-   */
-  private async pressKey(key: string): Promise<void> {
-    try {
-      const cdp = this.view.webContents.debugger;
-
-      await cdp.sendCommand('Input.dispatchKeyEvent', {
-        type: 'keyDown',
-        key: key,
-        code: key === 'Enter' ? 'Enter' : key,
-      });
-
-      await this.sleep(50);
-
-      await cdp.sendCommand('Input.dispatchKeyEvent', {
-        type: 'keyUp',
-        key: key,
-        code: key === 'Enter' ? 'Enter' : key,
-      });
-    } catch (error) {
-      console.warn(`[TypeHandler] ⚠️ Press ${key} failed:`, error);
-    }
-  }
 }

@@ -36,12 +36,15 @@ export class InteractionHandler extends BaseHandler {
       }
 
       const cdp = this.view.webContents.debugger;
-      if (!cdp.isAttached()) cdp.attach('1.3');
+      const keyInfo = this.getKeyInfo(params.key);
+      const keyDownType = keyInfo.isSpecialKey ? 'rawKeyDown' : 'keyDown';
 
       await cdp.sendCommand('Input.dispatchKeyEvent', {
-        type: 'keyDown',
-        key: params.key,
-        code: this.getKeyCode(params.key),
+        type: keyDownType,
+        key: keyInfo.key,
+        code: keyInfo.code,
+        windowsVirtualKeyCode: keyInfo.vkCode,
+        nativeVirtualKeyCode: keyInfo.vkCode,
         modifiers: modifiersBitmask,
       });
 
@@ -49,8 +52,10 @@ export class InteractionHandler extends BaseHandler {
 
       await cdp.sendCommand('Input.dispatchKeyEvent', {
         type: 'keyUp',
-        key: params.key,
-        code: this.getKeyCode(params.key),
+        key: keyInfo.key,
+        code: keyInfo.code,
+        windowsVirtualKeyCode: keyInfo.vkCode,
+        nativeVirtualKeyCode: keyInfo.vkCode,
         modifiers: modifiersBitmask,
       });
 
@@ -237,27 +242,44 @@ export class InteractionHandler extends BaseHandler {
     }
   }
 
-  /**
-   * Get key code for common keys
-   */
-  private getKeyCode(key: string): string {
-    const keyMap: Record<string, string> = {
-      Enter: 'Enter',
-      Escape: 'Escape',
-      Tab: 'Tab',
-      Backspace: 'Backspace',
-      Delete: 'Delete',
-      ArrowUp: 'ArrowUp',
-      ArrowDown: 'ArrowDown',
-      ArrowLeft: 'ArrowLeft',
-      ArrowRight: 'ArrowRight',
-      Home: 'Home',
-      End: 'End',
-      PageUp: 'PageUp',
-      PageDown: 'PageDown',
-      Space: 'Space',
+  private getKeyInfo(key: string): {
+    key: string;
+    code: string;
+    vkCode: number;
+    isSpecialKey: boolean;
+  } {
+    const keyMap: Record<string, { code: string; vkCode: number }> = {
+      Enter: { code: 'Enter', vkCode: 13 },
+      Escape: { code: 'Escape', vkCode: 27 },
+      Tab: { code: 'Tab', vkCode: 9 },
+      Backspace: { code: 'Backspace', vkCode: 8 },
+      Delete: { code: 'Delete', vkCode: 46 },
+      ArrowUp: { code: 'ArrowUp', vkCode: 38 },
+      ArrowDown: { code: 'ArrowDown', vkCode: 40 },
+      ArrowLeft: { code: 'ArrowLeft', vkCode: 37 },
+      ArrowRight: { code: 'ArrowRight', vkCode: 39 },
+      Home: { code: 'Home', vkCode: 36 },
+      End: { code: 'End', vkCode: 35 },
+      PageUp: { code: 'PageUp', vkCode: 33 },
+      PageDown: { code: 'PageDown', vkCode: 34 },
+      Space: { code: 'Space', vkCode: 32 },
     };
 
-    return keyMap[key] || key;
+    const keyInfo = keyMap[key];
+    if (keyInfo) {
+      return {
+        key,
+        code: keyInfo.code,
+        vkCode: keyInfo.vkCode,
+        isSpecialKey: true,
+      };
+    }
+
+    return {
+      key,
+      code: key,
+      vkCode: 0,
+      isSpecialKey: false,
+    };
   }
 }

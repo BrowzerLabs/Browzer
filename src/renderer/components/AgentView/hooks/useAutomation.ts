@@ -120,8 +120,8 @@ export function useAutomation() {
 
   const handleStopAutomation = useCallback(async () => {
     if (currentSession && isSubmitting) {
-      await stopAutomation(currentSession.sessionId);
       setIsSubmitting(false);
+      stopAutomation(currentSession.sessionId);
     }
   }, [currentSession, isSubmitting, stopAutomation]);
 

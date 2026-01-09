@@ -38,6 +38,8 @@ export interface NavigateParams {
 
 export interface ClickParams extends ElementFinderParams {
   click_position?: { x: number; y: number };
+  nodeId?: number;
+  // cdp_backend_node_id?: number;
 }
 
 export interface TypeParams extends ElementFinderParams {
