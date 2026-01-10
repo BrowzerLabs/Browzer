@@ -69,38 +69,6 @@ export interface BrowserAPI {
     y: number
   ) => Promise<boolean>;
 
-  // Desktop Capturer (for video recording)
-  getDesktopSources: () => Promise<
-    Array<{ id: string; name: string; thumbnail: any }>
-  >;
-
-  // Recording Management
-  startRecording: () => Promise<boolean>;
-  stopRecording: () => Promise<{
-    actions: any[];
-    duration: number;
-    startUrl: string;
-  }>;
-  saveRecording: (
-    name: string,
-    description: string,
-    actions: any[]
-  ) => Promise<string>;
-  getAllRecordings: () => Promise<any[]>;
-  deleteRecording: (id: string) => Promise<boolean>;
-  isRecording: () => Promise<boolean>;
-  getRecordedActions: () => Promise<any[]>;
-  exportRecording: (id: string) => Promise<{
-    success: boolean;
-    filePath?: string;
-    error?: string;
-    cancelled?: boolean;
-  }>;
-
-  // Video File Operations
-  openVideoFile: (videoPath: string) => Promise<void>;
-  getVideoFileUrl: (videoPath: string) => Promise<string>;
-
   // Password Management
   getAllPasswords: () => Promise<any[]>;
   savePassword: (
@@ -186,57 +154,15 @@ export interface BrowserAPI {
   ) => () => void;
   onRequestFind: (callback: () => void) => () => void;
 
-  // LLM Automation
-  executeLLMAutomation: (
-    userGoal: string,
-    recordedSessionId: string
-  ) => Promise<{
-    success: boolean;
-    sessionId: string;
-    message: string;
-  }>;
-
   // Session Management
-  loadAutomationSession: (sessionId: string) => Promise<any>;
-
   restoreSession: () => Promise<boolean>;
   discardSession: () => Promise<boolean>;
   onShowRestoreSession: (callback: () => void) => () => void;
-
-  getAutomationSessionHistory: (limit?: number) => Promise<any[]>;
-  getAutomationSessions: () => Promise<any[]>;
-  getAutomationSessionDetails: (sessionId: string) => Promise<any>;
-  resumeAutomationSession: (sessionId: string) => Promise<any>;
-  deleteAutomationSession: (sessionId: string) => Promise<boolean>;
-  stopAutomation: (sessionId: string) => Promise<{ success: boolean }>;
 
   // Event listeners
   onTabsUpdated: (callback: (data: TabsSnapshot) => void) => () => void;
   onTabReordered: (
     callback: (data: { tabId: string; from: number; to: number }) => void
-  ) => () => void;
-  onRecordingAction: (callback: (action: any) => void) => () => void;
-  onRecordingStarted: (callback: () => void) => () => void;
-  onRecordingStopped: (
-    callback: (data: {
-      actions: any[];
-      duration: number;
-      startUrl: string;
-    }) => void
-  ) => () => void;
-  onRecordingSaved: (callback: (session: any) => void) => () => void;
-  onRecordingDeleted: (callback: (id: string) => void) => () => void;
-  onRecordingMaxActionsReached: (callback: () => void) => () => void;
-
-  // Automation event listeners
-  onAutomationProgress: (
-    callback: (data: { sessionId: string; event: any }) => void
-  ) => () => void;
-  onAutomationComplete: (
-    callback: (data: { sessionId: string; result: any }) => void
-  ) => () => void;
-  onAutomationError: (
-    callback: (data: { sessionId: string; error: string }) => void
   ) => () => void;
 
   // Download event listeners

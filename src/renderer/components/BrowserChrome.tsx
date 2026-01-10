@@ -16,7 +16,7 @@ import { useScrollForwarding } from '@/renderer/hooks/useScrollForwarding';
 export function BrowserChrome() {
   useScrollForwarding();
   const browserAPI = useBrowserAPI();
-  const { isVisible: isSidebarVisible, showSidebar } = useSidebarStore();
+  const { isVisible: isSidebarVisible } = useSidebarStore();
   const [showBookmarksBar, setShowBookmarksBar] = useState(false);
   const [showRestorePopup, setShowRestorePopup] = useState(false);
   const { toggleFindBar } = useFindStore();
@@ -69,14 +69,6 @@ export function BrowserChrome() {
       unsubSettings();
     };
   }, []);
-
-  useEffect(() => {
-    const unsubStart = window.browserAPI.onRecordingStarted(() => {
-      showSidebar();
-    });
-
-    return () => unsubStart();
-  }, [showSidebar]);
 
   return (
     <div className="h-full w-full flex flex-col select-none">

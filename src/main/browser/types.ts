@@ -1,8 +1,6 @@
 import { WebContentsView } from 'electron';
 
-import { ElementTarget, RecordedAction, TabInfo } from '@/shared/types';
-import { VideoRecorder } from '@/main/recording';
-import { BrowserAutomationExecutor } from '@/main/automation';
+import { TabInfo } from '@/shared/types';
 import { PasswordAutomation } from '@/main/password';
 
 /**
@@ -12,13 +10,22 @@ export interface Tab {
   id: string;
   view: WebContentsView;
   info: TabInfo;
-  videoRecorder?: VideoRecorder;
   passwordAutomation?: PasswordAutomation;
-  automationExecutor: BrowserAutomationExecutor;
   // Track selected credential for multi-step flows
   selectedCredentialId?: string;
   selectedCredentialUsername?: string;
   bypassedCertificateHosts?: Set<string>;
+}
+
+export interface ContextMenuEvent {
+  type: string;
+  value: string;
+  position: { x: number; y: number };
+  target: {
+    tagName?: string;
+    attributes: Record<string, string>;
+  };
+  timestamp: number;
 }
 
 export interface TabServiceEvents {
@@ -31,12 +38,5 @@ export interface TabServiceEvents {
   'tab:switched': (previousTabId: string, newTab: Tab) => void;
   'tab:reordered': (data: { tabId: string; from: number; to: number }) => void;
   'tabs:changed': () => void;
-  'context-menu-action': (event: RecordedAction) => void;
-}
-
-export interface RecordingState {
-  isRecording: boolean;
-  recordingId: string | null;
-  startTime: number;
-  startUrl: string;
+  'context-menu-action': (event: ContextMenuEvent) => void;
 }

@@ -15,7 +15,7 @@ import https from 'node:https';
 import http from 'node:http';
 import { EventEmitter } from 'events';
 
-import { RecordedAction } from '@/shared/types';
+import { ContextMenuEvent } from './types';
 
 const EXTENSION_MAP: Record<string, string> = {
   jpeg: 'jpg',
@@ -64,7 +64,7 @@ export class ContextMenuService extends EventEmitter {
     if (this.currentParams.titleText)
       attributes['title'] = this.currentParams.titleText;
 
-    const event: RecordedAction = {
+    const event: ContextMenuEvent = {
       type: 'context-menu',
       value: action,
       position: { x: this.currentParams.x, y: this.currentParams.y },

@@ -22,9 +22,7 @@ import {
   ClosedTabInfo,
 } from '@/shared/types';
 import { GROUP_COLORS } from '@/shared/constants/tabs';
-import { VideoRecorder } from '@/main/recording';
 import { PasswordManager } from '@/main/password/PasswordManager';
-import { BrowserAutomationExecutor } from '@/main/automation';
 import { HistoryService } from '@/main/history/HistoryService';
 import { BookmarkService } from '@/main/bookmark';
 import { PasswordAutomation } from '@/main/password';
@@ -204,14 +202,12 @@ export class TabService extends EventEmitter {
       id: tabId,
       view,
       info: tabInfo,
-      videoRecorder: new VideoRecorder(view),
       passwordAutomation: new PasswordAutomation(
         view,
         this.passwordManager,
         tabId,
         this.handleCredentialSelected.bind(this)
       ),
-      automationExecutor: new BrowserAutomationExecutor(view, tabId),
     };
 
     this.tabs.set(tabId, tab);

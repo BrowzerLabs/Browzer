@@ -1,5 +1,3 @@
-import { desktopCapturer } from 'electron';
-
 import type { BrowserAPI } from '@/preload/types/browser.types';
 import {
   invoke,
@@ -79,35 +77,6 @@ export const createBrowserAPI = (): BrowserAPI => ({
   openDownload: (id: string) => invoke('download:open', id),
   showDownloadInFolder: (id: string) => invoke('download:show-in-folder', id),
 
-  // Recording Management
-  startRecording: () => invoke('browser:start-recording'),
-  stopRecording: () => invoke('browser:stop-recording'),
-  saveRecording: (name: string, description: string, actions: any[]) =>
-    invoke('browser:save-recording', name, description, actions),
-  getAllRecordings: () => invoke('browser:get-all-recordings'),
-  deleteRecording: (id: string) => invoke('browser:delete-recording', id),
-  isRecording: () => invoke('browser:is-recording'),
-  getRecordedActions: () => invoke('browser:get-recorded-actions'),
-  exportRecording: (id: string) => invoke('browser:export-recording', id),
-
-  // Desktop Capturer API
-  getDesktopSources: async () => {
-    const sources = await desktopCapturer.getSources({
-      types: ['window', 'screen'],
-      thumbnailSize: { width: 150, height: 150 },
-    });
-    return sources.map((source) => ({
-      id: source.id,
-      name: source.name,
-      thumbnail: source.thumbnail.toDataURL(),
-    }));
-  },
-
-  // Video File Operations
-  openVideoFile: (videoPath: string) => invoke('video:open-file', videoPath),
-  getVideoFileUrl: (videoPath: string) =>
-    invoke('video:get-file-url', videoPath),
-
   // Password Management API
   getAllPasswords: () => invoke('password:get-all'),
   savePassword: (origin: string, username: string, password: string) =>
@@ -183,29 +152,11 @@ export const createBrowserAPI = (): BrowserAPI => ({
   onRequestFind: (callback) =>
     createSimpleListener('browser:request-find', callback),
 
-  // LLM Automation API
-  executeLLMAutomation: (userGoal: string, recordedSessionId: string) =>
-    invoke('automation:execute-llm', userGoal, recordedSessionId),
-
   // Session Management API
-  loadAutomationSession: (sessionId: string) =>
-    invoke('automation:load-session', sessionId),
-
   restoreSession: () => invoke('browser:restore-session'),
   discardSession: () => invoke('browser:discard-session'),
   onShowRestoreSession: (callback) =>
     createSimpleListener('browser:show-restore-session', callback),
-
-  getAutomationSessionHistory: (limit?: number) =>
-    invoke('automation:get-session-history', limit),
-  getAutomationSessions: () => invoke('automation:get-sessions'),
-  getAutomationSessionDetails: (sessionId: string) =>
-    invoke('automation:get-session-details', sessionId),
-  resumeAutomationSession: (sessionId: string) =>
-    invoke('automation:resume-session', sessionId),
-  deleteAutomationSession: (sessionId: string) =>
-    invoke('automation:delete-session', sessionId),
-  stopAutomation: (sessionId: string) => invoke('automation:stop', sessionId),
 
   // Event listeners - Tab events
   onTabsUpdated: (callback) =>
@@ -215,28 +166,6 @@ export const createBrowserAPI = (): BrowserAPI => ({
       'browser:tab-reordered',
       callback
     ),
-
-  // Event listeners - Recording events
-  onRecordingAction: (callback) =>
-    createEventListener('recording:action-captured', callback),
-  onRecordingStarted: (callback) =>
-    createSimpleListener('recording:started', callback),
-  onRecordingStopped: (callback) =>
-    createEventListener('recording:stopped', callback),
-  onRecordingSaved: (callback) =>
-    createEventListener('recording:saved', callback),
-  onRecordingDeleted: (callback) =>
-    createEventListener('recording:deleted', callback),
-  onRecordingMaxActionsReached: (callback) =>
-    createSimpleListener('recording:max-actions-reached', callback),
-
-  // Event listeners - Automation events
-  onAutomationProgress: (callback) =>
-    createEventListener('automation:progress', callback),
-  onAutomationComplete: (callback) =>
-    createEventListener('automation:complete', callback),
-  onAutomationError: (callback) =>
-    createEventListener('automation:error', callback),
 
   // Event listeners - Download events
   onDownloadsUpdated: (callback) =>

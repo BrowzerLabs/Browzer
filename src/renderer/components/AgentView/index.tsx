@@ -1,76 +1,18 @@
-import { useEffect } from 'react';
-
-import { AgentHeader } from './AgentHeader';
-import { AgentChatArea } from './AgentChatArea';
-import { AgentFooter } from './AgentFooter';
-import { useAutomation } from './hooks';
+import { Bot } from 'lucide-react';
 
 export default function AgentView() {
-  const {
-    viewState,
-    currentSession,
-    sessionHistory,
-    selectedRecordingId,
-    userPrompt,
-    recordings,
-    isSubmitting,
-    isLoadingSession,
-    isLoadingHistory,
-    agentMode,
-    loadRecordings,
-    handleSubmit,
-    handleSessionSelect,
-    handleNewSession,
-    handleRecordingSelect,
-    handlePromptChange,
-    handleStopAutomation,
-    handleModeChange,
-    handleAskSubmit,
-  } = useAutomation();
-
-  useEffect(() => {
-    loadRecordings();
-  }, [loadRecordings]);
-
-  const isDisabled = currentSession?.status === 'running';
-  const onSubmit = agentMode === 'ask' ? handleAskSubmit : handleSubmit;
-
   return (
-    <section className="flex flex-col h-full overflow-hidden">
-      {/* Only show AgentHeader in automate mode */}
-      {agentMode === 'automate' && (
-        <AgentHeader
-          viewMode={viewState}
-          selectedRecordingId={selectedRecordingId}
-          recordings={recordings}
-          currentSession={currentSession}
-          onRecordingSelect={handleRecordingSelect}
-          onNewSession={handleNewSession}
-          isDisabled={isDisabled}
-        />
-      )}
-
-      <AgentChatArea
-        agentMode={agentMode}
-        viewMode={viewState}
-        currentSession={currentSession}
-        sessionHistory={sessionHistory}
-        isLoadingSession={isLoadingSession}
-        isLoadingHistory={isLoadingHistory}
-        onSessionSelect={handleSessionSelect}
-      />
-
-      <AgentFooter
-        userPrompt={userPrompt}
-        selectedRecordingId={selectedRecordingId}
-        isSubmitting={isSubmitting}
-        isDisabled={isDisabled}
-        agentMode={agentMode}
-        onPromptChange={handlePromptChange}
-        onSubmit={onSubmit}
-        onStop={handleStopAutomation}
-        onModeChange={handleModeChange}
-      />
+    <section className="flex flex-col h-full overflow-hidden items-center justify-center p-6">
+      <div className="flex flex-col items-center text-center gap-4">
+        <div className="p-4 rounded-full bg-blue-50 dark:bg-blue-950">
+          <Bot className="w-12 h-12 text-blue-500" />
+        </div>
+        <h2 className="text-xl font-semibold">Agent Panel</h2>
+        <p className="text-sm text-muted-foreground max-w-xs">
+          The agent panel is coming soon. Stay tuned for AI-powered browsing
+          assistance.
+        </p>
+      </div>
     </section>
   );
 }

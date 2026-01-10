@@ -6,7 +6,6 @@ import { useNavigate } from 'react-router-dom';
 
 // Import assets from the same directory
 import aiLogoAnimation from './ai_logo.lottie';
-import automationAnimation from './automation.lottie';
 import aAnimation from './a.lottie';
 import lockAnimation from './lock.lottie';
 import aiCircleAnimation from './ai_circle.lottie';
@@ -25,30 +24,24 @@ const slides: OnboardingSlide[] = [
   {
     title: 'Welcome to Browzer',
     description:
-      'Your intelligent browser that learns and automates your repetitive workflows.',
+      'Your intelligent browser designed with privacy and productivity in mind.',
     animationPath: aiLogoAnimation,
   },
   {
-    title: 'Record Your Processes',
+    title: 'Smart Browsing',
     description:
-      'Teach Browzer how you work, instead of letting AI assume "your" processes',
-    animationPath: automationAnimation,
-  },
-  {
-    title: 'Automate Your Tasks',
-    description:
-      'Browzer understands your workflows (truly), to automate them the way you do it!',
+      'Experience a browser that understands your needs and helps you work smarter.',
     animationPath: aAnimation,
   },
   {
     title: 'Privacy First',
-    description: 'All while ensuring that your data stays locally!',
+    description: 'Your data stays local and secure. Browse with confidence.',
     animationPath: lockAnimation,
   },
   {
     title: 'Always Present',
     description:
-      'Invoke with a click of the button to chat with your Browzer Assistant',
+      'Your Browzer Assistant is just a click away to help with your browsing needs.',
     animationPath: aiCircleAnimation,
   },
 ];

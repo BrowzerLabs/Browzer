@@ -2,8 +2,6 @@ import {
   Clock,
   type LucideIcon,
   Settings,
-  Video,
-  Bot,
   User,
   CreditCard,
   MailCheck,
@@ -65,20 +63,10 @@ export const ROUTES: Record<string, RouteConfig> = {
     title: 'History',
     favicon: 'clock',
   },
-  recordings: {
-    path: '/recordings',
-    title: 'Recordings',
-    favicon: 'video',
-  },
   downloads: {
     path: '/downloads',
     title: 'Downloads',
     favicon: 'download',
-  },
-  automation: {
-    path: '/automation',
-    title: 'Automation',
-    favicon: 'bot',
   },
   profile: {
     path: '/profile',
@@ -100,8 +88,6 @@ export const ROUTES: Record<string, RouteConfig> = {
 export const ICON_MAP: Record<string, LucideIcon> = {
   settings: Settings,
   clock: Clock,
-  video: Video,
-  bot: Bot,
   user: User,
   'credit-card': CreditCard,
   'mail-check': MailCheck,

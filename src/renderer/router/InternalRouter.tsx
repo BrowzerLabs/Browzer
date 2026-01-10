@@ -1,13 +1,6 @@
 import { useEffect, useState } from 'react';
 
-import {
-  History,
-  Recordings,
-  Automation,
-  Settings,
-  Downloads,
-  Bookmarks,
-} from '@/renderer/screens';
+import { History, Settings, Downloads, Bookmarks } from '@/renderer/screens';
 import Profile from '@/renderer/pages/Profile';
 import { ROUTES } from '@/shared/routes';
 import { SubscriptionPage, Home } from '@/renderer/pages';
@@ -20,9 +13,7 @@ const ROUTE_COMPONENTS: Record<string, React.ComponentType> = {
   profile: Profile,
   settings: Settings,
   history: History,
-  recordings: Recordings,
   downloads: Downloads,
-  automation: Automation,
   subscription: SubscriptionPage,
   bookmarks: Bookmarks,
 };

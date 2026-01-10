@@ -1,6 +1,4 @@
 export * from './History';
-export * from './Recordings';
-export * from './Automation';
 export * from './Settings';
 export * from './Downloads';
 export * from './Bookmarks';

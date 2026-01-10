@@ -3,12 +3,9 @@ import {
   ArrowRight,
   RotateCw,
   X,
-  Circle,
-  Square,
   Settings,
   Clock,
   MoreVertical,
-  Video,
   ChevronRight,
   ChevronLeft,
   Loader2,
@@ -21,7 +18,6 @@ import {
 import type { TabInfo } from '@/shared/types';
 import { cn } from '@/renderer/lib/utils';
 import { useSidebarStore } from '@/renderer/store/useSidebarStore';
-import { useRecording } from '@/renderer/hooks/useRecording';
 import { useAuth } from '@/renderer/hooks/useAuth';
 import { useUpdateProgress } from '@/renderer/hooks/useUpdateProgress';
 import { useBrowserViewLayer } from '@/renderer/hooks/useBrowserViewLayer';
@@ -57,7 +53,6 @@ export function NavigationBar({
   onStop,
 }: NavigationBarProps) {
   const { isVisible: isSidebarVisible, toggleSidebar } = useSidebarStore();
-  const { isRecording, isLoading, toggleRecording } = useRecording();
   const { user, signOut, loading } = useAuth();
   const { isDownloading, progress, version } = useUpdateProgress();
   const { createOverlayHandler } = useBrowserViewLayer();
@@ -126,36 +121,6 @@ export function NavigationBar({
       )}
 
       <DownloadsDropdown onNavigate={onNavigate} />
-
-      <Tooltip>
-        <TooltipTrigger
-          onClick={toggleRecording}
-          disabled={isLoading}
-          title={
-            isLoading
-              ? 'Processing...'
-              : isRecording
-                ? 'Stop Recording'
-                : 'Start Recording'
-          }
-          className={cn(
-            'bg-red-50 dark:bg-red-950 p-2 rounded-full',
-            isRecording && 'border-red-500',
-            isLoading && 'opacity-70'
-          )}
-        >
-          {isLoading ? (
-            <Loader2 className="w-4 h-4 animate-spin text-red-500" />
-          ) : isRecording ? (
-            <Circle className="w-4 h-4 fill-red-600 animate-pulse" />
-          ) : (
-            <Circle className="w-4 h-4 text-red-500" />
-          )}
-        </TooltipTrigger>
-        <TooltipContent>
-          {isRecording ? 'Stop Recording' : 'Start Recording'}
-        </TooltipContent>
-      </Tooltip>
 
       <ThemeToggle className="bg-blue-50 dark:bg-blue-950 p-2 rounded-full" />
 
@@ -226,16 +191,6 @@ export function NavigationBar({
           <DropdownMenuItem onClick={() => onNavigate('browzer://bookmarks')}>
             <Bookmark className="w-4 h-4 mr-2" />
             Bookmarks
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={() => onNavigate('browzer://recordings')}>
-            <Video className="w-4 h-4 mr-2" />
-            Recordings
-          </DropdownMenuItem>
-
-          <DropdownMenuItem onClick={() => onNavigate('browzer://automation')}>
-            <Clock className="w-4 h-4 mr-2" />
-            Automation
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem
