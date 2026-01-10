@@ -8,7 +8,6 @@ import { AutomationClient } from '..';
 
 import {
   ExecutedStep,
-  CompletedPlan,
   PlanExecutionResult,
   AutomationStep,
   AutomationPlan,
@@ -35,15 +34,12 @@ export class AutomationStateManager extends EventEmitter {
   private messages: Anthropic.MessageParam[] = [];
   private current_plan: AutomationPlan | null = null;
   private executed_steps: ExecutedStep[] = [];
-  private phase_number = 1;
-  private completed_plans: CompletedPlan[] = [];
-  private is_in_recovery = false;
+  private iteration_number = 1;
   private status: AutomationStatus = AutomationStatus.RUNNING;
   private final_error?: string;
 
   private executor: BrowserAutomationExecutor;
   private automationClient: AutomationClient;
-  private current_url: string;
 
   constructor(
     userGoal: string,
@@ -67,7 +63,6 @@ export class AutomationStateManager extends EventEmitter {
 
     this.automationClient = automationClient;
     this.executor = executor;
-    this.current_url = recordedSession.url;
   }
 
   public emitProgress(type: AutomationEventType, data: any): void {
@@ -121,7 +116,6 @@ export class AutomationStateManager extends EventEmitter {
 
       const step = this.current_plan.steps[i];
       const stepNumber = this.executed_steps.length + 1;
-      const isLastStep = i === this.current_plan.steps.length - 1;
 
       const stepResult = await this.executeStep(step, stepNumber, totalSteps);
 
@@ -135,103 +129,71 @@ export class AutomationStateManager extends EventEmitter {
       }
 
       if (!stepResult.success || stepResult.error) {
-        return await this.handleError(step, stepResult.result);
-      }
-
-      if (this.isAnalysisTool(step.toolName) && isLastStep) {
-        const toolResultBlocks = this.buildToolResultsForPlan(
-          this.current_plan,
-          this.executed_steps
-        );
-        this.addMessage({ role: 'user', content: toolResultBlocks });
-
-        const response = await this.automationClient.continueConversation(
-          SystemPromptType.AUTOMATION_CONTINUATION,
-          this.getMessages(),
-          this.cached_context
-        );
-
-        this.addMessage({
-          role: 'assistant',
-          content: response.content,
-        });
-
-        this.compressMessages();
-
-        const newPlan = this.parsePlan(response);
-        this.setCurrentPlan(newPlan);
-
-        return {
-          status: AutomationStatus.RUNNING,
-          isComplete: false,
-        };
+        return await this.handleError(stepResult.result);
       }
     }
 
+    return await this.handlePlanCompletion();
+  }
+
+  private async handlePlanCompletion(): Promise<PlanExecutionResult> {
     const toolResultBlocks = this.buildToolResultsForPlan(
       this.current_plan,
       this.executed_steps
     );
 
-    this.addMessage({ role: 'user', content: toolResultBlocks });
+    const browserContext = await this.captureBrowserContext();
+    const browserSnapshot = await this.captureBrowserSnapshot();
 
-    if (this.is_in_recovery) {
-      if (this.current_plan.planType === 'final') {
-        this.exitRecoveryMode();
-        return { status: AutomationStatus.COMPLETED, isComplete: true };
-      }
+    const userMessage: Anthropic.MessageParam = {
+      role: 'user',
+      content: [
+        ...toolResultBlocks,
+        {
+          type: 'image',
+          source: {
+            type: 'base64',
+            media_type: 'image/jpeg',
+            data: browserSnapshot,
+          },
+        },
+        {
+          type: 'text',
+          text: browserContext,
+        },
+      ],
+    };
 
-      const response = await this.automationClient.continueConversation(
-        SystemPromptType.AUTOMATION_ERROR_RECOVERY,
-        this.getMessages(),
-        this.cached_context
+    this.addMessage(userMessage);
+
+    const response = await this.automationClient.continueConversation(
+      SystemPromptType.AUTOMATION_CONTINUATION,
+      this.getMessages(),
+      this.cached_context
+    );
+
+    this.addMessage({
+      role: 'assistant',
+      content: response.content,
+    });
+
+    this.compressMessages();
+
+    const newPlan = this.parsePlan(response);
+    this.setCurrentPlan(newPlan);
+    this.iteration_number++;
+
+    if (newPlan.steps.length === 0) {
+      console.log(
+        '✅ [AutomationStateManager] LLM returned text only - automation complete'
       );
-
-      this.addMessage({ role: 'assistant', content: response.content });
-
-      this.compressMessages();
-
-      const newPlan = this.parsePlan(response);
-
-      this.setCurrentPlan(newPlan);
-      this.exitRecoveryMode();
-
-      return {
-        status: AutomationStatus.RUNNING,
-        isComplete: false,
-      };
+      return { status: AutomationStatus.COMPLETED, isComplete: true };
     }
 
-    if (this.current_plan.planType === 'intermediate') {
-      this.completePhase();
-      const continuationPrompt =
-        SystemPromptBuilder.buildIntermediatePlanContinuationPrompt({
-          userGoal: this.user_goal,
-          currentUrl: this.current_url,
-        });
-
-      this.addMessage({ role: 'user', content: continuationPrompt });
-
-      const response = await this.automationClient.continueConversation(
-        SystemPromptType.AUTOMATION_CONTINUATION,
-        this.getMessages(),
-        this.cached_context
-      );
-
-      this.addMessage({ role: 'assistant', content: response.content });
-
-      this.compressMessages();
-
-      const newPlan = this.parsePlan(response);
-      this.setCurrentPlan(newPlan);
-
-      return {
-        status: AutomationStatus.RUNNING,
-        isComplete: false,
-      };
-    }
-
-    return { status: AutomationStatus.COMPLETED, isComplete: true };
+    return {
+      status: AutomationStatus.RUNNING,
+      isComplete: false,
+    };
   }
 
   private async executeStep(
@@ -340,7 +302,6 @@ export class AutomationStateManager extends EventEmitter {
   }
 
   public async handleError(
-    failedStep: any,
     result: ToolExecutionResult
   ): Promise<PlanExecutionResult> {
     const toolResults = this.buildToolResultsForErrorRecovery(
@@ -348,23 +309,29 @@ export class AutomationStateManager extends EventEmitter {
       this.executed_steps
     );
 
-    const errorPrompt = SystemPromptBuilder.buildErrorRecoveryPrompt({
-      errorInfo: {
-        message: result.error?.message || 'Unknown error',
-        code: result.error?.code,
-      },
-    });
+    const browserContext = await this.captureBrowserContext();
+    const browserSnapshot = await this.captureBrowserSnapshot();
 
-    this.addMessage({
+    const userMessage: Anthropic.MessageParam = {
       role: 'user',
       content: [
         ...toolResults,
         {
+          type: 'image',
+          source: {
+            type: 'base64',
+            media_type: 'image/jpeg',
+            data: browserSnapshot,
+          },
+        },
+        {
           type: 'text',
-          text: errorPrompt,
+          text: browserContext,
         },
       ],
-    });
+    };
+
+    this.addMessage(userMessage);
 
     const response = await this.automationClient.continueConversation(
       SystemPromptType.AUTOMATION_ERROR_RECOVERY,
@@ -377,13 +344,54 @@ export class AutomationStateManager extends EventEmitter {
 
     const newPlan = this.parsePlan(response);
     this.setCurrentPlan(newPlan);
-    this.enterRecoveryMode();
+    this.iteration_number++;
+
+    if (newPlan.steps.length === 0) {
+      return {
+        status: AutomationStatus.COMPLETED,
+        isComplete: true,
+      };
+    }
 
     return {
       status: AutomationStatus.RUNNING,
       isComplete: false,
       error: 'Recovery mode initiated - continuing with updated plan',
     };
+  }
+
+  private async captureBrowserContext(): Promise<string> {
+    try {
+      const result = await this.executor.executeTool('extract_context', {
+        maxElements: 100,
+        tags: [],
+        attributes: {},
+      });
+
+      if (result.success && result.value) {
+        return result.value.toString();
+      }
+
+      return 'Failed to capture browser context';
+    } catch (error) {
+      console.error('Failed to capture browser context:', error);
+      return 'Error capturing browser context';
+    }
+  }
+
+  private async captureBrowserSnapshot(): Promise<string | null> {
+    try {
+      const result = await this.executor.executeTool('take_snapshot', {});
+
+      if (result.success && result.value) {
+        return result.value.toString();
+      }
+
+      return null;
+    } catch (error) {
+      console.error('Failed to capture browser snapshot:', error);
+      return null;
+    }
   }
 
   public getSessionId(): string {
@@ -425,43 +433,6 @@ export class AutomationStateManager extends EventEmitter {
     });
   }
 
-  public enterRecoveryMode(): void {
-    this.is_in_recovery = true;
-
-    this.session_manager.updateSession(this.session_id, {
-      metadata: {
-        isInRecovery: true,
-      },
-    });
-  }
-
-  public exitRecoveryMode(): void {
-    this.is_in_recovery = false;
-
-    this.session_manager.updateSession(this.session_id, {
-      metadata: {
-        isInRecovery: false,
-      },
-    });
-  }
-
-  public completePhase(): void {
-    if (this.current_plan) {
-      this.completed_plans.push({
-        phaseNumber: this.phase_number,
-        plan: this.current_plan,
-        stepsExecuted: this.current_plan.steps.length,
-      });
-      this.phase_number++;
-
-      this.session_manager.updateSession(this.session_id, {
-        metadata: {
-          phaseNumber: this.phase_number,
-        },
-      });
-    }
-  }
-
   public markComplete(status: AutomationStatus, error?: string): void {
     this.status = status;
     this.final_error = error;
@@ -485,10 +456,6 @@ export class AutomationStateManager extends EventEmitter {
     return this.user_goal;
   }
 
-  public isInRecovery(): boolean {
-    return this.is_in_recovery;
-  }
-
   public isRunning(): boolean {
     return this.status === AutomationStatus.RUNNING;
   }
@@ -504,14 +471,6 @@ export class AutomationStateManager extends EventEmitter {
     };
   }
 
-  public getCompletedPlans(): CompletedPlan[] {
-    return this.completed_plans;
-  }
-
-  public getLastCompletedPlan(): CompletedPlan | undefined {
-    return this.completed_plans[this.completed_plans.length - 1];
-  }
-
   private isAnalysisTool(toolName: string): boolean {
     return toolName === 'extract_context' || toolName === 'take_snapshot';
   }
@@ -523,7 +482,6 @@ export class AutomationStateManager extends EventEmitter {
   private parsePlan(response: Anthropic.Message): AutomationPlan {
     const steps: AutomationStep[] = [];
     let stepOrder = 0;
-    let planType: 'intermediate' | 'final' = 'final';
 
     for (const block of response.content) {
       if (block.type === 'text') {
@@ -540,7 +498,7 @@ export class AutomationStateManager extends EventEmitter {
       }
     }
 
-    return { steps, planType };
+    return { steps };
   }
 
   private buildToolResultsForPlan(
@@ -604,13 +562,11 @@ export class AutomationStateManager extends EventEmitter {
     type: 'tool_result';
     tool_use_id: string;
     content: string;
-    is_error?: boolean;
   }> {
     const toolResults: Array<{
       type: 'tool_result';
       tool_use_id: string;
       content: string;
-      is_error?: boolean;
     }> = [];
 
     let executedCount = 0;
@@ -618,29 +574,21 @@ export class AutomationStateManager extends EventEmitter {
     for (let i = 0; i < plan.steps.length; i++) {
       const step = plan.steps[i];
 
-      // Check if this step was executed
       if (executedCount < executedSteps.length) {
         const executedStep = executedSteps[executedCount];
 
-        // Verify this is the right step (match by tool name)
         if (executedStep.toolName === step.toolName) {
-          // Add tool result for this executed step
           toolResults.push({
             type: 'tool_result',
             tool_use_id: step.toolUseId,
             content: executedStep.success
               ? `✅`
-              : JSON.stringify({
-                  error:
-                    executedStep.error ||
-                    executedStep.result?.error?.message ||
-                    '❌ Unknown error',
-                  toolName: step.toolName,
-                }),
+              : executedStep.result?.error?.code +
+                ' ' +
+                executedStep.result?.error?.message,
           });
           executedCount++;
         } else {
-          // Mismatch - this step wasn't executed
           toolResults.push({
             type: 'tool_result',
             tool_use_id: step.toolUseId,
@@ -648,7 +596,6 @@ export class AutomationStateManager extends EventEmitter {
           });
         }
       } else {
-        // This step wasn't executed yet
         toolResults.push({
           type: 'tool_result',
           tool_use_id: step.toolUseId,

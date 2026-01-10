@@ -9,7 +9,6 @@ export interface AutomationStep {
 
 export interface AutomationPlan {
   steps: AutomationStep[];
-  planType: 'intermediate' | 'final';
 }
 
 export interface ExecutedStep {
