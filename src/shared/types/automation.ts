@@ -46,6 +46,7 @@ export interface TypeParams extends ElementFinderParams {
   text: string;
   clearFirst?: boolean; // Clear existing value before typing (default true)
   pressEnter?: boolean; // Press Enter after typing (default false)
+  nodeId?: number; // CDP node ID for direct element targeting
 }
 
 export interface SelectParams extends ElementFinderParams {

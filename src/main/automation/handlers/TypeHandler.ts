@@ -10,7 +10,13 @@ export class TypeHandler extends BaseHandler {
   async execute(params: TypeParams): Promise<ToolExecutionResult> {
     const cdp = this.view.webContents.debugger;
     try {
-      console.log('[TypeHandler] ⌨️  Starting type execution');
+      if (params.nodeId) {
+        const success = await this.executeTypeByNodeId(params);
+        return success ? { success: true } : this.createErrorResult({
+          code: 'EXECUTION_ERROR',
+          message: 'Failed to type using CDP node ID',
+        });
+      }
 
       const findResult = await this.executeFindAndPrepare(params);
       if (!findResult.success) {
@@ -434,7 +440,7 @@ export class TypeHandler extends BaseHandler {
 
       // Select all (Ctrl/Cmd + A)
       await cdp.sendCommand('Input.dispatchKeyEvent', {
-        type: 'keyDown',
+        type: 'rawKeyDown',
         key: 'a',
         code: 'KeyA',
         modifiers: modifierCode,
@@ -443,7 +449,7 @@ export class TypeHandler extends BaseHandler {
       await this.sleep(50);
 
       await cdp.sendCommand('Input.dispatchKeyEvent', {
-        type: 'keyUp',
+        type: 'rawKeyUp',
         key: 'a',
         code: 'KeyA',
         modifiers: modifierCode,
@@ -453,7 +459,7 @@ export class TypeHandler extends BaseHandler {
 
       // Delete (Backspace)
       await cdp.sendCommand('Input.dispatchKeyEvent', {
-        type: 'keyDown',
+        type: 'rawKeyDown',
         key: 'Backspace',
         code: 'Backspace',
       });
@@ -461,7 +467,7 @@ export class TypeHandler extends BaseHandler {
       await this.sleep(50);
 
       await cdp.sendCommand('Input.dispatchKeyEvent', {
-        type: 'keyUp',
+        type: 'rawKeyUp',
         key: 'Backspace',
         code: 'Backspace',
       });
@@ -475,8 +481,6 @@ export class TypeHandler extends BaseHandler {
   private async typeText(text: string): Promise<boolean> {
     try {
       const cdp = this.view.webContents.debugger;
-
-      console.log(`[TypeHandler] ⌨️  Typing: "${text}"`);
 
       for (const char of text) {
         if (char === '\n') {
@@ -512,10 +516,94 @@ export class TypeHandler extends BaseHandler {
         await this.sleep(1);
       }
 
-      console.log('[TypeHandler] ✅ Text typed successfully');
       return true;
     } catch (error) {
       console.error('[TypeHandler] ❌ Type text failed:', error);
+      return false;
+    }
+  }
+
+  private async executeTypeByNodeId(params: TypeParams): Promise<boolean> {
+    try {
+      const cdp = this.view.webContents.debugger;
+      const nodeId = params.nodeId!;
+      await cdp.sendCommand('DOM.scrollIntoViewIfNeeded', { nodeId });
+      await this.sleep(150);
+
+      const { model } = await cdp.sendCommand('DOM.getBoxModel', { nodeId });
+
+      if (!model || !model.content || model.content.length < 8) {
+        console.error('[TypeHandler] Invalid box model for node', nodeId);
+        return false;
+      }
+
+      const [x1, y1, x2, y2, x3, y3, x4, y4] = model.content;
+      const centerX = Math.round((x1 + x2 + x3 + x4) / 4);
+      const centerY = Math.round((y1 + y2 + y3 + y4) / 4);
+      await cdp.sendCommand('Input.dispatchMouseEvent', {
+        type: 'mouseMoved',
+        x: centerX,
+        y: centerY,
+        button: 'none',
+        clickCount: 0,
+      });
+
+      await this.sleep(50);
+
+      await cdp.sendCommand('Input.dispatchMouseEvent', {
+        type: 'mousePressed',
+        x: centerX,
+        y: centerY,
+        button: 'left',
+        clickCount: 1,
+      });
+
+      await this.sleep(50);
+
+      await cdp.sendCommand('Input.dispatchMouseEvent', {
+        type: 'mouseReleased',
+        x: centerX,
+        y: centerY,
+        button: 'left',
+        clickCount: 1,
+      });
+
+      await this.sleep(50);
+      if (params.clearFirst !== false) {
+        await this.clearInput();
+        await this.sleep(10);
+      }
+
+      const typeSuccess = await this.typeText(params.text);
+      if (!typeSuccess) {
+        return false;
+      }
+
+      if (params.pressEnter) {
+        await cdp.sendCommand('Input.dispatchKeyEvent', {
+          type: 'rawKeyDown',
+          key: 'Enter',
+          code: 'Enter',
+          windowsVirtualKeyCode: 13,
+          nativeVirtualKeyCode: 13,
+        });
+
+        await this.sleep(10);
+
+        await cdp.sendCommand('Input.dispatchKeyEvent', {
+          type: 'keyUp',
+          key: 'Enter',
+          code: 'Enter',
+          windowsVirtualKeyCode: 13,
+          nativeVirtualKeyCode: 13,
+        });
+      }
+
+      await this.sleep(30);
+
+      return true;
+    } catch (error) {
+      console.error('[TypeHandler] ❌ CDP node typing failed:', error);
       return false;
     }
   }
