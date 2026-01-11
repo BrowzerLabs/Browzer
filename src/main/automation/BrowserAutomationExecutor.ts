@@ -7,6 +7,7 @@ import type {
 import { XMLExtractor, AccessibilityTreeExtractor } from '../context';
 import { ViewportSnapshotCapture } from './ViewportSnapshotCapture';
 import { ClickHandler } from './handlers/ClickHandler';
+import { ClickHandler as AccessibilityClickHandler } from './handlers/AccessibilityClickHandler';
 import { TypeHandler } from './handlers/TypeHandler';
 import { FormHandler } from './handlers/FormHandler';
 import { NavigationHandler } from './handlers/NavigationHandler';
@@ -22,6 +23,7 @@ export class BrowserAutomationExecutor {
   private snapshotCapture: ViewportSnapshotCapture;
 
   private clickHandler: ClickHandler;
+  private accessibilityClickHandler: AccessibilityClickHandler;
   private typeHandler: TypeHandler;
   private formHandler: FormHandler;
   private navigationHandler: NavigationHandler;
@@ -37,6 +39,7 @@ export class BrowserAutomationExecutor {
 
     const context: HandlerContext = { view, tabId };
     this.clickHandler = new ClickHandler(context);
+    this.accessibilityClickHandler = new AccessibilityClickHandler(context);
     this.typeHandler = new TypeHandler(context);
     this.formHandler = new FormHandler(context);
     this.navigationHandler = new NavigationHandler(context);
@@ -55,8 +58,11 @@ export class BrowserAutomationExecutor {
       case 'wait':
         return this.navigationHandler.executeWait(params);
 
-      case 'click':
+      case 'old_click':
         return this.clickHandler.execute(params);
+
+      case 'click':
+        return this.accessibilityClickHandler.execute(params);
 
       case 'type':
         return this.typeHandler.execute(params);

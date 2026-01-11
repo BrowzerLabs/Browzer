@@ -97,7 +97,7 @@ export class AccessibilityTreeExtractor {
       'pressed',
     ]);
 
-    const shouldInclude = (name && name.length > 0 && !NOISE_ROLES.has(role));
+    const shouldInclude = name && name.length > 0 && !NOISE_ROLES.has(role);
 
     if (shouldInclude && !isRoot) {
       const indent = '  '.repeat(depth);
