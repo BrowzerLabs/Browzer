@@ -4,7 +4,7 @@ import type {
   ToolExecutionResult,
   XMLContextOptions,
 } from '@/shared/types';
-import { XMLExtractor } from '../context';
+import { XMLExtractor, AccessibilityTreeExtractor } from '../context';
 import { ViewportSnapshotCapture } from './ViewportSnapshotCapture';
 import { ClickHandler } from './handlers/ClickHandler';
 import { TypeHandler } from './handlers/TypeHandler';
@@ -18,6 +18,7 @@ export class BrowserAutomationExecutor {
   private tabId: string;
 
   private contextExtractor: XMLExtractor;
+  private accessibilityExtractor: AccessibilityTreeExtractor;
   private snapshotCapture: ViewportSnapshotCapture;
 
   private clickHandler: ClickHandler;
@@ -31,6 +32,7 @@ export class BrowserAutomationExecutor {
     this.tabId = tabId;
 
     this.contextExtractor = new XMLExtractor(view);
+    this.accessibilityExtractor = new AccessibilityTreeExtractor(view);
     this.snapshotCapture = new ViewportSnapshotCapture(view);
 
     const context: HandlerContext = { view, tabId };
@@ -48,21 +50,17 @@ export class BrowserAutomationExecutor {
     switch (toolName) {
       case 'declare_plan_metadata':
         return this.handlePlan();
-      // Navigation operations
       case 'navigate':
         return this.navigationHandler.executeNavigate(params);
       case 'wait':
         return this.navigationHandler.executeWait(params);
 
-      // Click operations
       case 'click':
         return this.clickHandler.execute(params);
 
-      // Input operations
       case 'type':
         return this.typeHandler.execute(params);
 
-      // Form operations
       case 'select':
         return this.formHandler.executeSelect(params);
       case 'checkbox':
@@ -70,17 +68,17 @@ export class BrowserAutomationExecutor {
       case 'submit':
         return this.formHandler.executeSubmit(params, this.clickHandler);
 
-      // Interaction operations
       case 'keyPress':
         return this.interactionHandler.executeKeyPress(params);
       case 'scroll':
         return this.interactionHandler.executeScroll(params);
 
-      // Context extraction
       case 'extract_context':
         return this.extractContext(params);
 
-      // Snapshot capture
+      case 'context':
+        return this.extractAccessibilityTree();
+
       case 'take_snapshot':
         return this.captureViewportSnapshot(params);
 
@@ -118,6 +116,22 @@ export class BrowserAutomationExecutor {
     return this.createErrorResult({
       code: 'EXECUTION_ERROR',
       message: result.error || 'Failed to extract context',
+    });
+  }
+
+  private async extractAccessibilityTree(): Promise<ToolExecutionResult> {
+    const result = await this.accessibilityExtractor.extractAccessibilityTree();
+
+    if (result.tree && !result.error) {
+      return {
+        success: true,
+        value: result.tree,
+      };
+    }
+
+    return this.createErrorResult({
+      code: 'EXECUTION_ERROR',
+      message: result.error || 'Failed to extract accessibility tree',
     });
   }
 
