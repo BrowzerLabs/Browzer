@@ -222,6 +222,7 @@ export class TabService extends EventEmitter {
       .catch((err) =>
         console.error('[TabService] Failed to initialize debugger:', tabId, err)
       );
+    this.enableClickTracking(tab);
     this.baseWindow.contentView.addChildView(view);
     this.updateTabViewBounds(view, this.currentSidebarWidth);
     view.webContents.loadURL(this.navigationService.normalizeURL(urlToLoad));
@@ -1040,4 +1041,161 @@ export class TabService extends EventEmitter {
       if (!groupsInUse.has(groupId)) this.tabGroups.delete(groupId);
     });
   }
+
+  private async enableClickTracking(tab: Tab): Promise<boolean> {
+    const cdp = tab.view.webContents.debugger;
+    
+    const script = `
+      if (!window.__browzer) {
+        window.__browzer = true;
+        window.__browzerClickedElement = null;
+        
+        document.addEventListener('click', (e) => {
+          window.__browzerClickedElement = e.target;
+          console.log('__browzer_click__');
+        }, true);
+      }
+    `;
+    
+    await cdp.sendCommand('Page.addScriptToEvaluateOnNewDocument', {
+      source: script,
+    });
+    
+    await cdp.sendCommand('Runtime.evaluate', {
+      expression: script,
+      includeCommandLineAPI: false,
+    });
+    
+    const consoleHandler = async (_: any, method: string, params: any) => {
+      if (
+        method === 'Runtime.consoleAPICalled' &&
+        params.args?.[0]?.value === '__browzer_click__'
+      ) {
+        try {
+          const { result } = await cdp.sendCommand('Runtime.evaluate', {
+            expression: 'window.__browzerClickedElement',
+            returnByValue: false,
+          });
+          console.log(result);
+          const { nodes } = await cdp.sendCommand('Accessibility.getPartialAXTree', {
+            objectId: result.objectId,
+            fetchRelatives: true,
+          });
+          console.log(this.formatAccessibilityTree(nodes));
+        } catch (err) {
+          console.error(`[Recording] Failed to get clicked element:`, err);
+        }
+      }
+    };
+    
+    tab.clickTrackingHandler = consoleHandler;
+    cdp.on('message', consoleHandler);
+    return true;
+  }
+
+  private formatAccessibilityTree(nodes: any[]): string {
+    const lines: string[] = [];
+    const nodeMap = new Map<string, any>();
+    for (const node of nodes) {
+      if (node.nodeId) {
+        nodeMap.set(node.nodeId, node);
+      }
+    }
+
+    const rootNode = nodes.find((n) => !n.parentId) || nodes[0];
+    if (rootNode) {
+      this.formatNode(rootNode, nodeMap, lines, 0, true);
+    }
+
+    return lines.filter((line) => line.trim() !== '').join('\n');
+  }
+  private formatNode(
+    node: any,
+    nodeMap: Map<string, any>,
+    lines: string[],
+    depth: number,
+    isRoot: boolean = false
+  ): void {
+    const role = node.role?.value || '';
+    const name = node.name?.value || '';
+    const value = node.value?.value || '';
+
+    const NOISE_ROLES = new Set([
+      'none',
+      'InlineTextBox',
+      'LineBreak',
+      'LayoutTableCell',
+      'LayoutTableRow',
+      'LayoutTable',
+      'StaticText',
+    ]);
+    const NOISE_PROPVALUE_SET = new Set([null, undefined, '', false]);
+    const NOISE_PROPNAME_SET = new Set([
+      'focusable',
+      'readonly',
+      'level',
+      'orientation',
+      'multiline',
+      'settable',
+      'pressed',
+    ]);
+
+    const shouldInclude =
+      !NOISE_ROLES.has(role) && (name.length > 0 || value.length > 0);
+
+    if (shouldInclude) {
+      const indent = '  '.repeat(depth);
+      let nodeStr = `${indent}[${role}]`;
+
+      if (name && name.trim().length > 0) {
+        name.length > 120
+          ? (nodeStr += ` "${name.trim().substring(0, 120)}..."`)
+          : (nodeStr += ` "${name.trim()}"`);
+      }
+
+      if (value && value !== name && value.trim().length > 0) {
+        value.length > 120
+          ? (nodeStr += ` value="${value.trim().substring(0, 120)}..."`)
+          : (nodeStr += ` value="${value.trim()}"`);
+      }
+
+      if (node.properties) {
+        const importantProps: string[] = [];
+        importantProps.push(`nodeId=${node.nodeId}`);
+
+        for (const prop of node.properties) {
+          const propName = prop.name;
+          const propValue = prop.value?.value;
+
+          if (
+            !NOISE_PROPVALUE_SET.has(propValue) &&
+            !NOISE_PROPNAME_SET.has(propName)
+          ) {
+            const propStr =
+              typeof propValue === 'string' && propValue.length > 120
+                ? `${propName}=${propValue.substring(0, 120)}...`
+                : `${propName}=${propValue}`;
+            importantProps.push(propStr);
+          }
+        }
+
+        if (importantProps.length > 0) {
+          nodeStr += ` ${importantProps.join(', ')}`;
+        }
+      }
+
+      lines.push(nodeStr);
+    }
+
+    if (node.childIds && node.childIds.length > 0) {
+      for (const childId of node.childIds) {
+        const childNode = nodeMap.get(childId);
+        if (childNode) {
+          const nextDepth = shouldInclude && !isRoot ? depth + 1 : depth;
+          this.formatNode(childNode, nodeMap, lines, nextDepth, false);
+        }
+      }
+    }
+  }
 }
+

@@ -9,9 +9,10 @@ import { AutomationProgressEvent } from '@/shared/types';
 
 export class AutomationManager {
   private automationSessions: Map<string, AutomationService> = new Map();
+  private recordingStore: RecordingStore;
 
   constructor(
-    private recordingStore: RecordingStore,
+    // private recordingStore: / RecordingStore,
     private sessionManager: SessionManager,
     private browserUIView: WebContentsView
   ) {}

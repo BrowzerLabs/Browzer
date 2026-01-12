@@ -19,6 +19,7 @@ export interface Tab {
   selectedCredentialId?: string;
   selectedCredentialUsername?: string;
   bypassedCertificateHosts?: Set<string>;
+  clickTrackingHandler?: (event: any, method: string, params: any) => void;
 }
 
 export interface TabServiceEvents {

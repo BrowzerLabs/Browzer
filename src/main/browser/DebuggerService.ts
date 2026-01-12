@@ -19,6 +19,8 @@ export class DebuggerService {
         cdpDebugger.sendCommand('Network.enable'),
         cdpDebugger.sendCommand('Console.enable'),
         cdpDebugger.sendCommand('Log.enable'),
+        cdpDebugger.sendCommand('CSS.enable'),
+        cdpDebugger.sendCommand('Accessibility.enable'),
       ]);
 
       await cdpDebugger.sendCommand('DOM.getDocument', { depth: -1 });
