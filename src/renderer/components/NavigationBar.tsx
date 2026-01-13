@@ -13,11 +13,14 @@ import {
   DiamondIcon,
   Download,
   Bookmark,
+  Circle,
+  Square,
 } from 'lucide-react';
 
 import type { TabInfo } from '@/shared/types';
 import { cn } from '@/renderer/lib/utils';
 import { useSidebarStore } from '@/renderer/store/useSidebarStore';
+import { useRecordingStore } from '@/renderer/store/useRecordingStore';
 import { useAuth } from '@/renderer/hooks/useAuth';
 import { useUpdateProgress } from '@/renderer/hooks/useUpdateProgress';
 import { useBrowserViewLayer } from '@/renderer/hooks/useBrowserViewLayer';
@@ -53,9 +56,23 @@ export function NavigationBar({
   onStop,
 }: NavigationBarProps) {
   const { isVisible: isSidebarVisible, toggleSidebar } = useSidebarStore();
+  const {
+    status: recordingStatus,
+    startRecording,
+    stopRecording,
+    isLoading: recordingLoading,
+  } = useRecordingStore();
   const { user, signOut, loading } = useAuth();
   const { isDownloading, progress, version } = useUpdateProgress();
   const { createOverlayHandler } = useBrowserViewLayer();
+
+  const handleRecordToggle = async () => {
+    if (recordingStatus === 'recording') {
+      await stopRecording();
+    } else {
+      await startRecording();
+    }
+  };
 
   const handleSignOut = async () => {
     await signOut();
@@ -123,6 +140,37 @@ export function NavigationBar({
       <DownloadsDropdown onNavigate={onNavigate} />
 
       <ThemeToggle className="bg-blue-50 dark:bg-blue-950 p-2 rounded-full" />
+
+      <Tooltip>
+        <TooltipTrigger
+          onClick={handleRecordToggle}
+          disabled={recordingLoading}
+          className={cn(
+            'p-2 rounded-full transition-colors',
+            recordingStatus === 'recording'
+              ? 'bg-red-100 dark:bg-red-900 text-red-600 dark:text-red-400'
+              : 'bg-blue-50 dark:bg-blue-950'
+          )}
+          title={
+            recordingStatus === 'recording'
+              ? 'Stop Recording'
+              : 'Start Recording'
+          }
+        >
+          {recordingLoading ? (
+            <Loader2 className="w-4 h-4 animate-spin" />
+          ) : recordingStatus === 'recording' ? (
+            <Square className="w-4 h-4 fill-current" />
+          ) : (
+            <Circle className="w-4 h-4 fill-red-500 text-red-500" />
+          )}
+        </TooltipTrigger>
+        <TooltipContent>
+          {recordingStatus === 'recording'
+            ? 'Stop Recording'
+            : 'Start Recording'}
+        </TooltipContent>
+      </Tooltip>
 
       <Tooltip>
         <TooltipTrigger

@@ -5,6 +5,7 @@ import type {
   NotificationAPI,
   UpdaterAPI,
 } from './preload/preload';
+import type { RecordingAPI } from './preload/types/recording.types';
 
 declare global {
   interface Window {
@@ -13,6 +14,7 @@ declare global {
     subscriptionAPI: SubscriptionAPI;
     notificationAPI: NotificationAPI;
     updaterAPI: UpdaterAPI;
+    recordingAPI: RecordingAPI;
   }
 
   // Vite Electron Forge globals

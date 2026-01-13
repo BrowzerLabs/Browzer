@@ -10,6 +10,7 @@ import { DeepLinkService } from '@/main/deeplink/DeepLinkService';
 import { AuthService } from '@/main/auth/AuthService';
 import { AppMenu } from '@/main/menu/AppMenu';
 import { ThemeService } from '@/main/theme/ThemeService';
+import { RecordingManager } from '@/main/recording';
 
 export class MainService {
   private browserService: BrowserService;
@@ -24,6 +25,7 @@ export class MainService {
   private sidebarVisible = true;
   private sidebarWidthPercent = 30;
   private themeService: ThemeService;
+  private recordingManager: RecordingManager;
 
   constructor() {
     const isMac = process.platform === 'darwin';
@@ -98,6 +100,10 @@ export class MainService {
       this.authService,
       this.themeService
     );
+
+    // Initialize recording manager
+    this.recordingManager = new RecordingManager(this.browserView);
+    this.ipcHandlers.setRecordingManager(this.recordingManager);
 
     this.appMenu = new AppMenu(
       this.browserService.getTabService(),
@@ -184,6 +190,7 @@ export class MainService {
   public destroy(): void {
     this.ipcHandlers.cleanup();
     this.themeService.destroy();
+    this.recordingManager.destroy();
     this.browserService.destroy();
     this.baseWindow = null;
     this.browserView = null;

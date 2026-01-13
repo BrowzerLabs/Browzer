@@ -17,6 +17,7 @@ import {
   createSubscriptionAPI,
   createNotificationAPI,
   createUpdaterAPI,
+  createRecordingAPI,
 } from './api';
 
 const browserAPI = createBrowserAPI();
@@ -24,9 +25,11 @@ const authAPI = createAuthAPI();
 const subscriptionAPI = createSubscriptionAPI();
 const notificationAPI = createNotificationAPI();
 const updaterAPI = createUpdaterAPI();
+const recordingAPI = createRecordingAPI();
 
 contextBridge.exposeInMainWorld('browserAPI', browserAPI);
 contextBridge.exposeInMainWorld('authAPI', authAPI);
 contextBridge.exposeInMainWorld('subscriptionAPI', subscriptionAPI);
 contextBridge.exposeInMainWorld('notificationAPI', notificationAPI);
 contextBridge.exposeInMainWorld('updaterAPI', updaterAPI);
+contextBridge.exposeInMainWorld('recordingAPI', recordingAPI);

@@ -16,3 +16,4 @@ export { ShellHandler } from './ShellHandler';
 export { DeepLinkHandler } from './DeepLinkHandler';
 export { AutocompleteHandler } from './AutocompleteHandler';
 export { ThemeHandler } from './ThemeHandler';
+export { RecordingHandler } from './RecordingHandler';

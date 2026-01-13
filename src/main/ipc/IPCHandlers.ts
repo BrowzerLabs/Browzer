@@ -19,16 +19,19 @@ import {
   DeepLinkHandler,
   AutocompleteHandler,
   ThemeHandler,
+  RecordingHandler,
 } from './handlers';
 
 import { BrowserService } from '@/main/BrowserService';
 import { AuthService } from '@/main/auth';
 import { SubscriptionService } from '@/main/subscription/SubscriptionService';
 import { ThemeService } from '@/main/theme';
+import { RecordingManager } from '@/main/recording';
 
 export class IPCHandlers extends EventEmitter {
   private context: IPCContext;
   private handlers: IIPCHandler[] = [];
+  private recordingHandler: RecordingHandler | null = null;
 
   constructor(
     private baseWindow: BaseWindow,
@@ -54,6 +57,8 @@ export class IPCHandlers extends EventEmitter {
   }
 
   private initializeHandlers(): void {
+    this.recordingHandler = new RecordingHandler(this.context);
+
     this.handlers = [
       new TabHandler(this.context),
       new NavigationHandler(this.context),
@@ -70,8 +75,15 @@ export class IPCHandlers extends EventEmitter {
       new DeepLinkHandler(this.context),
       new AutocompleteHandler(this.context),
       new ThemeHandler(this.context),
+      this.recordingHandler,
     ];
     this.handlers.forEach((handler) => handler.register());
+  }
+
+  setRecordingManager(manager: RecordingManager): void {
+    if (this.recordingHandler) {
+      this.recordingHandler.setRecordingManager(manager);
+    }
   }
 
   public getRegisteredChannels(): string[] {
