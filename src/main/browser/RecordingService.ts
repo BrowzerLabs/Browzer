@@ -3,6 +3,7 @@ import { EventEmitter } from 'events';
 import type { AXNode, RecordingEvent, Tab } from './types';
 
 const CLICK_MARKER = '__browzer_click__';
+const INPUT_MARKER = '__browzer_input__';
 const KEY_MARKER = '__browzer_key__';
 
 export class RecordingService extends EventEmitter {
@@ -46,7 +47,7 @@ export class RecordingService extends EventEmitter {
     return `
       if (!window.__browzer) {
         window.__browzer = true;
-        window.__browzerRecordingEvent = null;
+        window.__browzer_event = null;
         window._click_data = null;
         window._key_data = null;
         
@@ -242,7 +243,7 @@ export class RecordingService extends EventEmitter {
         }
         
         document.addEventListener('click', (e) => {
-          window.__browzerRecordingEvent = e.target;
+          window.__browzer_event = e.target;
           
           const element = findBestElement(e.target);
           if (element) {
@@ -284,6 +285,73 @@ export class RecordingService extends EventEmitter {
             console.log('${KEY_MARKER}');
           }
         }, true);
+        
+        const inputDebounce = {};
+        const lastRecordedValue = {};
+        
+        function isTextboxElement(el) {
+          if (!el) return false;
+          const tag = el.tagName.toLowerCase();
+          const type = el.getAttribute('type')?.toLowerCase();
+          const role = el.getAttribute('role');
+          
+          if (tag === 'textarea' || role === 'textbox' || role === 'searchbox') return true;
+          if (tag === 'input') {
+            const textTypes = ['checkbox', 'radio', 'file'];
+            if (!textTypes.includes(type)) return true;
+          }
+          if (el.isContentEditable || el.getAttribute('contenteditable') === 'true') return true;
+          
+          return false;
+        }
+        
+        function recordInput(target) {
+          if (!isTextboxElement(target)) return;
+          
+          const key = target.id || target.name || getElementText(target) || 'input';
+          const currentValue = target.isContentEditable 
+            ? (target.innerText || target.textContent || '').trim()
+            : (target.value || '');
+          
+          if (lastRecordedValue[key] === currentValue) return;
+          
+          lastRecordedValue[key] = currentValue;
+          window.__browzer_event = target;
+          
+          const role = getElementRole(target);
+          const text = getElementText(target);
+          
+          window._input_data = {
+            role: role,
+            text: text,
+            value: currentValue,
+            url: ''
+          };
+          
+          console.log('${INPUT_MARKER}');
+        }
+        
+        document.addEventListener('input', (e) => {
+          if (!isTextboxElement(e.target)) return;
+          
+          const target = e.target;
+          const key = target.id || target.name || getElementText(target) || 'input';
+          
+          clearTimeout(inputDebounce[key]);
+          inputDebounce[key] = setTimeout(() => {
+            recordInput(target);
+          }, 3000);
+        }, true);
+        
+        document.addEventListener('blur', (e) => {
+          if (!isTextboxElement(e.target)) return;
+          
+          const target = e.target;
+          const key = target.id || target.name || getElementText(target) || 'input';
+          
+          clearTimeout(inputDebounce[key]);
+          recordInput(target);
+        }, true);
       }
     `;
   }
@@ -295,6 +363,9 @@ export class RecordingService extends EventEmitter {
           if (params.args?.[0]?.value === CLICK_MARKER){
             const clickEvent = await this.processClickEvent(tab, cdp);
             console.info(clickEvent);
+          } else if (params.args?.[0]?.value === INPUT_MARKER){
+            const inputEvent = await this.processInputEvent(tab, cdp);
+            console.info(inputEvent);
           } else if (params.args?.[0]?.value === KEY_MARKER){
             const keyEvent = await this.processKeyEvent(tab, cdp);
             console.info(keyEvent);
@@ -313,7 +384,7 @@ export class RecordingService extends EventEmitter {
     };
   }
 
-   private async processKeyEvent(tab: Tab, cdp: Debugger): Promise<RecordingEvent> {
+  private async processKeyEvent(tab: Tab, cdp: Debugger): Promise<RecordingEvent> {
     const dataResult = await cdp.sendCommand('Runtime.evaluate', {
       expression: 'window._key_data',
       returnByValue: true,
@@ -335,7 +406,7 @@ export class RecordingService extends EventEmitter {
     const data = dataResult.result.value || {};
 
     const { result } = await cdp.sendCommand('Runtime.evaluate', {
-      expression: 'window.__browzerRecordingEvent',
+      expression: 'window.__browzer_event',
       returnByValue: false,
     });
     
@@ -354,6 +425,36 @@ export class RecordingService extends EventEmitter {
       text: data.text || axData.name || '',
       value: data.value || axData.value || '',
       url: data.url || '',
+    };
+  }
+
+  private async processInputEvent(tab: Tab, cdp: Debugger): Promise<RecordingEvent> {
+    const dataResult = await cdp.sendCommand('Runtime.evaluate', {
+      expression: 'window._input_data',
+      returnByValue: true,
+    });
+    const data = dataResult.result.value || {};
+
+    const { result } = await cdp.sendCommand('Runtime.evaluate', {
+      expression: 'window.__browzer_event',
+      returnByValue: false,
+    });
+    
+    const { nodes } = await cdp.sendCommand('Accessibility.getPartialAXTree', {
+      objectId: result.objectId,
+      fetchRelatives: true,
+    });
+
+    const axData = this.extractAccessibilityData(nodes);
+    console.log(this.formatAccessibilityTree(nodes));
+
+    return {
+      tabId: tab.id,
+      type: 'input',
+      role: data.role || axData.role || '',
+      text: data.text || axData.name || '',
+      value: data.value || axData.value || '',
+      url: tab.view.webContents.getURL(),
     };
   }
   
