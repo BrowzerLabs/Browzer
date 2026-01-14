@@ -1,399 +1,424 @@
-import { WebContentsView, dialog } from 'electron';
-import { stat } from 'fs/promises';
+import { Debugger } from 'electron';
 import { EventEmitter } from 'events';
+import type { AXNode, RecordingEvent, Tab } from './types';
 
-import { Tab, RecordingState } from './types';
-
-import {
-  ActionRecorder,
-  VideoRecorder,
-  RecordingStore,
-} from '@/main/recording';
-import {
-  RecordedAction,
-  RecordingSession,
-  RecordingTabInfo,
-} from '@/shared/types';
+const CONSOLE_MARKER = '__browzer_click__';
 
 export class RecordingService extends EventEmitter {
-  private recordingState: RecordingState = {
-    isRecording: false,
-    recordingId: null,
-    startTime: 0,
-    startUrl: '',
-  };
-
-  private centralRecorder: ActionRecorder;
-  private recordingTabs: Map<string, RecordingTabInfo> = new Map();
-  private activeVideoRecorder: VideoRecorder | null = null;
-
-  constructor(
-    private recordingStore: RecordingStore,
-    private browserUIView?: WebContentsView
-  ) {
-    super();
-    this.centralRecorder = new ActionRecorder();
-  }
-
-  public async startRecording(activeTab: Tab): Promise<boolean> {
-    if (this.recordingState.isRecording) {
-      console.error('Recording already in progress');
-      return false;
-    }
-
-    if (!activeTab || !activeTab.videoRecorder) {
-      console.error('Tab or recorders not found');
-      return false;
-    }
-
+  public async enableClickTracking(tab: Tab): Promise<void> {
     try {
-      this.recordingState.recordingId = `rec-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-      this.recordingTabs.clear();
+      const cdp = tab.view.webContents.debugger;
+      const script = this.getClickTrackingScript();
 
-      this.recordingTabs.set(activeTab.id, {
-        tabId: activeTab.id,
-        title: activeTab.info.title,
-        url: activeTab.info.url,
-        firstActiveAt: Date.now(),
-        lastActiveAt: Date.now(),
-        actionCount: 0,
+      await cdp.sendCommand('Page.addScriptToEvaluateOnNewDocument', {
+        source: script,
+      });
+      await cdp.sendCommand('Runtime.evaluate', {
+        expression: script,
+        includeCommandLineAPI: false,
       });
 
-      this.centralRecorder.setView(activeTab.view);
-      this.setupRecorderEventListeners(activeTab.id);
-
-      await this.centralRecorder.startRecording(
-        activeTab.id,
-        activeTab.info.url,
-        activeTab.info.title,
-        this.recordingState.recordingId
-      );
-
-      this.activeVideoRecorder = activeTab.videoRecorder;
-      const videoStarted = await this.activeVideoRecorder.startRecording(
-        this.recordingState.recordingId
-      );
-
-      if (!videoStarted) {
-        dialog
-          .showMessageBox({
-            type: 'warning',
-            title: 'Video Recording Failed',
-            message:
-              'Video recording failed to start. Please ensure to provide Screen Recording permissions in System Preferences > Security & Privacy > Privacy > Screen Recording for Browzer.',
-            buttons: ['OK'],
-          })
-          .then(() => {
-            this.activeVideoRecorder = null;
-          });
-      }
-
-      this.recordingState.isRecording = true;
-      this.recordingState.startTime = Date.now();
-      this.recordingState.startUrl = activeTab.info.url;
-
-      console.log(
-        '🎬 Recording started (actions + video) on tab:',
-        activeTab.id
-      );
-
-      if (this.browserUIView && !this.browserUIView.webContents.isDestroyed()) {
-        this.browserUIView.webContents.send('recording:started');
-      }
-
-      return true;
+      const consoleHandler = this.createConsoleHandler(tab, cdp);
+      tab.clickTrackingHandler = consoleHandler;
+      cdp.on('message', consoleHandler);
     } catch (error) {
-      console.error('Failed to start recording:', error);
-      return false;
+      const err = error instanceof Error ? error : new Error(String(error));
+      console.error(`Failed to enable click tracking for tab ${tab.id}:`, err);
+      this.emit('error', tab.id, err);
+      throw err;
     }
   }
 
-  public async stopRecording(
-    tabs: Map<string, Tab>
-  ): Promise<RecordedAction[]> {
-    if (!this.recordingState.isRecording) {
-      console.warn('No recording in progress');
-      return [];
+  public async disableClickTracking(tab: Tab): Promise<void> {
+    try {
+      const cdp = tab.view.webContents.debugger;
+      cdp.removeListener('message', tab.clickTrackingHandler);
+      tab.clickTrackingHandler = undefined;
+      console.info(`Click tracking disabled for tab ${tab.id}`);
+      this.emit('tracking-disabled', tab.id);
+    } catch (error) {
+      console.error(error)
     }
-
-    const actions = await this.centralRecorder.stopRecording();
-
-    let videoPath: string | null = null;
-    if (this.activeVideoRecorder && this.activeVideoRecorder.isActive()) {
-      videoPath = await this.activeVideoRecorder.stopRecording();
-      console.log('🎥 Video recording stopped:', videoPath || 'no video');
-      this.activeVideoRecorder = null;
-    } else {
-      console.warn('⚠️ No active video recorder to stop');
-    }
-
-    if (!videoPath && this.recordingState.recordingId) {
-      for (const tab of tabs.values()) {
-        const tabVideoPath = tab.videoRecorder?.getVideoPath();
-        if (
-          tabVideoPath &&
-          tabVideoPath.includes(this.recordingState.recordingId)
-        ) {
-          videoPath = tabVideoPath;
-          console.log('📹 Found video path from tab recorder:', videoPath);
-          break;
-        }
-      }
-    }
-
-    this.recordingState.isRecording = false;
-
-    const duration = Date.now() - this.recordingState.startTime;
-    console.log(
-      '⏹️ Recording stopped. Duration:',
-      duration,
-      'ms, Actions:',
-      actions.length
-    );
-
-    const tabSwitchCount = this.countTabSwitchActions(actions);
-
-    if (this.browserUIView && !this.browserUIView.webContents.isDestroyed()) {
-      this.browserUIView.webContents.send('recording:stopped', {
-        actions,
-        duration,
-        startUrl: this.recordingState.startUrl,
-        videoPath,
-        tabs: Array.from(this.recordingTabs.values()),
-        tabSwitchCount,
-      });
-    }
-
-    return actions;
   }
 
-  public async saveRecording(
-    name: string,
-    description: string,
-    actions: RecordedAction[],
-    tabs: Map<string, Tab>
-  ): Promise<string> {
-    let videoPath = this.activeVideoRecorder?.getVideoPath();
+  private getClickTrackingScript(): string {
+    return `
+      if (!window.__browzer) {
+        window.__browzer = true;
+        window.__browzerRecordingEvent = null;
+        window._data = null;
+        
+        function getElementText(el) {
+          if (!el) return '';
 
-    if (!videoPath && this.recordingState.recordingId) {
-      for (const tab of tabs.values()) {
-        const tabVideoPath = tab.videoRecorder?.getVideoPath();
-        if (
-          tabVideoPath &&
-          tabVideoPath.includes(this.recordingState.recordingId)
-        ) {
-          videoPath = tabVideoPath;
-          console.log('📹 Found video path from tab recorder:', videoPath);
-          break;
+          const title = el.getAttribute('title') || el.getAttribute('name') || el.getAttribute('aria-label');
+          if (title) return title.trim().substring(0, 250);
+
+          const id = el.getAttribute('id');
+          if (id) {
+            const label = document.querySelector(\`label[for="\${id}"]\`);
+            if (label) {
+              const labelText = label.textContent?.trim() || label.innerText?.trim();
+              if (labelText) return labelText.replace(/\\\\s+/g, ' ').substring(0, 250);
+            }
+          }
+
+          const ariaLabelledBy = el.getAttribute('aria-labelledby');
+          if (ariaLabelledBy) {
+            const ids = ariaLabelledBy.split(' ').filter(id => id.trim());
+            const texts = ids.map(id => document.getElementById(id)?.textContent?.trim()).filter(Boolean);
+            if (texts.length > 0) return texts.join(' ').replace(/\\\\s+/g, ' ').substring(0, 250);
+          }
+          
+          const ariaDescribedBy = el.getAttribute('aria-describedby');
+          if (ariaDescribedBy) {
+            const ids = ariaDescribedBy.split(' ').filter(id => id.trim());
+            const texts = ids.map(id => document.getElementById(id)?.textContent?.trim()).filter(Boolean);
+            if (texts.length > 0) return texts.join(' ').replace(/\\\\s+/g, ' ').substring(0, 250);
+          }
+          
+          const parentLabel = el.closest('label');
+          if (parentLabel) {
+            const labelText = parentLabel.textContent?.trim() || parentLabel.innerText?.trim();
+            if (labelText) return labelText.replace(/\\\\s+/g, ' ').substring(0, 250);
+          }
+          
+          const tag = el.tagName;
+          if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') {
+            let parent = el.parentElement;
+            let depth = 0;
+            while (parent && depth < 3) {
+              const labelInParent = parent.querySelector('label');
+              if (labelInParent) {
+                const labelText = labelInParent.textContent?.trim();
+                if (labelText) return labelText.replace(/\\\\s+/g, ' ').substring(0, 250);
+              }
+              
+              const prevSibling = parent.previousElementSibling;
+              if (prevSibling && (prevSibling.tagName === 'LABEL' || prevSibling.querySelector('label'))) {
+                const labelText = prevSibling.textContent?.trim();
+                if (labelText) return labelText.replace(/\\\\s+/g, ' ').substring(0, 250);
+              }
+              
+              parent = parent.parentElement;
+              depth++;
+            }
+            
+            if (tag === 'INPUT') {
+              const placeholder = el.placeholder;
+              if (placeholder) return placeholder.substring(0, 250);
+            }
+            
+            return '';
+          }
+          
+          const img = el.querySelector('img');
+          if (img?.alt) return img.alt.trim().substring(0, 250);
+          
+          if (tag === 'BUTTON' || tag === 'A') {
+            let text = '';
+            for (const node of el.childNodes) {
+              if (node.nodeType === 3) text += node.textContent;
+              else if (node.nodeType === 1 && node.tagName !== 'SVG') {
+                text += node.innerText || '';
+              }
+            }
+            if (text.trim()) return text.trim().replace(/\\\\s+/g, ' ').substring(0, 250);
+          } else {
+            const text = el.innerText?.trim() || el.textContent?.trim() || '';
+            if (text) return text.replace(/\\\\s+/g, ' ').substring(0, 250);
+          }
+          
+          const className = el.className?.baseVal || el.className || '';
+          const iconMatch = className.match(/fa-([a-z0-9-]+)|bi-([a-z0-9-]+)|icon-([a-z0-9-]+)/i);
+          if (iconMatch) {
+            const iconName = (iconMatch[1] || iconMatch[2] || iconMatch[3]).replace(/-/g, ' ');
+            return iconName.charAt(0).toUpperCase() + iconName.slice(1);
+          }
+          
+          return '';
         }
+        
+        function getElementValue(el) {
+          if (!el) return '';
+          const tag = el.tagName;
+          if (tag === 'INPUT' || tag === 'TEXTAREA') {
+            return (el.value || '').substring(0, 250);
+          } else if (tag === 'SELECT') {
+            return (el.options[el.selectedIndex]?.text || '').substring(0, 250);
+          }
+          return '';
+        }
+        
+        function getElementRole(el) {
+          if (!el) return 'generic';
+          const role = el.getAttribute('role');
+          if (role) return role;
+          
+          const tag = el.tagName.toLowerCase();
+          const type = el.getAttribute('type')?.toLowerCase();
+          
+          const roleMap = {
+            'button': 'button',
+            'a': 'link',
+            'textarea': 'textbox',
+            'select': 'combobox',
+            'img': 'image',
+            'nav': 'navigation',
+            'main': 'main',
+            'header': 'banner',
+            'footer': 'contentinfo',
+            'aside': 'complementary',
+            'section': 'region',
+            'article': 'article',
+            'form': 'form',
+            'h1': 'heading',
+            'h2': 'heading',
+            'h3': 'heading',
+            'h4': 'heading',
+            'h5': 'heading',
+            'h6': 'heading',
+            'ul': 'list',
+            'ol': 'list',
+            'li': 'listitem',
+            'table': 'table',
+            'tr': 'row',
+            'td': 'cell',
+            'th': 'columnheader',
+            'option': 'option'
+          };
+          
+          if (tag === 'input') {
+            if (type === 'checkbox') return 'checkbox';
+            if (type === 'radio') return 'radio';
+            if (type === 'search') return 'searchbox';
+            if (type === 'button' || type === 'submit' || type === 'reset') return 'button';
+            return 'textbox';
+          }
+          
+          return roleMap[tag] || tag;
+        }
+        
+        function findBestElement(el) {
+          if (!el) return null;
+          const tag = el.tagName;
+          const svgTags = ['PATH', 'CIRCLE', 'RECT', 'LINE', 'POLYGON', 'G', 'SVG'];
+          
+          if (svgTags.includes(tag)) {
+            const interactive = el.closest('button, a, [role="button"], [role="link"]');
+            if (interactive) return interactive;
+            const svg = tag === 'SVG' ? el : el.closest('svg');
+            if (svg?.parentElement) return svg.parentElement;
+          }
+          
+          const interactiveTags = ['BUTTON', 'A', 'INPUT', 'SELECT', 'TEXTAREA'];
+          const interactiveRoles = [
+            'button', 'link', 'menuitem', 'menuitemradio', 'menuitemcheckbox',
+            'tab', 'checkbox', 'radio', 'switch', 'slider', 'spinbutton',
+            'option', 'treeitem', 'gridcell', 'row', 'columnheader', 'rowheader',
+            'searchbox', 'combobox', 'listbox'
+          ];
+          const role = el.getAttribute('role');
+          
+          if (interactiveTags.includes(tag) || interactiveRoles.includes(role)) {
+            return el;
+          }
+          
+          let current = el.parentElement;
+          let depth = 0;
+          while (current && current !== document.body && depth < 7) {
+            const currentTag = current.tagName;
+            const currentRole = current.getAttribute('role');
+            if (interactiveTags.includes(currentTag) || interactiveRoles.includes(currentRole)) {
+              return current;
+            }
+            current = current.parentElement;
+            depth++;
+          }
+          
+          return el;
+        }
+        
+        document.addEventListener('click', (e) => {
+          window.__browzerRecordingEvent = e.target;
+          
+          const element = findBestElement(e.target);
+          if (element) {
+            const role = getElementRole(element);
+            const text = getElementText(element);
+            const value = getElementValue(element);
+            const url = element.href || element.getAttribute('href') || '';
+            
+            window._data = {
+              role: role,
+              text: text,
+              value: value,
+              url: url
+            };
+          }
+          console.log('${CONSOLE_MARKER}');
+        }, true);
       }
-    }
+    `;
+  }
 
-    let videoSize: number | undefined;
-    let videoDuration: number | undefined;
+  private createConsoleHandler(tab: Tab, cdp: Debugger) {
+    return async (_event: any, method: string, params: any): Promise<void> => {
+      if (
+        method !== 'Runtime.consoleAPICalled' ||
+        params.args?.[0]?.value !== CONSOLE_MARKER
+      ) return;
 
-    if (videoPath) {
-      try {
-        const stats = await stat(videoPath);
-        videoSize = stats.size;
-        videoDuration = Date.now() - this.recordingState.startTime;
-      } catch (error) {
-        console.error('Failed to get video stats:', error);
-      }
-    }
-
-    const snapshotStats = await this.centralRecorder.getSnapshotStats();
-    const tabSwitchCount = this.countTabSwitchActions(actions);
-    const firstTab = this.recordingTabs.values().next().value;
-
-    const session: RecordingSession = {
-      id:
-        this.recordingState.recordingId ||
-        `rec-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-      name,
-      description,
-      actions,
-      createdAt: this.recordingState.startTime,
-      duration: Date.now() - this.recordingState.startTime,
-      actionCount: actions.length,
-      url: this.recordingState.startUrl,
-
-      startTabId: firstTab?.tabId,
-      tabs: Array.from(this.recordingTabs.values()),
-      tabSwitchCount,
-
-      videoPath,
-      videoSize,
-      videoFormat: videoPath ? 'webm' : undefined,
-      videoDuration,
-
-      snapshotCount: snapshotStats.count,
-      snapshotsDirectory: snapshotStats.directory,
-      totalSnapshotSize: snapshotStats.totalSize,
+      const clickEvent = await this.processClickEvent(tab, cdp);
+      console.info(clickEvent);
     };
-
-    this.recordingStore.saveRecording(session);
-    console.log('💾 Recording saved:', session.id, session.name);
-    console.log(
-      '📊 Multi-tab session:',
-      this.recordingTabs.size,
-      'tabs,',
-      tabSwitchCount,
-      'switches'
-    );
-    if (videoPath && videoSize) {
-      console.log(
-        '🎥 Video included:',
-        videoPath,
-        `(${(videoSize / 1024 / 1024).toFixed(2)} MB)`
-      );
-    }
-    if (snapshotStats.count > 0) {
-      console.log(
-        '📸 Snapshots captured:',
-        snapshotStats.count,
-        `(${(snapshotStats.totalSize / 1024 / 1024).toFixed(2)} MB)`
-      );
-    }
-
-    if (this.browserUIView && !this.browserUIView.webContents.isDestroyed()) {
-      this.browserUIView.webContents.send('recording:saved', session);
-    }
-
-    this.recordingState.recordingId = null;
-    this.recordingTabs.clear();
-
-    return session.id;
   }
 
-  public async handleTabSwitch(
-    previousTabId: string | null,
-    newTab: Tab
-  ): Promise<void> {
-    if (!this.recordingState.isRecording) return;
+  private async processClickEvent(tab: Tab, cdp: Debugger): Promise<RecordingEvent> {
+    const dataResult = await cdp.sendCommand('Runtime.evaluate', {
+      expression: 'window._data',
+      returnByValue: true,
+    });
+    const data = dataResult.result.value || {};
 
-    try {
-      console.log(
-        `🔄 Tab switch detected during recording: ${previousTabId} -> ${newTab.id}`
-      );
+    const { result } = await cdp.sendCommand('Runtime.evaluate', {
+      expression: 'window.__browzerRecordingEvent',
+      returnByValue: false,
+    });
+    
+    const { nodes } = await cdp.sendCommand('Accessibility.getPartialAXTree', {
+      objectId: result.objectId,
+      fetchRelatives: true,
+    });
 
-      const tabSwitchAction: RecordedAction = {
-        type: 'tab-switch',
-        timestamp: Date.now(),
-        tabId: newTab.id,
-        tabUrl: newTab.info.url,
-        tabTitle: newTab.info.title,
-        metadata: {
-          previousTabId: previousTabId,
-        },
-      };
+    const axData = this.extractAccessibilityData(nodes);
+    console.log(this.formatAccessibilityTree(nodes));
 
-      this.centralRecorder.addAction(tabSwitchAction);
-      this.handleActionCaptured(tabSwitchAction);
+    return {
+      tabId: tab.id,
+      type: 'click',
+      role: data.role || axData.role || '',
+      text: data.text || axData.name || '',
+      value: data.value || axData.value || '',
+      url: data.url || '',
+    };
+  }
+  
+  private extractAccessibilityData(nodes: any[]): AXNode {
+    const rootNode = nodes.find((n: any) => !n.parentId) || nodes[0];
+    if (!rootNode) {
+      return { role: '', name: '', value: '' };
+    }
+    return {
+      role: rootNode.role?.value || '',
+      name: rootNode.name?.value || '',
+      value: rootNode.value?.value || '',
+    };
+  }
 
-      const now = Date.now();
-      if (!this.recordingTabs.has(newTab.id)) {
-        this.recordingTabs.set(newTab.id, {
-          tabId: newTab.id,
-          title: newTab.info.title,
-          url: newTab.info.url,
-          firstActiveAt: now,
-          lastActiveAt: now,
-          actionCount: 0,
-        });
-      } else {
-        const tabInfo = this.recordingTabs.get(newTab.id);
-        if (tabInfo) {
-          tabInfo.lastActiveAt = now;
-          tabInfo.title = newTab.info.title;
-          tabInfo.url = newTab.info.url;
+  private formatAccessibilityTree(nodes: any[]): string {
+    const lines: string[] = [];
+    const nodeMap = new Map<string, any>();
+    for (const node of nodes) {
+      if (node.nodeId) {
+        nodeMap.set(node.nodeId, node);
+      }
+    }
+
+    const rootNode = nodes.find((n) => !n.parentId) || nodes[0];
+    if (rootNode) {
+      this.formatNode(rootNode, nodeMap, lines, 0, true);
+    }
+
+    return lines.filter((line) => line.trim() !== '').join('\n');
+  }
+
+  private formatNode(
+    node: any,
+    nodeMap: Map<string, any>,
+    lines: string[],
+    depth: number,
+    isRoot: boolean = false
+  ): void {
+    const role = node.role?.value || '';
+    const name = node.name?.value || '';
+    const value = node.value?.value || '';
+
+    const NOISE_ROLES = new Set([
+      'none',
+      'InlineTextBox',
+      'LineBreak',
+      'LayoutTableCell',
+      'LayoutTableRow',
+      'LayoutTable',
+      'StaticText',
+    ]);
+    const NOISE_PROPVALUE_SET = new Set([null, undefined, '', false]);
+    const NOISE_PROPNAME_SET = new Set([
+      'focusable',
+      'readonly',
+      'level',
+      'orientation',
+      'multiline',
+      'settable',
+      'pressed',
+    ]);
+
+    const shouldInclude =
+      !NOISE_ROLES.has(role) && (name.length > 0 || value.length > 0);
+
+    if (shouldInclude && !isRoot) {
+      const indent = '  '.repeat(depth);
+      let nodeStr = `${indent}[${role}]`;
+
+      if (name && name.trim().length > 0) {
+        name.length > 120
+          ? (nodeStr += ` "${name.trim().substring(0, 120)}..."`)
+          : (nodeStr += ` "${name.trim()}"`);
+      }
+
+      if (value && value !== name && value.trim().length > 0) {
+        value.length > 120
+          ? (nodeStr += ` value="${value.trim().substring(0, 120)}..."`)
+          : (nodeStr += ` value="${value.trim()}"`);
+      }
+
+      if (node.properties) {
+        const importantProps: string[] = [];
+        importantProps.push(`nodeId=${node.nodeId}`);
+
+        for (const prop of node.properties) {
+          const propName = prop.name;
+          const propValue = prop.value?.value;
+
+          if (
+            !NOISE_PROPVALUE_SET.has(propValue) &&
+            !NOISE_PROPNAME_SET.has(propName)
+          ) {
+            const propStr =
+              typeof propValue === 'string' && propValue.length > 120
+                ? `${propName}=${propValue.substring(0, 120)}...`
+                : `${propName}=${propValue}`;
+            importantProps.push(propStr);
+          }
+        }
+
+        if (importantProps.length > 0) {
+          nodeStr += ` ${importantProps.join(', ')}`;
         }
       }
 
-      await this.centralRecorder.switchWebContents(
-        newTab.view,
-        newTab.id,
-        newTab.info.url,
-        newTab.info.title
-      );
-    } catch (error) {
-      console.error('Failed to handle recording tab switch:', error);
+      lines.push(nodeStr);
     }
-  }
 
-  public isRecordingActive(): boolean {
-    return this.recordingState.isRecording;
-  }
-
-  public getRecordedActions(): RecordedAction[] {
-    return this.centralRecorder.getActions();
-  }
-
-  public getRecordingStore(): RecordingStore {
-    return this.recordingStore;
-  }
-
-  public async deleteRecording(id: string): Promise<boolean> {
-    const success = await this.recordingStore.deleteRecording(id);
-
-    if (
-      success &&
-      this.browserUIView &&
-      !this.browserUIView.webContents.isDestroyed()
-    ) {
-      this.browserUIView.webContents.send('recording:deleted', id);
+    if (node.childIds && node.childIds.length > 0) {
+      for (const childId of node.childIds) {
+        const childNode = nodeMap.get(childId);
+        if (childNode) {
+          const nextDepth = shouldInclude && !isRoot ? depth + 1 : depth;
+          this.formatNode(childNode, nodeMap, lines, nextDepth, false);
+        }
+      }
     }
-    return success;
-  }
-
-  private countTabSwitchActions(actions: RecordedAction[]): number {
-    return actions.filter((action) => action.type === 'tab-switch').length;
-  }
-
-  public handleContextMenuAction(action: RecordedAction): void {
-    if (!this.recordingState.isRecording) return;
-
-    this.centralRecorder.addAction(action);
-    this.handleActionCaptured(action);
-  }
-
-  private setupRecorderEventListeners(defaultTabId: string): void {
-    this.centralRecorder.removeAllListeners('action');
-    this.centralRecorder.removeAllListeners('maxActionsReached');
-
-    this.centralRecorder.on('action', (action: RecordedAction) => {
-      this.handleActionCaptured(action, defaultTabId);
-    });
-    this.centralRecorder.on('maxActionsReached', () => {
-      this.handleMaxActionsReached();
-    });
-  }
-
-  private handleActionCaptured(
-    action: RecordedAction,
-    defaultTabId?: string
-  ): void {
-    const tabInfo = this.recordingTabs.get(action.tabId || defaultTabId || '');
-    if (tabInfo) {
-      tabInfo.actionCount++;
-    }
-    this.browserUIView?.webContents.send('recording:action-captured', action);
-  }
-  private handleMaxActionsReached(): void {
-    dialog
-      .showMessageBox({
-        type: 'warning',
-        title: 'Recording Limit Reached',
-        message: 'Maximum actions limit reached. Please stop the recording.',
-        buttons: ['OK'],
-      })
-      .then(() => {
-        this.browserUIView?.webContents.send('recording:max-actions-reached');
-      });
-  }
-
-  public destroy(): void {
-    this.centralRecorder.removeAllListeners();
-    this.recordingTabs.clear();
   }
 }
