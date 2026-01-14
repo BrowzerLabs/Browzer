@@ -1,13 +1,112 @@
-import { Debugger } from 'electron';
+import { Debugger, WebContentsView } from 'electron';
 import { EventEmitter } from 'events';
 import type { Tab } from './types';
-import { AXNode, RecordingAction } from '@/shared/types';
+import { AXNode, RecordingAction, RecordingSession } from '@/shared/types';
+import { RecordingStore } from '../recording';
+import { randomUUID } from 'crypto';
 
 const CLICK_MARKER = '__browzer_click__';
 const INPUT_MARKER = '__browzer_input__';
 const KEY_MARKER = '__browzer_key__';
 
 export class RecordingService extends EventEmitter {
+  private recordingStore: RecordingStore;
+  private currentSession: RecordingSession | null = null;
+  private recordingStartTime: number = 0;
+  private recordingStartUrl: string = '';
+
+  constructor(
+    private browserView: WebContentsView,
+  ) {
+    super();
+    this.recordingStore = new RecordingStore();
+  }
+
+  public getRecordingStore(): RecordingStore {
+    return this.recordingStore;
+  }
+
+  public startRecordingSession(startUrl: string): void {
+    this.recordingStartTime = Date.now();
+    this.recordingStartUrl = startUrl;
+    this.currentSession = {
+      id: randomUUID(),
+      name: `Recording ${new Date().toLocaleString()}`,
+      actions: [],
+      createdAt: this.recordingStartTime,
+      duration: 0,
+      startUrl,
+    };
+    this.browserView.webContents.send('recording:started');
+  }
+
+  public stopRecordingSession(): { actions: RecordingAction[]; duration: number; startUrl: string } | null {
+    if (!this.currentSession) {
+      return null;
+    }
+
+    this.browserView.webContents.send('recording:stopped')
+    const duration = Date.now() - this.recordingStartTime;
+    this.currentSession.duration = duration;
+
+    const result = {
+      actions: [...this.currentSession.actions],
+      duration,
+      startUrl: this.recordingStartUrl,
+    };
+    return result;
+  }
+
+  public saveRecording(name: string, description?: string): boolean {
+    if (!this.currentSession) {
+      console.error('No active recording session to save');
+      return false;
+    }
+
+    this.currentSession.name = name;
+    this.currentSession.description = description;
+    this.currentSession.duration = Date.now() - this.recordingStartTime;
+
+    try {
+      this.recordingStore.saveRecording(this.currentSession);
+      const sessionId = this.currentSession.id;
+      console.log('💾 Recording saved:', sessionId);
+      this.discardRecording();
+      return true;
+    } catch (error) {
+      console.error('Failed to save recording:', error);
+      return false;
+    }
+  }
+
+  public discardRecording(): void {
+    if (this.currentSession) {
+      console.log('🗑️ Recording discarded:', this.currentSession.id);
+    }
+    this.currentSession = null;
+    this.recordingStartTime = 0;
+    this.recordingStartUrl = '';
+  }
+
+  public getCurrentActions(): RecordingAction[] {
+    return this.currentSession?.actions || [];
+  }
+
+  public isRecording(): boolean {
+    return this.currentSession !== null;
+  }
+
+  public addAction(action: RecordingAction): void {
+    if (!this.currentSession) {
+      console.warn('No active recording session, action not recorded');
+      return;
+    }
+
+    this.currentSession.actions.push(action);
+    this.browserView.webContents.send('recording:action-recorded', action);
+    console.log(`📝 Action recorded: ${action.type} (${this.currentSession.actions.length} total)`);
+  }
+
   public async enableClickTracking(tab: Tab): Promise<void> {
     try {
       const cdp = tab.view.webContents.debugger;
@@ -363,20 +462,28 @@ export class RecordingService extends EventEmitter {
         case 'Runtime.consoleAPICalled':
           if (params.args?.[0]?.value === CLICK_MARKER){
             const clickEvent = await this.processClickEvent(tab, cdp);
-            console.info(clickEvent);
+            this.addAction(clickEvent);
           } else if (params.args?.[0]?.value === INPUT_MARKER){
             const inputEvent = await this.processInputEvent(tab, cdp);
-            console.info(inputEvent);
+            if(inputEvent.element.value){
+              this.addAction(inputEvent);
+            }
           } else if (params.args?.[0]?.value === KEY_MARKER){
             const keyEvent = await this.processKeyEvent(tab, cdp);
-            console.info(keyEvent);
+            this.addAction(keyEvent);
           }
           break;
         case 'Page.frameNavigated':
            if (params.frame.parentId === undefined) {
             const newUrl = params.frame.url;
             if (this.isSignificantNavigation(newUrl)) {
-              console.info('navigation to ' + newUrl, tab.id);
+              const navigationAction: RecordingAction = {
+                tabId: tab.id,
+                type: 'navigate',
+                url: newUrl,
+                timestamp: Date.now(),
+              };
+              this.addAction(navigationAction);
             }
           }
           break;

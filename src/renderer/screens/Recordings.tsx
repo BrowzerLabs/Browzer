@@ -38,7 +38,7 @@ export function Recordings() {
   const loadRecordings = async () => {
     try {
       setLoading(true);
-      const data = await window.browserAPI.getAllRecordings();
+      const data = await window.recordingAPI.getAllRecordings();
       // Sort by creation date (newest first)
       const sorted = data.sort((a, b) => b.createdAt - a.createdAt);
       setRecordings(sorted);

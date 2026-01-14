@@ -74,29 +74,6 @@ export interface BrowserAPI {
     Array<{ id: string; name: string; thumbnail: any }>
   >;
 
-  // Recording Management
-  startRecording: () => Promise<boolean>;
-  stopRecording: () => Promise<{
-    actions: any[];
-    duration: number;
-    startUrl: string;
-  }>;
-  saveRecording: (
-    name: string,
-    description: string,
-    actions: any[]
-  ) => Promise<string>;
-  getAllRecordings: () => Promise<any[]>;
-  deleteRecording: (id: string) => Promise<boolean>;
-  isRecording: () => Promise<boolean>;
-  getRecordedActions: () => Promise<any[]>;
-  exportRecording: (id: string) => Promise<{
-    success: boolean;
-    filePath?: string;
-    error?: string;
-    cancelled?: boolean;
-  }>;
-
   // Video File Operations
   openVideoFile: (videoPath: string) => Promise<void>;
   getVideoFileUrl: (videoPath: string) => Promise<string>;
@@ -215,19 +192,6 @@ export interface BrowserAPI {
   onTabReordered: (
     callback: (data: { tabId: string; from: number; to: number }) => void
   ) => () => void;
-  onRecordingAction: (callback: (action: any) => void) => () => void;
-  onRecordingStarted: (callback: () => void) => () => void;
-  onRecordingStopped: (
-    callback: (data: {
-      actions: any[];
-      duration: number;
-      startUrl: string;
-    }) => void
-  ) => () => void;
-  onRecordingSaved: (callback: (session: any) => void) => () => void;
-  onRecordingDeleted: (callback: (id: string) => void) => () => void;
-  onRecordingMaxActionsReached: (callback: () => void) => () => void;
-
   // Automation event listeners
   onAutomationProgress: (
     callback: (data: { sessionId: string; event: any }) => void

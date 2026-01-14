@@ -63,7 +63,7 @@ export function useAutomation() {
 
   const loadRecordings = useCallback(async () => {
     try {
-      const allRecordings = await window.browserAPI.getAllRecordings();
+      const allRecordings = await window.recordingAPI.getAllRecordings();
       setRecordings(allRecordings);
     } catch (error) {
       console.error('[useAutomation] Failed to load recordings:', error);

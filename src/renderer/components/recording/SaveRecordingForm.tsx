@@ -8,14 +8,12 @@ import { Label } from '@/renderer/ui/label';
 
 interface SaveRecordingFormProps {
   actionCount: number;
-  duration: number;
   onSave: (name: string, description: string) => void;
   onDiscard: () => void;
 }
 
 export function SaveRecordingForm({
   actionCount,
-  duration,
   onSave,
   onDiscard,
 }: SaveRecordingFormProps) {
@@ -58,9 +56,6 @@ export function SaveRecordingForm({
     <div className="p-6 max-w-2xl mx-auto">
       <div className="mb-6">
         <h3 className="text-lg font-semibold mb-2">Save Recording</h3>
-        <p className="text-sm">
-          Recorded {actionCount} actions in {formatDuration(duration)}
-        </p>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-4">

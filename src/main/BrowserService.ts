@@ -6,6 +6,7 @@ import {
   AutomationManager,
   NavigationService,
   DebuggerService,
+  RecordingService,
 } from './browser';
 import { SettingsService } from './settings/SettingsService';
 import { DownloadService } from './download/DownloadService';
@@ -33,6 +34,8 @@ export class BrowserService {
   private bookmarkService: BookmarkService;
   private sessionManager: SessionManager;
 
+   private recordingService: RecordingService;
+
   constructor(
     private baseWindow: BaseWindow,
     private browserView: WebContentsView
@@ -55,6 +58,7 @@ export class BrowserService {
       this.baseWindow,
       this.browserView.webContents
     );
+    this.recordingService = new RecordingService(this.browserView);
 
     this.tabService = new TabService(
       baseWindow,
@@ -64,7 +68,8 @@ export class BrowserService {
       this.historyService,
       this.navigationService,
       this.debuggerService,
-      this.bookmarkService
+      this.bookmarkService,
+      this.recordingService,
     );
 
     this.setupTabEventListeners();
@@ -151,6 +156,10 @@ export class BrowserService {
 
   public getDownloadService(): DownloadService {
     return this.downloadService;
+  }
+
+  public getRecordingService(): RecordingService {
+    return this.recordingService;
   }
 
   public getActiveAutomationExecutor(): BrowserAutomationExecutor | null {

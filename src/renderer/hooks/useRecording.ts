@@ -2,26 +2,20 @@ import { useState, useCallback, useEffect } from 'react';
 import { toast } from 'sonner';
 
 import { useSidebarStore } from '../store/useSidebarStore';
-import { RecordedAction } from '../../shared/types';
 
-/**
- * React hook for action recording
- */
 export function useRecording() {
   const [isRecording, setIsRecording] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [actions, setActions] = useState<RecordedAction[]>([]);
   const { showSidebar } = useSidebarStore();
 
-  // Check recording status on mount
   useEffect(() => {
-    window.browserAPI.isRecording().then(setIsRecording);
+    window.recordingAPI.isRecording().then(setIsRecording);
   }, []);
 
   const startRecording = useCallback(async () => {
     setIsLoading(true);
 
-    const promise = window.browserAPI.startRecording();
+    const promise = window.recordingAPI.startRecording();
 
     toast.promise(promise, {
       loading: 'Starting recording...',
@@ -33,7 +27,6 @@ export function useRecording() {
       const success = await promise;
       if (success) {
         setIsRecording(true);
-        setActions([]);
         showSidebar();
       }
       return success;
@@ -45,7 +38,7 @@ export function useRecording() {
   const stopRecording = useCallback(async () => {
     setIsLoading(true);
 
-    const promise = window.browserAPI.stopRecording();
+    const promise = window.recordingAPI.stopRecording();
 
     toast.promise(promise, {
       loading: 'Stopping recording...',
@@ -56,7 +49,6 @@ export function useRecording() {
     try {
       const recordedActions = await promise;
       setIsRecording(false);
-      setActions(recordedActions.actions);
       return recordedActions;
     } finally {
       setIsLoading(false);
@@ -71,19 +63,11 @@ export function useRecording() {
     }
   }, [isRecording, startRecording, stopRecording]);
 
-  const getActions = useCallback(async () => {
-    const recordedActions = await window.browserAPI.getRecordedActions();
-    setActions(recordedActions || []);
-    return recordedActions;
-  }, []);
-
   return {
     isRecording,
     isLoading,
-    actions,
     startRecording,
     stopRecording,
     toggleRecording,
-    getActions,
   };
 }

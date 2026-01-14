@@ -53,9 +53,6 @@ export class TabService extends EventEmitter {
   private isRestorePending = false;
   private restoreCheckFired = false;
 
-  private isRecording = true;
-  private readonly recordingService = new RecordingService();
-
   constructor(
     private baseWindow: BaseWindow,
     private browserView: WebContentsView,
@@ -64,7 +61,8 @@ export class TabService extends EventEmitter {
     private historyService: HistoryService,
     private navigationService: NavigationService,
     private debuggerService: DebuggerService,
-    private bookmarkService: BookmarkService
+    private bookmarkService: BookmarkService,
+    private recordingService: RecordingService
   ) {
     super();
     this.sessionStore = new Store<{ lastSession: TabsSnapshot | null }>({
@@ -158,30 +156,42 @@ export class TabService extends EventEmitter {
     this.updateLayout(this.currentSidebarWidth);
   }
 
-  public async startRecording(): Promise<void> {
-    this.isRecording = true;
-    const enablePromises = Array.from(this.tabs.values()).map((tab) =>
-      this.recordingService.enableClickTracking(tab).catch((error) => {
-        console.error(`[TabService] Failed to enable tracking for tab ${tab.id}:`, error);
-      })
-    );
+  public async startRecording(): Promise<boolean> {
+    try {
+      const activeTab = this.getActiveTab();
+      const startUrl = activeTab?.info.url || 'browzer://home';
+      this.recordingService.startRecordingSession(startUrl);
+      
+      const enablePromises = Array.from(this.tabs.values()).map((tab) =>
+        this.recordingService.enableClickTracking(tab).catch((error) => {
+          console.error(`[TabService] Failed to enable tracking for tab ${tab.id}:`, error);
+        })
+      );
 
-    await Promise.allSettled(enablePromises);
+      await Promise.allSettled(enablePromises);
+      return true;
+    } catch (error) {
+      console.error('[TabService] Failed to start recording:', error);
+      return false;
+    }
   } 
 
-  public async stopRecording(): Promise<void> {
-    this.isRecording = false;
-    const enablePromises = Array.from(this.tabs.values()).map((tab) =>
-      this.recordingService.disableClickTracking(tab).catch((error) => {
-        console.error(`[TabService] Failed to enable tracking for tab ${tab.id}:`, error);
-      })
-    );
+  public async stopRecording(): Promise<{ actions: any[]; duration: number; startUrl: string } | null> {
+    try {
+      const disablePromises = Array.from(this.tabs.values()).map((tab) =>
+        this.recordingService.disableClickTracking(tab).catch((error) => {
+          console.error(`[TabService] Failed to disable tracking for tab ${tab.id}:`, error);
+        })
+      );
 
-    await Promise.allSettled(enablePromises);
-  }
-
-  public isRecordingActive(): boolean {
-    return this.isRecording;
+      await Promise.allSettled(disablePromises);
+      
+      const result = this.recordingService.stopRecordingSession();
+      return result;
+    } catch (error) {
+      console.error('[TabService] Failed to stop recording:', error);
+      return null;
+    }
   }
 
   public createTab(url?: string): Tab {
@@ -228,7 +238,7 @@ export class TabService extends EventEmitter {
         console.error('[TabService] Failed to initialize debugger:', tabId, err)
       );
     
-    if (this.isRecording) {
+    if (this.recordingService.isRecording()) {
       this.recordingService.enableClickTracking(tab).catch((error) => {
         console.error(`[TabService] Failed to enable tracking for new tab ${tab.id}:`, error);
       });

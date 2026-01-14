@@ -1,6 +1,6 @@
 export interface RecordingAction {
   tabId: string;
-  type: 'click' | 'input' | 'key' | 'navigation' | 'context' | 'context' | 'file';
+  type: 'click' | 'input' | 'key' | 'navigate' | 'context' | 'tab-switch' | 'file';
   url: string;
   element?: {
     role: string;

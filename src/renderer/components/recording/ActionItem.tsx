@@ -5,11 +5,11 @@ import {
   ItemTitle,
   ItemDescription,
 } from '@/renderer/ui/item';
-import { RecordedAction } from '@/shared/types';
+import { RecordingAction } from '@/shared/types';
 import { RecordingUtils } from '@/renderer/utils';
 
 interface ActionItemProps {
-  action: RecordedAction;
+  action: RecordingAction;
   index: number;
 }
 

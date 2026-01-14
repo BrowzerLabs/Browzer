@@ -79,17 +79,6 @@ export const createBrowserAPI = (): BrowserAPI => ({
   openDownload: (id: string) => invoke('download:open', id),
   showDownloadInFolder: (id: string) => invoke('download:show-in-folder', id),
 
-  // Recording Management
-  startRecording: () => invoke('browser:start-recording'),
-  stopRecording: () => invoke('browser:stop-recording'),
-  saveRecording: (name: string, description: string, actions: any[]) =>
-    invoke('browser:save-recording', name, description, actions),
-  getAllRecordings: () => invoke('browser:get-all-recordings'),
-  deleteRecording: (id: string) => invoke('browser:delete-recording', id),
-  isRecording: () => invoke('browser:is-recording'),
-  getRecordedActions: () => invoke('browser:get-recorded-actions'),
-  exportRecording: (id: string) => invoke('browser:export-recording', id),
-
   // Desktop Capturer API
   getDesktopSources: async () => {
     const sources = await desktopCapturer.getSources({
@@ -215,20 +204,6 @@ export const createBrowserAPI = (): BrowserAPI => ({
       'browser:tab-reordered',
       callback
     ),
-
-  // Event listeners - Recording events
-  onRecordingAction: (callback) =>
-    createEventListener('recording:action-captured', callback),
-  onRecordingStarted: (callback) =>
-    createSimpleListener('recording:started', callback),
-  onRecordingStopped: (callback) =>
-    createEventListener('recording:stopped', callback),
-  onRecordingSaved: (callback) =>
-    createEventListener('recording:saved', callback),
-  onRecordingDeleted: (callback) =>
-    createEventListener('recording:deleted', callback),
-  onRecordingMaxActionsReached: (callback) =>
-    createSimpleListener('recording:max-actions-reached', callback),
 
   // Event listeners - Automation events
   onAutomationProgress: (callback) =>

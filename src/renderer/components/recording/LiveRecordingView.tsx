@@ -5,18 +5,13 @@ import { ActionItem } from './ActionItem';
 
 import { Badge } from '@/renderer/ui/badge';
 import { ItemGroup } from '@/renderer/ui/item';
-import { RecordedAction } from '@/shared/types';
+import { RecordingAction } from '@/shared/types';
 import { MAX_RECORDING_ACTIONS } from '@/shared/constants/limits';
 
 interface LiveRecordingViewProps {
-  actions: RecordedAction[];
+  actions: RecordingAction[];
   isRecording: boolean;
   showSaveForm: boolean;
-  recordingData: {
-    actions: RecordedAction[];
-    duration: number;
-    startUrl: string;
-  } | null;
   onSave: (name: string, description: string) => void;
   onDiscard: () => void;
 }
@@ -25,7 +20,6 @@ export function LiveRecordingView({
   actions,
   isRecording,
   showSaveForm,
-  recordingData,
   onSave,
   onDiscard,
 }: LiveRecordingViewProps) {
@@ -67,10 +61,9 @@ export function LiveRecordingView({
       </div>
 
       <div className="flex-1 overflow-y-auto">
-        {showSaveForm && recordingData ? (
+        {showSaveForm ? (
           <SaveRecordingForm
-            actionCount={recordingData.actions.length}
-            duration={recordingData.duration}
+            actionCount={actions.length}
             onSave={onSave}
             onDiscard={onDiscard}
           />
