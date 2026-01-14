@@ -1,6 +1,7 @@
 import { Debugger } from 'electron';
 import { EventEmitter } from 'events';
-import type { AXNode, RecordingEvent, Tab } from './types';
+import type { Tab } from './types';
+import { AXNode, RecordingAction } from '@/shared/types';
 
 const CLICK_MARKER = '__browzer_click__';
 const INPUT_MARKER = '__browzer_input__';
@@ -250,13 +251,13 @@ export class RecordingService extends EventEmitter {
             const role = getElementRole(element);
             const text = getElementText(element);
             const value = getElementValue(element);
-            const url = element.href || element.getAttribute('href') || '';
+            const href = element.href || element.getAttribute('href') || '';
             
             window._click_data = {
               role: role,
               text: text,
               value: value,
-              url: url
+              href: href
             };
           }
           console.log('${CLICK_MARKER}');
@@ -384,7 +385,7 @@ export class RecordingService extends EventEmitter {
     };
   }
 
-  private async processKeyEvent(tab: Tab, cdp: Debugger): Promise<RecordingEvent> {
+  private async processKeyEvent(tab: Tab, cdp: Debugger): Promise<RecordingAction> {
     const dataResult = await cdp.sendCommand('Runtime.evaluate', {
       expression: 'window._key_data',
       returnByValue: true,
@@ -394,11 +395,12 @@ export class RecordingService extends EventEmitter {
       tabId: tab.id,
       url: tab.view.webContents.getURL(),
       type: 'key',
-      keys: data
+      keys: data,
+      timestamp: Date.now(),
     };
   }
 
-  private async processClickEvent(tab: Tab, cdp: Debugger): Promise<RecordingEvent> {
+  private async processClickEvent(tab: Tab, cdp: Debugger): Promise<RecordingAction> {
     const dataResult = await cdp.sendCommand('Runtime.evaluate', {
       expression: 'window._click_data',
       returnByValue: true,
@@ -421,14 +423,18 @@ export class RecordingService extends EventEmitter {
     return {
       tabId: tab.id,
       type: 'click',
-      role: data.role || axData.role || '',
-      text: data.text || axData.name || '',
-      value: data.value || axData.value || '',
-      url: data.url || '',
+      url: tab.view.webContents.getURL(),
+      element: {
+        role: data.role || axData.role || '',
+        text: data.text || axData.name || '',
+        value: data.value || axData.value || '',
+        href: data.href || '',
+      },
+      timestamp: Date.now(),
     };
   }
 
-  private async processInputEvent(tab: Tab, cdp: Debugger): Promise<RecordingEvent> {
+  private async processInputEvent(tab: Tab, cdp: Debugger): Promise<RecordingAction> {
     const dataResult = await cdp.sendCommand('Runtime.evaluate', {
       expression: 'window._input_data',
       returnByValue: true,
@@ -451,10 +457,13 @@ export class RecordingService extends EventEmitter {
     return {
       tabId: tab.id,
       type: 'input',
-      role: data.role || axData.role || '',
-      text: data.text || axData.name || '',
-      value: data.value || axData.value || '',
+      element: {
+        role: data.role || axData.role || '',
+        text: data.text || axData.name || '',
+        value: data.value || axData.value || '',
+      },
       url: tab.view.webContents.getURL(),
+      timestamp: Date.now(),
     };
   }
   

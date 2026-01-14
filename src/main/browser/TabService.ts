@@ -4,7 +4,7 @@ import path from 'node:path';
 
 import Store from 'electron-store';
 
-import { Tab, TabServiceEvents } from './types';
+import { Tab } from './types';
 import { NavigationService } from './NavigationService';
 import { DebuggerService } from './DebuggerService';
 import { ContextMenuService } from './ContextMenuService';
@@ -37,20 +37,6 @@ const TAB_HEIGHT = {
 };
 
 export class TabService extends EventEmitter {
-  public on<K extends keyof TabServiceEvents>(
-    event: K,
-    listener: TabServiceEvents[K]
-  ): this {
-    return super.on(event, listener);
-  }
-
-  public emit<K extends keyof TabServiceEvents>(
-    event: K,
-    ...args: Parameters<TabServiceEvents[K]>
-  ): boolean {
-    return super.emit(event, ...args);
-  }
-
   private tabs = new Map<string, Tab>();
   private orderedTabIds: string[] = [];
   private activeTabId: string | null = null;
