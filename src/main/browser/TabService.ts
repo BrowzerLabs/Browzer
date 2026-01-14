@@ -1044,14 +1044,220 @@ export class TabService extends EventEmitter {
 
   private async enableClickTracking(tab: Tab): Promise<boolean> {
     const cdp = tab.view.webContents.debugger;
-    
     const script = `
       if (!window.__browzer) {
         window.__browzer = true;
         window.__browzerClickedElement = null;
+        window.__browzer_data = null;
+        
+        function getElementText(el) {
+          if (!el) return '';
+
+          const title = el.getAttribute('title') || el.getAttribute('name') || el.getAttribute('aria-label');
+          if (title) return title.trim().substring(0, 250);
+
+          const id = el.getAttribute('id');
+          if (id) {
+            const label = document.querySelector(\`label[for="\${id}"]\`);
+            if (label) {
+              const labelText = label.textContent?.trim() || label.innerText?.trim();
+              if (labelText) return labelText.replace(/\\s+/g, ' ').substring(0, 250);
+            }
+          }
+
+          const ariaLabelledBy = el.getAttribute('aria-labelledby');
+          if (ariaLabelledBy) {
+            const ids = ariaLabelledBy.split(' ').filter(id => id.trim());
+            const texts = ids.map(id => document.getElementById(id)?.textContent?.trim()).filter(Boolean);
+            if (texts.length > 0) return texts.join(' ').replace(/\\s+/g, ' ').substring(0, 250);
+          }
+          
+          const ariaDescribedBy = el.getAttribute('aria-describedby');
+          if (ariaDescribedBy) {
+            const ids = ariaDescribedBy.split(' ').filter(id => id.trim());
+            const texts = ids.map(id => document.getElementById(id)?.textContent?.trim()).filter(Boolean);
+            if (texts.length > 0) return texts.join(' ').replace(/\\s+/g, ' ').substring(0, 250);
+          }
+          
+          const parentLabel = el.closest('label');
+          if (parentLabel) {
+            const labelText = parentLabel.textContent?.trim() || parentLabel.innerText?.trim();
+            if (labelText) return labelText.replace(/\\s+/g, ' ').substring(0, 250);
+          }
+          
+          const tag = el.tagName;
+          if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') {
+            let parent = el.parentElement;
+            let depth = 0;
+            while (parent && depth < 3) {
+              const labelInParent = parent.querySelector('label');
+              if (labelInParent) {
+                const labelText = labelInParent.textContent?.trim();
+                if (labelText) return labelText.replace(/\\s+/g, ' ').substring(0, 250);
+              }
+              
+              const prevSibling = parent.previousElementSibling;
+              if (prevSibling && (prevSibling.tagName === 'LABEL' || prevSibling.querySelector('label'))) {
+                const labelText = prevSibling.textContent?.trim();
+                if (labelText) return labelText.replace(/\\s+/g, ' ').substring(0, 250);
+              }
+              
+              parent = parent.parentElement;
+              depth++;
+            }
+            
+            if (tag === 'INPUT') {
+              const placeholder = el.placeholder;
+              if (placeholder) return placeholder.substring(0, 250);
+            }
+            
+            return '';
+          }
+          
+          const img = el.querySelector('img');
+          if (img?.alt) return img.alt.trim().substring(0, 250);
+          
+          if (tag === 'BUTTON' || tag === 'A') {
+            let text = '';
+            for (const node of el.childNodes) {
+              if (node.nodeType === 3) text += node.textContent;
+              else if (node.nodeType === 1 && node.tagName !== 'SVG') {
+                text += node.innerText || '';
+              }
+            }
+            if (text.trim()) return text.trim().replace(/\\s+/g, ' ').substring(0, 250);
+          } else {
+            const text = el.innerText?.trim() || el.textContent?.trim() || '';
+            if (text) return text.replace(/\\s+/g, ' ').substring(0, 250);
+          }
+          
+          const className = el.className?.baseVal || el.className || '';
+          const iconMatch = className.match(/fa-([a-z0-9-]+)|bi-([a-z0-9-]+)|icon-([a-z0-9-]+)/i);
+          if (iconMatch) {
+            const iconName = (iconMatch[1] || iconMatch[2] || iconMatch[3]).replace(/-/g, ' ');
+            return iconName.charAt(0).toUpperCase() + iconName.slice(1);
+          }
+          
+          return '';
+        }
+        
+        function getElementValue(el) {
+          if (!el) return '';
+          const tag = el.tagName;
+          if (tag === 'INPUT' || tag === 'TEXTAREA') {
+            return (el.value || '').substring(0, 250);
+          } else if (tag === 'SELECT') {
+            return (el.options[el.selectedIndex]?.text || '').substring(0, 250);
+          }
+          return '';
+        }
+        
+        function getElementRole(el) {
+          if (!el) return 'generic';
+          const role = el.getAttribute('role');
+          if (role) return role;
+          
+          const tag = el.tagName.toLowerCase();
+          const type = el.getAttribute('type')?.toLowerCase();
+          
+          const roleMap = {
+            'button': 'button',
+            'a': 'link',
+            'textarea': 'textbox',
+            'select': 'combobox',
+            'img': 'image',
+            'nav': 'navigation',
+            'main': 'main',
+            'header': 'banner',
+            'footer': 'contentinfo',
+            'aside': 'complementary',
+            'section': 'region',
+            'article': 'article',
+            'form': 'form',
+            'h1': 'heading',
+            'h2': 'heading',
+            'h3': 'heading',
+            'h4': 'heading',
+            'h5': 'heading',
+            'h6': 'heading',
+            'ul': 'list',
+            'ol': 'list',
+            'li': 'listitem',
+            'table': 'table',
+            'tr': 'row',
+            'td': 'cell',
+            'th': 'columnheader',
+            'option': 'option'
+          };
+          
+          if (tag === 'input') {
+            if (type === 'checkbox') return 'checkbox';
+            if (type === 'radio') return 'radio';
+            if (type === 'search') return 'searchbox';
+            if (type === 'button' || type === 'submit' || type === 'reset') return 'button';
+            return 'textbox';
+          }
+          
+          return roleMap[tag] || tag;
+        }
+        
+        function findBestElement(el) {
+          if (!el) return null;
+          const tag = el.tagName;
+          const svgTags = ['PATH', 'CIRCLE', 'RECT', 'LINE', 'POLYGON', 'G', 'SVG'];
+          
+          if (svgTags.includes(tag)) {
+            const interactive = el.closest('button, a, [role="button"], [role="link"]');
+            if (interactive) return interactive;
+            const svg = tag === 'SVG' ? el : el.closest('svg');
+            if (svg?.parentElement) return svg.parentElement;
+          }
+          
+          const interactiveTags = ['BUTTON', 'A', 'INPUT', 'SELECT', 'TEXTAREA'];
+          const interactiveRoles = [
+            'button', 'link', 'menuitem', 'menuitemradio', 'menuitemcheckbox',
+            'tab', 'checkbox', 'radio', 'switch', 'slider', 'spinbutton',
+            'option', 'treeitem', 'gridcell', 'row', 'columnheader', 'rowheader',
+            'searchbox', 'combobox', 'listbox'
+          ];
+          const role = el.getAttribute('role');
+          
+          if (interactiveTags.includes(tag) || interactiveRoles.includes(role)) {
+            return el;
+          }
+          
+          let current = el.parentElement;
+          let depth = 0;
+          while (current && current !== document.body && depth < 7) {
+            const currentTag = current.tagName;
+            const currentRole = current.getAttribute('role');
+            if (interactiveTags.includes(currentTag) || interactiveRoles.includes(currentRole)) {
+              return current;
+            }
+            current = current.parentElement;
+            depth++;
+          }
+          
+          return el;
+        }
         
         document.addEventListener('click', (e) => {
           window.__browzerClickedElement = e.target;
+          
+          const element = findBestElement(e.target);
+          if (element) {
+            const role = getElementRole(element);
+            const text = getElementText(element);
+            const value = getElementValue(element);
+            const url = element.href || element.getAttribute('href') || '';
+            
+            window.__browzer_data = {
+              role: role,
+              text: text,
+              value: value,
+              url: url
+            };
+          }
           console.log('__browzer_click__');
         }, true);
       }
@@ -1071,26 +1277,79 @@ export class TabService extends EventEmitter {
         method === 'Runtime.consoleAPICalled' &&
         params.args?.[0]?.value === '__browzer_click__'
       ) {
-        try {
-          const { result } = await cdp.sendCommand('Runtime.evaluate', {
-            expression: 'window.__browzerClickedElement',
-            returnByValue: false,
-          });
-          console.log(result);
-          const { nodes } = await cdp.sendCommand('Accessibility.getPartialAXTree', {
-            objectId: result.objectId,
-            fetchRelatives: true,
-          });
-          console.log(this.formatAccessibilityTree(nodes));
-        } catch (err) {
-          console.error(`[Recording] Failed to get clicked element:`, err);
+        const runtimeDataResult = await cdp.sendCommand('Runtime.evaluate', {
+          expression: 'window.__browzer_data',
+          returnByValue: true,
+        });
+        const runtimeData = runtimeDataResult.result.value || {};
+        const { result } = await cdp.sendCommand('Runtime.evaluate', {
+          expression: 'window.__browzerClickedElement',
+          returnByValue: false,
+        });
+        const { nodes } = await cdp.sendCommand('Accessibility.getPartialAXTree', {
+          objectId: result.objectId,
+          fetchRelatives: true,
+        });
+        
+        const axData = this.extractClickedElementData(nodes);
+        
+        const finalData: any = { ...runtimeData };
+        
+        if (!finalData.role || finalData.role === '') {
+          finalData.role = axData.role || '';
         }
+        if (!finalData.text || finalData.text === '') {
+          finalData.text = axData.name || '';
+        }
+        if (!finalData.value || finalData.value === '') {
+          finalData.value = axData.value || '';
+        }
+        if (axData.describedby) finalData.describedby = axData.describedby;
+        
+        console.log(finalData);
+        console.log(this.formatAccessibilityTree(nodes));
       }
     };
     
     tab.clickTrackingHandler = consoleHandler;
     cdp.on('message', consoleHandler);
     return true;
+  }
+  private extractClickedElementData(nodes: any[]): any {
+    const rootNode = nodes.find((n: any) => !n.parentId) || nodes[0];
+    if (!rootNode) return {};
+    
+    const data: any = {
+      role: rootNode.role?.value || '',
+      name: rootNode.name?.value || '',
+      value: rootNode.value?.value || '',
+      nodeId: rootNode.nodeId || '',
+    };
+    
+    if (rootNode.properties) {
+      for (const prop of rootNode.properties) {
+        const propName = prop.name;
+        const propValue = prop.value?.value;
+        
+        if (propName === 'focused' && propValue === true) {
+          data.focused = true;
+        } else if (propName === 'invalid' && propValue !== false) {
+          data.invalid = propValue;
+        } else if (propName === 'required' && propValue === true) {
+          data.required = true;
+        } else if (propName === 'readonly' && propValue === true) {
+          data.readonly = true;
+        } else if (propName === 'disabled' && propValue === true) {
+          data.disabled = true;
+        } else if (propName === 'editable') {
+          data.editable = propValue;
+        } else if (propName === 'describedby') {
+          data.describedby = propValue;
+        }
+      }
+    }
+    
+    return data;
   }
 
   private formatAccessibilityTree(nodes: any[]): string {
@@ -1143,7 +1402,7 @@ export class TabService extends EventEmitter {
     const shouldInclude =
       !NOISE_ROLES.has(role) && (name.length > 0 || value.length > 0);
 
-    if (shouldInclude) {
+    if (shouldInclude && !isRoot) {
       const indent = '  '.repeat(depth);
       let nodeStr = `${indent}[${role}]`;
 
