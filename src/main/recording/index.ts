@@ -2,7 +2,7 @@
  * Recording Module Exports
  */
 
-export { RecordingManager } from './RecordingManager';
+export { RecordingService } from './RecordingService';
 export { StorageService } from './storage/StorageService';
 export { WorkflowGenerator } from './workflow/WorkflowGenerator';
 export { SelectorGenerator } from './workflow/SelectorGenerator';

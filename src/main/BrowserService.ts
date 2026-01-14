@@ -4,6 +4,7 @@ import { TabService, NavigationService, DebuggerService } from './browser';
 import { SettingsService } from './settings/SettingsService';
 import { DownloadService } from './download/DownloadService';
 import { AdBlockerService } from './adblocker/AdBlockerService';
+import { RecordingService } from './recording/RecordingService';
 
 import { AutocompleteSuggestion } from '@/shared/types';
 import { HistoryService } from '@/main/history/HistoryService';
@@ -23,6 +24,7 @@ export class BrowserService {
   private historyService: HistoryService;
   private passwordManager: PasswordManager;
   private bookmarkService: BookmarkService;
+  private recordingService: RecordingService;
 
   constructor(
     private baseWindow: BaseWindow,
@@ -34,6 +36,7 @@ export class BrowserService {
     this.passwordManager = new PasswordManager();
     this.bookmarkService = new BookmarkService(this.browserView);
     this.adBlockerService = new AdBlockerService();
+    this.recordingService = new RecordingService(this.browserView);
 
     // Initialize managers
     this.navigationService = new NavigationService(
@@ -54,7 +57,8 @@ export class BrowserService {
       this.historyService,
       this.navigationService,
       this.debuggerService,
-      this.bookmarkService
+      this.bookmarkService,
+      this.recordingService
     );
 
     this.setupTabEventListeners();
@@ -63,6 +67,10 @@ export class BrowserService {
 
   public getTabService(): TabService {
     return this.tabService;
+  }
+
+  public getRecordingService(): RecordingService {
+    return this.recordingService;
   }
 
   public async getSearchSuggestions(query: string): Promise<string[]> {

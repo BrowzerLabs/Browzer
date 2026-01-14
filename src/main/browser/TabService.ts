@@ -10,6 +10,7 @@ import { DebuggerService } from './DebuggerService';
 import { ContextMenuService } from './ContextMenuService';
 import { errorPageService } from './ErrorPageService';
 
+import { RecordingService } from '@/main/recording/RecordingService';
 import {
   TabInfo,
   HistoryTransition,
@@ -75,7 +76,8 @@ export class TabService extends EventEmitter {
     private historyService: HistoryService,
     private navigationService: NavigationService,
     private debuggerService: DebuggerService,
-    private bookmarkService: BookmarkService
+    private bookmarkService: BookmarkService,
+    private recordingService: RecordingService
   ) {
     super();
     this.sessionStore = new Store<{ lastSession: TabsSnapshot | null }>({
@@ -587,6 +589,46 @@ export class TabService extends EventEmitter {
     this.tabs.clear();
     this.orderedTabIds = [];
     this.activeTabId = null;
+  }
+
+  public async startRecording(): Promise<boolean> {
+    try {
+      const activeTab = this.getActiveTab();
+      const startUrl = activeTab?.info.url || 'browzer://home';
+      this.recordingService.startRecordingSession(startUrl);
+
+      const enablePromises = Array.from(this.tabs.values()).map((tab) =>
+        this.recordingService.enableClickTracking(tab).catch((error) => {
+          console.error(
+            `[TabService] Failed to enable tracking for tab ${tab.id}:`,
+            error
+          );
+        })
+      );
+      await Promise.allSettled(enablePromises);
+      return true;
+    } catch (error) {
+      console.error('[TabService] Failed to start recording:', error);
+      return false;
+    }
+  }
+
+  public async stopRecording(): Promise<boolean> {
+    try {
+      const disablePromises = Array.from(this.tabs.values()).map((tab) =>
+        this.recordingService.disableClickTracking(tab).catch((error) => {
+          console.error(
+            `[TabService] Failed to disable tracking for tab ${tab.id}:`,
+            error
+          );
+        })
+      );
+      await Promise.allSettled(disablePromises);
+      return this.recordingService.stopRecordingSession();
+    } catch (error) {
+      console.error('[TabService] Failed to stop recording:', error);
+      return false;
+    }
   }
 
   public handleCredentialSelected(
