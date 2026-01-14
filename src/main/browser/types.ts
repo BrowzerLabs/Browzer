@@ -30,11 +30,12 @@ export interface TabServiceEvents {
 
 export interface RecordingEvent {
   tabId: string;
-  type: 'click' | 'input' | 'navigation' | 'upload';
+  type: 'click' | 'input' | 'key' | 'navigation' | 'upload';
   url: string;
   role?: string;
   text?: string;
   value?: string;
+  keys?: string[];
 }
 
 export interface AXNode {

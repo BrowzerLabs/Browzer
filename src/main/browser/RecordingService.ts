@@ -2,13 +2,14 @@ import { Debugger } from 'electron';
 import { EventEmitter } from 'events';
 import type { AXNode, RecordingEvent, Tab } from './types';
 
-const CONSOLE_MARKER = '__browzer_click__';
+const CLICK_MARKER = '__browzer_click__';
+const KEY_MARKER = '__browzer_key__';
 
 export class RecordingService extends EventEmitter {
   public async enableClickTracking(tab: Tab): Promise<void> {
     try {
       const cdp = tab.view.webContents.debugger;
-      const script = this.getClickTrackingScript();
+      const script = this.getRecordingScript();
 
       await cdp.sendCommand('Page.addScriptToEvaluateOnNewDocument', {
         source: script,
@@ -41,12 +42,13 @@ export class RecordingService extends EventEmitter {
     }
   }
 
-  private getClickTrackingScript(): string {
+  private getRecordingScript(): string {
     return `
       if (!window.__browzer) {
         window.__browzer = true;
         window.__browzerRecordingEvent = null;
-        window._data = null;
+        window._click_data = null;
+        window._key_data = null;
         
         function getElementText(el) {
           if (!el) return '';
@@ -249,14 +251,38 @@ export class RecordingService extends EventEmitter {
             const value = getElementValue(element);
             const url = element.href || element.getAttribute('href') || '';
             
-            window._data = {
+            window._click_data = {
               role: role,
               text: text,
               value: value,
               url: url
             };
           }
-          console.log('${CONSOLE_MARKER}');
+          console.log('${CLICK_MARKER}');
+        }, true);
+
+        document.addEventListener('keydown', (e) => {
+          const importantKeys = [
+            'Enter', 'Escape', 'Tab',
+            'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight',
+            'Home', 'End', 'PageUp', 'PageDown', 'Delete'
+          ];
+          const isShortcut = (e.ctrlKey || e.metaKey || e.altKey) && e.key.length === 1;
+          const isImportantKey = importantKeys.includes(e.key);
+          
+          if (isShortcut || isImportantKey) {
+            const focusedElement = document.activeElement;
+            
+            const modifiers = [];
+            if (e.metaKey) modifiers.push('Cmd');
+            if (e.ctrlKey) modifiers.push('Ctrl');
+            if (e.altKey) modifiers.push('Alt');
+            if (e.shiftKey) modifiers.push('Shift');
+            
+            modifiers.push(e.key);
+            window._key_data = modifiers;
+            console.log('${KEY_MARKER}');
+          }
         }, true);
       }
     `;
@@ -264,19 +290,46 @@ export class RecordingService extends EventEmitter {
 
   private createConsoleHandler(tab: Tab, cdp: Debugger) {
     return async (_event: any, method: string, params: any): Promise<void> => {
-      if (
-        method !== 'Runtime.consoleAPICalled' ||
-        params.args?.[0]?.value !== CONSOLE_MARKER
-      ) return;
+      switch(method){
+        case 'Runtime.consoleAPICalled':
+          if (params.args?.[0]?.value === CLICK_MARKER){
+            const clickEvent = await this.processClickEvent(tab, cdp);
+            console.info(clickEvent);
+          } else if (params.args?.[0]?.value === KEY_MARKER){
+            const keyEvent = await this.processKeyEvent(tab, cdp);
+            console.info(keyEvent);
+          }
+          break;
+        case 'Page.frameNavigated':
+           if (params.frame.parentId === undefined) {
+            const newUrl = params.frame.url;
+            if (this.isSignificantNavigation(newUrl)) {
+              console.info('navigation to ' + newUrl, tab.id);
+            }
+          }
+          break;
+        default:
+      }
+    };
+  }
 
-      const clickEvent = await this.processClickEvent(tab, cdp);
-      console.info(clickEvent);
+   private async processKeyEvent(tab: Tab, cdp: Debugger): Promise<RecordingEvent> {
+    const dataResult = await cdp.sendCommand('Runtime.evaluate', {
+      expression: 'window._key_data',
+      returnByValue: true,
+    });
+    const data = dataResult.result.value || []
+    return {
+      tabId: tab.id,
+      url: tab.view.webContents.getURL(),
+      type: 'key',
+      keys: data
     };
   }
 
   private async processClickEvent(tab: Tab, cdp: Debugger): Promise<RecordingEvent> {
     const dataResult = await cdp.sendCommand('Runtime.evaluate', {
-      expression: 'window._data',
+      expression: 'window._click_data',
       returnByValue: true,
     });
     const data = dataResult.result.value || {};
@@ -420,5 +473,19 @@ export class RecordingService extends EventEmitter {
         }
       }
     }
+  }
+
+  private isSignificantNavigation(url: string): boolean {
+    const ignorePatterns = [
+      'data:',
+      'about:',
+      'chrome:',
+      'chrome-extension:',
+      '/log',
+      '/analytics',
+      '/tracking',
+    ];
+
+    return !ignorePatterns.some((pattern) => url.startsWith(pattern) || url.includes(pattern));
   }
 }

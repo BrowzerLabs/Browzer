@@ -342,8 +342,10 @@ export class TabService extends EventEmitter {
     tab.view.setVisible(true);
     this.activeTabId = tabId;
     this.emit('tabs:changed');
-    if (previousTabId && previousTabId !== tabId)
+    if (previousTabId && previousTabId !== tabId) {
       this.emit('tab:switched', previousTabId, tab);
+      console.log('tab switched', previousTabId, tabId);
+    }
     return true;
   }
 
