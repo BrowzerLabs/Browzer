@@ -37,6 +37,10 @@ export class RecordingHandler extends BaseHandler {
       return recordingService.getRecordingStore().getRecording(id);
     });
 
+    this.handle('export-recording', async (_, id: string) => {
+      return recordingService.getRecordingStore().exportRecording(id)
+    });
+
     this.handle('browser:delete-recording', async (_, id: string) => {
       return recordingService.getRecordingStore().deleteRecording(id);
     });

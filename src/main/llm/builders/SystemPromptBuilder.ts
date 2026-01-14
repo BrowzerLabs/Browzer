@@ -1,7 +1,7 @@
 import {
-  ElementTarget,
-  RecordedAction,
+  RecordingAction,
   RecordingSession,
+  TargetElement,
 } from '@/shared/types';
 import { escapeXml } from '@/shared/utils';
 
@@ -61,12 +61,11 @@ ${errorInfo.code ? `- Code: ${errorInfo.code}` : ''}
   public static formatRecordedSession(session: RecordingSession): string {
     const actions = session.actions || [];
 
-    let formatted = `<rec name="${escapeXml(session.name)}" desc="${escapeXml(session.description)}" dur="${Math.round(session.duration / 1000)}" start_url="${escapeXml(session.url || session.tabs?.[0]?.url || '')}">
-<actions>\n`;
+    let formatted = `<rec name="${escapeXml(session.name)}" desc="${escapeXml(session.description)}" dur="${Math.round(session.duration / 1000)}" start_url="${escapeXml(session.startUrl)}">\n`;
 
     let previousTimestamp: number | null = null;
 
-    actions.forEach((action: RecordedAction, index: number) => {
+    actions.forEach((action: RecordingAction) => {
       const gap =
         previousTimestamp !== null
           ? ((action.timestamp - previousTimestamp) / 1000).toFixed(1)
@@ -74,61 +73,33 @@ ${errorInfo.code ? `- Code: ${errorInfo.code}` : ''}
 
       previousTimestamp = action.timestamp;
 
-      formatted += `  <action id="${index + 1}" type="${action.type}" url="${escapeXml(action.tabUrl || '')}" gap="${gap}">\n`;
+      formatted += `  <${action.type}`;
 
-      if (action.target) {
-        formatted += this.formatElementInline(action.target);
+      if (action.element) {
+        formatted += this.formatElementInline(action.element);
+      }
+      if (action.keys) {
+        formatted += ` value="${escapeXml(action.keys.join('+'))}"`;
       }
 
-      const shouldOutputValue =
-        action.value !== undefined &&
-        action.value !== null &&
-        (action.type === 'keypress' ||
-          action.type === 'context-menu' ||
-          !action.target?.value);
-
-      if (shouldOutputValue) {
-        formatted += `    <input_value>${escapeXml(String(action.value))}</input_value>\n`;
-      }
-
-      // commented as click position of element during recording is not reliable in automation.
-      // if (action.position) {
-      //   formatted += `    <click_pos x="${action.position.x}" y="${action.position.y}" />\n`;
-      // }
-
-      formatted += `  </action>\n`;
+      formatted += ` tab_id="${action.tabId}" url="${escapeXml(action.url)}" gap=${gap} />\n`;
     });
 
-    formatted += `</actions>\n</rec>`;
+    formatted += `</rec>`;
     return formatted;
   }
 
-  private static formatElementInline(target: ElementTarget): string {
+  private static formatElementInline(target: TargetElement): string {
     const attrs = target.attributes || {};
 
-    let element = `    <${escapeXml(target.tagName).toLowerCase()} `;
+    let element = ` role="${escapeXml(target.role)}" text="${escapeXml(target.text)}"`;
 
-    if (target.boundingBox !== undefined) {
-      const bb = target.boundingBox;
-      element += ` x="${bb.x}" y="${bb.y}" width="${bb.width}" height="${bb.height}"`;
-    }
-
-    if (target.value !== undefined) {
+    if (target.value) {
       element += ` value="${escapeXml(target.value)}"`;
     }
-
-    if (target.text) {
-      element += ` text="${escapeXml(target.text.slice(0, 120))}"`;
+    if (target.href) {
+      element += ` href="${escapeXml(target.href)}"`;
     }
-
-    if (target.elementIndex !== undefined) {
-      element += ` elementIndex="${target.elementIndex}"`;
-    }
-
-    if (target.isDisabled) {
-      element += ` disabled="true"`;
-    }
-    element += `\n`;
 
     const IGNORE_KEYS = [
       'style',
@@ -151,10 +122,8 @@ ${errorInfo.code ? `- Code: ${errorInfo.code}` : ''}
         finalValue = this.normalizeGoogleSearchUrl(finalValue);
       }
 
-      element += `      ${escapeXml(key)}="${escapeXml(finalValue)}"\n`;
+      element += ` ${escapeXml(key)}="${escapeXml(finalValue)}"`;
     });
-
-    element += `    />\n`;
     return element;
   }
 

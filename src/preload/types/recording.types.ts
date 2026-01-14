@@ -15,6 +15,7 @@ export interface RecordingAPI {
     getCurrentActions: () => Promise<RecordingAction[]>;
     getAllRecordings: () => Promise<RecordingSession[]>;
     getRecording: (id: string) => Promise<RecordingSession>;
+    exportRecording: (id: string) => Promise<{ success: boolean, filePath?: string, error: string }>;
     deleteRecording: (id: string) => Promise<boolean>;
     isRecording: () => Promise<boolean>;
     onActionRecorded: (callback: (action: RecordingAction) => void) => () => void;

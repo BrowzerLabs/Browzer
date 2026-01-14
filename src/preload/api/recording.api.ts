@@ -12,6 +12,7 @@ export const createRecordingAPI = (): RecordingAPI => ({
   getCurrentActions: () => invoke('browser:get-current-actions'),
   getAllRecordings: () => invoke('browser:get-all-recordings'),
   getRecording: (id: string) => invoke('browser:get-recording', id),
+  exportRecording: (id: string) => invoke('export-recording', id),
   deleteRecording: (id: string) => invoke('browser:delete-recording', id),
   isRecording: () => invoke('browser:is-recording'),
   onActionRecorded: (callback: (action: RecordingAction) => void) => {

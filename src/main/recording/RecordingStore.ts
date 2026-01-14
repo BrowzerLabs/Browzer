@@ -1,8 +1,10 @@
-import { app } from 'electron';
+import { app, dialog } from 'electron';
 import path from 'path';
 import Database from 'better-sqlite3';
+import { writeFile } from 'fs/promises';
 
 import { RecordingSession } from '@/shared/types';
+import { SystemPromptBuilder } from '../llm';
 
 export class RecordingStore {
   private db: Database.Database;
@@ -241,6 +243,31 @@ export class RecordingStore {
     } catch (error) {
       console.error('Error deleting multiple recordings:', error);
       return 0;
+    }
+  }
+
+  async exportRecording(
+    id: string
+  ): Promise<{ success: boolean; filePath?: string; error?: string; }> {
+    try {
+      const recording = this.getRecording(id);
+      const xmlString = SystemPromptBuilder.formatRecordedSession(recording);
+      const fileName = `${recording.name.replace(/[^a-z0-9]/gi, '-').toLowerCase()}-${Date.now()}.xml`;
+
+      const { filePath } = await dialog.showSaveDialog({
+        title: 'Export Recording',
+        defaultPath: fileName,
+      });
+
+      if (filePath) {
+        await writeFile(filePath, xmlString, 'utf-8');
+        return { success: true, filePath };
+      }
+
+      return { success: false, error: 'Export cancelled' };
+    } catch (error) {
+      console.error('Error exporting recording:', error);
+      return { success: false, error: String(error) };
     }
   }
 

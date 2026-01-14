@@ -1,14 +1,16 @@
+export interface TargetElement {
+  role: string;
+  text: string;
+  href?: string;
+  value?: string;
+  attributes?: Record<string, string>;
+}
+
 export interface RecordingAction {
   tabId: string;
   type: 'click' | 'input' | 'key' | 'navigate' | 'context' | 'tab-switch' | 'file';
   url: string;
-  element?: {
-    role: string;
-    text: string;
-    href?: string;
-    value?: string;
-    attributes?: Record<string, string>;
-  }
+  element? : TargetElement;
   timestamp: number;
   keys?: string[];
 }
