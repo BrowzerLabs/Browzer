@@ -1,10 +1,12 @@
 import { app, dialog } from 'electron';
 import path from 'path';
-import Database from 'better-sqlite3';
 import { writeFile } from 'fs/promises';
 
-import { RecordingSession } from '@/shared/types';
+import Database from 'better-sqlite3';
+
 import { SystemPromptBuilder } from '../llm';
+
+import { RecordingSession } from '@/shared/types';
 
 export class RecordingStore {
   private db: Database.Database;
@@ -37,8 +39,8 @@ export class RecordingStore {
     this.stmts = {
       insert: this.db.prepare(`
         INSERT INTO recordings (
-          id, name, description, created_at, duration, start_url, actions_json
-        ) VALUES (?, ?, ?, ?, ?, ?, ?)
+          id, name, description, created_at, duration, start_url, actions_json, action_count
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
       `),
       getById: this.db.prepare('SELECT * FROM recordings WHERE id = ?'),
       getAll: this.db.prepare(
@@ -118,6 +120,7 @@ export class RecordingStore {
 
   saveRecording(session: RecordingSession): void {
     try {
+      const actions = session.actions || [];
       this.stmts.insert.run(
         session.id,
         session.name,
@@ -125,7 +128,8 @@ export class RecordingStore {
         session.createdAt,
         session.duration,
         session.startUrl || null,
-        JSON.stringify(session.actions)
+        JSON.stringify(actions),
+        actions.length
       );
 
       console.log('✅ Recording saved:', session.name);
@@ -248,7 +252,7 @@ export class RecordingStore {
 
   async exportRecording(
     id: string
-  ): Promise<{ success: boolean; filePath?: string; error?: string; }> {
+  ): Promise<{ success: boolean; filePath?: string; error?: string }> {
     try {
       const recording = this.getRecording(id);
       const xmlString = SystemPromptBuilder.formatRecordedSession(recording);
