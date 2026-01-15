@@ -143,20 +143,11 @@ export class AutomationStateManager extends EventEmitter {
     );
 
     const browserContext = await this.captureBrowserContext();
-    const browserSnapshot = await this.captureBrowserSnapshot();
 
     const userMessage: Anthropic.MessageParam = {
       role: 'user',
       content: [
         ...toolResultBlocks,
-        {
-          type: 'image',
-          source: {
-            type: 'base64',
-            media_type: 'image/jpeg',
-            data: browserSnapshot,
-          },
-        },
         {
           type: 'text',
           text: browserContext,
@@ -310,20 +301,11 @@ export class AutomationStateManager extends EventEmitter {
     );
 
     const browserContext = await this.captureBrowserContext();
-    const browserSnapshot = await this.captureBrowserSnapshot();
 
     const userMessage: Anthropic.MessageParam = {
       role: 'user',
       content: [
         ...toolResults,
-        {
-          type: 'image',
-          source: {
-            type: 'base64',
-            media_type: 'image/jpeg',
-            data: browserSnapshot,
-          },
-        },
         {
           type: 'text',
           text: browserContext,
@@ -376,21 +358,6 @@ export class AutomationStateManager extends EventEmitter {
     } catch (error) {
       console.error('Failed to capture browser context:', error);
       return 'Error capturing browser context';
-    }
-  }
-
-  private async captureBrowserSnapshot(): Promise<string | null> {
-    try {
-      const result = await this.executor.executeTool('snapshot', {});
-
-      if (result.success && result.value) {
-        return result.value.toString();
-      }
-
-      return null;
-    } catch (error) {
-      console.error('Failed to capture browser snapshot:', error);
-      return null;
     }
   }
 

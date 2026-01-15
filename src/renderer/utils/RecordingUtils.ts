@@ -37,7 +37,7 @@ export class RecordingUtils {
           color: 'bg-purple-500/10 text-purple-400 border-purple-500/70',
         };
 
-      case 'input': {
+      case 'type': {
         return {
           icon: PencilIcon,
           title: `Entered in ${action.element?.role || 'textbox'}`,

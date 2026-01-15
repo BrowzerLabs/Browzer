@@ -254,42 +254,48 @@ export class TypeHandler {
 
   private async focusElement(nodeId: number): Promise<void> {
     try {
-      const { model } = await this.cdp.sendCommand('DOM.getBoxModel', { nodeId });
+      const { object } = await this.cdp.sendCommand('DOM.resolveNode', {
+        backendNodeId: nodeId,
+      });
+      if(!object || !object.objectId) {
+        throw new Error('Element not found');
+      }
 
-        if (!model || !model.content || model.content.length < 8) {
+      const { model } = await this.cdp.sendCommand('DOM.getBoxModel', { objectId: object.objectId });
+      if (!model || !model.content || model.content.length < 8) {
         throw new Error('Element not visible or has no box model');
-        }
+      }
 
-        const [x1, y1, x2, y2, x3, y3, x4, y4] = model.content;
-        const centerX = (x1 + x2 + x3 + x4) / 4;
-        const centerY = (y1 + y2 + y3 + y4) / 4;
+      const [x1, y1, x2, y2, x3, y3, x4, y4] = model.content;
+      const centerX = (x1 + x2 + x3 + x4) / 4;
+      const centerY = (y1 + y2 + y3 + y4) / 4;
 
-        await this.cdp.sendCommand('Input.dispatchMouseEvent', {
-            type: 'mouseMoved',
-            x: centerX,
-            y: centerY,
-            button: 'none',
-            clickCount: 0,
-        });
-        await new Promise((resolve) => setTimeout(resolve, 20));
+      await this.cdp.sendCommand('Input.dispatchMouseEvent', {
+          type: 'mouseMoved',
+          x: centerX,
+          y: centerY,
+          button: 'none',
+          clickCount: 0,
+      });
+      await new Promise((resolve) => setTimeout(resolve, 10));
 
-        await this.cdp.sendCommand('Input.dispatchMouseEvent', {
-            type: 'mousePressed',
-            x: centerX,
-            y: centerY,
-            button: 'left',
-            clickCount: 1,
-        });
-        await new Promise((resolve) => setTimeout(resolve, 20));
+      await this.cdp.sendCommand('Input.dispatchMouseEvent', {
+          type: 'mousePressed',
+          x: centerX,
+          y: centerY,
+          button: 'left',
+          clickCount: 1,
+      });
+      await new Promise((resolve) => setTimeout(resolve, 10));
 
-        await this.cdp.sendCommand('Input.dispatchMouseEvent', {
-            type: 'mouseReleased',
-            x: centerX,
-            y: centerY,
-            button: 'left',
-            clickCount: 1,
-        });
-        await new Promise((resolve) => setTimeout(resolve, 20));
+      await this.cdp.sendCommand('Input.dispatchMouseEvent', {
+          type: 'mouseReleased',
+          x: centerX,
+          y: centerY,
+          button: 'left',
+          clickCount: 1,
+      });
+      await new Promise((resolve) => setTimeout(resolve, 10));
     } catch (error) {
       console.error('[TypeHandler] Error focusing element:', error);
       throw new Error('Failed to focus element');

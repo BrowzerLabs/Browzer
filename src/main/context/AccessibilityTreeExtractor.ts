@@ -117,7 +117,7 @@ export class AccessibilityTreeExtractor {
 
       if (node.properties) {
         const importantProps: string[] = [];
-        importantProps.push(`nodeId=${node.nodeId}`);
+        importantProps.push(`nodeId=${node.backendDOMNodeId}`);
 
         for (const prop of node.properties) {
           const propName = prop.name;

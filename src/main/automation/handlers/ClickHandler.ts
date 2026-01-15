@@ -187,8 +187,16 @@ export class ClickHandler {
   private async performClick(
     nodeId: number
   ): Promise<void> {
-    const { model } = await this.cdp.sendCommand('DOM.getBoxModel', { nodeId });
+    const { object } = await this.cdp.sendCommand('DOM.resolveNode', {
+      backendNodeId: nodeId,
+    });
+    if(!object || !object.objectId) {
+      throw new Error('Element not found');
+    }
 
+    const { model } = await this.cdp.sendCommand('DOM.getBoxModel', {
+      objectId: object.objectId,
+    });
     if (!model || !model.content || model.content.length < 8) {
       throw new Error('Element not visible or has no box model');
     }
