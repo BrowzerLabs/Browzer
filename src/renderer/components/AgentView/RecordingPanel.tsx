@@ -10,6 +10,8 @@ import {
   Navigation,
   KeyRound,
   Loader2,
+  CheckSquare,
+  CircleDot,
 } from 'lucide-react';
 
 import { useRecordingStore } from '@/renderer/store/useRecordingStore';
@@ -257,6 +259,10 @@ function ActionItem({
         return <Navigation className="w-4 h-4" />;
       case 'keypress':
         return <KeyRound className="w-4 h-4" />;
+      case 'checkbox_change':
+        return <CheckSquare className="w-4 h-4" />;
+      case 'radio_change':
+        return <CircleDot className="w-4 h-4" />;
       default:
         return <Circle className="w-4 h-4" />;
     }
@@ -270,10 +276,40 @@ function ActionItem({
         return `Type "${truncate(action.value || '', 20)}" into "${truncate(action.element?.innerText || action.element?.placeholder || 'field', 20)}"`;
       case 'navigation':
         return `Navigate to ${truncate(action.pageUrl, 40)}`;
-      case 'keypress':
+      case 'keypress': {
+        // Format keyboard shortcut display
+        const modifiers = action.modifiers || [];
+        if (modifiers.length > 0) {
+          const modifierSymbols = modifiers.map((m) => {
+            switch (m) {
+              case 'cmd':
+                return '⌘';
+              case 'ctrl':
+                return '⌃';
+              case 'alt':
+                return '⌥';
+              case 'shift':
+                return '⇧';
+              default:
+                return m;
+            }
+          });
+          return `Press ${modifierSymbols.join('')}+${action.key}`;
+        }
         return `Press ${action.key}`;
+      }
       case 'select_change':
         return `Select "${truncate(action.selectedText || '', 30)}"`;
+      case 'checkbox_change': {
+        const label = action.label || action.element?.innerText || 'checkbox';
+        const state = action.checked ? 'Check' : 'Uncheck';
+        return `${state} "${truncate(label, 30)}"`;
+      }
+      case 'radio_change': {
+        const label =
+          action.label || action.element?.innerText || action.value || 'option';
+        return `Select radio "${truncate(label, 30)}"`;
+      }
       case 'scroll':
         return `Scroll to (${action.scrollX}, ${action.scrollY})`;
       default:

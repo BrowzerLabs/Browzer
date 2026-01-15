@@ -54,6 +54,8 @@ export type ActionType =
   | 'keypress'
   | 'scroll'
   | 'select_change'
+  | 'checkbox_change'
+  | 'radio_change'
   | 'focus'
   | 'blur'
   | 'submit';
@@ -73,9 +75,12 @@ export interface RecordedAction {
   // Action-specific data
   value?: string; // For input actions
   key?: string; // For keypress actions
+  modifiers?: string[]; // For keypress with modifiers (e.g., ['cmd', 'shift'])
   scrollX?: number; // For scroll actions
   scrollY?: number;
   selectedText?: string; // For select actions
+  checked?: boolean; // For checkbox/radio actions
+  label?: string; // For checkbox/radio label text
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -133,15 +138,22 @@ export interface WorkflowStep {
 
   // Element targeting
   target_text?: string;
+  tag?: string;
+  role?: string;
+  css_selector?: string;
+
+  // Legacy: selector strategies (for internal use)
   selectorStrategies?: SelectorStrategy[];
   container_hint?: string;
 
   // Input
+  input?: string;
   value?: string;
   default_value?: string;
 
   // Key press
   key?: string;
+  keys?: string[];
 
   // Select
   selectedText?: string;

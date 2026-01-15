@@ -36,9 +36,12 @@ export interface RecordedAction {
   element?: RecordedElement;
   value?: string;
   key?: string;
+  modifiers?: string[]; // For keypress with modifiers (e.g., ['cmd', 'shift'])
   scrollX?: number;
   scrollY?: number;
   selectedText?: string;
+  checked?: boolean; // For checkbox/radio actions
+  label?: string; // For checkbox/radio label text
 }
 
 export type RecordingStatus = 'idle' | 'recording' | 'stopped' | 'processing';
@@ -90,8 +93,13 @@ export interface WorkflowDefinition {
     description?: string;
     url?: string;
     target_text?: string;
+    tag?: string;
+    role?: string;
+    css_selector?: string;
+    input?: string;
     value?: string;
     key?: string;
+    keys?: string[];
     selectedText?: string;
     scrollX?: number;
     scrollY?: number;

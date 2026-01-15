@@ -94,6 +94,9 @@ export class WorkflowGenerator {
           description: clickTargetText
             ? `Click on "${this.truncateText(clickTargetText, 50)}"`
             : `Click on element`,
+          tag: action.element.tagName || undefined,
+          role: this.getElementRole(action.element),
+          css_selector: this.getSimpleCssSelector(action.element),
           selectorStrategies: this.selectorGenerator.generate(action.element),
           container_hint: action.element.containerHint,
         };
@@ -103,19 +106,50 @@ export class WorkflowGenerator {
         if (!action.element) return null;
         return {
           type: 'input',
+          input: action.value || '',
           target_text: this.getInputTargetText(action.element),
-          value: action.value || '',
           description: `Enter text into "${this.getInputTargetText(action.element)}"`,
+          tag: action.element.tagName,
+          css_selector: this.getSimpleCssSelector(action.element),
           selectorStrategies: this.selectorGenerator.generate(action.element),
         };
 
-      case 'keypress':
+      case 'keypress': {
+        // Format key with modifiers if present
+        const modifiers = action.modifiers || [];
+        let keyDescription = action.key || 'Enter';
+
+        // Build keys array: modifiers + key
+        const keys: string[] = [...modifiers];
+        if (action.key) {
+          keys.push(action.key);
+        }
+
+        if (modifiers.length > 0) {
+          const modifierDisplay = modifiers
+            .map((m) => {
+              switch (m) {
+                case 'cmd':
+                  return 'Cmd';
+                case 'ctrl':
+                  return 'Ctrl';
+                case 'alt':
+                  return 'Alt';
+                case 'shift':
+                  return 'Shift';
+                default:
+                  return m;
+              }
+            })
+            .join('+');
+          keyDescription = `${modifierDisplay}+${action.key}`;
+        }
         return {
           type: 'key_press',
-          key: action.key || 'Enter',
-          target_text: action.element?.innerText,
-          description: `Press ${action.key} key`,
+          keys: keys,
+          description: `Press ${keyDescription}`,
         };
+      }
 
       case 'select_change':
         if (!action.element) return null;
@@ -126,6 +160,36 @@ export class WorkflowGenerator {
           description: `Select "${action.selectedText}" from dropdown`,
           selectorStrategies: this.selectorGenerator.generate(action.element),
         };
+
+      case 'checkbox_change': {
+        if (!action.element) return null;
+        const checkboxLabel =
+          action.label || action.element.innerText || 'checkbox';
+        const checkState = action.checked ? 'Check' : 'Uncheck';
+        return {
+          type: 'click',
+          target_text: checkboxLabel,
+          description: `${checkState} "${this.truncateText(checkboxLabel, 50)}"`,
+          selectorStrategies: this.selectorGenerator.generate(action.element),
+          container_hint: action.element.containerHint,
+        };
+      }
+
+      case 'radio_change': {
+        if (!action.element) return null;
+        const radioLabel =
+          action.label ||
+          action.element.innerText ||
+          action.value ||
+          'radio option';
+        return {
+          type: 'click',
+          target_text: radioLabel,
+          description: `Select radio option "${this.truncateText(radioLabel, 50)}"`,
+          selectorStrategies: this.selectorGenerator.generate(action.element),
+          container_hint: action.element.containerHint,
+        };
+      }
 
       case 'scroll':
         return {
@@ -170,6 +234,73 @@ export class WorkflowGenerator {
       element.innerText ||
       'Input field'
     );
+  }
+
+  private getSimpleCssSelector(element: RecordedElement): string | undefined {
+    // Prefer ID if available
+    if (element.id) {
+      return `#${element.id}`;
+    }
+
+    // If className exists, use the first simple class name
+    if (element.className) {
+      const classes = element.className.split(' ').filter((c) => c.trim());
+      // Find a simple class (no special chars, not too generic)
+      const simpleClass = classes.find((cls) => {
+        const isSimple = /^[a-zA-Z][a-zA-Z0-9_-]*$/.test(cls);
+        const isNotGeneric = ![
+          'container',
+          'wrapper',
+          'inner',
+          'outer',
+        ].includes(cls.toLowerCase());
+        return isSimple && isNotGeneric;
+      });
+      if (simpleClass) {
+        return `.${simpleClass}`;
+      }
+    }
+
+    return undefined;
+  }
+
+  private getElementRole(element: RecordedElement): string | undefined {
+    // Map tag names to implicit ARIA roles
+    const tagToRole: Record<string, string> = {
+      button: 'button',
+      a: 'link',
+      input: 'textbox',
+      select: 'combobox',
+      textarea: 'textbox',
+      checkbox: 'checkbox',
+      radio: 'radio',
+      img: 'img',
+      nav: 'navigation',
+      main: 'main',
+      header: 'banner',
+      footer: 'contentinfo',
+      aside: 'complementary',
+      article: 'article',
+      section: 'region',
+      form: 'form',
+      table: 'table',
+      ul: 'list',
+      ol: 'list',
+      li: 'listitem',
+    };
+
+    const tag = element.tagName?.toLowerCase();
+
+    // Special handling for input types
+    if (tag === 'input' && element.type) {
+      const inputType = element.type.toLowerCase();
+      if (inputType === 'checkbox') return 'checkbox';
+      if (inputType === 'radio') return 'radio';
+      if (inputType === 'button' || inputType === 'submit') return 'button';
+    }
+
+    // Return mapped role or undefined
+    return tag ? tagToRole[tag] : undefined;
   }
 
   private getHostname(url: string): string {

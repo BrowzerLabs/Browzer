@@ -272,33 +272,94 @@ export class StorageService {
   private cleanWorkflowForStorage(
     workflow: WorkflowDefinition
   ): WorkflowDefinition {
-    const cleaned = { ...workflow };
+    // Create a clean workflow object with only the desired fields
+    const cleaned: WorkflowDefinition = {
+      id: workflow.id,
+      name: workflow.name,
+      description: workflow.description,
+      version: workflow.version,
+      default_wait_time: workflow.default_wait_time ?? 0.5,
+      input_schema: workflow.input_schema || [],
+      steps: [],
+    };
 
-    // Remove internal metadata
-    if (cleaned.metadata) {
-      delete cleaned.metadata.action_count;
-    }
+    // Clean steps - output only the fields needed for the simplified format
+    cleaned.steps = workflow.steps.map((step) => {
+      switch (step.type) {
+        case 'navigation':
+          return {
+            type: step.type,
+            url: step.url,
+            description: step.description,
+          };
 
-    // Clean steps
-    cleaned.steps = cleaned.steps.map((step) => {
-      const cleanStep = { ...step };
+        case 'click':
+          return this.removeUndefined({
+            type: step.type,
+            target_text: step.target_text,
+            description: step.description,
+            tag: step.tag,
+            role: step.role,
+            css_selector: step.css_selector,
+          });
 
-      // Remove verbose fields
-      delete (cleanStep as any).boundingRect;
-      delete (cleanStep as any).index;
+        case 'input':
+          return this.removeUndefined({
+            type: step.type,
+            input: step.input || step.value,
+            target_text: step.target_text,
+            description: step.description,
+            tag: step.tag,
+            css_selector: step.css_selector,
+          });
 
-      // Limit selector strategies to top 3
-      if (
-        cleanStep.selectorStrategies &&
-        cleanStep.selectorStrategies.length > 3
-      ) {
-        cleanStep.selectorStrategies = cleanStep.selectorStrategies.slice(0, 3);
+        case 'key_press':
+          return this.removeUndefined({
+            type: step.type,
+            keys: step.keys || (step.key ? [step.key] : undefined),
+            description: step.description,
+          });
+
+        case 'select_change':
+          return this.removeUndefined({
+            type: step.type,
+            target_text: step.target_text,
+            selectedText: step.selectedText,
+            description: step.description,
+            tag: step.tag,
+            css_selector: step.css_selector,
+          });
+
+        case 'scroll':
+          return {
+            type: step.type,
+            scrollX: step.scrollX,
+            scrollY: step.scrollY,
+            description: step.description,
+          };
+
+        default:
+          return this.removeUndefined({
+            type: step.type,
+            description: step.description,
+            target_text: step.target_text,
+            tag: step.tag,
+            css_selector: step.css_selector,
+          });
       }
-
-      return cleanStep;
     });
 
     return cleaned;
+  }
+
+  private removeUndefined<T extends Record<string, unknown>>(obj: T): T {
+    const result = {} as T;
+    for (const key in obj) {
+      if (obj[key] !== undefined) {
+        result[key] = obj[key];
+      }
+    }
+    return result;
   }
 
   // ═══════════════════════════════════════════════════════════════════════

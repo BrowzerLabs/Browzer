@@ -854,12 +854,65 @@ export class RecordingManager extends EventEmitter {
     };
   }
 
+  // Helper to check if element is or contains a checkbox/radio
+  function isCheckboxOrRadio(el) {
+    if (!el) return false;
+    const tag = el.tagName?.toUpperCase();
+    if (tag === 'INPUT') {
+      const inputType = el.getAttribute('type')?.toLowerCase();
+      return inputType === 'checkbox' || inputType === 'radio';
+    }
+    return false;
+  }
+
+  function containsCheckboxOrRadio(el) {
+    if (!el) return false;
+    return el.querySelector && el.querySelector('input[type="checkbox"], input[type="radio"]');
+  }
+
   // Click handler
   document.addEventListener('click', function(event) {
     let element = event.target;
 
+    // Skip click recording for checkboxes and radio buttons - they will be captured by 'change' event
+    // This ensures we get the checked state and proper label extraction
+    if (isCheckboxOrRadio(element)) {
+      return;
+    }
+
+    // Also skip if clicked on a label or element that contains a checkbox/radio
+    if (containsCheckboxOrRadio(element)) {
+      return;
+    }
+
+    // Check if any ancestor up to 3 levels is associated with a checkbox/radio
+    let parent = element.parentElement;
+    let depth = 0;
+    while (parent && depth < 3) {
+      if (isCheckboxOrRadio(parent) || containsCheckboxOrRadio(parent)) {
+        return;
+      }
+      // Check if parent is a label with 'for' attribute pointing to checkbox/radio
+      if (parent.tagName?.toUpperCase() === 'LABEL') {
+        const forId = parent.getAttribute('for');
+        if (forId) {
+          const target = document.getElementById(forId);
+          if (target && isCheckboxOrRadio(target)) {
+            return;
+          }
+        }
+      }
+      parent = parent.parentElement;
+      depth++;
+    }
+
     // Find the best element for recording - may be a parent with better semantic info
     element = findBestElementForRecording(element);
+
+    // After finding best element, check again if it's a checkbox/radio
+    if (isCheckboxOrRadio(element) || containsCheckboxOrRadio(element)) {
+      return;
+    }
 
     if (shouldIgnoreElement(element)) return;
     sendEvent(createAction('click', element));
@@ -894,16 +947,48 @@ export class RecordingManager extends EventEmitter {
     }
   }
 
-  // Keyboard input handler for tracking typed text
+  // Keyboard input handler for tracking typed text and shortcuts
   document.addEventListener('keydown', function(event) {
     const element = event.target;
 
-    // Special keys handling
-    const specialKeys = ['Enter', 'Tab', 'Escape', 'Backspace', 'Delete'];
+    // Collect active modifiers
+    const modifiers = [];
+    if (event.metaKey) modifiers.push('cmd');
+    if (event.ctrlKey) modifiers.push('ctrl');
+    if (event.altKey) modifiers.push('alt');
+    if (event.shiftKey) modifiers.push('shift');
+
+    // Handle keyboard shortcuts with modifiers (Cmd+C, Ctrl+V, etc.)
+    // Only record if it's a key combination (modifier + non-modifier key)
+    const isModifierKey = ['Meta', 'Control', 'Alt', 'Shift'].includes(event.key);
+    const hasModifier = event.metaKey || event.ctrlKey || event.altKey;
+
+    if (hasModifier && !isModifierKey) {
+      // This is a keyboard shortcut like Cmd+C, Ctrl+V, Cmd+Shift+P, etc.
+      flushTypingBuffer();
+
+      // Format the key for display (e.g., 'c' -> 'C', 'ArrowUp' stays as is)
+      let keyDisplay = event.key;
+      if (event.key.length === 1) {
+        keyDisplay = event.key.toUpperCase();
+      }
+
+      sendEvent(createAction('keypress', element, {
+        key: keyDisplay,
+        modifiers: modifiers
+      }));
+      return;
+    }
+
+    // Special keys handling (without modifiers)
+    const specialKeys = ['Enter', 'Tab', 'Escape', 'Backspace', 'Delete', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Home', 'End', 'PageUp', 'PageDown'];
     if (specialKeys.includes(event.key)) {
       // Flush any pending typing first
       flushTypingBuffer();
-      sendEvent(createAction('keypress', element, { key: event.key }));
+      sendEvent(createAction('keypress', element, {
+        key: event.key,
+        modifiers: modifiers.length > 0 ? modifiers : undefined
+      }));
       return;
     }
 
@@ -914,7 +999,7 @@ export class RecordingManager extends EventEmitter {
                        element.getAttribute('role') === 'textbox';
 
     if (isEditable && event.key.length === 1 && !event.ctrlKey && !event.metaKey) {
-      // Single character key press - accumulate in buffer
+      // Single character key press in editable - accumulate in buffer
       if (typingElement !== element) {
         flushTypingBuffer();
         typingElement = element;
@@ -924,6 +1009,13 @@ export class RecordingManager extends EventEmitter {
       // Reset debounce timer
       if (typingTimeout) clearTimeout(typingTimeout);
       typingTimeout = setTimeout(flushTypingBuffer, 1000);
+    } else if (!isEditable && event.key.length === 1 && !event.ctrlKey && !event.metaKey && !event.altKey) {
+      // Single character keypress OUTSIDE of input fields (e.g., '/', '\\', ',', '-', '?')
+      // These are often keyboard shortcuts in web apps (e.g., '/' to search, '?' for help)
+      sendEvent(createAction('keypress', element, {
+        key: event.key,
+        modifiers: event.shiftKey ? ['shift'] : undefined
+      }));
     }
   }, true);
 
@@ -932,16 +1024,133 @@ export class RecordingManager extends EventEmitter {
     flushTypingBuffer();
   }, true);
 
-  // Change handler for selects
+  // Change handler for selects, checkboxes, and radio buttons
   document.addEventListener('change', function(event) {
     const element = event.target;
-    if (!element || element.tagName !== 'SELECT') return;
-    const selectedOption = element.options[element.selectedIndex];
-    sendEvent(createAction('select_change', element, {
-      value: element.value,
-      selectedText: selectedOption?.text
-    }));
+    if (!element) return;
+
+    const tagName = element.tagName?.toUpperCase();
+    const inputType = element.getAttribute('type')?.toLowerCase();
+
+    // Handle SELECT elements
+    if (tagName === 'SELECT') {
+      const selectedOption = element.options[element.selectedIndex];
+      sendEvent(createAction('select_change', element, {
+        value: element.value,
+        selectedText: selectedOption?.text
+      }));
+      return;
+    }
+
+    // Handle checkboxes
+    if (tagName === 'INPUT' && inputType === 'checkbox') {
+      const label = getCheckboxRadioLabel(element);
+      sendEvent(createAction('checkbox_change', element, {
+        checked: element.checked,
+        label: label,
+        value: element.value || (element.checked ? 'checked' : 'unchecked')
+      }));
+      return;
+    }
+
+    // Handle radio buttons
+    if (tagName === 'INPUT' && inputType === 'radio') {
+      const label = getCheckboxRadioLabel(element);
+      sendEvent(createAction('radio_change', element, {
+        checked: element.checked,
+        label: label,
+        value: element.value
+      }));
+      return;
+    }
   }, true);
+
+  // Also listen for clicks directly on checkbox/radio inputs as a backup
+  // Some frameworks prevent the change event from bubbling
+  document.addEventListener('click', function(event) {
+    const element = event.target;
+    if (!element) return;
+
+    const tagName = element.tagName?.toUpperCase();
+    if (tagName !== 'INPUT') return;
+
+    const inputType = element.getAttribute('type')?.toLowerCase();
+
+    if (inputType === 'checkbox') {
+      // Use setTimeout to capture the state AFTER the click toggles it
+      setTimeout(function() {
+        const label = getCheckboxRadioLabel(element);
+        sendEvent(createAction('checkbox_change', element, {
+          checked: element.checked,
+          label: label,
+          value: element.value || (element.checked ? 'checked' : 'unchecked')
+        }));
+      }, 0);
+      return;
+    }
+
+    if (inputType === 'radio') {
+      setTimeout(function() {
+        const label = getCheckboxRadioLabel(element);
+        sendEvent(createAction('radio_change', element, {
+          checked: element.checked,
+          label: label,
+          value: element.value
+        }));
+      }, 0);
+      return;
+    }
+  }, true);
+
+  // Helper function to get label text for checkbox/radio elements
+  function getCheckboxRadioLabel(element) {
+    // Method 1: Check for associated <label> via 'for' attribute
+    const id = element.id;
+    if (id) {
+      const label = document.querySelector('label[for="' + id + '"]');
+      if (label) {
+        return label.textContent?.trim() || null;
+      }
+    }
+
+    // Method 2: Check if element is inside a <label>
+    const parentLabel = element.closest('label');
+    if (parentLabel) {
+      // Get text content excluding the input element itself
+      const clone = parentLabel.cloneNode(true);
+      const inputs = clone.querySelectorAll('input');
+      inputs.forEach(input => input.remove());
+      const text = clone.textContent?.trim();
+      if (text) return text;
+    }
+
+    // Method 3: Check aria-label
+    const ariaLabel = element.getAttribute('aria-label');
+    if (ariaLabel) return ariaLabel.trim();
+
+    // Method 4: Check aria-labelledby
+    const labelledBy = element.getAttribute('aria-labelledby');
+    if (labelledBy) {
+      const labelElement = document.getElementById(labelledBy);
+      if (labelElement) return labelElement.textContent?.trim() || null;
+    }
+
+    // Method 5: Check title attribute
+    const title = element.getAttribute('title');
+    if (title) return title.trim();
+
+    // Method 6: Check name attribute as fallback
+    const name = element.getAttribute('name');
+    if (name) return humanizeIdentifier(name);
+
+    // Method 7: Check value for radio buttons
+    const value = element.value;
+    if (value && element.getAttribute('type') === 'radio') {
+      return humanizeIdentifier(value);
+    }
+
+    return null;
+  }
 
   // Form submit handler
   document.addEventListener('submit', function(event) {
