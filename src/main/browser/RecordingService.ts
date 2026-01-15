@@ -563,7 +563,7 @@ export class RecordingService extends EventEmitter {
 
     return {
       tabId: tab.id,
-      type: 'input',
+      type: 'type',
       element: {
         role: data.role || axData.role || '',
         text: data.text || axData.name || '',

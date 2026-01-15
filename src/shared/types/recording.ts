@@ -8,7 +8,7 @@ export interface TargetElement {
 
 export interface RecordingAction {
   tabId: string;
-  type: 'click' | 'input' | 'key' | 'navigate' | 'context' | 'tab-switch' | 'file';
+  type: 'click' | 'type' | 'key' | 'navigate' | 'context' | 'tab-switch' | 'file';
   url: string;
   element? : TargetElement;
   timestamp: number;

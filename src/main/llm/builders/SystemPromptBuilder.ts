@@ -75,6 +75,10 @@ ${errorInfo.code ? `- Code: ${errorInfo.code}` : ''}
 
       formatted += `  <${action.type}`;
 
+      if(action.type === 'navigate') {
+        formatted += ` url="${escapeXml(action.url)}"`;
+      }
+
       if (action.element) {
         formatted += this.formatElementInline(action.element);
       }
@@ -82,7 +86,7 @@ ${errorInfo.code ? `- Code: ${errorInfo.code}` : ''}
         formatted += ` value="${escapeXml(action.keys.join('+'))}"`;
       }
 
-      formatted += ` tab_id="${action.tabId}" url="${escapeXml(action.url)}" gap=${gap} />\n`;
+      formatted += ` tab_id="${action.tabId}" gap=${gap} />\n`;
     });
 
     formatted += `</rec>`;
