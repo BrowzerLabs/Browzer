@@ -98,7 +98,8 @@ export interface AutomationError {
     | 'NAVIGATION_FAILED'
     | 'CDP_ERROR'
     | 'EXECUTION_ERROR'
-    | 'UNKNOWN_ERROR';
+    | 'UNKNOWN_ERROR'
+    | 'TYPE_FAILED';
   message: string;
 }
 

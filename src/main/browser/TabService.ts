@@ -30,6 +30,7 @@ import {
   SettingsChangeEvent,
 } from '@/main/settings/SettingsService';
 import { RecordingService } from '.';
+import { BrowserAutomationExecutor } from '../automation';
 
 const TAB_HEIGHT = {
   WITHOUT_BOOKMARKS: 75 as number,
@@ -227,6 +228,7 @@ export class TabService extends EventEmitter {
       id: tabId,
       view,
       info: tabInfo,
+      automationExecutor: new BrowserAutomationExecutor(view, tabId),
     };
 
     this.tabs.set(tabId, tab);

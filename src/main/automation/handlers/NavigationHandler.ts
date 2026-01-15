@@ -8,8 +8,6 @@ export class NavigationHandler extends BaseHandler {
   }
 
   async executeNavigate(params: NavigateParams): Promise<ToolExecutionResult> {
-    const startTime = Date.now();
-
     try {
       await this.view.webContents.loadURL(params.url);
 

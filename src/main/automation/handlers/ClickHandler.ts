@@ -1,726 +1,373 @@
-import { BaseHandler, HandlerContext } from './BaseHandler';
+import { Debugger, WebContentsView } from 'electron';
+import { ToolExecutionResult, AutomationError } from '@/shared/types';
+import { HandlerContext } from './BaseHandler';
 
-import type { ToolExecutionResult, ClickParams } from '@/shared/types';
+export interface ClickParams {
+  nodeId?: number;
+  role?: string;
+  text?: string;
+  attributes?: Record<string, string>;
+}
 
-export class ClickHandler extends BaseHandler {
+export class ClickHandler {
+  private view: WebContentsView;
+  private tabId: string;
+  private cdp: Debugger;
+
   constructor(context: HandlerContext) {
-    super(context);
+    this.view = context.view;
+    this.tabId = context.tabId;
+    this.cdp = this.view.webContents.debugger;
   }
 
-  async execute(params: ClickParams): Promise<ToolExecutionResult> {
+  public async execute(
+    params: ClickParams
+  ): Promise<ToolExecutionResult> {
     try {
-      if (params.nodeId) {
-        console.log('[ClickHandler] 🎯 Using CDP node ID for reliable click');
-        const success = await this.executeClickByCDPNodeId(params.nodeId);
-        if (success) return { success: true };
-
-        return this.createErrorResult({
-          code: 'CLICK_FAILED',
-          message: 'Failed to click using CDP node ID',
-        });
-      } else if (params.click_position) {
-        const positionSuccess = await this.executeClickAtPosition(
-          params.click_position.x,
-          params.click_position.y
-        );
-
-        return positionSuccess
-          ? { success: true }
-          : this.createErrorResult({
-              code: 'CLICK_FAILED',
-              message: `Click at position (${params.click_position.x},${params.click_position.y}) failed`,
-            });
-      } else if (params.tag) {
-        const result = await this.executeFindAndClick(params);
-        return result.success
-          ? { success: true }
-          : this.createErrorResult({
-              code: 'ELEMENT_NOT_FOUND',
-              message: result.error || 'Could not find or click element',
-            });
-      } else {
-        return this.createErrorResult({
-          code: 'INVALID_PARAMS',
-          message:
-            'Must provide either nodeId, tag for element finding, or click_position',
-        });
+      // MODE 1: Direct CDP node click
+      if (params.nodeId !== undefined) {
+        await this.performClick(params.nodeId);
+        return { 
+          success: true,
+          tabId: this.tabId,
+        };
       }
+
+      // MODE 2: Attribute-based element finding
+      if (params.role || params.text || params.attributes) {
+        const result = await this.findAndClickByAttributes(params);
+        if (result.success) return result;
+      }
+
+      return this.createErrorResult({
+        code: 'ELEMENT_NOT_FOUND',
+        message: `Could not find element with provided parameters: ${JSON.stringify(params)}`,
+      });
     } catch (error) {
-      console.error('[ClickHandler] ❌ Click failed:', error);
+      console.error('[ClickHandler] Error:', error);
       return this.createErrorResult({
         code: 'EXECUTION_ERROR',
-        message: `Click execution failed: ${error instanceof Error ? error.message : String(error)}`,
+        message: error instanceof Error ? error.message : 'Unknown click error',
       });
     }
   }
 
-  private async executeFindAndClick(
+  private async findAndClickByAttributes(
     params: ClickParams
-  ): Promise<{ success: boolean; error?: string }> {
+  ): Promise<ToolExecutionResult> {
     try {
-      console.log('[ClickHandler] 🔍 Executing unified find-and-click script');
-
-      const script = `
-        (async function() {
-          // ============================================================================
-          // CONFIGURATION
-          // ============================================================================
-          const targetTag = ${JSON.stringify(params.tag)};
-          const targetText = ${JSON.stringify(params.text || '')}.toLowerCase().trim();
-          const targetAttrs = ${JSON.stringify(params.attributes || {})};
-          const targetBoundingBox = ${JSON.stringify(params.boundingBox || null)};
-          const targetIndex = ${JSON.stringify(params.elementIndex)};
-          
-          const DYNAMIC_ATTRIBUTES = [
-            'class', 'style', 'aria-expanded', 'aria-selected', 'aria-checked',
-            'aria-pressed', 'aria-hidden', 'aria-current', 'tabindex',
-            'data-state', 'data-active', 'data-selected', 'data-focus', 'data-hover',
-            'value', 'checked', 'selected'
-          ];
-          
-          console.log('[Click] 🔍 Finding elements with:', {
-            tag: targetTag,
-            text: targetText.substring(0, 50),
-            hasAttrs: Object.keys(targetAttrs).length > 0
-          });
-          
-          // ============================================================================
-          // STEP 1: FIND ALL CANDIDATE ELEMENTS
-          // ============================================================================
-          let candidates = Array.from(document.getElementsByTagName(targetTag));
-          console.log('[Click] Found', candidates.length, 'elements with tag', targetTag);
-          
-          if (candidates.length === 0 && targetText) {
-            candidates = Array.from(document.querySelectorAll(
-              'button, a, input, textarea, path, svg, label, span, div, [role="button"], [role="link"]'
-            ));
-            console.log('[Click] Broadened search, found', candidates.length, 'interactive elements');
-          }
-          
-          // Filter by text
-          if (targetText) {
-            candidates = candidates.filter(el => {
-              const elText = (el.innerText || el.textContent || '').toLowerCase().trim();
-              const ariaLabel = (el.getAttribute('aria-label') || '').toLowerCase().trim();
-              const placeholder = (el.getAttribute('placeholder') || '').toLowerCase().trim();
-              const title = (el.getAttribute('title') || '').toLowerCase().trim();
-              const value = (el.value || '').toLowerCase().trim();
-              
-              return elText.includes(targetText) || 
-                     ariaLabel.includes(targetText) ||
-                     placeholder.includes(targetText) ||
-                     title.includes(targetText) ||
-                     value.includes(targetText);
-            });
-            console.log('[Click] After text filter:', candidates.length);
-          }
-          
-          const stableAttrKeys = Object.keys(targetAttrs).filter(key => 
-            !DYNAMIC_ATTRIBUTES.includes(key) && targetAttrs[key]
-          );
-          const dynamicAttrKeys = Object.keys(targetAttrs).filter(key => 
-            DYNAMIC_ATTRIBUTES.includes(key) && targetAttrs[key]
-          );
-          
-          if (stableAttrKeys.length > 0) {
-            candidates = candidates.filter(el => {
-              return stableAttrKeys.some(key => el.getAttribute(key) === targetAttrs[key]);
-            });
-          }
-          
-          if (candidates.length === 0) {
-            return { success: false, error: 'No matching elements found' };
-          }
-          
-          // ============================================================================
-          // STEP 2: SCORE ALL CANDIDATES
-          // ============================================================================
-          const scored = candidates.map(el => {
-            let score = 0;
-            const matchedBy = [];
-            
-            // Tag match (20 points)
-            if (el.tagName.toUpperCase() === targetTag.toUpperCase()) {
-              score += 20;
-              matchedBy.push('tag');
-            }
-            
-            // Stable attribute matches (up to 60 points)
-            for (const key of stableAttrKeys) {
-              const elValue = el.getAttribute(key);
-              if (elValue === targetAttrs[key]) {
-                if (key === 'id') score += 20;
-                else if (key.startsWith('data-')) score += 15;
-                else if (key.startsWith('aria-')) score += 12;
-                else if (['name', 'type', 'role'].includes(key)) score += 10;
-                else score += 5;
-                matchedBy.push('attr:' + key);
-              }
-            }
-            
-            for (const key of dynamicAttrKeys) {
-              const elValue = el.getAttribute(key);
-              const targetValue = targetAttrs[key];
-              
-              if (elValue === targetValue) {
-                if (key === 'class') {
-                  const elClasses = (elValue || '').split(/\\s+/);
-                  const targetClasses = (targetValue || '').split(/\\s+/);
-                  const matchingClasses = targetClasses.filter(c => elClasses.includes(c));
-                  if (matchingClasses.length > 0) {
-                    const classScore = Math.min(matchingClasses.length * 1, 4);
-                    score += classScore;
-                    matchedBy.push('dyn:class(' + matchingClasses.length + ')');
-                  }
-                } else if (key === 'style') {
-                  score += 1; // Minimal score for style match
-                  matchedBy.push('dyn:style');
-                } else if (key.startsWith('aria-')) {
-                  score += 3; // Dynamic aria attributes (expanded, selected, etc.)
-                  matchedBy.push('dyn:' + key);
-                } else if (key.startsWith('data-')) {
-                  score += 2; // Dynamic data attributes (state, active, etc.)
-                  matchedBy.push('dyn:' + key);
-                } else {
-                  score += 2; // Other dynamic attributes (value, checked, tabindex, etc.)
-                  matchedBy.push('dyn:' + key);
-                }
-              } else if (key === 'class' && elValue && targetValue) {
-                const elClasses = elValue.split(/\\s+/);
-                const targetClasses = targetValue.split(/\\s+/);
-                const matchingClasses = targetClasses.filter(c => elClasses.includes(c));
-                if (matchingClasses.length > 0) {
-                  const classScore = Math.min(matchingClasses.length * 1, 4); // Max 4 points
-                  score += classScore;
-                  matchedBy.push('dyn:class-partial(' + matchingClasses.length + ')');
-                }
-              }
-            }
-            
-            // Text match (up to 50 points)
-            if (targetText) {
-              const elText = (el.innerText || el.textContent || '').toLowerCase().trim();
-              if (elText === targetText) {
-                score += 50;
-                matchedBy.push('text:exact');
-              } else if (elText.includes(targetText)) {
-                score += 20;
-                matchedBy.push('text:contains');
-              }
-            }
-            
-            // Position match (up to 40 points)
-            if (targetBoundingBox) {
-              const rect = el.getBoundingClientRect();
-              const xDiff = Math.abs(rect.x - targetBoundingBox.x);
-              const yDiff = Math.abs(rect.y - targetBoundingBox.y);
-              const totalDiff = xDiff + yDiff;
-              
-              if (totalDiff < 5) score += 40;
-              else if (totalDiff < 20) score += 30;
-              else if (totalDiff < 50) score += 20;
-              else if (totalDiff < 100) score += 10;
-              else if (totalDiff < 200) score += 5;
-              
-              if (totalDiff < 50) matchedBy.push('position');
-            }
-            
-            // Visibility bonus (10 points)
-            const rect = el.getBoundingClientRect();
-            const style = window.getComputedStyle(el);
-            const isVisible = rect.width > 0 && rect.height > 0 && 
-                             style.display !== 'none' && 
-                             style.visibility !== 'hidden' &&
-                             style.opacity !== '0';
-            if (isVisible) {
-              score += 10;
-              matchedBy.push('visible');
-            }
-            
-            
-            return { element: el, score, matchedBy };
-          });
-          
-          // Sort by score
-          scored.sort((a, b) => b.score - a.score);
-          console.log('[Click] Scored candidates:', scored);
-          
-          // Apply element index disambiguation
-          if (targetIndex !== undefined && scored.length > 1) {
-            const topScore = scored[0].score;
-            const closeMatches = scored.filter(s => Math.abs(s.score - topScore) < 15);
-            
-            if (closeMatches.length > 1) {
-              for (const candidate of closeMatches) {
-                const elIndex = candidate.element.parentElement 
-                  ? Array.from(candidate.element.parentElement.children).indexOf(candidate.element)
-                  : 0;
-                if (elIndex === targetIndex) {
-                  candidate.score += 50;
-                  candidate.matchedBy.push('index');
-                  break;
-                }
-              }
-              scored.sort((a, b) => b.score - a.score);
-            }
-          }
-          
-          const best = scored[0];
-          console.log('[Click] 🏆 Best match: score=' + best.score + ', matched by: ' + best.matchedBy.join(', '));
-          
-          if (scored.length > 1) {
-            console.log('[Click] 🥈 Second best: score=' + scored[1].score);
-            if (Math.abs(best.score - scored[1].score) < 10) {
-              console.warn('[Click] ⚠️ AMBIGUOUS MATCH! Scores are very close.');
-            }
-          }
-          
-          // ============================================================================
-          // STEP 3: CHECK IF ELEMENT IS DISABLED
-          // ============================================================================
-          const element = best.element;
-          console.log('[Click] Checking if element is disabled:', element);
-          
-          // Check if element is disabled
-          const isDisabled = element.disabled || 
-                            element.getAttribute('disabled') !== null ||
-                            element.getAttribute('aria-disabled') === 'true';
-          
-          if (isDisabled) {
-            console.error('[Click] ❌ Element is DISABLED');
-            return { 
-              success: false, 
-              error: 'Element is disabled - cannot be clicked. This may indicate missing form validation or conditional requirements.' 
-            };
-          }
-          
-          // ============================================================================
-          // STEP 4: FOCUS ELEMENT
-          // ============================================================================
-          if (typeof element.focus === 'function') {
-            element.focus();
-          }
-          
-          // ============================================================================
-          // STEP 5: SCROLL INTO VIEW
-          // ============================================================================
-          element.scrollIntoView({ behavior: 'auto', block: 'center', inline: 'center' });
-          await new Promise(resolve => setTimeout(resolve, 600));
-          
-          // ============================================================================
-          // STEP 6: HIGHLIGHT ELEMENT
-          // ============================================================================
-          const originalOutline = element.style.border;
-          const originalOutlineOffset = element.style.outlineOffset;
-          element.style.border = '3px solid #00ff00';
-          element.style.outlineOffset = '2px';
-          await new Promise(resolve => setTimeout(resolve, 100));
-          
-          // ============================================================================
-          // STEP 7: VERIFY IN VIEWPORT
-          // ============================================================================
-          element.scrollIntoView({ behavior: 'auto', block: 'nearest', inline: 'nearest' });
-          await new Promise(resolve => setTimeout(resolve, 400));
-          
-          // ============================================================================
-          // STEP 8: EXECUTE FULL CLICK SEQUENCE
-          // ============================================================================
-          // Get fresh bounding box after scrolling
-          const rect = element.getBoundingClientRect();
-          const centerX = rect.left + rect.width / 2;
-          const centerY = rect.top + rect.height / 2;
-          
-          // Hover events
-          const hoverEvents = [
-            new PointerEvent('pointerover', {
-              bubbles: true, cancelable: true, composed: true,
-              pointerId: 1, pointerType: 'mouse', isPrimary: true,
-              clientX: centerX, clientY: centerY,
-              screenX: centerX, screenY: centerY,
-              button: 0, buttons: 0
-            }),
-            new MouseEvent('mouseover', {
-              bubbles: true, cancelable: true, composed: true,
-              view: window, clientX: centerX, clientY: centerY,
-              screenX: centerX, screenY: centerY,
-              button: 0, buttons: 0
-            })
-          ];
-          hoverEvents.forEach(event => element.dispatchEvent(event));
-          await new Promise(resolve => setTimeout(resolve, 120));
-          
-          // Focus events
-          if (typeof element.focus === 'function') {
-            element.dispatchEvent(new FocusEvent('focusin', { bubbles: true, composed: true }));
-            element.dispatchEvent(new FocusEvent('focus', { bubbles: false, composed: true }));
-            await new Promise(resolve => setTimeout(resolve, 50));
-          }
-          
-          // Mouse down
-          const downEvents = [
-            new PointerEvent('pointerdown', {
-              bubbles: true, cancelable: true, composed: true,
-              pointerId: 1, pointerType: 'mouse', isPrimary: true,
-              clientX: centerX, clientY: centerY,
-              screenX: centerX, screenY: centerY,
-              button: 0, buttons: 1, pressure: 0.5
-            }),
-            new MouseEvent('mousedown', {
-              bubbles: true, cancelable: true, composed: true,
-              view: window, detail: 1,
-              clientX: centerX, clientY: centerY,
-              screenX: centerX, screenY: centerY,
-              button: 0, buttons: 1
-            })
-          ];
-          downEvents.forEach(event => element.dispatchEvent(event));
-          await new Promise(resolve => setTimeout(resolve, 80));
-          
-          // Mouse up
-          const upEvents = [
-            new PointerEvent('pointerup', {
-              bubbles: true, cancelable: true, composed: true,
-              pointerId: 1, pointerType: 'mouse', isPrimary: true,
-              clientX: centerX, clientY: centerY,
-              screenX: centerX, screenY: centerY,
-              button: 0, buttons: 0, pressure: 0
-            }),
-            new MouseEvent('mouseup', {
-              bubbles: true, cancelable: true, composed: true,
-              view: window, detail: 1,
-              clientX: centerX, clientY: centerY,
-              screenX: centerX, screenY: centerY,
-              button: 0, buttons: 0
-            })
-          ];
-          upEvents.forEach(event => element.dispatchEvent(event));
-          await new Promise(resolve => setTimeout(resolve, 20));
-          
-          // Click events
-          const clickEvents = [
-            new PointerEvent('click', {
-              bubbles: true, cancelable: true, composed: true,
-              pointerId: 1, pointerType: 'mouse', isPrimary: true,
-              view: window, detail: 1,
-              clientX: centerX, clientY: centerY,
-              screenX: centerX, screenY: centerY,
-              button: 0, buttons: 0
-            }),
-            new MouseEvent('click', {
-              bubbles: true, cancelable: true, composed: true,
-              view: window, detail: 1,
-              clientX: centerX, clientY: centerY,
-              screenX: centerX, screenY: centerY,
-              button: 0, buttons: 0
-            })
-          ];
-          // clickEvents.forEach(event => element.dispatchEvent(event));
-          element.click();
-          
-          console.log('[Click] ✅ Click events dispatched and native click() called');
-          
-          // Wait and restore
-          await new Promise(resolve => setTimeout(resolve, 300));
-          element.style.border = originalOutline;
-          element.style.outlineOffset = originalOutlineOffset;
-          
-          console.log('[Click] ✅ Click completed successfully');
-          return { success: true };
-          
-        })();
-      `;
-
-      const result = await this.view.webContents.executeJavaScript(script);
-      return result;
-    } catch (error) {
-      console.error('[ClickHandler] ❌  click execution failed:', error);
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : String(error),
-      };
-    }
-  }
-
-  /**
-   * Fallback: Execute click at specific coordinates using CDP
-   * WITH VISUAL FEEDBACK (ripple effect)
-   */
-  private async executeClickAtPosition(x: number, y: number): Promise<boolean> {
-    try {
-      const cdpDebugger = this.view.webContents.debugger;
-      const clickX = Math.round(x);
-      const clickY = Math.round(y);
-
-      console.log(
-        `[ClickHandler] 🎯 Executing CDP click at position (${clickX}, ${clickY})`
-      );
-
-      // ============================================================================
-      // VISUAL FEEDBACK: Show ripple effect at click position
-      // ============================================================================
-      await this.showClickRipple(clickX, clickY);
-      await this.sleep(200);
-
-      // Mouse move
-      await cdpDebugger.sendCommand('Input.dispatchMouseEvent', {
-        type: 'mouseMoved',
-        x: clickX,
-        y: clickY,
-        button: 'none',
-        clickCount: 0,
+      const { root } = await this.cdp.sendCommand('DOM.getDocument', {
+        depth: -1,
+        pierce: true,
       });
 
-      await this.sleep(50);
+      // Build selector based on role if provided, otherwise search all interactive elements
+      const selector = params.role
+        ? this.buildSelectorFromRole(params.role)
+        : 'button, a, input, select, textarea, [role], [onclick], [tabindex]';
 
-      // Mouse down
-      await cdpDebugger.sendCommand('Input.dispatchMouseEvent', {
-        type: 'mousePressed',
-        x: clickX,
-        y: clickY,
-        button: 'left',
-        clickCount: 1,
+      const { nodeIds } = await this.cdp.sendCommand('DOM.querySelectorAll', {
+        nodeId: root.nodeId,
+        selector,
       });
 
-      await this.sleep(50);
+      console.log(`[ClickHandler] Found ${nodeIds.length} candidate elements for role: ${params.role || 'any'}`);
 
-      // Mouse up
-      await cdpDebugger.sendCommand('Input.dispatchMouseEvent', {
-        type: 'mouseReleased',
-        x: clickX,
-        y: clickY,
-        button: 'left',
-        clickCount: 1,
-      });
+      // Score and find best matching element
+      let bestMatch: { nodeId: number; score: number } | null = null;
 
-      console.log('[ClickHandler] ✅ CDP position-based click executed');
-      await this.removeClickRipple();
-
-      return true;
-    } catch (error) {
-      console.error(
-        '[ClickHandler] ❌ CDP position-based click failed:',
-        error
-      );
-      await this.removeClickRipple();
-      return false;
-    }
-  }
-
-  /**
-   * Show visual ripple effect at click coordinates
-   */
-  private async showClickRipple(x: number, y: number): Promise<void> {
-    try {
-      const script = `
-        (function() {
-          // Remove any existing ripple
-          const existing = document.getElementById('browzer-click-ripple');
-          if (existing) existing.remove();
-          
-          // Create ripple container
-          const ripple = document.createElement('div');
-          ripple.id = 'browzer-click-ripple';
-          ripple.style.cssText = \`
-            position: fixed;
-            left: ${x}px;
-            top: ${y}px;
-            width: 0;
-            height: 0;
-            pointer-events: none;
-            z-index: 2147483647;
-          \`;
-          
-          // Create outer ring (red)
-          const outerRing = document.createElement('div');
-          outerRing.style.cssText = \`
-            position: absolute;
-            left: -20px;
-            top: -20px;
-            width: 40px;
-            height: 40px;
-            border: 3px solid #ff0000;
-            border-radius: 50%;
-            animation: browzer-ripple-expand 0.6s ease-out;
-            opacity: 0.8;
-          \`;
-          
-          // Create center dot (red)
-          const centerDot = document.createElement('div');
-          centerDot.style.cssText = \`
-            position: absolute;
-            left: -6px;
-            top: -6px;
-            width: 12px;
-            height: 12px;
-            background: #ff0000;
-            border: 2px solid white;
-            border-radius: 50%;
-            box-shadow: 0 0 8px rgba(255, 0, 0, 0.8);
-          \`;
-          
-          // Create crosshair
-          const crosshairV = document.createElement('div');
-          crosshairV.style.cssText = \`
-            position: absolute;
-            left: -1px;
-            top: -30px;
-            width: 2px;
-            height: 60px;
-            background: linear-gradient(to bottom, transparent, #ff0000 40%, #ff0000 60%, transparent);
-          \`;
-          
-          const crosshairH = document.createElement('div');
-          crosshairH.style.cssText = \`
-            position: absolute;
-            left: -30px;
-            top: -1px;
-            width: 60px;
-            height: 2px;
-            background: linear-gradient(to right, transparent, #ff0000 40%, #ff0000 60%, transparent);
-          \`;
-          
-          // Add animation keyframes
-          if (!document.getElementById('browzer-ripple-style')) {
-            const style = document.createElement('style');
-            style.id = 'browzer-ripple-style';
-            style.textContent = \`
-              @keyframes browzer-ripple-expand {
-                0% {
-                  transform: scale(0.5);
-                  opacity: 1;
-                }
-                100% {
-                  transform: scale(2);
-                  opacity: 0;
-                }
-              }
-            \`;
-            document.head.appendChild(style);
+      for (const nodeId of nodeIds) {
+        const score = await this.scoreElementMatch(nodeId, params);
+        
+        if (score > 0) {
+          console.log(`[ClickHandler] Element ${nodeId} score: ${score}`);
+          if (!bestMatch || score > bestMatch.score) {
+            bestMatch = { nodeId, score };
           }
-          
-          ripple.appendChild(outerRing);
-          ripple.appendChild(centerDot);
-          ripple.appendChild(crosshairV);
-          ripple.appendChild(crosshairH);
-          document.body.appendChild(ripple);
-          
-          console.log('[ClickRipple] 🎯 Visual feedback shown at (' + ${x} + ', ' + ${y} + ')');
-        })();
-      `;
-
-      await this.view.webContents.executeJavaScript(script);
-    } catch (error) {
-      console.warn('[ClickHandler] ⚠️ Failed to show ripple:', error);
-    }
-  }
-
-  /**
-   * Remove click ripple effect
-   */
-  private async removeClickRipple(): Promise<void> {
-    try {
-      const script = `
-        (function() {
-          const ripple = document.getElementById('browzer-click-ripple');
-          if (ripple) {
-            ripple.style.transition = 'opacity 0.3s';
-            ripple.style.opacity = '0';
-            setTimeout(() => ripple.remove(), 300);
-          }
-        })();
-      `;
-
-      await this.view.webContents.executeJavaScript(script);
-    } catch (error) {
-      console.warn('[ClickHandler] ⚠️ Failed to remove ripple:', error);
-    }
-  }
-
-  private async executeClickByCDPNodeId(nodeId: number): Promise<boolean> {
-    try {
-      const cdp = this.view.webContents.debugger;
-      await cdp.sendCommand('DOM.scrollIntoViewIfNeeded', { nodeId });
-      await this.sleep(150);
-      const { model } = await cdp.sendCommand('DOM.getBoxModel', { nodeId });
-
-      if (!model || !model.content || model.content.length < 8) {
-        console.error('[ClickHandler] Invalid box model for node', nodeId);
-        return false;
-      }
-
-      const [x1, y1, x2, y2, x3, y3, x4, y4] = model.content;
-      const centerX = Math.round((x1 + x2 + x3 + x4) / 4);
-      const centerY = Math.round((y1 + y2 + y3 + y4) / 4);
-
-      console.log(
-        `[ClickHandler] 🎯 Clicking CDP node ${nodeId} at (${centerX}, ${centerY})`
-      );
-
-      await this.showClickRipple(centerX, centerY);
-      await this.sleep(300);
-
-      await cdp.sendCommand('Input.dispatchMouseEvent', {
-        type: 'mouseMoved',
-        x: centerX,
-        y: centerY,
-        button: 'none',
-        clickCount: 0,
-      });
-
-      await this.sleep(50);
-
-      await cdp.sendCommand('Input.dispatchMouseEvent', {
-        type: 'mousePressed',
-        x: centerX,
-        y: centerY,
-        button: 'left',
-        clickCount: 1,
-      });
-
-      await this.sleep(50);
-
-      await cdp.sendCommand('Input.dispatchMouseEvent', {
-        type: 'mouseReleased',
-        x: centerX,
-        y: centerY,
-        button: 'left',
-        clickCount: 1,
-      });
-
-      console.log(`[ClickHandler] ✅ Clicked CDP node ${nodeId} successfully`);
-      await this.removeClickRipple();
-      return true;
-    } catch (error) {
-      console.error('[ClickHandler] ❌ CDP node click failed:', error);
-      await this.removeClickRipple();
-      return false;
-    }
-  }
-
-  private async executeClickByCDPBackendNodeId(
-    backendNodeId: number
-  ): Promise<boolean> {
-    try {
-      const cdp = this.view.webContents.debugger;
-      const { nodeIds } = await cdp.sendCommand(
-        'DOM.pushNodesByBackendIdsToFrontend',
-        {
-          backendNodeIds: [backendNodeId],
         }
-      );
-
-      if (!nodeIds || nodeIds.length === 0) {
-        console.error(
-          '[ClickHandler] Failed to resolve backend node ID',
-          backendNodeId
-        );
-        return false;
       }
 
-      return await this.executeClickByCDPNodeId(nodeIds[0]);
+      if (bestMatch) {
+        console.log(`[ClickHandler] Clicking best match: nodeId=${bestMatch.nodeId}, score=${bestMatch.score}`);
+        await this.performClick(bestMatch.nodeId);
+        return {
+          success: true,
+          tabId: this.tabId,
+        };
+      }
+
+      return this.createErrorResult({
+        code: 'ELEMENT_NOT_FOUND',
+        message: `No element found matching: ${JSON.stringify(params)}`,
+      });
     } catch (error) {
-      console.error('[ClickHandler] ❌ CDP backend node click failed:', error);
-      return false;
+      return this.createErrorResult({
+        code: 'CLICK_FAILED',
+        message: `Failed to find and click element: ${error instanceof Error ? error.message : String(error)}`,
+      });
     }
+  }
+
+  private async scoreElementMatch(
+    nodeId: number,
+    params: ClickParams
+  ): Promise<number> {
+    try {
+      let score = 0;
+
+      const elementText = await this.getElementText(nodeId);
+      
+      if (params.text) {
+        if (!elementText) {
+          return 0;
+        }
+        
+        const textMatch = this.textMatches(elementText, params.text);
+        if (!textMatch) {
+          return 0;
+        }
+        
+        if (elementText.toLowerCase().trim() === params.text.toLowerCase().trim()) {
+          score += 100;
+        } else {
+          score += 50;
+        }
+      }
+
+      if (params.attributes && Object.keys(params.attributes).length > 0) {
+        const { node } = await this.cdp.sendCommand('DOM.describeNode', {
+          nodeId,
+        });
+
+        if (node.attributes) {
+          const elementAttrs = this.parseAttributes(node.attributes);
+          
+          let matchedAttributes = 0;
+          let totalAttributes = Object.keys(params.attributes).length;
+
+          for (const [key, value] of Object.entries(params.attributes)) {
+            const elementValue = elementAttrs[key];
+            
+            if (elementValue !== undefined) {
+              // Check for exact match or partial match
+              if (elementValue === value) {
+                matchedAttributes++;
+                score += 20; // Exact attribute match
+              } else if (
+                typeof elementValue === 'string' &&
+                typeof value === 'string' &&
+                (elementValue.includes(value) || value.includes(elementValue))
+              ) {
+                matchedAttributes++;
+                score += 10; // Partial attribute match
+              }
+            }
+          }
+
+          // Require at least some attribute matches if attributes are provided
+          if (matchedAttributes === 0 && totalAttributes > 0) {
+            return 0; // No attribute matches when attributes were specified
+          }
+        }
+      }
+
+      // Role matching (implicit through selector, but add bonus if explicitly checking)
+      if (params.role) {
+        score += 5;
+      }
+
+      return score;
+    } catch (error) {
+      console.error('[ClickHandler] Error scoring element:', error);
+      return 0;
+    }
+  }
+
+
+  private async performClick(
+    nodeId: number
+  ): Promise<void> {
+    const { model } = await this.cdp.sendCommand('DOM.getBoxModel', { nodeId });
+
+    if (!model || !model.content || model.content.length < 8) {
+      throw new Error('Element not visible or has no box model');
+    }
+
+    const [x1, y1, x2, y2, x3, y3, x4, y4] = model.content;
+    const centerX = (x1 + x2 + x3 + x4) / 4;
+    const centerY = (y1 + y2 + y3 + y4) / 4;
+
+    await this.cdp.sendCommand('Input.dispatchMouseEvent', {
+      type: 'mouseMoved',
+      x: centerX,
+      y: centerY,
+      button: 'none',
+      clickCount: 0,
+    });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    await this.cdp.sendCommand('Input.dispatchMouseEvent', {
+      type: 'mousePressed',
+      x: centerX,
+      y: centerY,
+      button: 'left',
+      clickCount: 1,
+    });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    await this.cdp.sendCommand('Input.dispatchMouseEvent', {
+      type: 'mouseReleased',
+      x: centerX,
+      y: centerY,
+      button: 'left',
+      clickCount: 1,
+    });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  }
+
+
+  private async getElementText(
+    nodeId: number
+  ): Promise<string | null> {
+    try {
+      const { object } = await this.cdp.sendCommand('DOM.resolveNode', { nodeId });
+
+      if (!object || !object.objectId) {
+        return null;
+      }
+
+      const textResult = await this.cdp.sendCommand('Runtime.callFunctionOn', {
+        objectId: object.objectId,
+        functionDeclaration: `
+          function() {
+            let text = (this.innerText || '').trim();
+            if (!text) text = (this.textContent || '').trim();
+            if (!text) text = this.getAttribute('aria-label') || '';
+            if (!text) text = this.title || '';
+            if (!text) text = this.getAttribute('placeholder') || '';
+            if (!text && this.value) text = this.value;
+            return text;
+          }
+        `,
+        returnByValue: true,
+      });
+
+      await this.cdp.sendCommand('Runtime.releaseObject', {
+        objectId: object.objectId,
+      });
+
+      if (textResult.result && textResult.result.value) {
+        return String(textResult.result.value).trim();
+      }
+
+      return null;
+    } catch (error) {
+      return null;
+    }
+  }
+
+  private textMatches(elementText: string, searchText: string): boolean {
+    const normalizedElement = elementText.toLowerCase().trim();
+    const normalizedSearch = searchText.toLowerCase().trim();
+
+    if (normalizedElement === normalizedSearch) {
+      return true;
+    }
+
+    if (normalizedElement.includes(normalizedSearch)) {
+      return true;
+    }
+
+    if (normalizedSearch.includes(normalizedElement)) {
+      return true;
+    }
+
+    const elementWords = normalizedElement.split(/\s+/);
+    const searchWords = normalizedSearch.split(/\s+/);
+
+    if (searchWords.every((word) => elementWords.includes(word))) {
+      return true;
+    }
+
+    return false;
+  }
+
+  private buildSelectorFromRole(role: string): string {
+    const roleMap: Record<string, string> = {
+      button: 'button, [role="button"]',
+      link: 'a, [role="link"]',
+      textbox:
+        'input[type="text"], input:not([type]), textarea, [role="textbox"]',
+      searchbox: 'input[type="search"], [role="searchbox"]',
+      combobox: 'select, [role="combobox"]',
+      checkbox: 'input[type="checkbox"], [role="checkbox"]',
+      radio: 'input[type="radio"], [role="radio"]',
+      tab: '[role="tab"]',
+      menuitem: '[role="menuitem"]',
+      menu: '[role="menu"]',
+      menubar: '[role="menubar"]',
+      heading: 'h1, h2, h3, h4, h5, h6, [role="heading"]',
+      listbox: '[role="listbox"]',
+      option: 'option, [role="option"]',
+      navigation: 'nav, [role="navigation"]',
+      banner: '[role="banner"]',
+      complementary: '[role="complementary"]',
+      contentinfo: '[role="contentinfo"]',
+      main: 'main, [role="main"]',
+      form: 'form, [role="form"]',
+      search: '[role="search"]',
+      region: '[role="region"]',
+      article: 'article, [role="article"]',
+      section: 'section, [role="section"]',
+      img: 'img, [role="img"]',
+      image: 'img, [role="image"]',
+      dialog: '[role="dialog"]',
+      alertdialog: '[role="alertdialog"]',
+      alert: '[role="alert"]',
+      status: '[role="status"]',
+      progressbar: '[role="progressbar"]',
+      slider: '[role="slider"]',
+      spinbutton: '[role="spinbutton"]',
+      switch: '[role="switch"]',
+      toolbar: '[role="toolbar"]',
+      tooltip: '[role="tooltip"]',
+      tree: '[role="tree"]',
+      treeitem: '[role="treeitem"]',
+      tablist: '[role="tablist"]',
+      tabpanel: '[role="tabpanel"]',
+      separator: '[role="separator"]',
+      group: '[role="group"]',
+      list: 'ul, ol, [role="list"]',
+      listitem: 'li, [role="listitem"]',
+      row: '[role="row"]',
+      gridcell: '[role="gridcell"]',
+      cell: 'td, [role="cell"]',
+      columnheader: 'th, [role="columnheader"]',
+      rowheader: '[role="rowheader"]',
+      table: 'table, [role="table"]',
+      grid: '[role="grid"]',
+    };
+
+    return roleMap[role.toLowerCase()] || `[role="${role}"]`;
+  }
+
+  private parseAttributes(attributes: string[]): Record<string, string> {
+    const attrs: Record<string, string> = {};
+    for (let i = 0; i < attributes.length; i += 2) {
+      const key = attributes[i];
+      const value = attributes[i + 1];
+      if (key && value !== undefined) {
+        attrs[key] = value;
+      }
+    }
+    return attrs;
+  }
+
+  private createErrorResult(error: AutomationError): ToolExecutionResult {
+    return {
+      success: false,
+      error,
+      tabId: this.tabId,
+    };
   }
 }

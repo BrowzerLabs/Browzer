@@ -76,7 +76,8 @@ export class BrowserService {
     this.setupAdBlocker();
     this.automationManager = new AutomationManager(
       this.sessionManager,
-      this.browserView
+      this.browserView,
+      this.recordingService.getRecordingStore()
     );
   }
 

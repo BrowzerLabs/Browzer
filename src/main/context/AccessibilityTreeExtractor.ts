@@ -8,7 +8,7 @@ export interface AccessibilityTreeResult {
 export class AccessibilityTreeExtractor {
   constructor(private view: WebContentsView) {}
 
-  public async extractAccessibilityTree(): Promise<AccessibilityTreeResult> {
+  public async extractContext(): Promise<AccessibilityTreeResult> {
     try {
       const cdp = this.view.webContents.debugger;
 

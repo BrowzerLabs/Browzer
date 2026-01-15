@@ -362,7 +362,7 @@ export class AutomationStateManager extends EventEmitter {
 
   private async captureBrowserContext(): Promise<string> {
     try {
-      const result = await this.executor.executeTool('extract_context', {
+      const result = await this.executor.executeTool('context', {
         maxElements: 100,
         tags: [],
         attributes: {},
@@ -381,7 +381,7 @@ export class AutomationStateManager extends EventEmitter {
 
   private async captureBrowserSnapshot(): Promise<string | null> {
     try {
-      const result = await this.executor.executeTool('take_snapshot', {});
+      const result = await this.executor.executeTool('snapshot', {});
 
       if (result.success && result.value) {
         return result.value.toString();
@@ -404,6 +404,16 @@ export class AutomationStateManager extends EventEmitter {
 
   public addMessage(message: Anthropic.MessageParam): void {
     this.messages.push(message);
+
+    this.messages.forEach(m => {
+       if(typeof m.content === 'string') {
+         console.log(m.content)
+       }else {
+        m.content.forEach(c => {
+          console.log(c)
+        })
+       }
+    })
 
     this.session_manager.addMessage({
       sessionId: this.session_id,
@@ -472,7 +482,7 @@ export class AutomationStateManager extends EventEmitter {
   }
 
   private isAnalysisTool(toolName: string): boolean {
-    return toolName === 'extract_context' || toolName === 'take_snapshot';
+    return toolName === 'context' || toolName === 'snapshot';
   }
 
   public compressMessages(): void {
@@ -519,29 +529,11 @@ export class AutomationStateManager extends EventEmitter {
 
       const result = executedStep.result;
 
-      if (planStep.toolName === 'extract_context') {
+      if (planStep.toolName === 'context') {
         toolResultBlocks.push({
           type: 'tool_result',
           tool_use_id: planStep.toolUseId,
           content: result.value.toString(),
-        });
-      } else if (
-        planStep.toolName === 'take_snapshot' &&
-        typeof result.value === 'string'
-      ) {
-        toolResultBlocks.push({
-          type: 'tool_result',
-          tool_use_id: planStep.toolUseId,
-          content: [
-            {
-              type: 'image',
-              source: {
-                type: 'base64',
-                media_type: 'image/jpeg',
-                data: result.value,
-              },
-            },
-          ],
         });
       } else {
         toolResultBlocks.push({

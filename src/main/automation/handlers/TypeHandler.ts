@@ -1,611 +1,438 @@
-import { BaseHandler, HandlerContext } from './BaseHandler';
+import { Debugger, WebContentsView } from 'electron';
+import { ToolExecutionResult, AutomationError } from '@/shared/types';
+import { HandlerContext } from './BaseHandler';
 
-import type { ToolExecutionResult, TypeParams } from '@/shared/types';
+export interface TypeParams {
+  nodeId?: number;
+  role?: string;
+  text?: string;
+  attributes?: Record<string, string>;
+  value: string;
+  clearFirst?: boolean;
+}
 
-export class TypeHandler extends BaseHandler {
+export class TypeHandler {
+  private view: WebContentsView;
+  private tabId: string;
+  private cdp: Debugger;
+
   constructor(context: HandlerContext) {
-    super(context);
+    this.view = context.view;
+    this.tabId = context.tabId;
+    this.cdp = this.view.webContents.debugger;
   }
 
-  async execute(params: TypeParams): Promise<ToolExecutionResult> {
-    const cdp = this.view.webContents.debugger;
+  public async execute(
+    params: TypeParams
+  ): Promise<ToolExecutionResult> {
     try {
-      if (params.nodeId) {
-        const success = await this.executeTypeByNodeId(params);
-        return success ? { success: true } : this.createErrorResult({
-          code: 'EXECUTION_ERROR',
-          message: 'Failed to type using CDP node ID',
-        });
+      const clearFirst = params.clearFirst !== false; // Default to true
+
+      // MODE 1: Direct CDP node typing
+      if (params.nodeId !== undefined) {
+        await this.typeIntoNode(params.nodeId, params.value, clearFirst);
+        return {
+          success: true,
+          tabId: this.tabId,
+        };
       }
 
-      const findResult = await this.executeFindAndPrepare(params);
-      if (!findResult.success) {
-        return this.createErrorResult({
-          code: 'ELEMENT_NOT_FOUND',
-          message: findResult.error || 'Could not find input element',
-        });
+      // MODE 2: Attribute-based element finding
+      if (params.role || params.text || params.attributes) {
+        const result = await this.findAndType(params, clearFirst);
+        if (result.success) return result;
       }
 
-      const { centerX, centerY, isContentEditable } = findResult;
-      console.log(
-        `[TypeHandler] ✅ Input found and prepared at (${centerX}, ${centerY}), contentEditable: ${isContentEditable}`
-      );
-
-      if (isContentEditable) {
-        const x = Math.round(centerX);
-        const y = Math.round(centerY);
-        await cdp.sendCommand('Input.dispatchMouseEvent', {
-          type: 'mousePressed',
-          x,
-          y,
-          button: 'left',
-          clickCount: 1,
-        });
-        await this.sleep(10);
-        await cdp.sendCommand('Input.dispatchMouseEvent', {
-          type: 'mouseReleased',
-          x,
-          y,
-          button: 'left',
-          clickCount: 1,
-        });
-        await this.sleep(10);
-      } else {
-        await this.focusElement(centerX!, centerY!);
-        await this.sleep(50);
-      }
-
-      if (params.clearFirst !== false) {
-        await this.clearInput();
-        await this.sleep(10);
-      }
-
-      const typeSuccess = await this.typeText(params.text);
-      if (!typeSuccess) {
-        return this.createErrorResult({
-          code: 'EXECUTION_ERROR',
-          message: 'Failed to type text',
-        });
-      }
-
-      if (params.pressEnter) {
-        await cdp.sendCommand('Input.dispatchKeyEvent', {
-          type: 'rawKeyDown',
-          key: 'Enter',
-          code: 'Enter',
-          windowsVirtualKeyCode: 13,
-          nativeVirtualKeyCode: 13,
-        });
-
-        await this.sleep(10);
-
-        await cdp.sendCommand('Input.dispatchKeyEvent', {
-          type: 'keyUp',
-          key: 'Enter',
-          code: 'Enter',
-          windowsVirtualKeyCode: 13,
-          nativeVirtualKeyCode: 13,
-        });
-        console.log('[TypeHandler] ↵ Pressed Enter');
-      }
-
-      await this.sleep(30);
-
-      return { success: true };
+      return this.createErrorResult({
+        code: 'ELEMENT_NOT_FOUND',
+        message: `Could not find input element with provided parameters: ${JSON.stringify(params)}`,
+      });
     } catch (error) {
-      console.error('[TypeHandler] ❌ Type failed:', error);
+      console.error('[TypeHandler] Error:', error);
       return this.createErrorResult({
         code: 'EXECUTION_ERROR',
-        message: `Type execution failed: ${error instanceof Error ? error.message : String(error)}`,
+        message: error instanceof Error ? error.message : 'Unknown type error',
       });
     }
   }
 
-  private async executeFindAndPrepare(params: TypeParams): Promise<{
-    success: boolean;
-    error?: string;
-    centerX?: number;
-    centerY?: number;
-    isContentEditable?: boolean;
-  }> {
+  private async findAndType(
+    params: TypeParams,
+    clearFirst: boolean
+  ): Promise<ToolExecutionResult> {
     try {
-      console.log('[TypeHandler] 🔍 Executing find-and-prepare script');
+      const { root } = await this.cdp.sendCommand('DOM.getDocument', {
+        depth: -1,
+        pierce: true,
+      });
 
-      const script = `
-        (async function() {
-          // ============================================================================
-          // CONFIGURATION
-          // ============================================================================
-          const targetTag = ${JSON.stringify(params.tag || 'INPUT')};
-          const targetAttrs = ${JSON.stringify(params.attributes || {})};
-          const targetBoundingBox = ${JSON.stringify(params.boundingBox || null)};
-          const targetIndex = ${JSON.stringify(params.elementIndex)};
-          
-          const DYNAMIC_ATTRIBUTES = [
-            'class', 'style', 'aria-expanded', 'aria-selected', 'aria-checked',
-            'aria-pressed', 'aria-hidden', 'aria-current', 'tabindex',
-            'data-state', 'data-active', 'data-selected', 'data-focus', 'data-hover',
-            'value', 'checked', 'selected'
-          ];
-          
-          console.log('[Type] 🔍 Finding input elements with:', {
-            tag: targetTag,
-            hasAttrs: Object.keys(targetAttrs).length > 0
-          });
-          
-          // ============================================================================
-          // STEP 1: FIND ALL CANDIDATE INPUT ELEMENTS
-          // ============================================================================
-          let candidates = [];
-          
-          // Strategy 1: Find by specific tag
-          if (targetTag) {
-            candidates = Array.from(document.getElementsByTagName(targetTag));
-            console.log('[Type] Found', candidates.length, 'elements with tag', targetTag);
+      // Build selector for input elements based on role
+      const selector = params.role
+        ? this.buildSelectorFromRole(params.role)
+        : 'input, textarea, [contenteditable="true"], [role="textbox"], [role="searchbox"], [role="combobox"]';
+
+      const { nodeIds } = await this.cdp.sendCommand('DOM.querySelectorAll', {
+        nodeId: root.nodeId,
+        selector,
+      });
+
+      console.log(`[TypeHandler] Found ${nodeIds.length} candidate input elements for role: ${params.role || 'any'}`);
+
+      // Score and find best matching element
+      let bestMatch: { nodeId: number; score: number } | null = null;
+
+      for (const nodeId of nodeIds) {
+        const score = await this.scoreElementMatch(nodeId, params);
+        
+        if (score > 0) {
+          console.log(`[TypeHandler] Element ${nodeId} score: ${score}`);
+          if (!bestMatch || score > bestMatch.score) {
+            bestMatch = { nodeId, score };
           }
+        }
+      }
+
+      if (bestMatch) {
+        console.log(`[TypeHandler] Typing into best match: nodeId=${bestMatch.nodeId}, score=${bestMatch.score}`);
+        await this.typeIntoNode(bestMatch.nodeId, params.value, clearFirst);
+        return {
+          success: true,
+          tabId: this.tabId,
+        };
+      }
+
+      return this.createErrorResult({
+        code: 'ELEMENT_NOT_FOUND',
+        message: `No input element found matching: ${JSON.stringify(params)}`,
+      });
+    } catch (error) {
+      return this.createErrorResult({
+        code: 'TYPE_FAILED',
+        message: `Failed to find and type into element: ${error instanceof Error ? error.message : String(error)}`,
+      });
+    }
+  }
+
+  private async scoreElementMatch(
+    nodeId: number,
+    params: TypeParams
+  ): Promise<number> {
+    try {
+      let score = 0;
+
+      // Check if element is actually typeable
+      const isTypeable = await this.isElementTypeable(nodeId);
+      if (!isTypeable) {
+        return 0;
+      }
+
+      const elementText = await this.getElementText(nodeId);
+      
+      if (params.text) {
+        if (!elementText) {
+          return 0;
+        }
+        
+        const textMatch = this.textMatches(elementText, params.text);
+        if (!textMatch) {
+          return 0;
+        }
+        
+        if (elementText.toLowerCase().trim() === params.text.toLowerCase().trim()) {
+          score += 100;
+        } else {
+          score += 50;
+        }
+      }
+
+      if (params.attributes && Object.keys(params.attributes).length > 0) {
+        const { node } = await this.cdp.sendCommand('DOM.describeNode', {
+          nodeId,
+        });
+
+        if (node.attributes) {
+          const elementAttrs = this.parseAttributes(node.attributes);
           
-          // Strategy 2: If no specific tag or no results, find ALL input-like elements
-          if (candidates.length === 0) {
-            const inputSelectors = [
-              'input[type="text"]',
-              'input[type="email"]',
-              'input[type="password"]',
-              'input[type="search"]',
-              'input[type="tel"]',
-              'input[type="url"]',
-              'input[type="number"]',
-              'input:not([type])',  // Inputs without type default to text
-              'textarea',
-              '[contenteditable="true"]',
-              '[role="textbox"]',
-              '[role="searchbox"]',
-              '[role="combobox"]'
-            ];
+          let matchedAttributes = 0;
+          let totalAttributes = Object.keys(params.attributes).length;
+
+          for (const [key, value] of Object.entries(params.attributes)) {
+            const elementValue = elementAttrs[key];
             
-            candidates = Array.from(document.querySelectorAll(inputSelectors.join(', ')));
-            console.log('[Type] Broadened search, found', candidates.length, 'input elements');
-          }
-          
-          // Filter out disabled and readonly elements
-          candidates = candidates.filter(el => {
-            const isDisabled = el.disabled || el.getAttribute('aria-disabled') === 'true';
-            const isReadonly = el.readOnly || el.getAttribute('aria-readonly') === 'true';
-            return !isDisabled && !isReadonly;
-          });
-          console.log('[Type] After filtering disabled/readonly:', candidates.length);
-          
-          const stableAttrKeys = Object.keys(targetAttrs).filter(key => 
-            !DYNAMIC_ATTRIBUTES.includes(key) && targetAttrs[key]
-          );
-          const dynamicAttrKeys = Object.keys(targetAttrs).filter(key => 
-            DYNAMIC_ATTRIBUTES.includes(key) && targetAttrs[key]
-          );
-          
-          if (stableAttrKeys.length > 0) {
-            candidates = candidates.filter(el => {
-              return stableAttrKeys.some(key => el.getAttribute(key) === targetAttrs[key]);
-            });
-          }
-          
-          if (candidates.length === 0) {
-            return { success: false, error: 'No matching input elements found' };
-          }
-          
-          // ============================================================================
-          // STEP 2: SCORE ALL CANDIDATES
-          // ============================================================================
-          const scored = candidates.map(el => {
-            let score = 0;
-            const matchedBy = [];
-            
-            // Tag match (20 points)
-            if (targetTag && el.tagName.toUpperCase() === targetTag.toUpperCase()) {
-              score += 20;
-              matchedBy.push('tag');
-            }
-            
-            // Input type bonus (15 points for text-like inputs)
-            const inputType = el.type?.toLowerCase();
-            const textTypes = ['text', 'email', 'password', 'search', 'tel', 'url', 'number'];
-            if (textTypes.includes(inputType) || el.tagName === 'TEXTAREA') {
-              score += 15;
-              matchedBy.push('inputType');
-            }
-            
-            // Stable attribute matches (up to 60 points)
-            for (const key of stableAttrKeys) {
-              const elValue = el.getAttribute(key);
-              if (elValue === targetAttrs[key]) {
-                if (key === 'id') score += 20;
-                else if (key === 'name') score += 18;
-                else if (key === 'placeholder') score += 15;
-                else if (key.startsWith('data-')) score += 15;
-                else if (key.startsWith('aria-')) score += 12;
-                else if (key === 'type') score += 10;
-                else score += 5;
-                matchedBy.push('attr:' + key);
+            if (elementValue !== undefined) {
+              if (elementValue === value) {
+                matchedAttributes++;
+                score += 20;
+              } else if (
+                typeof elementValue === 'string' &&
+                typeof value === 'string' &&
+                (elementValue.includes(value) || value.includes(elementValue))
+              ) {
+                matchedAttributes++;
+                score += 10;
               }
             }
-            
-            for (const key of dynamicAttrKeys) {
-              const elValue = el.getAttribute(key);
-              const targetValue = targetAttrs[key];
-              
-              if (elValue === targetValue) {
-                if (key === 'class') {
-                  const elClasses = (elValue || '').split(/\\s+/);
-                  const targetClasses = (targetValue || '').split(/\\s+/);
-                  const matchingClasses = targetClasses.filter(c => elClasses.includes(c));
-                  if (matchingClasses.length > 0) {
-                    const classScore = Math.min(matchingClasses.length * 1, 4);
-                    score += classScore;
-                    matchedBy.push('dyn:class(' + matchingClasses.length + ')');
-                  }
-                } else if (key === 'style') {
-                  score += 1;
-                  matchedBy.push('dyn:style');
-                } else if (key.startsWith('aria-')) {
-                  score += 3;
-                  matchedBy.push('dyn:' + key);
-                } else if (key.startsWith('data-')) {
-                  score += 2;
-                  matchedBy.push('dyn:' + key);
-                } else {
-                  score += 2;
-                  matchedBy.push('dyn:' + key);
-                }
-              } else if (key === 'class' && elValue && targetValue) {
-                const elClasses = elValue.split(/\\s+/);
-                const targetClasses = targetValue.split(/\\s+/);
-                const matchingClasses = targetClasses.filter(c => elClasses.includes(c));
-                if (matchingClasses.length > 0) {
-                  const classScore = Math.min(matchingClasses.length * 1, 4);
-                  score += classScore;
-                  matchedBy.push('dyn:class-partial(' + matchingClasses.length + ')');
-                }
-              }
-            }
-            
-            // Position match (up to 40 points)
-            if (targetBoundingBox) {
-              const rect = el.getBoundingClientRect();
-              const xDiff = Math.abs(rect.x - targetBoundingBox.x);
-              const yDiff = Math.abs(rect.y - targetBoundingBox.y);
-              const totalDiff = xDiff + yDiff;
-              
-              if (totalDiff < 5) score += 40;
-              else if (totalDiff < 20) score += 30;
-              else if (totalDiff < 50) score += 20;
-              else if (totalDiff < 100) score += 10;
-              else if (totalDiff < 200) score += 5;
-              
-              if (totalDiff < 50) matchedBy.push('position');
-            }
-            
-            // Visibility bonus (10 points)
-            const rect = el.getBoundingClientRect();
-            const style = window.getComputedStyle(el);
-            const isVisible = rect.width > 0 && rect.height > 0 && 
-                             style.display !== 'none' && 
-                             style.visibility !== 'hidden' &&
-                             style.opacity !== '0';
-            if (isVisible) {
-              score += 10;
-              matchedBy.push('visible');
-            }
-            
-            // Empty value bonus (5 points) - prefer empty inputs for new typing
-            if (!el.value || el.value.trim() === '') {
-              score += 5;
-              matchedBy.push('empty');
-            }
-            
-            // Focus bonus (10 points) - if already focused, likely the right one
-            if (document.activeElement === el) {
-              score += 10;
-              matchedBy.push('focused');
-            }
-            
-            return { element: el, score, matchedBy };
-          });
-          
-          // Sort by score
-          scored.sort((a, b) => b.score - a.score);
-          
-          // Apply element index disambiguation
-          if (targetIndex !== undefined && scored.length > 1) {
-            const topScore = scored[0].score;
-            const closeMatches = scored.filter(s => Math.abs(s.score - topScore) < 15);
-            
-            if (closeMatches.length > 1) {
-              for (const candidate of closeMatches) {
-                const elIndex = candidate.element.parentElement 
-                  ? Array.from(candidate.element.parentElement.children).indexOf(candidate.element)
-                  : 0;
-                if (elIndex === targetIndex) {
-                  candidate.score += 50;
-                  candidate.matchedBy.push('index');
-                  break;
-                }
-              }
-              scored.sort((a, b) => b.score - a.score);
-            }
           }
-          
-          const best = scored[0];
-          console.log('[Type] 🏆 Best match: score=' + best.score + ', matched by: ' + best.matchedBy.join(', '));
-          
-          if (scored.length > 1) {
-            console.log('[Type] 🥈 Second best: score=' + scored[1].score);
-            if (Math.abs(best.score - scored[1].score) < 10) {
-              console.warn('[Type] ⚠️ AMBIGUOUS MATCH! Scores are very close.');
-            }
-          }
-          
-          // ============================================================================
-          // STEP 3: PREPARE ELEMENT (Focus + Scroll + Highlight)
-          // ============================================================================
-          const element = best.element;
-          
-          // Focus
-          if (typeof element.focus === 'function') {
-            element.focus();
-            console.log('[Type] ✅ Element focused');
-          }
-          
-          // Scroll into view
-          element.scrollIntoView({ behavior: 'auto', block: 'center', inline: 'center' });
-          console.log('[Type] 📍 Scrolling element into view...');
-          await new Promise(resolve => setTimeout(resolve, 500));
-          
-          // Highlight
-          const originalOutline = element.style.outline;
-          const originalOutlineOffset = element.style.outlineOffset;
-          element.style.outline = '2px solid #0066ff';  // Blue for input
-          element.style.outlineOffset = '2px';
-          console.log('[Type] ✅ Element highlighted');
-          await new Promise(resolve => setTimeout(resolve, 200));
-          
-          // Get center coordinates for CDP click
-          const rect = element.getBoundingClientRect();
-          const centerX = rect.left + rect.width / 2;
-          const centerY = rect.top + rect.height / 2;
-          
-          // Check if element is contentEditable
-          const isContentEditable = element.contentEditable === 'true' || 
-                                   element.getAttribute('contenteditable') === 'true' ||
-                                   element.hasAttribute('contenteditable');
-          
-          // Restore outline after a moment
-          setTimeout(() => {
-            element.style.outline = originalOutline;
-            element.style.outlineOffset = originalOutlineOffset;
-          }, 1000);
-          
-          console.log('[Type] ✅ Input prepared successfully, contentEditable:', isContentEditable);
-          return { success: true, centerX, centerY, isContentEditable };
-          
-        })();
-      `;
 
-      const result = await this.view.webContents.executeJavaScript(script);
-      return result;
+          if (matchedAttributes === 0 && totalAttributes > 0) {
+            return 0;
+          }
+        }
+      }
+
+      if (params.role) {
+        score += 5;
+      }
+
+      return score;
     } catch (error) {
-      console.error('[TypeHandler] ❌  find-and-prepare failed:', error);
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : String(error),
-      };
+      console.error('[TypeHandler] Error scoring element:', error);
+      return 0;
     }
   }
 
-  /**
-   * Focus element using CDP click
-   */
-  private async focusElement(centerX: number, centerY: number): Promise<void> {
+  private async isElementTypeable(nodeId: number): Promise<boolean> {
     try {
-      const cdp = this.view.webContents.debugger;
-      if (!cdp.isAttached()) cdp.attach('1.3');
-
-      // Click to focus
-      await cdp.sendCommand('Input.dispatchMouseEvent', {
-        type: 'mousePressed',
-        x: Math.round(centerX),
-        y: Math.round(centerY),
-        button: 'left',
-        clickCount: 1,
+      const { node } = await this.cdp.sendCommand('DOM.describeNode', {
+        nodeId,
       });
 
-      await this.sleep(50);
+      const attrs = node.attributes ? this.parseAttributes(node.attributes) : {};
+      
+      // Check if element is disabled or readonly
+      if (attrs['readonly'] !== undefined) {
+        return false;
+      }
 
-      await cdp.sendCommand('Input.dispatchMouseEvent', {
-        type: 'mouseReleased',
-        x: Math.round(centerX),
-        y: Math.round(centerY),
-        button: 'left',
-        clickCount: 1,
-      });
+      // Check if it's a valid input type
+      const nodeName = node.nodeName?.toLowerCase();
+      if (nodeName === 'input') {
+        const inputType = attrs['type']?.toLowerCase() || 'text';
+        const nonTypeableInputs = ['submit', 'button', 'reset', 'image', 'file', 'hidden', 'checkbox', 'radio'];
+        if (nonTypeableInputs.includes(inputType)) {
+          return false;
+        }
+      }
 
-      console.log('[TypeHandler] ✅ Element focused via CDP click');
+      return true;
     } catch (error) {
-      console.error('[TypeHandler] ❌ Focus failed:', error);
+      return false;
     }
   }
 
-  private async clearInput(): Promise<void> {
-    try {
-      const cdp = this.view.webContents.debugger;
-      const modifier = process.platform === 'darwin' ? 'Meta' : 'Control';
-      const modifierCode = modifier === 'Meta' ? 8 : 2;
+  private async typeIntoNode(
+    nodeId: number,
+    value: string,
+    clearFirst: boolean
+  ): Promise<void> {
+    // Focus the element first
+    await this.focusElement(nodeId);
 
-      // Select all (Ctrl/Cmd + A)
-      await cdp.sendCommand('Input.dispatchKeyEvent', {
-        type: 'rawKeyDown',
-        key: 'a',
-        code: 'KeyA',
-        modifiers: modifierCode,
-      });
-
-      await this.sleep(50);
-
-      await cdp.sendCommand('Input.dispatchKeyEvent', {
-        type: 'rawKeyUp',
-        key: 'a',
-        code: 'KeyA',
-        modifiers: modifierCode,
-      });
-
-      await this.sleep(50);
-
-      // Delete (Backspace)
-      await cdp.sendCommand('Input.dispatchKeyEvent', {
-        type: 'rawKeyDown',
-        key: 'Backspace',
-        code: 'Backspace',
-      });
-
-      await this.sleep(50);
-
-      await cdp.sendCommand('Input.dispatchKeyEvent', {
-        type: 'rawKeyUp',
-        key: 'Backspace',
-        code: 'Backspace',
-      });
-
-      console.log('[TypeHandler] ✅ Input cleared');
-    } catch (error) {
-      console.warn('[TypeHandler] ⚠️ Clear failed:', error);
+    // Clear existing content if requested
+    if (clearFirst) {
+      await this.clearElement(nodeId);
     }
+
+    // Type the value character by character for more realistic typing
+    for (const char of value) {
+      await this.cdp.sendCommand('Input.dispatchKeyEvent', {
+        type: 'keyDown',
+        text: char,
+      });
+      await this.sleep(1);
+
+      await this.cdp.sendCommand('Input.dispatchKeyEvent', {
+        type: 'keyUp',
+        text: char,
+      });
+      await this.sleep(1);
+    }
+
+    // Small delay after typing
+    await this.sleep(1);
   }
 
-  private async typeText(text: string): Promise<boolean> {
+  private async focusElement(nodeId: number): Promise<void> {
     try {
-      const cdp = this.view.webContents.debugger;
+      const { model } = await this.cdp.sendCommand('DOM.getBoxModel', { nodeId });
 
-      for (const char of text) {
-        if (char === '\n') {
-          await cdp.sendCommand('Input.dispatchKeyEvent', {
-            type: 'rawKeyDown',
-            key: 'Enter',
-            code: 'Enter',
-            windowsVirtualKeyCode: 13,
-            nativeVirtualKeyCode: 13,
-          });
-
-          await cdp.sendCommand('Input.dispatchKeyEvent', {
-            type: 'keyUp',
-            key: 'Enter',
-            code: 'Enter',
-            windowsVirtualKeyCode: 13,
-            nativeVirtualKeyCode: 13,
-          });
-
-          continue;
+        if (!model || !model.content || model.content.length < 8) {
+        throw new Error('Element not visible or has no box model');
         }
 
-        await cdp.sendCommand('Input.dispatchKeyEvent', {
-          type: 'keyDown',
-          text: char,
+        const [x1, y1, x2, y2, x3, y3, x4, y4] = model.content;
+        const centerX = (x1 + x2 + x3 + x4) / 4;
+        const centerY = (y1 + y2 + y3 + y4) / 4;
+
+        await this.cdp.sendCommand('Input.dispatchMouseEvent', {
+            type: 'mouseMoved',
+            x: centerX,
+            y: centerY,
+            button: 'none',
+            clickCount: 0,
         });
+        await new Promise((resolve) => setTimeout(resolve, 20));
 
-        await cdp.sendCommand('Input.dispatchKeyEvent', {
-          type: 'keyUp',
-          text: char,
+        await this.cdp.sendCommand('Input.dispatchMouseEvent', {
+            type: 'mousePressed',
+            x: centerX,
+            y: centerY,
+            button: 'left',
+            clickCount: 1,
         });
+        await new Promise((resolve) => setTimeout(resolve, 20));
 
-        await this.sleep(1);
-      }
-
-      return true;
+        await this.cdp.sendCommand('Input.dispatchMouseEvent', {
+            type: 'mouseReleased',
+            x: centerX,
+            y: centerY,
+            button: 'left',
+            clickCount: 1,
+        });
+        await new Promise((resolve) => setTimeout(resolve, 20));
     } catch (error) {
-      console.error('[TypeHandler] ❌ Type text failed:', error);
-      return false;
+      console.error('[TypeHandler] Error focusing element:', error);
+      throw new Error('Failed to focus element');
     }
   }
 
-  private async executeTypeByNodeId(params: TypeParams): Promise<boolean> {
+  private async clearElement(nodeId: number): Promise<void> {
     try {
-      const cdp = this.view.webContents.debugger;
-      const nodeId = params.nodeId!;
-      await cdp.sendCommand('DOM.scrollIntoViewIfNeeded', { nodeId });
-      await this.sleep(150);
+      const { object } = await this.cdp.sendCommand('DOM.resolveNode', { nodeId });
 
-      const { model } = await cdp.sendCommand('DOM.getBoxModel', { nodeId });
-
-      if (!model || !model.content || model.content.length < 8) {
-        console.error('[TypeHandler] Invalid box model for node', nodeId);
-        return false;
+      if (!object || !object.objectId) {
+        throw new Error('Could not resolve element to clear');
       }
 
-      const [x1, y1, x2, y2, x3, y3, x4, y4] = model.content;
-      const centerX = Math.round((x1 + x2 + x3 + x4) / 4);
-      const centerY = Math.round((y1 + y2 + y3 + y4) / 4);
-      await cdp.sendCommand('Input.dispatchMouseEvent', {
-        type: 'mouseMoved',
-        x: centerX,
-        y: centerY,
-        button: 'none',
-        clickCount: 0,
+      // Clear using JavaScript for reliability
+      await this.cdp.sendCommand('Runtime.callFunctionOn', {
+        objectId: object.objectId,
+        functionDeclaration: `
+          function() {
+            if (this.value !== undefined) {
+              this.value = '';
+            }
+            if (this.textContent !== undefined && this.getAttribute('contenteditable')) {
+              this.textContent = '';
+            }
+            // Trigger input event to notify frameworks (React, Vue, etc.)
+            this.dispatchEvent(new Event('input', { bubbles: true }));
+            this.dispatchEvent(new Event('change', { bubbles: true }));
+          }
+        `,
+        returnByValue: false,
       });
 
-      await this.sleep(50);
-
-      await cdp.sendCommand('Input.dispatchMouseEvent', {
-        type: 'mousePressed',
-        x: centerX,
-        y: centerY,
-        button: 'left',
-        clickCount: 1,
+      await this.cdp.sendCommand('Runtime.releaseObject', {
+        objectId: object.objectId,
       });
-
-      await this.sleep(50);
-
-      await cdp.sendCommand('Input.dispatchMouseEvent', {
-        type: 'mouseReleased',
-        x: centerX,
-        y: centerY,
-        button: 'left',
-        clickCount: 1,
-      });
-
-      await this.sleep(50);
-      if (params.clearFirst !== false) {
-        await this.clearInput();
-        await this.sleep(10);
-      }
-
-      const typeSuccess = await this.typeText(params.text);
-      if (!typeSuccess) {
-        return false;
-      }
-
-      if (params.pressEnter) {
-        await cdp.sendCommand('Input.dispatchKeyEvent', {
-          type: 'rawKeyDown',
-          key: 'Enter',
-          code: 'Enter',
-          windowsVirtualKeyCode: 13,
-          nativeVirtualKeyCode: 13,
-        });
-
-        await this.sleep(10);
-
-        await cdp.sendCommand('Input.dispatchKeyEvent', {
-          type: 'keyUp',
-          key: 'Enter',
-          code: 'Enter',
-          windowsVirtualKeyCode: 13,
-          nativeVirtualKeyCode: 13,
-        });
-      }
-
-      await this.sleep(30);
-
-      return true;
     } catch (error) {
-      console.error('[TypeHandler] ❌ CDP node typing failed:', error);
-      return false;
+      console.error('[TypeHandler] Error clearing element:', error);
+      // Don't throw - clearing is optional
     }
   }
 
+  private async getElementText(nodeId: number): Promise<string | null> {
+    try {
+      const { object } = await this.cdp.sendCommand('DOM.resolveNode', { nodeId });
+
+      if (!object || !object.objectId) {
+        return null;
+      }
+
+      const textResult = await this.cdp.sendCommand('Runtime.callFunctionOn', {
+        objectId: object.objectId,
+        functionDeclaration: `
+          function() {
+            let text = this.getAttribute('aria-label') || '';
+            if (!text) text = this.getAttribute('placeholder') || '';
+            if (!text) text = this.getAttribute('name') || '';
+            if (!text) text = this.title || '';
+            if (!text) text = this.getAttribute('aria-labelledby') || '';
+            if (!text && this.labels && this.labels.length > 0) {
+              text = this.labels[0].textContent || '';
+            }
+            if (!text) text = (this.innerText || '').trim();
+            if (!text) text = (this.textContent || '').trim();
+            return text.trim();
+          }
+        `,
+        returnByValue: true,
+      });
+
+      await this.cdp.sendCommand('Runtime.releaseObject', {
+        objectId: object.objectId,
+      });
+
+      if (textResult.result && textResult.result.value) {
+        return String(textResult.result.value).trim();
+      }
+
+      return null;
+    } catch (error) {
+      return null;
+    }
+  }
+
+  private textMatches(elementText: string, searchText: string): boolean {
+    const normalizedElement = elementText.toLowerCase().trim();
+    const normalizedSearch = searchText.toLowerCase().trim();
+
+    if (normalizedElement === normalizedSearch) {
+      return true;
+    }
+
+    if (normalizedElement.includes(normalizedSearch)) {
+      return true;
+    }
+
+    if (normalizedSearch.includes(normalizedElement)) {
+      return true;
+    }
+
+    const elementWords = normalizedElement.split(/\s+/);
+    const searchWords = normalizedSearch.split(/\s+/);
+
+    if (searchWords.every((word) => elementWords.includes(word))) {
+      return true;
+    }
+
+    return false;
+  }
+
+  private buildSelectorFromRole(role: string): string {
+    const roleMap: Record<string, string> = {
+      textbox: 'input[type="text"], input:not([type]), textarea, [role="textbox"]',
+      searchbox: 'input[type="search"], [role="searchbox"]',
+      combobox: 'select, input[list], [role="combobox"]',
+      spinbutton: 'input[type="number"], [role="spinbutton"]',
+      slider: 'input[type="range"], [role="slider"]',
+    };
+
+    return roleMap[role.toLowerCase()] || `[role="${role}"]`;
+  }
+
+  private parseAttributes(attributes: string[]): Record<string, string> {
+    const attrs: Record<string, string> = {};
+    for (let i = 0; i < attributes.length; i += 2) {
+      const key = attributes[i];
+      const value = attributes[i + 1];
+      if (key && value !== undefined) {
+        attrs[key] = value;
+      }
+    }
+    return attrs;
+  }
+
+  private createErrorResult(error: AutomationError): ToolExecutionResult {
+    return {
+      success: false,
+      error,
+      tabId: this.tabId,
+    };
+  }
+
+  private sleep(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
 }

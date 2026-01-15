@@ -106,7 +106,7 @@ export class ContextWindowService {
         message.content.forEach((block) => {
           if (
             block.type === 'tool_use' &&
-            (block.name === 'extract_context' || block.name === 'take_snapshot')
+            (block.name === 'context' || block.name === 'snapshot')
           ) {
             analysisToolIdSet.add(block.id);
           }
