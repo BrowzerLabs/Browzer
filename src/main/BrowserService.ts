@@ -17,11 +17,13 @@ import { HistoryService } from '@/main/history/HistoryService';
 import { PasswordManager } from '@/main/password/PasswordManager';
 import { BookmarkService } from '@/main/bookmark';
 import { SessionManager } from '@/main/llm/session/SessionManager';
+import { DOAgentManager } from '@/main/llm/agent';
 
 export class BrowserService {
   // Modular components
   private tabService: TabService;
   private automationManager: AutomationManager;
+  private doAgentManager: DOAgentManager;
   private navigationService: NavigationService;
   private debuggerService: DebuggerService;
   private downloadService: DownloadService;
@@ -34,7 +36,7 @@ export class BrowserService {
   private bookmarkService: BookmarkService;
   private sessionManager: SessionManager;
 
-   private recordingService: RecordingService;
+  private recordingService: RecordingService;
 
   constructor(
     private baseWindow: BaseWindow,
@@ -69,7 +71,7 @@ export class BrowserService {
       this.navigationService,
       this.debuggerService,
       this.bookmarkService,
-      this.recordingService,
+      this.recordingService
     );
 
     this.setupTabEventListeners();
@@ -79,6 +81,9 @@ export class BrowserService {
       this.browserView,
       this.recordingService.getRecordingStore()
     );
+
+    // Initialize DO Agent Manager for autopilot mode
+    this.doAgentManager = new DOAgentManager(this.browserView);
   }
 
   public getTabService(): TabService {
@@ -136,6 +141,42 @@ export class BrowserService {
 
   public async deleteAutomationSession(sessionId: string): Promise<boolean> {
     return this.automationManager.deleteAutomationSession(sessionId);
+  }
+
+  // ============================================================================
+  // Autopilot (DO Agent) Methods
+  // ============================================================================
+
+  /**
+   * Execute autopilot with a user goal (no recording needed)
+   */
+  public async executeAutopilot(
+    userGoal: string,
+    startUrl?: string
+  ): Promise<{
+    success: boolean;
+    sessionId: string;
+    message: string;
+  }> {
+    const newTab = this.tabService.createTab(startUrl);
+    return this.doAgentManager.executeAutopilot(newTab, userGoal, startUrl);
+  }
+
+  /**
+   * Stop an autopilot session
+   */
+  public stopAutopilot(sessionId: string): void {
+    this.doAgentManager.stopAutopilot(sessionId);
+  }
+
+  /**
+   * Get autopilot session status
+   */
+  public getAutopilotStatus(sessionId: string): {
+    exists: boolean;
+    status?: string;
+  } {
+    return this.doAgentManager.getSessionStatus(sessionId);
   }
 
   // Service Accessors (for IPCHandlers)
@@ -212,6 +253,7 @@ export class BrowserService {
   public destroy(): void {
     this.tabService.destroy();
     this.automationManager.destroy();
+    this.doAgentManager.destroy();
     this.downloadService.destroy();
     this.sessionManager.close();
   }

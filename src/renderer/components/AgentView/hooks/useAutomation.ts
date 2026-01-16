@@ -139,6 +139,63 @@ export function useAutomation() {
     setUserPrompt('');
   }, [userPrompt, setUserPrompt]);
 
+  /**
+   * Handle autopilot submission - autonomous agent without recording
+   */
+  const handleAutopilotSubmit = useCallback(async () => {
+    if (!userPrompt.trim() || isSubmitting) {
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    try {
+      const result = await window.browserAPI.executeAutopilot(userPrompt);
+
+      if (result.success) {
+        // Use 'autopilot' as the recordingId for autopilot sessions
+        startAutomation(userPrompt, 'autopilot', result.sessionId);
+      } else {
+        toast.error(result.message || 'Failed to start autopilot');
+        setIsSubmitting(false);
+      }
+    } catch (error) {
+      console.error('[useAutomation] Autopilot error:', error);
+      toast.error('Failed to start autopilot');
+      setIsSubmitting(false);
+    }
+  }, [userPrompt, isSubmitting, startAutomation]);
+
+  /**
+   * Unified submit handler that routes to the appropriate handler based on mode
+   */
+  const handleUnifiedSubmit = useCallback(() => {
+    if (agentMode === 'autopilot') {
+      return handleAutopilotSubmit();
+    }
+    if (agentMode === 'ask') {
+      return handleAskSubmit();
+    }
+    return handleSubmit();
+  }, [agentMode, handleAutopilotSubmit, handleAskSubmit, handleSubmit]);
+
+  /**
+   * Unified stop handler that works for both automate and autopilot
+   */
+  const handleUnifiedStop = useCallback(async () => {
+    if (!currentSession || !isSubmitting) {
+      return;
+    }
+
+    setIsSubmitting(false);
+
+    if (agentMode === 'autopilot') {
+      await window.browserAPI.stopAutopilot(currentSession.sessionId);
+    } else {
+      stopAutomation(currentSession.sessionId);
+    }
+  }, [currentSession, isSubmitting, agentMode, stopAutomation]);
+
   return {
     viewState,
     currentSession,
@@ -159,6 +216,9 @@ export function useAutomation() {
     handleStopAutomation,
     handleModeChange,
     handleAskSubmit,
+    handleAutopilotSubmit,
+    handleUnifiedSubmit,
+    handleUnifiedStop,
     setIsSubmitting,
   };
 }

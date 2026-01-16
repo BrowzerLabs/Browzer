@@ -1,16 +1,19 @@
 import { WebContentsView } from 'electron';
-import type {
-  AutomationError,
-  ToolExecutionResult,
-  XMLContextOptions,
-} from '@/shared/types';
+
 import { XMLExtractor, AccessibilityTreeExtractor } from '../context';
+
 import { ViewportSnapshotCapture } from './ViewportSnapshotCapture';
 import { ClickHandler } from './handlers/ClickHandler';
 import { TypeHandler } from './handlers/TypeHandler';
 import { NavigationHandler } from './handlers/NavigationHandler';
 import { HandlerContext } from './handlers/BaseHandler';
 import { KeyHandler } from './handlers';
+
+import type {
+  AutomationError,
+  ToolExecutionResult,
+  XMLContextOptions,
+} from '@/shared/types';
 
 export class BrowserAutomationExecutor {
   private view: WebContentsView;
@@ -66,6 +69,9 @@ export class BrowserAutomationExecutor {
       case 'snapshot':
         return this.captureViewportSnapshot(params);
 
+      case 'scroll':
+        return this.executeScroll(params);
+
       default:
         return this.createErrorResult({
           code: 'EXECUTION_ERROR',
@@ -73,7 +79,6 @@ export class BrowserAutomationExecutor {
         });
     }
   }
-
 
   private async extractContext(): Promise<ToolExecutionResult> {
     const result = await this.accessibilityExtractor.extractContext();
@@ -117,6 +122,55 @@ export class BrowserAutomationExecutor {
       code: 'EXECUTION_ERROR',
       message: result.error || 'Failed to capture viewport snapshot',
     });
+  }
+
+  private async executeScroll(params: {
+    direction: 'up' | 'down' | 'left' | 'right';
+    amount?: number;
+  }): Promise<ToolExecutionResult> {
+    const amount = params.amount ?? 300;
+    let deltaX = 0;
+    let deltaY = 0;
+
+    switch (params.direction) {
+      case 'up':
+        deltaY = -amount;
+        break;
+      case 'down':
+        deltaY = amount;
+        break;
+      case 'left':
+        deltaX = -amount;
+        break;
+      case 'right':
+        deltaX = amount;
+        break;
+    }
+
+    try {
+      // Execute scroll via JavaScript
+      await this.view.webContents.executeJavaScript(`
+        window.scrollBy({
+          left: ${deltaX},
+          top: ${deltaY},
+          behavior: 'smooth'
+        });
+      `);
+
+      // Wait for scroll to complete
+      await new Promise((resolve) => setTimeout(resolve, 300));
+
+      return {
+        success: true,
+        value: `Scrolled ${params.direction} by ${amount}px`,
+        tabId: this.tabId,
+      };
+    } catch (error) {
+      return this.createErrorResult({
+        code: 'EXECUTION_ERROR',
+        message: `Failed to scroll: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      });
+    }
   }
 
   private createErrorResult(error: AutomationError): ToolExecutionResult {

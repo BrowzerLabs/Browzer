@@ -173,6 +173,20 @@ export interface BrowserAPI {
     message: string;
   }>;
 
+  // Autopilot (DO Agent)
+  executeAutopilot: (
+    userGoal: string,
+    startUrl?: string
+  ) => Promise<{
+    success: boolean;
+    sessionId: string;
+    message: string;
+  }>;
+  stopAutopilot: (sessionId: string) => Promise<{ success: boolean }>;
+  getAutopilotStatus: (
+    sessionId: string
+  ) => Promise<{ exists: boolean; status?: string }>;
+
   // Session Management
   loadAutomationSession: (sessionId: string) => Promise<any>;
 

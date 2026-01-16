@@ -45,5 +45,25 @@ export class AutomationHandler extends BaseHandler {
     this.handle('automation:delete-session', async (_, sessionId: string) => {
       return await browserService.deleteAutomationSession(sessionId);
     });
+
+    // ========================================================================
+    // Autopilot (DO Agent) Handlers
+    // ========================================================================
+
+    this.handle(
+      'autopilot:execute',
+      async (_, userGoal: string, startUrl?: string) => {
+        return await browserService.executeAutopilot(userGoal, startUrl);
+      }
+    );
+
+    this.handle('autopilot:stop', async (_, sessionId: string) => {
+      browserService.stopAutopilot(sessionId);
+      return { success: true };
+    });
+
+    this.handle('autopilot:status', async (_, sessionId: string) => {
+      return browserService.getAutopilotStatus(sessionId);
+    });
   }
 }

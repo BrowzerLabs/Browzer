@@ -18,14 +18,13 @@ export default function AgentView() {
     isLoadingHistory,
     agentMode,
     loadRecordings,
-    handleSubmit,
     handleSessionSelect,
     handleNewSession,
     handleRecordingSelect,
     handlePromptChange,
-    handleStopAutomation,
     handleModeChange,
-    handleAskSubmit,
+    handleUnifiedSubmit,
+    handleUnifiedStop,
   } = useAutomation();
 
   useEffect(() => {
@@ -33,11 +32,10 @@ export default function AgentView() {
   }, [loadRecordings]);
 
   const isDisabled = currentSession?.status === 'running';
-  const onSubmit = agentMode === 'ask' ? handleAskSubmit : handleSubmit;
 
   return (
     <section className="flex flex-col h-full overflow-hidden">
-      {/* Only show AgentHeader in automate mode */}
+      {/* Only show AgentHeader in automate mode (recording-based automation) */}
       {agentMode === 'automate' && (
         <AgentHeader
           viewMode={viewState}
@@ -67,8 +65,8 @@ export default function AgentView() {
         isDisabled={isDisabled}
         agentMode={agentMode}
         onPromptChange={handlePromptChange}
-        onSubmit={onSubmit}
-        onStop={handleStopAutomation}
+        onSubmit={handleUnifiedSubmit}
+        onStop={handleUnifiedStop}
         onModeChange={handleModeChange}
       />
     </section>
