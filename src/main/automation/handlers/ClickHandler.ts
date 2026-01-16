@@ -194,6 +194,20 @@ export class ClickHandler {
       throw new Error('Element not found');
     }
 
+    await this.cdp.sendCommand('Runtime.callFunctionOn', {
+        objectId: object.objectId,
+        functionDeclaration: `
+          function() {
+            this.scrollIntoView({
+              behavior: 'smooth',
+              block: 'center',
+              inline: 'center'
+            });
+          }
+        `,
+        returnByValue: false,
+      });
+
     const { model } = await this.cdp.sendCommand('DOM.getBoxModel', {
       objectId: object.objectId,
     });
@@ -204,6 +218,8 @@ export class ClickHandler {
     const [x1, y1, x2, y2, x3, y3, x4, y4] = model.content;
     const centerX = (x1 + x2 + x3 + x4) / 4;
     const centerY = (y1 + y2 + y3 + y4) / 4;
+
+    await this.showClickIndicator(centerX, centerY);
 
     await this.cdp.sendCommand('Input.dispatchMouseEvent', {
       type: 'mouseMoved',
@@ -231,6 +247,8 @@ export class ClickHandler {
       clickCount: 1,
     });
     await new Promise((resolve) => setTimeout(resolve, 20));
+    
+    await this.removeClickIndicator();
   }
 
 
@@ -369,6 +387,75 @@ export class ClickHandler {
       }
     }
     return attrs;
+  }
+
+  private async scrollIntoView(objectId: string): Promise<void> {
+    try {
+      await this.cdp.sendCommand('Runtime.callFunctionOn', {
+        objectId,
+        functionDeclaration: `
+          function() {
+            this.scrollIntoView({
+              behavior: 'smooth',
+              block: 'center',
+              inline: 'center'
+            });
+          }
+        `,
+        returnByValue: false,
+      });
+    } catch (error) {
+      console.warn('[ClickHandler] Failed to scroll element into view:', error);
+    }
+  }
+
+  private async showClickIndicator(x: number, y: number): Promise<void> {
+    try {
+      await this.cdp.sendCommand('Runtime.evaluate', {
+        expression: `
+          (function() {
+            const existing = document.getElementById('__browzer_click_indicator');
+            if (existing) existing.remove();
+            
+            const indicator = document.createElement('div');
+            indicator.id = '__browzer_click_indicator';
+            indicator.style.cssText = \`
+              position: fixed;
+              left: ${x}px;
+              top: ${y}px;
+              width: 30px;
+              height: 30px;
+              border: 3px solid #ff4444;
+              border-radius: 50%;
+              background: rgba(255, 68, 68, 0.2);
+              pointer-events: none;
+              z-index: 2000;
+            \`;
+            
+            document.body.appendChild(indicator);
+          })();
+        `,
+      });
+    } catch (error) {
+      console.warn('[ClickHandler] Failed to show click indicator:', error);
+    }
+  }
+
+  private async removeClickIndicator(): Promise<void> {
+    try {
+      await this.cdp.sendCommand('Runtime.evaluate', {
+        expression: `
+          (function() {
+            const indicator = document.getElementById('__browzer_click_indicator');
+            if (indicator) {
+              setTimeout(() => indicator.remove(), 200);
+            }
+          })();
+        `,
+      });
+    } catch (error) {
+      console.warn('[ClickHandler] Failed to remove click indicator:', error);
+    }
   }
 
   private createErrorResult(error: AutomationError): ToolExecutionResult {

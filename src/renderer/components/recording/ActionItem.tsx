@@ -2,8 +2,6 @@ import {
   Item,
   ItemMedia,
   ItemContent,
-  ItemTitle,
-  ItemDescription,
 } from '@/renderer/ui/item';
 import { RecordingAction } from '@/shared/types';
 import { RecordingUtils } from '@/renderer/utils';
@@ -16,8 +14,6 @@ interface ActionItemProps {
 export function ActionItem({ action, index }: ActionItemProps) {
   const {
     icon: Icon,
-    title,
-    description,
     color,
   } = RecordingUtils.getActionDisplay(action);
 
@@ -32,12 +28,15 @@ export function ActionItem({ action, index }: ActionItemProps) {
       </ItemMedia>
 
       <ItemContent>
-        <ItemTitle className="text-xs font-semibold text-black dark:text-white">
-          {title}
-        </ItemTitle>
-        <ItemDescription className="text-xs text-gray-600 dark:text-gray-400">
-          {description}
-        </ItemDescription>
+        <h6 className="text-xs text-black dark:text-white">
+          <strong>{action.type}</strong> {action.element?.role || action?.keys?.join('+')}
+        </h6>
+        <p className="text-xs text-gray-600 dark:text-gray-400">
+          {action.element?.text || action.url.substring(0, 50)}
+        </p>
+        <p className="text-xs text-gray-400 dark:text-gray-500">
+          {(action.element?.value || action.element?.href)?.substring(0, 50)}
+        </p>
       </ItemContent>
 
       <div className="text-xs text-gray-600 dark:text-gray-400">

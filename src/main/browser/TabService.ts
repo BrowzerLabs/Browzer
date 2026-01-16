@@ -342,7 +342,12 @@ export class TabService extends EventEmitter {
     this.emit('tabs:changed');
     if (previousTabId && previousTabId !== tabId) {
       this.emit('tab:switched', previousTabId, tab);
-      console.log('tab switched', previousTabId, tabId);
+      this.recordingService.addAction({
+        type: 'tab-switch',
+        tabId: this.activeTabId,
+        url: tab.info.url,
+        timestamp: Date.now(),
+      });
     }
     return true;
   }

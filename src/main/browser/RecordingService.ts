@@ -104,7 +104,6 @@ export class RecordingService extends EventEmitter {
 
     this.currentSession.actions.push(action);
     this.browserView.webContents.send('recording:action-recorded', action);
-    console.log(`📝 Action recorded: ${action.type} (${this.currentSession.actions.length} total)`);
   }
 
   public async enableClickTracking(tab: Tab): Promise<void> {
@@ -288,7 +287,10 @@ export class RecordingService extends EventEmitter {
             'tr': 'row',
             'td': 'cell',
             'th': 'columnheader',
-            'option': 'option'
+            'option': 'option',
+            'div': 'generic',
+            'span': 'generic',
+            'canvas': 'canvas',
           };
           
           if (tag === 'input') {
@@ -350,14 +352,21 @@ export class RecordingService extends EventEmitter {
             const role = getElementRole(element);
             const text = getElementText(element);
             const value = getElementValue(element);
-            const href = element.href || element.getAttribute('href') || '';
+            const href = element.href || element.getAttribute('href');
+            const id = element.id || element.getAttribute('id');
             
             window._click_data = {
               role: role,
               text: text,
               value: value,
-              href: href
             };
+            
+            if (href) {
+              window._click_data.href = href;
+            }
+            if (id) {
+              window._click_data.id = id;
+            }
           }
           console.log('${CLICK_MARKER}');
         }, true);
@@ -440,7 +449,7 @@ export class RecordingService extends EventEmitter {
           clearTimeout(inputDebounce[key]);
           inputDebounce[key] = setTimeout(() => {
             recordInput(target);
-          }, 3000);
+          }, 2000);
         }, true);
         
         document.addEventListener('blur', (e) => {
@@ -514,18 +523,28 @@ export class RecordingService extends EventEmitter {
     });
     const data = dataResult.result.value || {};
 
-    const { result } = await cdp.sendCommand('Runtime.evaluate', {
-      expression: 'window.__browzer_event',
-      returnByValue: false,
-    });
+    let axData: AXNode = { role: '', name: '', value: '' };
     
-    const { nodes } = await cdp.sendCommand('Accessibility.getPartialAXTree', {
-      objectId: result.objectId,
-      fetchRelatives: true,
-    });
+    try {
+      const { result } = await cdp.sendCommand('Runtime.evaluate', {
+        expression: 'window.__browzer_event',
+        returnByValue: false,
+      });
+      
+      if (result && result.objectId) {
+        const { nodes } = await cdp.sendCommand('Accessibility.getPartialAXTree', {
+          objectId: result.objectId,
+          fetchRelatives: true,
+        });
 
-    const axData = this.extractAccessibilityData(nodes);
-    console.log(this.formatAccessibilityTree(nodes));
+        axData = this.extractAccessibilityData(nodes);
+        console.log(this.formatAccessibilityTree(nodes));
+      } else {
+        console.warn('🔴 No objectId available for clicked element');
+      }
+    } catch (error) {
+      console.error('🔴 Error getting accessibility data for click:', error);
+    }
 
     return {
       tabId: tab.id,
@@ -547,27 +566,35 @@ export class RecordingService extends EventEmitter {
       returnByValue: true,
     });
     const data = dataResult.result.value || {};
+    let axData: AXNode = { role: '', name: '', value: '' };
+    try {
+      const { result } = await cdp.sendCommand('Runtime.evaluate', {
+        expression: 'window.__browzer_event',
+        returnByValue: false,
+      });
+      
+      const { nodes } = await cdp.sendCommand('Accessibility.getPartialAXTree', {
+        objectId: result.objectId,
+        fetchRelatives: true,
+      });
 
-    const { result } = await cdp.sendCommand('Runtime.evaluate', {
-      expression: 'window.__browzer_event',
-      returnByValue: false,
-    });
-    
-    const { nodes } = await cdp.sendCommand('Accessibility.getPartialAXTree', {
-      objectId: result.objectId,
-      fetchRelatives: true,
-    });
-
-    const axData = this.extractAccessibilityData(nodes);
-    console.log(this.formatAccessibilityTree(nodes));
+      axData = this.extractAccessibilityData(nodes);
+      console.log(this.formatAccessibilityTree(nodes));
+    } catch (error) {
+      console.error('Error getting accessibility data:', error);
+    }
 
     return {
       tabId: tab.id,
       type: 'type',
       element: {
-        role: data.role || axData.role || '',
-        text: data.text || axData.name || '',
-        value: data.value || axData.value || '',
+        role: data.role || axData.role,
+        text: data.text || axData.name,
+        value: data.value || axData.value,
+        attributes: {
+          id: data.id,
+          href: data.href,
+        }
       },
       url: tab.view.webContents.getURL(),
       timestamp: Date.now(),

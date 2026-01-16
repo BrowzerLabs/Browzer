@@ -260,6 +260,19 @@ export class TypeHandler {
       if(!object || !object.objectId) {
         throw new Error('Element not found');
       }
+      await this.cdp.sendCommand('Runtime.callFunctionOn', {
+        objectId: object.objectId,
+        functionDeclaration: `
+          function() {
+            this.scrollIntoView({
+              behavior: 'smooth',
+              block: 'center',
+              inline: 'center'
+            });
+          }
+        `,
+        returnByValue: false,
+      });
 
       const { model } = await this.cdp.sendCommand('DOM.getBoxModel', { objectId: object.objectId });
       if (!model || !model.content || model.content.length < 8) {
