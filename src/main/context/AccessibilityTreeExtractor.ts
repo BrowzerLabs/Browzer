@@ -5,6 +5,22 @@ export interface AccessibilityTreeResult {
   error?: string;
 }
 
+/**
+ * Visibility context for layered filtering
+ */
+interface VisibilityContext {
+  hasActiveModal: boolean;
+  modalNodeIds: Set<number>;
+  ariaHiddenNodeIds: Set<number>;
+  cssHiddenNodeIds: Set<number>;
+  viewport: {
+    width: number;
+    height: number;
+    scrollX: number;
+    scrollY: number;
+  };
+}
+
 export class AccessibilityTreeExtractor {
   constructor(private view: WebContentsView) {}
 
@@ -27,8 +43,19 @@ export class AccessibilityTreeExtractor {
         return { error: 'No accessibility nodes found' };
       }
 
-      // Filter nodes to those in/near viewport
-      const visibleNodes = await this.filterVisibleNodes(nodes, viewport, cdp);
+      // Analyze visibility context (modals, aria-hidden, etc.)
+      const visibilityContext = await this.analyzeVisibilityContext(
+        nodes,
+        viewport,
+        cdp
+      );
+
+      // Filter nodes using layered visibility approach
+      const visibleNodes = await this.filterVisibleNodes(
+        nodes,
+        visibilityContext,
+        cdp
+      );
 
       const treeString = this.formatAccessibilityTree(visibleNodes);
       return { tree: treeString };
@@ -66,9 +93,12 @@ export class AccessibilityTreeExtractor {
   }
 
   /**
-   * Filter nodes to those visible in or near the viewport
+   * Analyze the page to determine visibility context
+   * Layer 1: Modal detection - if modal is open, only modal content is visible
+   * Layer 2: aria-hidden detection - elements with aria-hidden="true" are hidden
+   * Layer 3: CSS visibility - elements with display:none or visibility:hidden
    */
-  private async filterVisibleNodes(
+  private async analyzeVisibilityContext(
     nodes: any[],
     viewport: {
       width: number;
@@ -76,6 +106,205 @@ export class AccessibilityTreeExtractor {
       scrollX: number;
       scrollY: number;
     },
+    cdp: Electron.Debugger
+  ): Promise<VisibilityContext> {
+    const context: VisibilityContext = {
+      hasActiveModal: false,
+      modalNodeIds: new Set(),
+      ariaHiddenNodeIds: new Set(),
+      cssHiddenNodeIds: new Set(),
+      viewport,
+    };
+
+    // Detect active modal/dialog
+    const activeModal = await this.detectActiveModal(nodes, cdp);
+    if (activeModal) {
+      context.hasActiveModal = true;
+      // Collect all node IDs within the modal
+      this.collectModalNodeIds(activeModal, nodes, context.modalNodeIds);
+      console.log(
+        `[AccessibilityTreeExtractor] Active modal detected with ${context.modalNodeIds.size} nodes`
+      );
+    }
+
+    // Detect aria-hidden elements
+    for (const node of nodes) {
+      if (node.properties) {
+        const hiddenProp = node.properties.find(
+          (p: any) => p.name === 'hidden' && p.value?.value === true
+        );
+        if (hiddenProp) {
+          context.ariaHiddenNodeIds.add(node.backendDOMNodeId);
+        }
+      }
+    }
+
+    return context;
+  }
+
+  /**
+   * Detect if there's an active modal/dialog on the page
+   * Returns the topmost modal if multiple are found (for nested dialogs)
+   */
+  private async detectActiveModal(
+    nodes: any[],
+    cdp: Electron.Debugger
+  ): Promise<any | null> {
+    const modalRoles = ['dialog', 'alertdialog', 'menu', 'listbox'];
+
+    // Collect all visible modals
+    const visibleModals: { node: any; zIndex: number; domOrder: number }[] = [];
+
+    for (let i = 0; i < nodes.length; i++) {
+      const node = nodes[i];
+      const role = node.role?.value;
+
+      if (modalRoles.includes(role) && node.backendDOMNodeId) {
+        // Check if the modal is actually visible
+        try {
+          const { model } = await cdp.sendCommand('DOM.getBoxModel', {
+            backendNodeId: node.backendDOMNodeId,
+          });
+
+          if (model && model.content && model.content.length >= 4) {
+            const [x1, y1, x2, y2] = model.content;
+            const width = Math.abs(x2 - x1);
+            const height = Math.abs(y2 - y1);
+
+            // Modal should have reasonable dimensions
+            if (width > 50 && height > 50) {
+              // Get z-index for this modal
+              const zIndex = await this.getEffectiveZIndex(
+                node.backendDOMNodeId,
+                cdp
+              );
+              visibleModals.push({
+                node,
+                zIndex,
+                domOrder: i,
+              });
+            }
+          }
+        } catch {
+          // Element not in DOM or can't get box model
+        }
+      }
+    }
+
+    if (visibleModals.length === 0) {
+      return null;
+    }
+
+    // Find the topmost modal (highest z-index, or last in DOM order if same z-index)
+    const topmost = this.findTopmostElement(visibleModals);
+    console.log(
+      `[AccessibilityTreeExtractor] Found ${visibleModals.length} modals, selecting topmost with z-index ${topmost.zIndex}`
+    );
+    return topmost.node;
+  }
+
+  /**
+   * Find the topmost element from a list based on z-index and DOM order
+   */
+  private findTopmostElement(
+    elements: { node: any; zIndex: number; domOrder: number }[]
+  ): { node: any; zIndex: number; domOrder: number } {
+    return elements.reduce((top, current) => {
+      // Higher z-index wins
+      if (current.zIndex > top.zIndex) {
+        return current;
+      }
+      // Same z-index: later in DOM order wins (painted on top)
+      if (current.zIndex === top.zIndex && current.domOrder > top.domOrder) {
+        return current;
+      }
+      return top;
+    });
+  }
+
+  /**
+   * Get the effective z-index of an element (considering stacking context)
+   */
+  private async getEffectiveZIndex(
+    backendNodeId: number,
+    cdp: Electron.Debugger
+  ): Promise<number> {
+    try {
+      const result = await cdp.sendCommand('Runtime.evaluate', {
+        expression: `
+          (function() {
+            const el = document.querySelector('[data-backend-node-id="${backendNodeId}"]') ||
+                       Array.from(document.querySelectorAll('*')).find(e => e.__backendNodeId === ${backendNodeId});
+            if (!el) {
+              // Fallback: try to find by traversing
+              const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT);
+              let node;
+              let count = 0;
+              while ((node = walker.nextNode()) && count < 10000) {
+                count++;
+              }
+            }
+            // Get computed z-index, walking up the tree for stacking contexts
+            let maxZ = 0;
+            let current = el;
+            while (current && current !== document.body) {
+              const style = window.getComputedStyle(current);
+              const z = parseInt(style.zIndex, 10);
+              if (!isNaN(z) && z > maxZ) {
+                maxZ = z;
+              }
+              current = current.parentElement;
+            }
+            return maxZ;
+          })()
+        `,
+        returnByValue: true,
+      });
+      return result.result.value || 0;
+    } catch {
+      return 0;
+    }
+  }
+
+  /**
+   * Collect all node IDs that belong to a modal subtree
+   */
+  private collectModalNodeIds(
+    modalNode: any,
+    allNodes: any[],
+    nodeIds: Set<number>
+  ): void {
+    const nodeMap = new Map<string, any>();
+    for (const node of allNodes) {
+      if (node.nodeId) {
+        nodeMap.set(node.nodeId, node);
+      }
+    }
+
+    const collectRecursive = (node: any) => {
+      if (node.backendDOMNodeId) {
+        nodeIds.add(node.backendDOMNodeId);
+      }
+      if (node.childIds) {
+        for (const childId of node.childIds) {
+          const childNode = nodeMap.get(childId);
+          if (childNode) {
+            collectRecursive(childNode);
+          }
+        }
+      }
+    };
+
+    collectRecursive(modalNode);
+  }
+
+  /**
+   * Filter nodes using layered visibility approach
+   * Priority: Modal content > aria-hidden check > CSS visibility > Viewport
+   */
+  private async filterVisibleNodes(
+    nodes: any[],
+    context: VisibilityContext,
     cdp: Electron.Debugger
   ): Promise<any[]> {
     // Build node map for parent-child relationships
@@ -93,19 +322,38 @@ export class AccessibilityTreeExtractor {
       }
     }
 
-    // Nodes to include (visible + their ancestors)
+    // If modal is active, only show modal content
+    if (context.hasActiveModal) {
+      console.log(
+        '[AccessibilityTreeExtractor] Filtering to modal content only'
+      );
+      return nodes.filter(
+        (node) =>
+          node.backendDOMNodeId &&
+          context.modalNodeIds.has(node.backendDOMNodeId)
+      );
+    }
+
+    // Otherwise, use viewport-based filtering with aria-hidden check
     const includedNodeIds = new Set<string>();
 
-    // Buffer around viewport (include elements slightly outside)
+    // Buffer around viewport
     const BUFFER = 200;
-    const viewTop = viewport.scrollY - BUFFER;
-    const viewBottom = viewport.scrollY + viewport.height + BUFFER;
-    const viewLeft = viewport.scrollX - BUFFER;
-    const viewRight = viewport.scrollX + viewport.width + BUFFER;
+    const viewTop = context.viewport.scrollY - BUFFER;
+    const viewBottom =
+      context.viewport.scrollY + context.viewport.height + BUFFER;
+    const viewLeft = context.viewport.scrollX - BUFFER;
+    const viewRight =
+      context.viewport.scrollX + context.viewport.width + BUFFER;
 
     // Check each node with a backendDOMNodeId for visibility
     for (const node of nodes) {
       if (!node.backendDOMNodeId) continue;
+
+      // Skip aria-hidden elements
+      if (context.ariaHiddenNodeIds.has(node.backendDOMNodeId)) {
+        continue;
+      }
 
       try {
         // Get element's bounding box
@@ -215,7 +463,35 @@ export class AccessibilityTreeExtractor {
       'pressed',
     ]);
 
-    const shouldInclude = name && name.length > 0 && !NOISE_ROLES.has(role);
+    // Include interactive roles even without name
+    const INTERACTIVE_ROLES = new Set([
+      'button',
+      'link',
+      'textbox',
+      'searchbox',
+      'combobox',
+      'checkbox',
+      'radio',
+      'slider',
+      'spinbutton',
+      'switch',
+      'tab',
+      'menuitem',
+      'option',
+    ]);
+
+    // Check if it's an editable generic element (for custom UI frameworks)
+    const isEditableGeneric =
+      role === 'generic' &&
+      node.properties?.some(
+        (p: any) =>
+          (p.name === 'editable' && p.value?.value === 'plaintext') ||
+          (p.name === 'focusable' && p.value?.value === true)
+      );
+
+    const shouldInclude =
+      !NOISE_ROLES.has(role) &&
+      (name.length > 0 || INTERACTIVE_ROLES.has(role) || isEditableGeneric);
 
     if (shouldInclude && !isRoot) {
       const indent = '  '.repeat(depth);

@@ -11,7 +11,6 @@ import Anthropic from '@anthropic-ai/sdk';
  */
 export const TOOL_NAMES = {
   EXTRACT_CONTEXT: 'extract_context',
-  TAKE_SNAPSHOT: 'take_snapshot',
   CLICK: 'click',
   TYPE: 'type',
   SCROLL: 'scroll',
@@ -36,16 +35,6 @@ Example output:
 [456]<input type="email" placeholder="Enter email" />
 
 Use the [N] backend_node_id values for click and type actions.`,
-    input_schema: {
-      type: 'object' as const,
-      properties: {},
-      required: [],
-    },
-  },
-  {
-    name: TOOL_NAMES.TAKE_SNAPSHOT,
-    description:
-      'Capture a screenshot of the current viewport. Use this to visually verify the page state when text-based context is insufficient.',
     input_schema: {
       type: 'object' as const,
       properties: {},
@@ -83,7 +72,10 @@ Use clickCount for special click types:
     description: `Type text into an input field or editable element.
 
 The element is identified by its backend_node_id from extract_context.
-By default, existing content is cleared before typing.`,
+
+IMPORTANT: By default, existing content is automatically cleared before typing (using triple-click selection).
+DO NOT use Ctrl+A before typing - just call type() directly and it will replace existing text.
+Only set clearFirst: false if you specifically want to APPEND to existing text.`,
     input_schema: {
       type: 'object' as const,
       properties: {
@@ -99,7 +91,7 @@ By default, existing content is cleared before typing.`,
         clearFirst: {
           type: 'boolean',
           description:
-            'Clear existing content before typing (default: true). Set to false to append.',
+            'Clear existing content before typing (default: true). DO NOT set this to false unless you want to append text. DO NOT use Ctrl+A - the type tool handles clearing automatically.',
         },
         pressEnter: {
           type: 'boolean',
@@ -187,22 +179,38 @@ Common uses:
   },
   {
     name: TOOL_NAMES.WAIT,
-    description: `Wait for a specified duration. Use this when:
-- Waiting for animations to complete
-- Allowing time for content to load after an action
-- Giving dynamic elements time to appear
+    description: `Wait for page to be ready or for a specific duration.
 
-Maximum wait time is 5000ms (5 seconds).`,
+Two modes:
+1. **Network idle (recommended)**: Set waitForNetwork: true to wait until network activity stops.
+   This is faster and more reliable - use after navigate, click, or any action that loads content.
+
+2. **Fixed duration**: Set duration in milliseconds for animations or timed waits.
+   Only use this when you specifically need a delay (e.g., waiting for animation).
+
+PREFER network idle mode - it's faster because it stops waiting as soon as the page is ready.`,
     input_schema: {
       type: 'object' as const,
       properties: {
+        waitForNetwork: {
+          type: 'boolean',
+          description:
+            'Wait for network to become idle (no requests for 500ms). Recommended after navigation or clicks that load content.',
+        },
         duration: {
           type: 'number',
-          description: 'Duration to wait in milliseconds (max: 5000)',
+          description:
+            'Fixed duration to wait in milliseconds (max: 5000). Only use for animations, not for page loads.',
           maximum: 5000,
         },
+        timeout: {
+          type: 'number',
+          description:
+            'Maximum time to wait for network idle in milliseconds (default: 10000, max: 30000)',
+          maximum: 30000,
+        },
       },
-      required: ['duration'],
+      required: [],
     },
   },
   {

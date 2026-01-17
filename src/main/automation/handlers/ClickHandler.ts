@@ -216,6 +216,7 @@ export class ClickHandler {
       const elementText = textResult.result?.value || '(no text)';
       console.log(
         `[ClickHandler] Clicking element (nodeId=${nodeId}): "${elementText}"`
+        // Scroll element into view - use 'instant' for reliability inside modals
       );
     } catch {
       console.log(
@@ -223,19 +224,92 @@ export class ClickHandler {
       );
     }
 
+    // Scroll element into view - find scrollable parent (especially for modals) and scroll there
     await this.cdp.sendCommand('Runtime.callFunctionOn', {
       objectId: object.objectId,
       functionDeclaration: `
+        function() {
+          // First, find the nearest scrollable ancestor (important for modals)
+          const findScrollableParent = (el) => {
+            let parent = el.parentElement;
+            while (parent && parent !== document.body) {
+              const style = window.getComputedStyle(parent);
+              const overflowY = style.overflowY;
+              const isScrollable = (overflowY === 'auto' || overflowY === 'scroll') && parent.scrollHeight > parent.clientHeight;
+              if (isScrollable) {
+                return parent;
+              }
+              parent = parent.parentElement;
+            }
+            return null;
+          };
+
+          const scrollableParent = findScrollableParent(this);
+
+          if (scrollableParent) {
+            // Scroll within the scrollable container (e.g., modal)
+            const rect = this.getBoundingClientRect();
+            const parentRect = scrollableParent.getBoundingClientRect();
+            const elementCenterY = rect.top + rect.height / 2;
+            const parentCenterY = parentRect.top + parentRect.height / 2;
+            const scrollOffset = elementCenterY - parentCenterY;
+            scrollableParent.scrollBy({ top: scrollOffset, behavior: 'instant' });
+          } else {
+            // Fallback to standard scrollIntoView for non-modal elements
+            this.scrollIntoView({
+              behavior: 'instant',
+              block: 'center',
+              inline: 'center'
+            });
+          }
+        }
+      `,
+      returnByValue: false,
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 150)); // Wait for scroll
+
+    // Verify element is actually in viewport after scrolling
+    const viewportCheck = await this.cdp.sendCommand('Runtime.callFunctionOn', {
+      objectId: object.objectId,
+      functionDeclaration: `
+        function() {
+          const rect = this.getBoundingClientRect();
+          const viewHeight = window.innerHeight;
+          const viewWidth = window.innerWidth;
+          // Allow a small tolerance (5px) for elements that are very close to the edge
+          return {
+            inViewport: rect.top >= -5 && rect.bottom <= viewHeight + 5 && rect.left >= -5 && rect.right <= viewWidth + 5,
+            rect: { top: rect.top, bottom: rect.bottom, left: rect.left, right: rect.right },
+            viewport: { width: viewWidth, height: viewHeight }
+          };
+        }
+      `,
+      returnByValue: true,
+    });
+
+    const viewportInfo = viewportCheck.result?.value;
+    if (viewportInfo && !viewportInfo.inViewport) {
+      console.log(
+        `[ClickHandler] Element not fully in viewport after scroll:`,
+        viewportInfo
+      );
+      // Last resort: try scrollIntoView on the element itself
+      await this.cdp.sendCommand('Runtime.callFunctionOn', {
+        objectId: object.objectId,
+        functionDeclaration: `
           function() {
             this.scrollIntoView({
-              behavior: 'smooth',
+              behavior: 'instant',
               block: 'center',
               inline: 'center'
             });
           }
         `,
-      returnByValue: false,
-    });
+        returnByValue: false,
+      });
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
 
     const { model } = await this.cdp.sendCommand('DOM.getBoxModel', {
       objectId: object.objectId,

@@ -72,6 +72,9 @@ export class BrowserAutomationExecutor {
       case 'scroll':
         return this.executeScroll(params);
 
+      case 'waitForNetworkIdle':
+        return this.waitForNetworkIdle(params);
+
       default:
         return this.createErrorResult({
           code: 'EXECUTION_ERROR',
@@ -169,6 +172,87 @@ export class BrowserAutomationExecutor {
       return this.createErrorResult({
         code: 'EXECUTION_ERROR',
         message: `Failed to scroll: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      });
+    }
+  }
+
+  /**
+   * Wait for network to become idle (no requests for specified duration)
+   */
+  private async waitForNetworkIdle(params: {
+    timeout?: number;
+    idleTime?: number;
+  }): Promise<ToolExecutionResult> {
+    const timeout = params.timeout ?? 10000;
+    const idleTime = params.idleTime ?? 500;
+
+    try {
+      const cdp = this.view.webContents.debugger;
+
+      // Track pending requests
+      let pendingRequests = 0;
+      let lastActivityTime = Date.now();
+      let isIdle = false;
+
+      const requestHandler = () => {
+        pendingRequests++;
+        lastActivityTime = Date.now();
+      };
+
+      const responseHandler = () => {
+        pendingRequests = Math.max(0, pendingRequests - 1);
+        lastActivityTime = Date.now();
+      };
+
+      // Enable network tracking
+      await cdp.sendCommand('Network.enable');
+
+      cdp.on('message', (_event: any, method: string) => {
+        if (method === 'Network.requestWillBeSent') {
+          requestHandler();
+        } else if (
+          method === 'Network.loadingFinished' ||
+          method === 'Network.loadingFailed'
+        ) {
+          responseHandler();
+        }
+      });
+
+      const startTime = Date.now();
+
+      // Poll until network is idle or timeout
+      while (Date.now() - startTime < timeout) {
+        const timeSinceLastActivity = Date.now() - lastActivityTime;
+
+        if (pendingRequests === 0 && timeSinceLastActivity >= idleTime) {
+          isIdle = true;
+          break;
+        }
+
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      }
+
+      await cdp.sendCommand('Network.disable');
+
+      const elapsed = Date.now() - startTime;
+
+      if (isIdle) {
+        return {
+          success: true,
+          value: `Network idle after ${elapsed}ms`,
+          tabId: this.tabId,
+        };
+      } else {
+        return {
+          success: true,
+          value: `Network wait timeout after ${elapsed}ms (may still have pending requests)`,
+          tabId: this.tabId,
+        };
+      }
+    } catch (error) {
+      return this.createErrorResult({
+        code: 'EXECUTION_ERROR',
+        message: `Failed to wait for network idle: ${error instanceof Error ? error.message : 'Unknown error'}`,
       });
     }
   }

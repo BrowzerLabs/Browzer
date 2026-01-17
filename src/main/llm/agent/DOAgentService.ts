@@ -25,16 +25,24 @@ import {
   DoneToolInput,
   ToolResultForClaude,
   AutopilotProgressEvent,
+  TokenUsage,
+  UsageCost,
 } from './types';
-import {
-  AUTOPILOT_SYSTEM_PROMPT,
-  buildUserGoalMessage,
-  buildRecordingContextMessage,
-} from './SystemPrompt';
+import { AUTOPILOT_SYSTEM_PROMPT, buildUserGoalMessage } from './SystemPrompt';
 import { AUTOPILOT_TOOLS, TOOL_NAMES } from './ToolDefinitions';
 
 import { BrowserAutomationExecutor } from '@/main/automation';
 import { RecordingSession } from '@/shared/types';
+
+/**
+ * Model pricing per million tokens (as of Jan 2025)
+ */
+const MODEL_PRICING: Record<string, { input: number; output: number }> = {
+  'claude-sonnet-4-5-20250929': { input: 3.0, output: 15.0 },
+  'claude-3-5-sonnet-20241022': { input: 3.0, output: 15.0 },
+  'claude-3-opus-20240229': { input: 15.0, output: 75.0 },
+  'claude-3-haiku-20240307': { input: 0.25, output: 1.25 },
+};
 
 export class DOAgentService extends EventEmitter {
   private client: Anthropic;
@@ -44,6 +52,10 @@ export class DOAgentService extends EventEmitter {
   private status: AutopilotStatus = 'running';
   private messages: Anthropic.MessageParam[] = [];
   private loopState: AgentLoopState;
+
+  // Token usage tracking
+  private totalInputTokens = 0;
+  private totalOutputTokens = 0;
 
   constructor(
     executor: BrowserAutomationExecutor,
@@ -83,6 +95,36 @@ export class DOAgentService extends EventEmitter {
   }
 
   /**
+   * Get token usage for this session
+   */
+  public getTokenUsage(): TokenUsage {
+    return {
+      inputTokens: this.totalInputTokens,
+      outputTokens: this.totalOutputTokens,
+      totalTokens: this.totalInputTokens + this.totalOutputTokens,
+    };
+  }
+
+  /**
+   * Calculate cost based on token usage
+   */
+  public calculateCost(): UsageCost {
+    const pricing = MODEL_PRICING[this.config.model] || {
+      input: 3.0,
+      output: 15.0,
+    };
+    const inputCost = (this.totalInputTokens / 1_000_000) * pricing.input;
+    const outputCost = (this.totalOutputTokens / 1_000_000) * pricing.output;
+
+    return {
+      inputCost,
+      outputCost,
+      totalCost: inputCost + outputCost,
+      currency: 'USD',
+    };
+  }
+
+  /**
    * Stop the agent execution
    */
   public stop(): void {
@@ -118,6 +160,8 @@ export class DOAgentService extends EventEmitter {
     };
     this.status = 'running';
     this.messages = [];
+    this.totalInputTokens = 0;
+    this.totalOutputTokens = 0;
 
     try {
       // Wait for the page to load (the tab is already created with the startUrl)
@@ -150,6 +194,8 @@ export class DOAgentService extends EventEmitter {
         success: false,
         message: `Agent failed: ${errorMessage}`,
         stepCount: this.loopState.currentStep,
+        usage: this.getTokenUsage(),
+        cost: this.calculateCost(),
       };
     }
   }
@@ -191,11 +237,14 @@ export class DOAgentService extends EventEmitter {
           `[DOAgentService] Max consecutive failures (${this.config.maxConsecutiveFailures}) reached`
         );
         this.status = 'failed';
+        this.logUsageSummary();
         return {
           success: false,
           message: `Agent stopped after ${this.config.maxConsecutiveFailures} consecutive failures`,
           stepCount: this.loopState.currentStep,
           finalUrl: await this.getCurrentUrl(),
+          usage: this.getTokenUsage(),
+          cost: this.calculateCost(),
         };
       }
     }
@@ -206,21 +255,49 @@ export class DOAgentService extends EventEmitter {
         `[DOAgentService] Max steps (${this.config.maxSteps}) reached`
       );
       this.status = 'failed';
+      this.logUsageSummary();
       return {
         success: false,
         message: `Agent stopped after reaching maximum steps (${this.config.maxSteps})`,
         stepCount: this.loopState.currentStep,
         finalUrl: await this.getCurrentUrl(),
+        usage: this.getTokenUsage(),
+        cost: this.calculateCost(),
       };
     }
 
     // Stopped by user
+    this.logUsageSummary();
     return {
       success: false,
       message: 'Agent was stopped',
       stepCount: this.loopState.currentStep,
       finalUrl: await this.getCurrentUrl(),
+      usage: this.getTokenUsage(),
+      cost: this.calculateCost(),
     };
+  }
+
+  /**
+   * Log usage summary to console
+   */
+  private logUsageSummary(): void {
+    const usage = this.getTokenUsage();
+    const cost = this.calculateCost();
+    console.log(`[DOAgentService] === Session Usage Summary ===`);
+    console.log(
+      `[DOAgentService] Input tokens: ${usage.inputTokens.toLocaleString()}`
+    );
+    console.log(
+      `[DOAgentService] Output tokens: ${usage.outputTokens.toLocaleString()}`
+    );
+    console.log(
+      `[DOAgentService] Total tokens: ${usage.totalTokens.toLocaleString()}`
+    );
+    console.log(
+      `[DOAgentService] Estimated cost: $${cost.totalCost.toFixed(4)} USD`
+    );
+    console.log(`[DOAgentService] =============================`);
   }
 
   /**
@@ -236,6 +313,15 @@ export class DOAgentService extends EventEmitter {
       messages: this.messages,
       tools: AUTOPILOT_TOOLS,
     });
+
+    // Track token usage
+    if (response.usage) {
+      this.totalInputTokens += response.usage.input_tokens;
+      this.totalOutputTokens += response.usage.output_tokens;
+      console.log(
+        `[DOAgentService] Tokens this call - input: ${response.usage.input_tokens}, output: ${response.usage.output_tokens}`
+      );
+    }
 
     console.log(
       `[DOAgentService] Claude response - stop_reason: ${response.stop_reason}`
@@ -278,6 +364,8 @@ export class DOAgentService extends EventEmitter {
             message: input.message,
           });
 
+          this.logUsageSummary();
+
           return {
             done: true,
             result: {
@@ -285,6 +373,8 @@ export class DOAgentService extends EventEmitter {
               message: input.message,
               stepCount: this.loopState.currentStep,
               finalUrl: await this.getCurrentUrl(),
+              usage: this.getTokenUsage(),
+              cost: this.calculateCost(),
             },
           };
         }
@@ -403,15 +493,8 @@ export class DOAgentService extends EventEmitter {
           break;
         }
 
-        case TOOL_NAMES.TAKE_SNAPSHOT: {
-          result = await this.executor.executeTool('snapshot', {
-            scrollTo: 'current',
-          });
-          break;
-        }
-
         case TOOL_NAMES.CLICK: {
-          const input = toolInput as ClickToolInput;
+          const input = toolInput as unknown as ClickToolInput;
           result = await this.executor.executeTool('click', {
             nodeId: input.backend_node_id,
           });
@@ -419,7 +502,7 @@ export class DOAgentService extends EventEmitter {
         }
 
         case TOOL_NAMES.TYPE: {
-          const input = toolInput as TypeToolInput;
+          const input = toolInput as unknown as TypeToolInput;
           result = await this.executor.executeTool('type', {
             nodeId: input.backend_node_id,
             value: input.text,
@@ -433,7 +516,7 @@ export class DOAgentService extends EventEmitter {
         }
 
         case TOOL_NAMES.SCROLL: {
-          const input = toolInput as ScrollToolInput;
+          const input = toolInput as unknown as ScrollToolInput;
           result = await this.executor.executeTool('scroll', {
             direction: input.direction,
             amount: input.amount,
@@ -442,7 +525,7 @@ export class DOAgentService extends EventEmitter {
         }
 
         case TOOL_NAMES.NAVIGATE: {
-          const input = toolInput as NavigateToolInput;
+          const input = toolInput as unknown as NavigateToolInput;
           result = await this.executor.executeTool('navigate', {
             url: input.url,
           });
@@ -452,7 +535,7 @@ export class DOAgentService extends EventEmitter {
         }
 
         case TOOL_NAMES.KEY_PRESS: {
-          const input = toolInput as KeyPressToolInput;
+          const input = toolInput as unknown as KeyPressToolInput;
           result = await this.executor.executeTool('key', {
             key: input.key,
             modifiers: input.modifiers,
@@ -461,8 +544,8 @@ export class DOAgentService extends EventEmitter {
         }
 
         case TOOL_NAMES.WAIT: {
-          const input = toolInput as WaitToolInput;
-          const duration = Math.min(input.duration, 5000);
+          const input = toolInput as unknown as WaitToolInput;
+          const duration = Math.min(input.duration ?? 1000, 5000);
           await this.sleep(duration);
           result = {
             success: true,
@@ -542,10 +625,6 @@ export class DOAgentService extends EventEmitter {
         );
       }
       return contextStr;
-    }
-
-    if (toolName === TOOL_NAMES.TAKE_SNAPSHOT) {
-      return 'Screenshot captured successfully';
     }
 
     // Default: stringify the result

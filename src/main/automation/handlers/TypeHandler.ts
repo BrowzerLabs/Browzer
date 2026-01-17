@@ -242,11 +242,39 @@ export class TypeHandler {
     value: string,
     clearFirst: boolean
   ): Promise<void> {
-    // Focus the element and get coordinates for triple-click
+    // Focus the element and get coordinates
     const coords = await this.focusElementWithCoords(nodeId);
 
-    // Select all existing content if clearFirst is requested using triple-click
-    if (clearFirst && coords) {
+    if (!coords) {
+      throw new Error('Failed to focus element');
+    }
+
+    // Check if element is contenteditable (like Notion, Google Docs, etc.)
+    const { object } = await this.cdp.sendCommand('DOM.resolveNode', {
+      backendNodeId: nodeId,
+    });
+
+    let isContentEditable = false;
+    if (object?.objectId) {
+      const editableCheck = await this.cdp.sendCommand(
+        'Runtime.callFunctionOn',
+        {
+          objectId: object.objectId,
+          functionDeclaration: `function() {
+            return this.isContentEditable || this.contentEditable === 'true' || this.contentEditable === 'plaintext-only';
+          }`,
+          returnByValue: true,
+        }
+      );
+      isContentEditable = editableCheck.result?.value === true;
+      console.log(
+        `[TypeHandler] Element isContentEditable: ${isContentEditable}`
+      );
+    }
+
+    // Select all existing content if clearFirst is requested
+    // BUT skip for contenteditable elements - they handle placeholders differently
+    if (clearFirst && !isContentEditable) {
       console.log(
         `[TypeHandler] Triple-clicking at (${coords.x}, ${coords.y}) to select all`
       );
@@ -270,6 +298,10 @@ export class TypeHandler {
       });
       await this.sleep(50);
       console.log('[TypeHandler] Triple-click completed');
+    } else if (isContentEditable) {
+      console.log(
+        '[TypeHandler] Skipping select-all for contenteditable element'
+      );
     }
 
     // Type the value character by character for more realistic typing
@@ -288,7 +320,7 @@ export class TypeHandler {
     }
 
     // Small delay after typing
-    await this.sleep(1);
+    await this.sleep(10);
   }
 
   /**
@@ -301,26 +333,100 @@ export class TypeHandler {
       const { object } = await this.cdp.sendCommand('DOM.resolveNode', {
         backendNodeId: nodeId,
       });
+      // Get box model and verify element is in viewport
       if (!object || !object.objectId) {
         throw new Error('Element not found');
       }
 
-      // Scroll element into view
+      // Scroll element into view - find scrollable parent (especially for modals) and scroll there
       await this.cdp.sendCommand('Runtime.callFunctionOn', {
         objectId: object.objectId,
         functionDeclaration: `
           function() {
-            this.scrollIntoView({
-              behavior: 'smooth',
-              block: 'center',
-              inline: 'center'
-            });
+            // First, find the nearest scrollable ancestor (important for modals)
+            const findScrollableParent = (el) => {
+              let parent = el.parentElement;
+              while (parent && parent !== document.body) {
+                const style = window.getComputedStyle(parent);
+                const overflowY = style.overflowY;
+                const isScrollable = (overflowY === 'auto' || overflowY === 'scroll') && parent.scrollHeight > parent.clientHeight;
+                if (isScrollable) {
+                  return parent;
+                }
+                parent = parent.parentElement;
+              }
+              return null;
+            };
+
+            const scrollableParent = findScrollableParent(this);
+
+            if (scrollableParent) {
+              // Scroll within the scrollable container (e.g., modal)
+              const rect = this.getBoundingClientRect();
+              const parentRect = scrollableParent.getBoundingClientRect();
+              const elementCenterY = rect.top + rect.height / 2;
+              const parentCenterY = parentRect.top + parentRect.height / 2;
+              const scrollOffset = elementCenterY - parentCenterY;
+              scrollableParent.scrollBy({ top: scrollOffset, behavior: 'instant' });
+            } else {
+              // Fallback to standard scrollIntoView for non-modal elements
+              this.scrollIntoView({
+                behavior: 'instant',
+                block: 'center',
+                inline: 'center'
+              });
+            }
           }
         `,
         returnByValue: false,
       });
 
-      await this.sleep(100); // Wait for scroll
+      await this.sleep(150); // Wait for scroll to complete
+
+      // Verify element is actually in viewport after scrolling
+      const viewportCheck = await this.cdp.sendCommand(
+        'Runtime.callFunctionOn',
+        {
+          objectId: object.objectId,
+          functionDeclaration: `
+          function() {
+            const rect = this.getBoundingClientRect();
+            const viewHeight = window.innerHeight;
+            const viewWidth = window.innerWidth;
+            // Allow a small tolerance (5px) for elements that are very close to the edge
+            return {
+              inViewport: rect.top >= -5 && rect.bottom <= viewHeight + 5 && rect.left >= -5 && rect.right <= viewWidth + 5,
+              rect: { top: rect.top, bottom: rect.bottom, left: rect.left, right: rect.right },
+              viewport: { width: viewWidth, height: viewHeight }
+            };
+          }
+        `,
+          returnByValue: true,
+        }
+      );
+
+      const viewportInfo = viewportCheck.result?.value;
+      if (viewportInfo && !viewportInfo.inViewport) {
+        console.log(
+          `[TypeHandler] Element not fully in viewport after scroll:`,
+          viewportInfo
+        );
+        // Last resort: try scrollIntoView on the element itself
+        await this.cdp.sendCommand('Runtime.callFunctionOn', {
+          objectId: object.objectId,
+          functionDeclaration: `
+            function() {
+              this.scrollIntoView({
+                behavior: 'instant',
+                block: 'center',
+                inline: 'center'
+              });
+            }
+          `,
+          returnByValue: false,
+        });
+        await this.sleep(100);
+      }
 
       const { model } = await this.cdp.sendCommand('DOM.getBoxModel', {
         objectId: object.objectId,

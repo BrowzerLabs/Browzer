@@ -61,6 +61,25 @@ export interface AgentStepResult {
 }
 
 /**
+ * Token usage tracking
+ */
+export interface TokenUsage {
+  inputTokens: number;
+  outputTokens: number;
+  totalTokens: number;
+}
+
+/**
+ * Cost calculation result
+ */
+export interface UsageCost {
+  inputCost: number;
+  outputCost: number;
+  totalCost: number;
+  currency: string;
+}
+
+/**
  * Final result from agent execution
  */
 export interface DOAgentResult {
@@ -68,6 +87,8 @@ export interface DOAgentResult {
   message: string;
   stepCount: number;
   finalUrl?: string;
+  usage?: TokenUsage;
+  cost?: UsageCost;
 }
 
 // ============================================================================
@@ -130,8 +151,12 @@ export interface KeyPressToolInput {
  * Wait tool input parameters
  */
 export interface WaitToolInput {
-  /** Duration to wait in milliseconds (max 5000) */
-  duration: number;
+  /** Wait for network to become idle (recommended for page loads) */
+  waitForNetwork?: boolean;
+  /** Duration to wait in milliseconds (max 5000) - for animations only */
+  duration?: number;
+  /** Maximum time to wait for network idle in milliseconds (default: 10000) */
+  timeout?: number;
 }
 
 /**
