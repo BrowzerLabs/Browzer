@@ -15,8 +15,6 @@ import https from 'node:https';
 import http from 'node:http';
 import { EventEmitter } from 'events';
 
-import { RecordedAction } from '@/shared/types';
-
 const EXTENSION_MAP: Record<string, string> = {
   jpeg: 'jpg',
   jpg: 'jpg',
@@ -30,8 +28,6 @@ const EXTENSION_MAP: Record<string, string> = {
 const DOWNLOAD_CONFIG = { MAX_REDIRECTS: 5, TIMEOUT_MS: 30000 };
 
 export class ContextMenuService extends EventEmitter {
-  private currentParams: ContextMenuParams | null = null;
-
   public destroy(): void {
     this.removeAllListeners();
   }
@@ -40,53 +36,11 @@ export class ContextMenuService extends EventEmitter {
     webContents: WebContents,
     params: ContextMenuParams
   ): void {
-    this.currentParams = params;
     this.buildContextMenu(webContents, params).popup({
       window: BrowserWindow.fromWebContents(webContents) || undefined,
       x: params.x,
       y: params.y,
     });
-  }
-
-  private emitContextMenuAction(action: string): void {
-    if (!this.currentParams) return;
-
-    const attributes: Record<string, string> = {};
-    if (this.currentParams.linkURL)
-      attributes['href'] = this.currentParams.linkURL;
-    if (this.currentParams.srcURL)
-      attributes['src'] = this.currentParams.srcURL;
-    if (this.currentParams.mediaType)
-      attributes['type'] = this.currentParams.mediaType;
-    if (this.currentParams.selectionText)
-      attributes['text'] = this.currentParams.selectionText;
-    if (this.currentParams.isEditable) attributes['editable'] = 'true';
-    if (this.currentParams.titleText)
-      attributes['title'] = this.currentParams.titleText;
-
-    const event: RecordedAction = {
-      type: 'context-menu',
-      value: action,
-      position: { x: this.currentParams.x, y: this.currentParams.y },
-      target: {
-        tagName:
-          this.currentParams.mediaType === 'image'
-            ? 'IMG'
-            : this.currentParams.mediaType === 'video'
-              ? 'VIDEO'
-              : this.currentParams.mediaType === 'audio'
-                ? 'AUDIO'
-                : this.currentParams.linkURL
-                  ? 'A'
-                  : this.currentParams.isEditable
-                    ? 'INPUT'
-                    : undefined,
-        attributes,
-      },
-      timestamp: Date.now(),
-    };
-
-    this.emit('context-menu-action', event);
   }
 
   private buildContextMenu(wc: WebContents, params: ContextMenuParams): Menu {
@@ -122,10 +76,7 @@ export class ContextMenuService extends EventEmitter {
     const suggestionItems = suggestions.length
       ? suggestions.map((s) => ({
           label: s,
-          click: () => {
-            wc.replaceMisspelling(s);
-            this.emitContextMenuAction(`Replace with "${s}"`);
-          },
+          click: () => wc.replaceMisspelling(s),
         }))
       : [{ label: 'No spelling suggestions', enabled: false }];
 
@@ -134,10 +85,8 @@ export class ContextMenuService extends EventEmitter {
       { type: 'separator' },
       {
         label: 'Add to Dictionary',
-        click: () => {
-          wc.session.addWordToSpellCheckerDictionary(params.misspelledWord);
-          this.emitContextMenuAction('Add to Dictionary');
-        },
+        click: () =>
+          wc.session.addWordToSpellCheckerDictionary(params.misspelledWord),
       },
     ];
   }
@@ -152,79 +101,40 @@ export class ContextMenuService extends EventEmitter {
       return [
         {
           label: 'Copy Email Address',
-          click: () => {
-            clipboard.writeText(email);
-            this.emitContextMenuAction('Copy Email Address');
-          },
+          click: () => clipboard.writeText(email),
         },
-        {
-          label: 'Send Email',
-          click: () => {
-            shell.openExternal(linkURL);
-            this.emitContextMenuAction('Send Email');
-          },
-        },
+        { label: 'Send Email', click: () => shell.openExternal(linkURL) },
       ];
     }
 
     if (linkURL.startsWith('tel:')) {
       const phone = linkURL.replace('tel:', '');
       return [
-        {
-          label: 'Copy Phone Number',
-          click: () => {
-            clipboard.writeText(phone);
-            this.emitContextMenuAction('Copy Phone Number');
-          },
-        },
-        {
-          label: 'Call',
-          click: () => {
-            shell.openExternal(linkURL);
-            this.emitContextMenuAction('Call');
-          },
-        },
+        { label: 'Copy Phone Number', click: () => clipboard.writeText(phone) },
+        { label: 'Call', click: () => shell.openExternal(linkURL) },
       ];
     }
 
     return [
       {
         label: 'Open Link in New Tab',
-        click: () => {
-          this.emit('open-link-in-new-tab', linkURL);
-          this.emitContextMenuAction('Open Link in New Tab');
-        },
+        click: () => this.emit('open-link-in-new-tab', linkURL),
       },
       {
         label: 'Open Link in New Window',
-        click: () => {
-          shell.openExternal(linkURL);
-          this.emitContextMenuAction('Open Link in New Window');
-        },
+        click: () => shell.openExternal(linkURL),
       },
       { type: 'separator' },
       {
         label: 'Save Link As...',
-        click: () => {
-          this.saveAs(linkURL, 'download');
-          this.emitContextMenuAction('Save Link As...');
-        },
+        click: () => this.saveAs(linkURL, 'download'),
       },
-      {
-        label: 'Copy Link Address',
-        click: () => {
-          clipboard.writeText(linkURL);
-          this.emitContextMenuAction('Copy Link Address');
-        },
-      },
+      { label: 'Copy Link Address', click: () => clipboard.writeText(linkURL) },
       ...(linkText
         ? [
             {
               label: 'Copy Link Text',
-              click: () => {
-                clipboard.writeText(linkText);
-                this.emitContextMenuAction('Copy Link Text');
-              },
+              click: () => clipboard.writeText(linkText),
             },
           ]
         : []),
@@ -236,36 +146,17 @@ export class ContextMenuService extends EventEmitter {
   ): MenuItemConstructorOptions[] {
     const { srcURL } = params;
     const isBase64 = srcURL.startsWith('data:image/');
-    const copyLabel = isBase64 ? 'Copy Image Data URL' : 'Copy Image Address';
 
     return [
       {
         label: 'Open Image in New Tab',
-        click: () => {
-          this.emit('open-link-in-new-tab', srcURL);
-          this.emitContextMenuAction('Open Image in New Tab');
-        },
+        click: () => this.emit('open-link-in-new-tab', srcURL),
       },
+      { label: 'Save Image As...', click: () => this.saveImageAs(srcURL) },
+      { label: 'Copy Image', click: () => this.copyImageToClipboard(srcURL) },
       {
-        label: 'Save Image As...',
-        click: () => {
-          this.saveImageAs(srcURL);
-          this.emitContextMenuAction('Save Image As...');
-        },
-      },
-      {
-        label: 'Copy Image',
-        click: () => {
-          this.copyImageToClipboard(srcURL);
-          this.emitContextMenuAction('Copy Image');
-        },
-      },
-      {
-        label: copyLabel,
-        click: () => {
-          clipboard.writeText(srcURL);
-          this.emitContextMenuAction(copyLabel);
-        },
+        label: isBase64 ? 'Copy Image Data URL' : 'Copy Image Address',
+        click: () => clipboard.writeText(srcURL),
       },
     ];
   }
@@ -281,67 +172,50 @@ export class ContextMenuService extends EventEmitter {
     return [
       {
         label: `Open ${label} in New Tab`,
-        click: () => {
-          this.emit('open-link-in-new-tab', srcURL);
-          this.emitContextMenuAction(`Open ${label} in New Tab`);
-        },
+        click: () => this.emit('open-link-in-new-tab', srcURL),
       },
       {
         label: `Save ${label} As...`,
-        click: () => {
-          this.saveAs(srcURL, mediaType, ext);
-          this.emitContextMenuAction(`Save ${label} As...`);
-        },
+        click: () => this.saveAs(srcURL, mediaType, ext),
       },
       {
         label: `Copy ${label} Address`,
-        click: () => {
-          clipboard.writeText(srcURL);
-          this.emitContextMenuAction(`Copy ${label} Address`);
-        },
+        click: () => clipboard.writeText(srcURL),
       },
       { type: 'separator' },
       {
         label: 'Play/Pause',
-        click: () => {
+        click: () =>
           this.execMediaAction(
             wc,
             params,
             'element.paused ? element.play() : element.pause()'
-          );
-          this.emitContextMenuAction('Play/Pause');
-        },
+          ),
       },
       {
         label: 'Mute/Unmute',
-        click: () => {
-          this.execMediaAction(wc, params, 'element.muted = !element.muted');
-          this.emitContextMenuAction('Mute/Unmute');
-        },
+        click: () =>
+          this.execMediaAction(wc, params, 'element.muted = !element.muted'),
       },
       ...(mediaType === 'video'
         ? [
             {
               label: 'Toggle Loop',
-              click: () => {
+              click: () =>
                 this.execMediaAction(
                   wc,
                   params,
                   'element.loop = !element.loop'
-                );
-                this.emitContextMenuAction('Toggle Loop');
-              },
+                ),
             },
             {
               label: 'Toggle Controls',
-              click: () => {
+              click: () =>
                 this.execMediaAction(
                   wc,
                   params,
                   'element.controls = !element.controls'
-                );
-                this.emitContextMenuAction('Toggle Controls');
-              },
+                ),
             },
           ]
         : []),
@@ -363,19 +237,13 @@ export class ContextMenuService extends EventEmitter {
         label: 'Undo',
         accel: 'CmdOrCtrl+Z',
         enabled: editFlags.canUndo,
-        action: () => {
-          wc.undo();
-          this.emitContextMenuAction('Undo');
-        },
+        action: () => wc.undo(),
       },
       {
         label: 'Redo',
         accel: 'CmdOrCtrl+Shift+Z',
         enabled: editFlags.canRedo,
-        action: () => {
-          wc.redo();
-          this.emitContextMenuAction('Redo');
-        },
+        action: () => wc.redo(),
       },
     ];
 
@@ -384,45 +252,30 @@ export class ContextMenuService extends EventEmitter {
         label: 'Cut',
         accel: 'CmdOrCtrl+X',
         enabled: editFlags.canCut,
-        action: () => {
-          wc.cut();
-          this.emitContextMenuAction('Cut');
-        },
+        action: () => wc.cut(),
       },
       {
         label: 'Copy',
         accel: 'CmdOrCtrl+C',
         enabled: editFlags.canCopy,
-        action: () => {
-          wc.copy();
-          this.emitContextMenuAction('Copy');
-        },
+        action: () => wc.copy(),
       },
       {
         label: 'Paste',
         accel: 'CmdOrCtrl+V',
         enabled: editFlags.canPaste,
-        action: () => {
-          wc.paste();
-          this.emitContextMenuAction('Paste');
-        },
+        action: () => wc.paste(),
       },
       {
         label: 'Paste and Match Style',
         accel: 'CmdOrCtrl+Shift+V',
         enabled: editFlags.canPaste,
-        action: () => {
-          wc.pasteAndMatchStyle();
-          this.emitContextMenuAction('Paste and Match Style');
-        },
+        action: () => wc.pasteAndMatchStyle(),
       },
       {
         label: 'Delete',
         enabled: editFlags.canDelete,
-        action: () => {
-          wc.delete();
-          this.emitContextMenuAction('Delete');
-        },
+        action: () => wc.delete(),
       },
     ];
 
@@ -445,10 +298,7 @@ export class ContextMenuService extends EventEmitter {
         label: 'Select All',
         accelerator: 'CmdOrCtrl+A',
         enabled: editFlags.canSelectAll,
-        click: () => {
-          wc.selectAll();
-          this.emitContextMenuAction('Select All');
-        },
+        click: () => wc.selectAll(),
       },
     ];
   }
@@ -461,23 +311,14 @@ export class ContextMenuService extends EventEmitter {
     const displayText = text.length > 50 ? `${text.substring(0, 50)}...` : text;
 
     return [
-      {
-        label: 'Copy',
-        accelerator: 'CmdOrCtrl+C',
-        click: () => {
-          wc.copy();
-          this.emitContextMenuAction('Copy');
-        },
-      },
+      { label: 'Copy', accelerator: 'CmdOrCtrl+C', click: () => wc.copy() },
       {
         label: `Search Browzer for "${displayText}"`,
-        click: () => {
+        click: () =>
           this.emit(
             'open-link-in-new-tab',
             `https://www.google.com/search?q=${encodeURIComponent(text)}`
-          );
-          this.emitContextMenuAction(`Search for "${displayText}"`);
-        },
+          ),
       },
     ];
   }
@@ -491,53 +332,31 @@ export class ContextMenuService extends EventEmitter {
         label: 'Back',
         accelerator: 'Alt+Left',
         enabled: wc.navigationHistory.canGoBack(),
-        click: () => {
-          wc.navigationHistory.goBack();
-          this.emitContextMenuAction('Back');
-        },
+        click: () => wc.navigationHistory.goBack(),
       },
       {
         label: 'Forward',
         accelerator: 'Alt+Right',
         enabled: wc.navigationHistory.canGoForward(),
-        click: () => {
-          wc.navigationHistory.goForward();
-          this.emitContextMenuAction('Forward');
-        },
+        click: () => wc.navigationHistory.goForward(),
       },
-      {
-        label: 'Reload',
-        accelerator: 'CmdOrCtrl+R',
-        click: () => {
-          wc.reload();
-          this.emitContextMenuAction('Reload');
-        },
-      },
+      { label: 'Reload', accelerator: 'CmdOrCtrl+R', click: () => wc.reload() },
       { type: 'separator' },
       {
         label: 'Save As...',
         accelerator: 'CmdOrCtrl+S',
-        click: () => {
-          this.savePageAs(wc);
-          this.emitContextMenuAction('Save As...');
-        },
+        click: () => this.savePageAs(wc),
       },
       {
         label: 'Print...',
         accelerator: 'CmdOrCtrl+P',
-        click: () => {
-          wc.print();
-          this.emitContextMenuAction('Print...');
-        },
+        click: () => wc.print(),
       },
       { type: 'separator' },
       {
         label: 'Inspect',
         accelerator: 'CmdOrCtrl+Shift+I',
-        click: () => {
-          wc.inspectElement(params.x, params.y);
-          this.emitContextMenuAction('Inspect');
-        },
+        click: () => wc.inspectElement(params.x, params.y),
       },
     ];
   }
@@ -707,11 +526,7 @@ export class ContextMenuService extends EventEmitter {
       let opened = false;
 
       const cleanup = () => {
-        if (opened) {
-          fs.unlink(filePath, () => {
-            // Best-effort cleanup; ignore unlink errors
-          });
-        }
+        if (opened) fs.unlink(filePath, () => {});
       };
 
       file.on('open', () => {

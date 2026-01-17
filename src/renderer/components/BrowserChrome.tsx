@@ -70,14 +70,6 @@ export function BrowserChrome() {
     };
   }, []);
 
-  useEffect(() => {
-    const unsubStart = window.browserAPI.onRecordingStarted(() => {
-      showSidebar();
-    });
-
-    return () => unsubStart();
-  }, [showSidebar]);
-
   return (
     <div className="h-full w-full flex flex-col select-none">
       <div className="interactive-ui">

@@ -7,15 +7,11 @@ import { Button } from '@/renderer/ui/button';
 import { Label } from '@/renderer/ui/label';
 
 interface SaveRecordingFormProps {
-  actionCount: number;
-  duration: number;
   onSave: (name: string, description: string) => void;
   onDiscard: () => void;
 }
 
 export function SaveRecordingForm({
-  actionCount,
-  duration,
   onSave,
   onDiscard,
 }: SaveRecordingFormProps) {
@@ -43,26 +39,9 @@ export function SaveRecordingForm({
     onDiscard();
   };
 
-  const formatDuration = (ms: number) => {
-    const seconds = Math.floor(ms / 1000);
-    const minutes = Math.floor(seconds / 60);
-    const remainingSeconds = seconds % 60;
-
-    if (minutes > 0) {
-      return `${minutes}m ${remainingSeconds}s`;
-    }
-    return `${seconds}s`;
-  };
-
   return (
     <div className="p-6 max-w-2xl mx-auto">
-      <div className="mb-6">
-        <h3 className="text-lg font-semibold mb-2">Save Recording</h3>
-        <p className="text-sm">
-          Recorded {actionCount} actions in {formatDuration(duration)}
-        </p>
-      </div>
-
+      <h3 className="text-lg font-semibold mb-2">Save Recording</h3>
       <form onSubmit={handleSubmit} className="space-y-4">
         {/* Name Input */}
         <div>

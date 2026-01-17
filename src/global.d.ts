@@ -4,6 +4,7 @@ import type {
   SubscriptionAPI,
   NotificationAPI,
   UpdaterAPI,
+  RecordingAPI,
 } from './preload/preload';
 
 declare global {
@@ -13,6 +14,7 @@ declare global {
     subscriptionAPI: SubscriptionAPI;
     notificationAPI: NotificationAPI;
     updaterAPI: UpdaterAPI;
+    recordingAPI: RecordingAPI;
   }
 
   // Vite Electron Forge globals

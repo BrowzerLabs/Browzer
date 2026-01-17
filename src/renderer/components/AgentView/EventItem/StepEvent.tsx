@@ -1,15 +1,8 @@
-/**
- * StepEvent Component
- *
- * Displays automation step execution (start, complete, error)
- */
-
 import { Play, CheckCircle2, XCircle, Loader2 } from 'lucide-react';
 
 import { EventItemProps } from '../types';
 
 import { Card } from '@/renderer/ui/card';
-import { Badge } from '@/renderer/ui/badge';
 import { cn } from '@/renderer/lib/utils';
 
 export function StepEvent({ event, isLatest }: EventItemProps) {
@@ -41,20 +34,6 @@ export function StepEvent({ event, isLatest }: EventItemProps) {
     return '';
   };
 
-  // Format tool input parameters for display
-  const formatToolInput = (input: any) => {
-    if (!input) return null;
-
-    // Extract key parameters to show
-    const keyParams: Record<string, any> = {};
-    if (input.selector) keyParams.selector = input.selector;
-    if (input.text) keyParams.text = input.text;
-    if (input.url) keyParams.url = input.url;
-    if (input.value) keyParams.value = input.value;
-
-    return Object.keys(keyParams).length > 0 ? keyParams : input;
-  };
-
   return (
     <Card
       className={cn(
@@ -67,78 +46,23 @@ export function StepEvent({ event, isLatest }: EventItemProps) {
         <div className="flex-shrink-0 mt-0.5">{getIcon()}</div>
 
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-1">
-            <p className={cn('text-sm font-medium', getTextColor())}>
-              {event.data?.stepNumber && `Step ${event.data.stepNumber}: `}
-              {event.data?.toolName}
-            </p>
-            {event.data && event.data.status && (
-              <Badge
-                variant={
-                  event.data.status === 'success'
-                    ? 'success'
-                    : event.data.status === 'error'
-                      ? 'destructive'
-                      : 'default'
-                }
-                className="text-xs"
-              >
-                {event.data.status}
-              </Badge>
-            )}
-          </div>
-
-          {/* Tool Input Parameters (for step_start) */}
-          {isRunning && event.data?.input && (
-            <div className="mt-2 space-y-1">
-              {Object.entries(formatToolInput(event.data.input) || {}).map(
-                ([key, value]) => (
-                  <div key={key} className="text-xs">
-                    <span className="font-medium text-muted-foreground">
-                      {key}:
-                    </span>{' '}
-                    <span className="text-foreground">
-                      {typeof value === 'string'
-                        ? value
-                        : JSON.stringify(value)}
-                    </span>
-                  </div>
-                )
-              )}
-            </div>
-          )}
-
-          {/* Error Display (for step_error) */}
-          {event.data && event.data?.error && (
-            <div className="mt-2 p-3 bg-red-100 dark:bg-red-900/30 rounded text-sm text-red-700 dark:text-red-300">
-              <p className="font-medium mb-1">Error:</p>
-              <p className="text-xs">
-                {typeof event.data.error === 'string'
-                  ? event.data.error
-                  : event.data.error?.message ||
-                    JSON.stringify(event.data.error)}
-              </p>
-              {typeof event.data.error === 'object' &&
-                event.data.error?.code && (
-                  <p className="text-xs mt-1 opacity-75">
-                    Code: {event.data.error.code}
-                  </p>
-                )}
-            </div>
-          )}
-
-          {/* Result Details (collapsible) */}
-          {event.data && event.data?.result && !event.data.result.summary && (
-            <div className="mt-2 text-xs">
+          <p className={cn('text-sm font-medium', getTextColor())}>
+             {event.data.stepNumber}  {event.data?.toolName}
+          </p>
+          {event.data.params && (
               <details className="cursor-pointer">
-                <summary className="font-medium text-muted-foreground hover:text-foreground">
-                  View Details
+                <summary className="text-xs text-muted-foreground hover:text-foreground">
+                  View Params
                 </summary>
                 <pre className="mt-2 p-2 bg-muted/50 rounded overflow-x-auto text-xs">
-                  {JSON.stringify(event.data.result, null, 2)}
+                  {JSON.stringify(event.data.params, null, 2)}
                 </pre>
               </details>
-            </div>
+            )}
+          {event.data && event.data?.error && (
+            <p className="mt-2 p-3 bg-red-100 dark:bg-red-900/30 rounded text-sm text-red-700 dark:text-red-300">
+              {event.data.error}
+            </p>
           )}
         </div>
       </div>

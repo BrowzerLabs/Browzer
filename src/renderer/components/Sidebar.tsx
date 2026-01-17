@@ -4,110 +4,73 @@ import { toast } from 'sonner';
 import AgentView from './AgentView';
 import { LiveRecordingView } from './recording';
 
-import { RecordedAction } from '@/shared/types';
+import { RecordingAction } from '@/shared/types';
 
 export function Sidebar() {
-  const [actions, setActions] = useState<RecordedAction[]>([]);
-  const [isRecording, setIsRecording] = useState(false);
-  const [showSaveForm, setShowSaveForm] = useState(false);
-  const [recordingData, setRecordingData] = useState<{
-    actions: RecordedAction[];
-    duration: number;
-    startUrl: string;
-  } | null>(null);
+  const [actions, setActions] = useState<RecordingAction[]>([]);
+  const [state, setState] = useState<'default' | 'recording' | 'saving'>(
+    'default'
+  );
 
   useEffect(() => {
-    window.browserAPI.isRecording().then(setIsRecording);
+    window.recordingAPI
+      .isRecording()
+      .then((isRecording) => setState(isRecording ? 'recording' : 'default'))
+      .catch(() => setState('default'));
 
-    const unsubStart = window.browserAPI.onRecordingStarted(() => {
-      setIsRecording(true);
+    const unsubStart = window.recordingAPI.onRecordingStarted(() => {
       setActions([]);
-      setShowSaveForm(false);
+      setState('recording');
     });
 
-    const unsubStop = window.browserAPI.onRecordingStopped((data) => {
-      setIsRecording(false);
-      setRecordingData(data);
-      if (data.actions && data.actions.length > 0) {
-        setShowSaveForm(true);
-      }
+    const unsubStop = window.recordingAPI.onRecordingStopped(() => {
+      setState('saving');
     });
 
-    const unsubAction = window.browserAPI.onRecordingAction(
-      (action: RecordedAction) => {
+    const unsubAction = window.recordingAPI.onActionRecorded(
+      (action: RecordingAction) => {
         setActions((prev) => {
-          const isDuplicate = prev.some(
-            (a) =>
-              a.timestamp === action.timestamp &&
-              a.type === action.type &&
-              JSON.stringify(a.target) === JSON.stringify(action.target)
-          );
-
-          if (isDuplicate) {
-            console.warn('Duplicate action detected, skipping:', action);
-            return prev;
-          }
-
           const updated = [...prev, action];
           return updated.sort((a, b) => b.timestamp - a.timestamp);
         });
       }
     );
 
-    const unsubMaxActions = window.browserAPI.onRecordingMaxActionsReached(
-      async () => {
-        console.log('Max actions limit reached, auto-stopping recording');
-        toast.warning(
-          'Maximum 150 actions recorded. Stopping recording automatically.'
-        );
-        const data = await window.browserAPI.stopRecording();
-        setIsRecording(false);
-        setRecordingData(data);
-        if (data.actions && data.actions.length > 0) {
-          setShowSaveForm(true);
-        }
-      }
-    );
-
     return () => {
+      unsubAction();
       unsubStart();
       unsubStop();
-      unsubAction();
-      unsubMaxActions();
     };
   }, []);
 
   const handleSaveRecording = async (name: string, description: string) => {
-    if (recordingData) {
-      await window.browserAPI.saveRecording(
-        name,
-        description,
-        recordingData.actions
-      );
-      setShowSaveForm(false);
-      setRecordingData(null);
-      setActions([]);
+    try {
+      await window.recordingAPI.saveRecording(name, description);
       toast.success('Recording saved successfully');
+      setState('default');
+    } catch {
+      toast.error('Failed to save recording');
     }
   };
 
-  const handleDiscardRecording = () => {
-    setShowSaveForm(false);
-    setRecordingData(null);
-    setActions([]);
-    toast.success('Recording discarded');
+  const handleDiscardRecording = async () => {
+    try {
+      await window.recordingAPI.discardRecording();
+      setActions([]);
+      setState('default');
+      toast.success('Recording discarded');
+    } catch {
+      toast.error('Failed to discard recording');
+    }
   };
-
-  const showRecordingView = isRecording || showSaveForm;
 
   return (
     <section className="h-full w-full flex flex-col overflow-hidden bg-background border-l border-l-foreground">
-      {showRecordingView ? (
+      {state !== 'default' ? (
         <LiveRecordingView
           actions={actions}
-          isRecording={isRecording}
-          showSaveForm={showSaveForm}
-          recordingData={recordingData}
+          isRecording={state === 'recording'}
+          showSaveForm={state === 'saving'}
           onSave={handleSaveRecording}
           onDiscard={handleDiscardRecording}
         />

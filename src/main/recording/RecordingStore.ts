@@ -1,14 +1,10 @@
 import { app, dialog } from 'electron';
 import path from 'path';
-import { unlink, writeFile } from 'fs/promises';
-import { existsSync } from 'fs';
-
 import Database from 'better-sqlite3';
-
-import { SystemPromptBuilder } from '../llm';
+import { writeFile } from 'fs/promises';
 
 import { RecordingSession } from '@/shared/types';
-
+import { FormatService } from '../llm/utils/FormatService';
 export class RecordingStore {
   private db: Database.Database;
 
@@ -40,10 +36,8 @@ export class RecordingStore {
     this.stmts = {
       insert: this.db.prepare(`
         INSERT INTO recordings (
-          id, name, description, created_at, duration, action_count,
-          video_path, video_size, video_format, video_duration,
-          start_url, actions_json, tabs_json, metadata_json
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          id, name, description, created_at, duration, start_url, actions_json
+        ) VALUES (?, ?, ?, ?, ?, ?, ?)
       `),
       getById: this.db.prepare('SELECT * FROM recordings WHERE id = ?'),
       getAll: this.db.prepare(
@@ -51,7 +45,7 @@ export class RecordingStore {
       ),
       update: this.db.prepare(`
         UPDATE recordings 
-        SET name = ?, description = ?, metadata_json = ?
+        SET name = ?, description = ?
         WHERE id = ?
       `),
       deleteById: this.db.prepare('DELETE FROM recordings WHERE id = ?'),
@@ -70,25 +64,13 @@ export class RecordingStore {
           description TEXT,
           created_at INTEGER NOT NULL,
           duration INTEGER NOT NULL,
-          action_count INTEGER NOT NULL,
-          
-          video_path TEXT,
-          video_size INTEGER,
-          video_format TEXT,
-          video_duration INTEGER,
-          
           start_url TEXT,
-          
-          actions_json TEXT NOT NULL,
-          tabs_json TEXT,
-          metadata_json TEXT
+          actions_json TEXT NOT NULL
         );
 
         CREATE INDEX IF NOT EXISTS idx_created_at ON recordings(created_at DESC);
         CREATE INDEX IF NOT EXISTS idx_name ON recordings(name);
-        CREATE INDEX IF NOT EXISTS idx_action_count ON recordings(action_count DESC);
         CREATE INDEX IF NOT EXISTS idx_duration ON recordings(duration DESC);
-        CREATE INDEX IF NOT EXISTS idx_video_path ON recordings(video_path);
 
         CREATE VIRTUAL TABLE IF NOT EXISTS recordings_fts USING fts5(
           id UNINDEXED,
@@ -122,68 +104,30 @@ export class RecordingStore {
   }
 
   private rowToSession(row: any): RecordingSession {
-    const base: RecordingSession = {
+    return {
       id: row.id,
       name: row.name,
-      description: row.description,
+      description: row.description || undefined,
       createdAt: row.created_at,
       duration: row.duration,
-      actionCount: row.action_count,
+      startUrl: row.start_url || undefined,
       actions: JSON.parse(row.actions_json),
     };
-
-    if (row.video_path) base.videoPath = row.video_path;
-    if (row.video_size) base.videoSize = row.video_size;
-    if (row.video_format) base.videoFormat = row.video_format;
-    if (row.video_duration) base.videoDuration = row.video_duration;
-    if (row.start_url) base.url = row.start_url;
-    if (row.tabs_json) base.tabs = JSON.parse(row.tabs_json);
-
-    if (row.metadata_json) {
-      const metadata = JSON.parse(row.metadata_json);
-      Object.assign(base, metadata);
-    }
-
-    return base;
   }
 
   saveRecording(session: RecordingSession): void {
     try {
-      const {
-        id,
-        name,
-        description,
-        actions,
-        createdAt,
-        duration,
-        actionCount,
-        videoPath,
-        videoSize,
-        videoFormat,
-        videoDuration,
-        url,
-        tabs,
-        ...metadata
-      } = session;
-
       this.stmts.insert.run(
-        id,
-        name,
-        description || null,
-        createdAt,
-        duration,
-        actionCount,
-        videoPath || null,
-        videoSize || null,
-        videoFormat || null,
-        videoDuration || null,
-        url || null,
-        JSON.stringify(actions),
-        tabs ? JSON.stringify(tabs) : null,
-        Object.keys(metadata).length > 0 ? JSON.stringify(metadata) : null
+        session.id,
+        session.name,
+        session.description || null,
+        session.createdAt,
+        session.duration,
+        session.startUrl || null,
+        JSON.stringify(session.actions)
       );
 
-      console.log('✅ Recording saved:', name);
+      console.log('✅ Recording saved:', session.name);
     } catch (error) {
       console.error('Error saving recording:', error);
       throw error;
@@ -263,48 +207,8 @@ export class RecordingStore {
     }
   }
 
-  async exportRecording(
-    id: string
-  ): Promise<{ success: boolean; filePath?: string; error?: string }> {
+  deleteRecording(id: string): boolean {
     try {
-      const recording = this.getRecording(id);
-
-      if (!recording) {
-        return { success: false, error: 'Recording not found' };
-      }
-
-      const xmlString = SystemPromptBuilder.formatRecordedSession(recording);
-      const fileName = `${recording.name.replace(/[^a-z0-9]/gi, '-').toLowerCase()}-${Date.now()}.xml`;
-
-      const { filePath } = await dialog.showSaveDialog({
-        title: 'Export Recording',
-        defaultPath: fileName,
-      });
-
-      if (filePath) {
-        await writeFile(filePath, xmlString, 'utf-8');
-        return { success: true, filePath };
-      }
-
-      return { success: false, error: 'Export cancelled' };
-    } catch (error) {
-      console.error('Error exporting recording:', error);
-      return { success: false, error: String(error) };
-    }
-  }
-
-  async deleteRecording(id: string): Promise<boolean> {
-    try {
-      const recording = this.getRecording(id);
-
-      if (!recording) {
-        return false;
-      }
-
-      if (recording.videoPath) {
-        await this.deleteVideoFile(recording.videoPath);
-      }
-
       const result = this.stmts.deleteById.run(id);
       const deleted = result.changes > 0;
 
@@ -319,30 +223,51 @@ export class RecordingStore {
     }
   }
 
-  async deleteRecordings(ids: string[]): Promise<number> {
+  deleteRecordings(ids: string[]): number {
     if (ids.length === 0) return 0;
 
     try {
       const deleteMany = this.db.transaction((recordingIds: string[]) => {
         let count = 0;
         for (const id of recordingIds) {
-          const recording = this.getRecording(id);
-          if (recording?.videoPath) {
-            this.deleteVideoFile(recording.videoPath).catch((err) =>
-              console.error('Failed to delete video:', err)
-            );
-          }
-
           const result = this.stmts.deleteById.run(id);
           count += result.changes;
         }
         return count;
       });
 
-      return deleteMany(ids);
+      const deletedCount = deleteMany(ids);
+      console.log(`🗑️ Deleted ${deletedCount} recordings`);
+      return deletedCount;
     } catch (error) {
       console.error('Error deleting multiple recordings:', error);
       return 0;
+    }
+  }
+
+  async exportRecording(
+    id: string
+  ): Promise<{ success: boolean; filePath?: string; error?: string }> {
+    try {
+      const recording = this.getRecording(id);
+      if (recording) {
+        const xmlString = FormatService.formatRecordedSession(recording);
+        const fileName = `${recording.name.replace(/[^a-z0-9]/gi, '-').toLowerCase()}-${Date.now()}.xml`;
+
+        const { filePath } = await dialog.showSaveDialog({
+          title: 'Export Recording',
+          defaultPath: fileName,
+        });
+
+        if (filePath) {
+          await writeFile(filePath, xmlString, 'utf-8');
+          return { success: true, filePath };
+        }
+      }
+      return { success: false, error: 'Export cancelled' };
+    } catch (error) {
+      console.error('Error exporting recording:', error);
+      return { success: false, error: String(error) };
     }
   }
 
@@ -360,35 +285,7 @@ export class RecordingStore {
           ? updates.description
           : recording.description;
 
-      const {
-        id: _id,
-        name: _name,
-        description: _desc,
-        actions,
-        createdAt,
-        duration,
-        actionCount,
-        videoPath,
-        videoSize,
-        videoFormat,
-        videoDuration,
-        url,
-        tabs,
-        ...currentMetadata
-      } = recording;
-
-      const { name: _uName, description: _uDesc, ...updateMetadata } = updates;
-
-      const mergedMetadata = { ...currentMetadata, ...updateMetadata };
-
-      this.stmts.update.run(
-        name,
-        description || null,
-        Object.keys(mergedMetadata).length > 0
-          ? JSON.stringify(mergedMetadata)
-          : null,
-        id
-      );
+      this.stmts.update.run(name, description || null, id);
 
       console.log('✏️ Recording updated:', id);
       return true;
@@ -398,16 +295,8 @@ export class RecordingStore {
     }
   }
 
-  async clearAll(): Promise<void> {
+  clearAll(): void {
     try {
-      const recordings = this.getAllRecordings();
-
-      for (const recording of recordings) {
-        if (recording.videoPath) {
-          await this.deleteVideoFile(recording.videoPath);
-        }
-      }
-
       this.stmts.clearAll.run();
       console.log('🗑️ All recordings cleared');
     } catch (error) {
@@ -419,52 +308,35 @@ export class RecordingStore {
   getStats(): {
     count: number;
     totalActions: number;
-    totalSize: number;
-    totalVideoSize: number;
     totalDuration: number;
     avgActionsPerRecording: number;
+    avgDuration: number;
   } {
     try {
-      const stats = this.db
-        .prepare(
-          `
-        SELECT 
-          COUNT(*) as count,
-          SUM(action_count) as totalActions,
-          SUM(video_size) as totalVideoSize,
-          SUM(duration) as totalDuration,
-          AVG(action_count) as avgActions
-        FROM recordings
-      `
-        )
-        .get() as {
-        count: number;
-        totalActions: number | null;
-        totalVideoSize: number | null;
-        totalDuration: number | null;
-        avgActions: number | null;
-      };
-
       const recordings = this.getAllRecordings();
-      const totalSize = JSON.stringify(recordings).length;
+      const count = recordings.length;
+      const totalActions = recordings.reduce(
+        (sum, r) => sum + r.actions.length,
+        0
+      );
+      const totalDuration = recordings.reduce((sum, r) => sum + r.duration, 0);
 
       return {
-        count: stats.count || 0,
-        totalActions: stats.totalActions || 0,
-        totalSize,
-        totalVideoSize: stats.totalVideoSize || 0,
-        totalDuration: stats.totalDuration || 0,
-        avgActionsPerRecording: Math.round(stats.avgActions || 0),
+        count,
+        totalActions,
+        totalDuration,
+        avgActionsPerRecording:
+          count > 0 ? Math.round(totalActions / count) : 0,
+        avgDuration: count > 0 ? Math.round(totalDuration / count) : 0,
       };
     } catch (error) {
       console.error('Error getting stats:', error);
       return {
         count: 0,
         totalActions: 0,
-        totalSize: 0,
-        totalVideoSize: 0,
         totalDuration: 0,
         avgActionsPerRecording: 0,
+        avgDuration: 0,
       };
     }
   }
@@ -491,62 +363,17 @@ export class RecordingStore {
 
   getTopRecordingsByActions(limit = 10): RecordingSession[] {
     try {
-      const sql = `
-        SELECT * FROM recordings 
-        ORDER BY action_count DESC 
-        LIMIT ?
-      `;
-
-      const rows = this.db.prepare(sql).all(limit);
-      return rows.map((row) => this.rowToSession(row));
+      const recordings = this.getAllRecordings();
+      return recordings
+        .sort((a, b) => b.actions.length - a.actions.length)
+        .slice(0, limit);
     } catch (error) {
       console.error('Error getting top recordings:', error);
       return [];
     }
   }
 
-  private async deleteVideoFile(videoPath: string): Promise<void> {
-    try {
-      if (existsSync(videoPath)) {
-        await unlink(videoPath);
-        console.log('🎥 Video file deleted:', videoPath);
-      }
-    } catch (error) {
-      console.error('Failed to delete video file:', videoPath, error);
-    }
-  }
-
-  async cleanupOrphanedVideos(videosDirectory: string): Promise<number> {
-    try {
-      const { readdir } = await import('fs/promises');
-      const files = await readdir(videosDirectory);
-
-      const recordings = this.getAllRecordings();
-      const validVideoPaths = new Set(
-        recordings
-          .map((r) => r.videoPath)
-          .filter(Boolean)
-          .map((p) => path.basename(p!))
-      );
-
-      let deletedCount = 0;
-      for (const file of files) {
-        if (file.endsWith('.webm') && !validVideoPaths.has(file)) {
-          const fullPath = path.join(videosDirectory, file);
-          await this.deleteVideoFile(fullPath);
-          deletedCount++;
-        }
-      }
-
-      console.log(`🧹 Cleaned up ${deletedCount} orphaned video files`);
-      return deletedCount;
-    } catch (error) {
-      console.error('Error cleaning up orphaned videos:', error);
-      return 0;
-    }
-  }
-
-  async optimize(): Promise<void> {
+  optimize(): void {
     try {
       console.log('Optimizing recordings database...');
       this.db.pragma('optimize');

@@ -38,7 +38,7 @@ export function Recordings() {
   const loadRecordings = async () => {
     try {
       setLoading(true);
-      const data = await window.browserAPI.getAllRecordings();
+      const data = await window.recordingAPI.getAllRecordings();
       // Sort by creation date (newest first)
       const sorted = data.sort((a, b) => b.createdAt - a.createdAt);
       setRecordings(sorted);
@@ -60,16 +60,8 @@ export function Recordings() {
       filtered = filtered.filter(
         (rec) =>
           rec.name.toLowerCase().includes(query) ||
-          rec.description?.toLowerCase().includes(query) ||
-          rec.url?.toLowerCase().includes(query)
+          rec.description?.toLowerCase().includes(query)
       );
-    }
-
-    // Apply type filter
-    if (filterType === 'with-video') {
-      filtered = filtered.filter((rec) => rec.videoPath);
-    } else if (filterType === 'actions-only') {
-      filtered = filtered.filter((rec) => !rec.videoPath);
     }
 
     setFilteredRecordings(filtered);
@@ -85,7 +77,7 @@ export function Recordings() {
     }
 
     try {
-      await window.browserAPI.deleteRecording(id);
+      await window.recordingAPI.deleteRecording(id);
       toast.success('Recording deleted');
       loadRecordings();
     } catch (error) {
@@ -94,81 +86,20 @@ export function Recordings() {
     }
   };
 
-  const handlePlay = async (recording: RecordingSession) => {
-    setSelectedRecording(recording);
-    setIsPlayDialogOpen(true);
-
-    // Load video URL if video exists
-    if (recording.videoPath) {
-      try {
-        const url = await window.browserAPI.getVideoFileUrl(
-          recording.videoPath
-        );
-        setVideoUrl(url);
-      } catch (error) {
-        console.error('Failed to load video URL:', error);
-        setVideoUrl(null);
-      }
-    } else {
-      setVideoUrl(null);
-    }
-  };
-
-  const handleOpenVideo = async (videoPath: string) => {
-    try {
-      await window.browserAPI.openVideoFile(videoPath);
-      toast.success('Opening video file...');
-    } catch (error) {
-      console.error('Failed to open video:', error);
-      toast.error('Failed to open video file');
-    }
-  };
-
   const handleExport = async (id: string) => {
     try {
-      const result = await window.browserAPI.exportRecording(id);
+      const result = await window.recordingAPI.exportRecording(id);
 
       if (result.success && result.filePath) {
         toast.success(`Recording exported to ${result.filePath}`);
-      } else if (result.cancelled) {
-        // User cancelled the save dialog, no need to show error
+      } else if (result.error) {
+        toast.error(result.error);
         return;
-      } else {
-        toast.error(result.error || 'Failed to export recording');
       }
     } catch (error) {
       console.error('Failed to export recording:', error);
       toast.error('Failed to export recording');
     }
-  };
-
-  const getTotalStats = () => {
-    const totalActions = recordings.reduce(
-      (sum, rec) => sum + rec.actionCount,
-      0
-    );
-    const totalDuration = recordings.reduce(
-      (sum, rec) => sum + rec.duration,
-      0
-    );
-    const totalVideoSize = recordings.reduce(
-      (sum, rec) => sum + (rec.videoSize || 0),
-      0
-    );
-    const totalSnapshotSize = recordings.reduce(
-      (sum, rec) => sum + (rec.totalSnapshotSize || 0),
-      0
-    );
-    const withVideo = recordings.filter((rec) => rec.videoPath).length;
-
-    return {
-      total: recordings.length,
-      totalActions,
-      totalDuration,
-      totalVideoSize,
-      totalSnapshotSize,
-      withVideo,
-    };
   };
 
   if (loading) {
@@ -178,8 +109,6 @@ export function Recordings() {
       </div>
     );
   }
-
-  const stats = getTotalStats();
 
   return (
     <div className="bg-slate-100 dark:bg-slate-800 min-h-screen">
@@ -191,10 +120,6 @@ export function Recordings() {
               <Video className="w-6 h-6 text-blue-600" />
               Recordings
             </h1>
-            <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">
-              {stats.total} recordings • {stats.withVideo} with video •{' '}
-              {stats.totalActions} total actions
-            </p>
           </div>
 
           <section className="flex items-center gap-2">
@@ -220,9 +145,6 @@ export function Recordings() {
           onFilterChange={setFilterType}
         />
 
-        {/* Stats Cards */}
-        <RecordingStats {...stats} />
-
         {/* Recordings Grid */}
         {filteredRecordings.length === 0 ? (
           <div className="bg-white dark:bg-slate-800 rounded-xl border border-gray-200 dark:border-slate-700 p-12 text-center">
@@ -242,9 +164,7 @@ export function Recordings() {
               <RecordingCard
                 key={recording.id}
                 recording={recording}
-                onPlay={handlePlay}
                 onDelete={handleDelete}
-                onOpenVideo={handleOpenVideo}
                 onExport={handleExport}
               />
             ))}
@@ -258,7 +178,6 @@ export function Recordings() {
         videoUrl={videoUrl}
         open={isPlayDialogOpen}
         onOpenChange={setIsPlayDialogOpen}
-        onOpenVideo={handleOpenVideo}
         onExport={handleExport}
       />
     </div>

@@ -2,50 +2,53 @@ import { shell } from 'electron';
 
 import { BaseHandler } from './base';
 
-import { RecordedAction } from '@/shared/types';
-
 export class RecordingHandler extends BaseHandler {
   register(): void {
-    const { browserService } = this.context;
+    const { tabService, browserService } = this.context;
+    const recordingService = browserService.getRecordingService();
 
-    this.handle('browser:start-recording', async () => {
-      return browserService.startRecording();
+    this.handle('start-recording', async () => {
+      return tabService.startRecording();
     });
 
-    this.handle('browser:stop-recording', async () => {
-      return browserService.stopRecording();
+    this.handle('stop-recording', async () => {
+      return tabService.stopRecording();
     });
 
     this.handle(
-      'browser:save-recording',
-      async (
-        _,
-        name: string,
-        description: string,
-        actions: RecordedAction[]
-      ) => {
-        return browserService.saveRecording(name, description, actions);
+      'save-recording',
+      async (_, name: string, description?: string) => {
+        return recordingService.saveRecording(name, description);
       }
     );
 
-    this.handle('browser:get-all-recordings', async () => {
-      return browserService.getRecordingStore().getAllRecordings();
+    this.handle('discard-recording', async () => {
+      recordingService.discardRecording();
+      return true;
     });
 
-    this.handle('browser:delete-recording', async (_, id: string) => {
-      return browserService.deleteRecording(id);
+    this.handle('get-current-actions', async () => {
+      return recordingService.getCurrentActions();
     });
 
-    this.handle('browser:is-recording', async () => {
-      return browserService.isRecordingActive();
+    this.handle('get-all-recordings', async () => {
+      return recordingService.getRecordingStore().getAllRecordings();
     });
 
-    this.handle('browser:get-recorded-actions', async () => {
-      return browserService.getRecordedActions();
+    this.handle('get-recording', async (_, id: string) => {
+      return recordingService.getRecordingStore().getRecording(id);
     });
 
-    this.handle('browser:export-recording', async (_, id: string) => {
-      return await browserService.getRecordingStore().exportRecording(id);
+    this.handle('export-recording', async (_, id: string) => {
+      return recordingService.getRecordingStore().exportRecording(id);
+    });
+
+    this.handle('delete-recording', async (_, id: string) => {
+      return recordingService.getRecordingStore().deleteRecording(id);
+    });
+
+    this.handle('is-recording', async () => {
+      return recordingService.isRecording();
     });
 
     this.handle('video:open-file', async (_, videoPath: string) => {
