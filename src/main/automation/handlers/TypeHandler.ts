@@ -1,6 +1,8 @@
 import { Debugger, WebContentsView } from 'electron';
-import { ToolExecutionResult, AutomationError } from '@/shared/types';
+
 import { HandlerContext } from './BaseHandler';
+
+import { ToolExecutionResult, AutomationError } from '@/shared/types';
 
 export interface TypeParams {
   nodeId?: number;
@@ -22,9 +24,7 @@ export class TypeHandler {
     this.cdp = this.view.webContents.debugger;
   }
 
-  public async execute(
-    params: TypeParams
-  ): Promise<ToolExecutionResult> {
+  public async execute(params: TypeParams): Promise<ToolExecutionResult> {
     try {
       const clearFirst = params.clearFirst !== false; // Default to true
 
@@ -76,14 +76,16 @@ export class TypeHandler {
         selector,
       });
 
-      console.log(`[TypeHandler] Found ${nodeIds.length} candidate input elements for role: ${params.role || 'any'}`);
+      console.log(
+        `[TypeHandler] Found ${nodeIds.length} candidate input elements for role: ${params.role || 'any'}`
+      );
 
       // Score and find best matching element
       let bestMatch: { nodeId: number; score: number } | null = null;
 
       for (const nodeId of nodeIds) {
         const score = await this.scoreElementMatch(nodeId, params);
-        
+
         if (score > 0) {
           console.log(`[TypeHandler] Element ${nodeId} score: ${score}`);
           if (!bestMatch || score > bestMatch.score) {
@@ -93,7 +95,9 @@ export class TypeHandler {
       }
 
       if (bestMatch) {
-        console.log(`[TypeHandler] Typing into best match: nodeId=${bestMatch.nodeId}, score=${bestMatch.score}`);
+        console.log(
+          `[TypeHandler] Typing into best match: nodeId=${bestMatch.nodeId}, score=${bestMatch.score}`
+        );
         await this.typeIntoNode(bestMatch.nodeId, params.value, clearFirst);
         return {
           success: true,
@@ -127,18 +131,20 @@ export class TypeHandler {
       }
 
       const elementText = await this.getElementText(nodeId);
-      
+
       if (params.text) {
         if (!elementText) {
           return 0;
         }
-        
+
         const textMatch = this.textMatches(elementText, params.text);
         if (!textMatch) {
           return 0;
         }
-        
-        if (elementText.toLowerCase().trim() === params.text.toLowerCase().trim()) {
+
+        if (
+          elementText.toLowerCase().trim() === params.text.toLowerCase().trim()
+        ) {
           score += 100;
         } else {
           score += 50;
@@ -152,13 +158,13 @@ export class TypeHandler {
 
         if (node.attributes) {
           const elementAttrs = this.parseAttributes(node.attributes);
-          
+
           let matchedAttributes = 0;
-          let totalAttributes = Object.keys(params.attributes).length;
+          const totalAttributes = Object.keys(params.attributes).length;
 
           for (const [key, value] of Object.entries(params.attributes)) {
             const elementValue = elementAttrs[key];
-            
+
             if (elementValue !== undefined) {
               if (elementValue === value) {
                 matchedAttributes++;
@@ -197,8 +203,10 @@ export class TypeHandler {
         nodeId,
       });
 
-      const attrs = node.attributes ? this.parseAttributes(node.attributes) : {};
-      
+      const attrs = node.attributes
+        ? this.parseAttributes(node.attributes)
+        : {};
+
       // Check if element is disabled or readonly
       if (attrs['readonly'] !== undefined) {
         return false;
@@ -208,7 +216,16 @@ export class TypeHandler {
       const nodeName = node.nodeName?.toLowerCase();
       if (nodeName === 'input') {
         const inputType = attrs['type']?.toLowerCase() || 'text';
-        const nonTypeableInputs = ['submit', 'button', 'reset', 'image', 'file', 'hidden', 'checkbox', 'radio'];
+        const nonTypeableInputs = [
+          'submit',
+          'button',
+          'reset',
+          'image',
+          'file',
+          'hidden',
+          'checkbox',
+          'radio',
+        ];
         if (nonTypeableInputs.includes(inputType)) {
           return false;
         }
@@ -225,12 +242,34 @@ export class TypeHandler {
     value: string,
     clearFirst: boolean
   ): Promise<void> {
-    // Focus the element first
-    await this.focusElement(nodeId);
+    // Focus the element and get coordinates for triple-click
+    const coords = await this.focusElementWithCoords(nodeId);
 
-    // Clear existing content if requested
-    if (clearFirst) {
-      await this.clearElement(nodeId);
+    // Select all existing content if clearFirst is requested using triple-click
+    if (clearFirst && coords) {
+      console.log(
+        `[TypeHandler] Triple-clicking at (${coords.x}, ${coords.y}) to select all`
+      );
+
+      // Triple-click to select all text in the input
+      await this.cdp.sendCommand('Input.dispatchMouseEvent', {
+        type: 'mousePressed',
+        x: coords.x,
+        y: coords.y,
+        button: 'left',
+        clickCount: 3,
+      });
+      await this.sleep(10);
+
+      await this.cdp.sendCommand('Input.dispatchMouseEvent', {
+        type: 'mouseReleased',
+        x: coords.x,
+        y: coords.y,
+        button: 'left',
+        clickCount: 3,
+      });
+      await this.sleep(50);
+      console.log('[TypeHandler] Triple-click completed');
     }
 
     // Type the value character by character for more realistic typing
@@ -252,14 +291,21 @@ export class TypeHandler {
     await this.sleep(1);
   }
 
-  private async focusElement(nodeId: number): Promise<void> {
+  /**
+   * Focus element and return its center coordinates for subsequent operations
+   */
+  private async focusElementWithCoords(
+    nodeId: number
+  ): Promise<{ x: number; y: number } | null> {
     try {
       const { object } = await this.cdp.sendCommand('DOM.resolveNode', {
         backendNodeId: nodeId,
       });
-      if(!object || !object.objectId) {
+      if (!object || !object.objectId) {
         throw new Error('Element not found');
       }
+
+      // Scroll element into view
       await this.cdp.sendCommand('Runtime.callFunctionOn', {
         objectId: object.objectId,
         functionDeclaration: `
@@ -274,7 +320,11 @@ export class TypeHandler {
         returnByValue: false,
       });
 
-      const { model } = await this.cdp.sendCommand('DOM.getBoxModel', { objectId: object.objectId });
+      await this.sleep(100); // Wait for scroll
+
+      const { model } = await this.cdp.sendCommand('DOM.getBoxModel', {
+        objectId: object.objectId,
+      });
       if (!model || !model.content || model.content.length < 8) {
         throw new Error('Element not visible or has no box model');
       }
@@ -283,77 +333,47 @@ export class TypeHandler {
       const centerX = (x1 + x2 + x3 + x4) / 4;
       const centerY = (y1 + y2 + y3 + y4) / 4;
 
+      // Move mouse to element
       await this.cdp.sendCommand('Input.dispatchMouseEvent', {
-          type: 'mouseMoved',
-          x: centerX,
-          y: centerY,
-          button: 'none',
-          clickCount: 0,
+        type: 'mouseMoved',
+        x: centerX,
+        y: centerY,
+        button: 'none',
+        clickCount: 0,
       });
-      await new Promise((resolve) => setTimeout(resolve, 10));
+      await this.sleep(10);
+
+      // Single click to focus
+      await this.cdp.sendCommand('Input.dispatchMouseEvent', {
+        type: 'mousePressed',
+        x: centerX,
+        y: centerY,
+        button: 'left',
+        clickCount: 1,
+      });
+      await this.sleep(10);
 
       await this.cdp.sendCommand('Input.dispatchMouseEvent', {
-          type: 'mousePressed',
-          x: centerX,
-          y: centerY,
-          button: 'left',
-          clickCount: 1,
+        type: 'mouseReleased',
+        x: centerX,
+        y: centerY,
+        button: 'left',
+        clickCount: 1,
       });
-      await new Promise((resolve) => setTimeout(resolve, 10));
+      await this.sleep(10);
 
-      await this.cdp.sendCommand('Input.dispatchMouseEvent', {
-          type: 'mouseReleased',
-          x: centerX,
-          y: centerY,
-          button: 'left',
-          clickCount: 1,
-      });
-      await new Promise((resolve) => setTimeout(resolve, 10));
+      return { x: centerX, y: centerY };
     } catch (error) {
       console.error('[TypeHandler] Error focusing element:', error);
       throw new Error('Failed to focus element');
     }
   }
 
-  private async clearElement(nodeId: number): Promise<void> {
-    try {
-      const { object } = await this.cdp.sendCommand('DOM.resolveNode', { nodeId });
-
-      if (!object || !object.objectId) {
-        throw new Error('Could not resolve element to clear');
-      }
-
-      // Clear using JavaScript for reliability
-      await this.cdp.sendCommand('Runtime.callFunctionOn', {
-        objectId: object.objectId,
-        functionDeclaration: `
-          function() {
-            if (this.value !== undefined) {
-              this.value = '';
-            }
-            if (this.textContent !== undefined && this.getAttribute('contenteditable')) {
-              this.textContent = '';
-            }
-            // Trigger input event to notify frameworks (React, Vue, etc.)
-            this.dispatchEvent(new Event('input', { bubbles: true }));
-            this.dispatchEvent(new Event('change', { bubbles: true }));
-          }
-        `,
-        returnByValue: false,
-      });
-
-      await this.cdp.sendCommand('Runtime.releaseObject', {
-        objectId: object.objectId,
-      });
-    } catch (error) {
-      console.error('[TypeHandler] Error clearing element:', error);
-      // Don't throw - clearing is optional
-    }
-  }
-
   private async getElementText(nodeId: number): Promise<string | null> {
     try {
-      const { object } = await this.cdp.sendCommand('DOM.resolveNode', { nodeId });
+      const { object } = await this.cdp.sendCommand('DOM.resolveNode', {
+        nodeId,
+      });
 
       if (!object || !object.objectId) {
         return null;
@@ -421,7 +441,8 @@ export class TypeHandler {
 
   private buildSelectorFromRole(role: string): string {
     const roleMap: Record<string, string> = {
-      textbox: 'input[type="text"], input:not([type]), textarea, [role="textbox"]',
+      textbox:
+        'input[type="text"], input:not([type]), textarea, [role="textbox"]',
       searchbox: 'input[type="search"], [role="searchbox"]',
       combobox: 'select, input[list], [role="combobox"]',
       spinbutton: 'input[type="number"], [role="spinbutton"]',

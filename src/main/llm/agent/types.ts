@@ -25,7 +25,7 @@ export interface AutopilotConfig {
 }
 
 export const DEFAULT_AUTOPILOT_CONFIG: AutopilotConfig = {
-  maxSteps: 50,
+  maxSteps: 100,
   maxConsecutiveFailures: 3,
   includeScreenshots: false,
   model: 'claude-sonnet-4-5-20250929',

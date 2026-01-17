@@ -16,6 +16,7 @@ import type {
   CreateFolderParams,
   UpdateBookmarkParams,
   MoveBookmarkParams,
+  RecordingSession,
 } from '@/shared/types';
 
 export interface BrowserAPI {
@@ -176,7 +177,8 @@ export interface BrowserAPI {
   // Autopilot (DO Agent)
   executeAutopilot: (
     userGoal: string,
-    startUrl?: string
+    startUrl?: string,
+    referenceRecording?: RecordingSession
   ) => Promise<{
     success: boolean;
     sessionId: string;

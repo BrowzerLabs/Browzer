@@ -12,7 +12,7 @@ import { SettingsService } from './settings/SettingsService';
 import { DownloadService } from './download/DownloadService';
 import { AdBlockerService } from './adblocker/AdBlockerService';
 
-import { AutocompleteSuggestion } from '@/shared/types';
+import { AutocompleteSuggestion, RecordingSession } from '@/shared/types';
 import { HistoryService } from '@/main/history/HistoryService';
 import { PasswordManager } from '@/main/password/PasswordManager';
 import { BookmarkService } from '@/main/bookmark';
@@ -148,18 +148,26 @@ export class BrowserService {
   // ============================================================================
 
   /**
-   * Execute autopilot with a user goal (no recording needed)
+   * Execute autopilot with a user goal and optional reference recording
    */
   public async executeAutopilot(
     userGoal: string,
-    startUrl?: string
+    startUrl?: string,
+    referenceRecording?: RecordingSession
   ): Promise<{
     success: boolean;
     sessionId: string;
     message: string;
   }> {
-    const newTab = this.tabService.createTab(startUrl);
-    return this.doAgentManager.executeAutopilot(newTab, userGoal, startUrl);
+    // Use provided startUrl, or fall back to recording's startUrl
+    const effectiveStartUrl = startUrl || referenceRecording?.startUrl;
+    const newTab = this.tabService.createTab(effectiveStartUrl);
+    return this.doAgentManager.executeAutopilot(
+      newTab,
+      userGoal,
+      effectiveStartUrl,
+      referenceRecording
+    );
   }
 
   /**

@@ -52,8 +52,17 @@ export class AutomationHandler extends BaseHandler {
 
     this.handle(
       'autopilot:execute',
-      async (_, userGoal: string, startUrl?: string) => {
-        return await browserService.executeAutopilot(userGoal, startUrl);
+      async (
+        _,
+        userGoal: string,
+        startUrl?: string,
+        referenceRecording?: any
+      ) => {
+        return await browserService.executeAutopilot(
+          userGoal,
+          startUrl,
+          referenceRecording
+        );
       }
     );
 

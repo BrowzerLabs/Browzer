@@ -35,8 +35,8 @@ export default function AgentView() {
 
   return (
     <section className="flex flex-col h-full overflow-hidden">
-      {/* Only show AgentHeader in automate mode (recording-based automation) */}
-      {agentMode === 'automate' && (
+      {/* Show AgentHeader in automate and autopilot modes (recording selection) */}
+      {(agentMode === 'automate' || agentMode === 'autopilot') && (
         <AgentHeader
           viewMode={viewState}
           selectedRecordingId={selectedRecordingId}

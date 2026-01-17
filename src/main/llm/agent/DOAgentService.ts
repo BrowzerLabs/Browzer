@@ -26,10 +26,15 @@ import {
   ToolResultForClaude,
   AutopilotProgressEvent,
 } from './types';
-import { AUTOPILOT_SYSTEM_PROMPT, buildUserGoalMessage } from './SystemPrompt';
+import {
+  AUTOPILOT_SYSTEM_PROMPT,
+  buildUserGoalMessage,
+  buildRecordingContextMessage,
+} from './SystemPrompt';
 import { AUTOPILOT_TOOLS, TOOL_NAMES } from './ToolDefinitions';
 
 import { BrowserAutomationExecutor } from '@/main/automation';
+import { RecordingSession } from '@/shared/types';
 
 export class DOAgentService extends EventEmitter {
   private client: Anthropic;
@@ -90,13 +95,19 @@ export class DOAgentService extends EventEmitter {
   }
 
   /**
-   * Execute the agent with a user goal
+   * Execute the agent with a user goal and optional reference recording
    */
   public async execute(
     userGoal: string,
-    startUrl?: string
+    startUrl?: string,
+    referenceRecording?: RecordingSession
   ): Promise<DOAgentResult> {
     console.log(`[DOAgentService] Starting execution for goal: "${userGoal}"`);
+    if (referenceRecording) {
+      console.log(
+        `[DOAgentService] Reference recording provided: "${referenceRecording.name}"`
+      );
+    }
 
     // Initialize state
     this.loopState = {
@@ -109,18 +120,22 @@ export class DOAgentService extends EventEmitter {
     this.messages = [];
 
     try {
-      // Navigate to start URL if provided
+      // Wait for the page to load (the tab is already created with the startUrl)
+      // The startUrl is passed from BrowserService which creates the tab with it
       if (startUrl) {
-        console.log(`[DOAgentService] Navigating to start URL: ${startUrl}`);
-        await this.executor.executeTool('navigate', { url: startUrl });
-        await this.sleep(1500); // Wait for page load
+        console.log(`[DOAgentService] Waiting for page to load: ${startUrl}`);
+        await this.sleep(2000); // Wait for page load
       }
 
-      // Get current URL
-      const currentUrl = await this.getCurrentUrl();
+      // Get current URL for context
+      const currentUrl = startUrl || 'about:blank';
 
-      // Build initial message with goal
-      const initialMessage = buildUserGoalMessage(userGoal, currentUrl);
+      // Build initial message with goal and optional recording context
+      const initialMessage = buildUserGoalMessage(
+        userGoal,
+        currentUrl,
+        referenceRecording
+      );
       this.messages.push({ role: 'user', content: initialMessage });
 
       // Enter the agent loop
@@ -298,6 +313,17 @@ export class DOAgentService extends EventEmitter {
 
     // Add tool results as user message for next iteration
     if (toolResults.length > 0) {
+      // Check if any of the tool results are from extract_context
+      const hasNewContextResult = response.content.some(
+        (block) =>
+          block.type === 'tool_use' && block.name === TOOL_NAMES.EXTRACT_CONTEXT
+      );
+
+      // If we have a new context extraction, prune old context results
+      if (hasNewContextResult) {
+        this.pruneOldContextResults();
+      }
+
       this.messages.push({
         role: 'user',
         content: toolResults,
@@ -305,6 +331,54 @@ export class DOAgentService extends EventEmitter {
     }
 
     return { done: false };
+  }
+
+  /**
+   * Prune old extract_context results from conversation history
+   * to prevent context window overflow. Only keeps the most recent context.
+   */
+  private pruneOldContextResults(): void {
+    const CONTEXT_PLACEHOLDER =
+      '[Previous page context removed - see latest extract_context result]';
+
+    for (let i = 0; i < this.messages.length; i++) {
+      const message = this.messages[i];
+
+      // Only process user messages (which contain tool results)
+      if (message.role !== 'user' || typeof message.content === 'string') {
+        continue;
+      }
+
+      // Check if this is an array of content blocks (tool results)
+      if (Array.isArray(message.content)) {
+        const updatedContent = message.content.map((block) => {
+          // Check if this is a tool_result block with large content (likely context)
+          if (
+            block.type === 'tool_result' &&
+            typeof block.content === 'string' &&
+            block.content.length > 5000 &&
+            block.content.includes('[') &&
+            block.content.includes('<')
+          ) {
+            // This looks like an accessibility tree result - truncate it
+            return {
+              ...block,
+              content: CONTEXT_PLACEHOLDER,
+            };
+          }
+          return block;
+        });
+
+        this.messages[i] = {
+          ...message,
+          content: updatedContent,
+        };
+      }
+    }
+
+    console.log(
+      '[DOAgentService] Pruned old context results from conversation history'
+    );
   }
 
   /**
@@ -443,10 +517,31 @@ export class DOAgentService extends EventEmitter {
     }
 
     if (toolName === TOOL_NAMES.EXTRACT_CONTEXT) {
-      // Return the accessibility tree directly
-      return typeof result.value === 'string'
-        ? result.value
-        : JSON.stringify(result.value, null, 2);
+      // Return the accessibility tree with truncation to prevent token overflow
+      const contextStr =
+        typeof result.value === 'string'
+          ? result.value
+          : JSON.stringify(result.value, null, 2);
+
+      // Limit context to ~50k characters (~12k tokens) to leave room for conversation
+      const MAX_CONTEXT_LENGTH = 50000;
+      if (contextStr.length > MAX_CONTEXT_LENGTH) {
+        const truncated = contextStr.substring(0, MAX_CONTEXT_LENGTH);
+        // Try to end at a complete element
+        const lastNewline = truncated.lastIndexOf('\n');
+        const cleanTruncated =
+          lastNewline > MAX_CONTEXT_LENGTH - 1000
+            ? truncated.substring(0, lastNewline)
+            : truncated;
+        console.log(
+          `[DOAgentService] Truncated context from ${contextStr.length} to ${cleanTruncated.length} characters`
+        );
+        return (
+          cleanTruncated +
+          '\n\n[... context truncated due to size. Use scroll to see more elements if needed ...]'
+        );
+      }
+      return contextStr;
     }
 
     if (toolName === TOOL_NAMES.TAKE_SNAPSHOT) {

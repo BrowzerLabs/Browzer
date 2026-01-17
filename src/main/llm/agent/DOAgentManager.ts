@@ -15,6 +15,7 @@ import {
 } from './types';
 
 import { Tab } from '@/main/browser/types';
+import { RecordingSession } from '@/shared/types';
 
 export class DOAgentManager {
   private sessions: Map<string, DOAgentService> = new Map();
@@ -28,6 +29,7 @@ export class DOAgentManager {
     tab: Tab,
     userGoal: string,
     startUrl?: string,
+    referenceRecording?: RecordingSession,
     config?: Partial<AutopilotConfig>
   ): Promise<{
     success: boolean;
@@ -43,6 +45,11 @@ export class DOAgentManager {
     }
 
     console.log(`[DOAgentManager] Starting autopilot for goal: "${userGoal}"`);
+    if (referenceRecording) {
+      console.log(
+        `[DOAgentManager] Using reference recording: "${referenceRecording.name}" with ${referenceRecording.actions.length} actions`
+      );
+    }
 
     // Create new agent service
     const agentService = new DOAgentService(tab.automationExecutor, config);
@@ -60,7 +67,11 @@ export class DOAgentManager {
     });
 
     // Start execution (non-blocking)
-    const executionPromise = agentService.execute(userGoal, startUrl);
+    const executionPromise = agentService.execute(
+      userGoal,
+      startUrl,
+      referenceRecording
+    );
 
     // Handle completion
     executionPromise

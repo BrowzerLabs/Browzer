@@ -1,6 +1,8 @@
 import { Debugger, WebContentsView } from 'electron';
-import { ToolExecutionResult, AutomationError } from '@/shared/types';
+
 import { HandlerContext } from './BaseHandler';
+
+import { ToolExecutionResult, AutomationError } from '@/shared/types';
 
 export interface ClickParams {
   nodeId?: number;
@@ -20,14 +22,12 @@ export class ClickHandler {
     this.cdp = this.view.webContents.debugger;
   }
 
-  public async execute(
-    params: ClickParams
-  ): Promise<ToolExecutionResult> {
+  public async execute(params: ClickParams): Promise<ToolExecutionResult> {
     try {
       // MODE 1: Direct CDP node click
       if (params.nodeId !== undefined) {
         await this.performClick(params.nodeId);
-        return { 
+        return {
           success: true,
           tabId: this.tabId,
         };
@@ -71,14 +71,16 @@ export class ClickHandler {
         selector,
       });
 
-      console.log(`[ClickHandler] Found ${nodeIds.length} candidate elements for role: ${params.role || 'any'}`);
+      console.log(
+        `[ClickHandler] Found ${nodeIds.length} candidate elements for role: ${params.role || 'any'}`
+      );
 
       // Score and find best matching element
       let bestMatch: { nodeId: number; score: number } | null = null;
 
       for (const nodeId of nodeIds) {
         const score = await this.scoreElementMatch(nodeId, params);
-        
+
         if (score > 0) {
           console.log(`[ClickHandler] Element ${nodeId} score: ${score}`);
           if (!bestMatch || score > bestMatch.score) {
@@ -88,7 +90,9 @@ export class ClickHandler {
       }
 
       if (bestMatch) {
-        console.log(`[ClickHandler] Clicking best match: nodeId=${bestMatch.nodeId}, score=${bestMatch.score}`);
+        console.log(
+          `[ClickHandler] Clicking best match: nodeId=${bestMatch.nodeId}, score=${bestMatch.score}`
+        );
         await this.performClick(bestMatch.nodeId);
         return {
           success: true,
@@ -116,18 +120,20 @@ export class ClickHandler {
       let score = 0;
 
       const elementText = await this.getElementText(nodeId);
-      
+
       if (params.text) {
         if (!elementText) {
           return 0;
         }
-        
+
         const textMatch = this.textMatches(elementText, params.text);
         if (!textMatch) {
           return 0;
         }
-        
-        if (elementText.toLowerCase().trim() === params.text.toLowerCase().trim()) {
+
+        if (
+          elementText.toLowerCase().trim() === params.text.toLowerCase().trim()
+        ) {
           score += 100;
         } else {
           score += 50;
@@ -141,13 +147,13 @@ export class ClickHandler {
 
         if (node.attributes) {
           const elementAttrs = this.parseAttributes(node.attributes);
-          
+
           let matchedAttributes = 0;
-          let totalAttributes = Object.keys(params.attributes).length;
+          const totalAttributes = Object.keys(params.attributes).length;
 
           for (const [key, value] of Object.entries(params.attributes)) {
             const elementValue = elementAttrs[key];
-            
+
             if (elementValue !== undefined) {
               // Check for exact match or partial match
               if (elementValue === value) {
@@ -183,20 +189,43 @@ export class ClickHandler {
     }
   }
 
-
-  private async performClick(
-    nodeId: number
-  ): Promise<void> {
+  private async performClick(nodeId: number): Promise<void> {
     const { object } = await this.cdp.sendCommand('DOM.resolveNode', {
       backendNodeId: nodeId,
     });
-    if(!object || !object.objectId) {
+    if (!object || !object.objectId) {
       throw new Error('Element not found');
     }
 
-    await this.cdp.sendCommand('Runtime.callFunctionOn', {
+    // Log element text for debugging
+    try {
+      const textResult = await this.cdp.sendCommand('Runtime.callFunctionOn', {
         objectId: object.objectId,
         functionDeclaration: `
+          function() {
+            let text = (this.innerText || '').trim();
+            if (!text) text = (this.textContent || '').trim();
+            if (!text) text = this.getAttribute('aria-label') || '';
+            if (!text) text = this.title || '';
+            if (!text) text = this.getAttribute('placeholder') || '';
+            return text.substring(0, 100);
+          }
+        `,
+        returnByValue: true,
+      });
+      const elementText = textResult.result?.value || '(no text)';
+      console.log(
+        `[ClickHandler] Clicking element (nodeId=${nodeId}): "${elementText}"`
+      );
+    } catch {
+      console.log(
+        `[ClickHandler] Clicking element (nodeId=${nodeId}): (could not get text)`
+      );
+    }
+
+    await this.cdp.sendCommand('Runtime.callFunctionOn', {
+      objectId: object.objectId,
+      functionDeclaration: `
           function() {
             this.scrollIntoView({
               behavior: 'smooth',
@@ -205,8 +234,8 @@ export class ClickHandler {
             });
           }
         `,
-        returnByValue: false,
-      });
+      returnByValue: false,
+    });
 
     const { model } = await this.cdp.sendCommand('DOM.getBoxModel', {
       objectId: object.objectId,
@@ -247,16 +276,15 @@ export class ClickHandler {
       clickCount: 1,
     });
     await new Promise((resolve) => setTimeout(resolve, 20));
-    
+
     await this.removeClickIndicator();
   }
 
-
-  private async getElementText(
-    nodeId: number
-  ): Promise<string | null> {
+  private async getElementText(nodeId: number): Promise<string | null> {
     try {
-      const { object } = await this.cdp.sendCommand('DOM.resolveNode', { nodeId });
+      const { object } = await this.cdp.sendCommand('DOM.resolveNode', {
+        nodeId,
+      });
 
       if (!object || !object.objectId) {
         return null;

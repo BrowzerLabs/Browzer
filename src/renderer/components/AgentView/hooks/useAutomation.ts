@@ -140,7 +140,7 @@ export function useAutomation() {
   }, [userPrompt, setUserPrompt]);
 
   /**
-   * Handle autopilot submission - autonomous agent without recording
+   * Handle autopilot submission - autonomous agent with optional recording context
    */
   const handleAutopilotSubmit = useCallback(async () => {
     if (!userPrompt.trim() || isSubmitting) {
@@ -150,11 +150,24 @@ export function useAutomation() {
     setIsSubmitting(true);
 
     try {
-      const result = await window.browserAPI.executeAutopilot(userPrompt);
+      // Find the selected recording to pass as context
+      const selectedRecording = selectedRecordingId
+        ? recordings.find((r) => r.id === selectedRecordingId)
+        : undefined;
+
+      const result = await window.browserAPI.executeAutopilot(
+        userPrompt,
+        undefined, // startUrl
+        selectedRecording
+      );
 
       if (result.success) {
-        // Use 'autopilot' as the recordingId for autopilot sessions
-        startAutomation(userPrompt, 'autopilot', result.sessionId);
+        // Use selected recording ID or 'autopilot' if none selected
+        startAutomation(
+          userPrompt,
+          selectedRecordingId || 'autopilot',
+          result.sessionId
+        );
       } else {
         toast.error(result.message || 'Failed to start autopilot');
         setIsSubmitting(false);
@@ -164,7 +177,13 @@ export function useAutomation() {
       toast.error('Failed to start autopilot');
       setIsSubmitting(false);
     }
-  }, [userPrompt, isSubmitting, startAutomation]);
+  }, [
+    userPrompt,
+    isSubmitting,
+    startAutomation,
+    selectedRecordingId,
+    recordings,
+  ]);
 
   /**
    * Unified submit handler that routes to the appropriate handler based on mode
