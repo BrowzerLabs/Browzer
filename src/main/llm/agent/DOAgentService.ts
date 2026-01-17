@@ -36,12 +36,36 @@ import { RecordingSession } from '@/shared/types';
 
 /**
  * Model pricing per million tokens (as of Jan 2025)
+ * Includes cache pricing: writes are 1.25x input, reads are 0.1x input
  */
-const MODEL_PRICING: Record<string, { input: number; output: number }> = {
-  'claude-sonnet-4-5-20250929': { input: 3.0, output: 15.0 },
-  'claude-3-5-sonnet-20241022': { input: 3.0, output: 15.0 },
-  'claude-3-opus-20240229': { input: 15.0, output: 75.0 },
-  'claude-3-haiku-20240307': { input: 0.25, output: 1.25 },
+const MODEL_PRICING: Record<
+  string,
+  { input: number; output: number; cacheWrite: number; cacheRead: number }
+> = {
+  'claude-sonnet-4-5-20250929': {
+    input: 3.0,
+    output: 15.0,
+    cacheWrite: 3.75,
+    cacheRead: 0.3,
+  },
+  'claude-3-5-sonnet-20241022': {
+    input: 3.0,
+    output: 15.0,
+    cacheWrite: 3.75,
+    cacheRead: 0.3,
+  },
+  'claude-3-opus-20240229': {
+    input: 15.0,
+    output: 75.0,
+    cacheWrite: 18.75,
+    cacheRead: 1.5,
+  },
+  'claude-3-haiku-20240307': {
+    input: 0.25,
+    output: 1.25,
+    cacheWrite: 0.3,
+    cacheRead: 0.03,
+  },
 };
 
 export class DOAgentService extends EventEmitter {
@@ -53,9 +77,11 @@ export class DOAgentService extends EventEmitter {
   private messages: Anthropic.MessageParam[] = [];
   private loopState: AgentLoopState;
 
-  // Token usage tracking
+  // Token usage tracking (including cache metrics)
   private totalInputTokens = 0;
   private totalOutputTokens = 0;
+  private totalCacheCreationInputTokens = 0;
+  private totalCacheReadInputTokens = 0;
 
   constructor(
     executor: BrowserAutomationExecutor,
@@ -95,31 +121,41 @@ export class DOAgentService extends EventEmitter {
   }
 
   /**
-   * Get token usage for this session
+   * Get token usage for this session (including cache metrics)
    */
   public getTokenUsage(): TokenUsage {
     return {
       inputTokens: this.totalInputTokens,
       outputTokens: this.totalOutputTokens,
       totalTokens: this.totalInputTokens + this.totalOutputTokens,
+      cacheCreationInputTokens: this.totalCacheCreationInputTokens,
+      cacheReadInputTokens: this.totalCacheReadInputTokens,
     };
   }
 
   /**
-   * Calculate cost based on token usage
+   * Calculate cost based on token usage (including cache savings)
    */
   public calculateCost(): UsageCost {
     const pricing = MODEL_PRICING[this.config.model] || {
       input: 3.0,
       output: 15.0,
+      cacheWrite: 3.75,
+      cacheRead: 0.3,
     };
     const inputCost = (this.totalInputTokens / 1_000_000) * pricing.input;
     const outputCost = (this.totalOutputTokens / 1_000_000) * pricing.output;
+    const cacheWriteCost =
+      (this.totalCacheCreationInputTokens / 1_000_000) * pricing.cacheWrite;
+    const cacheReadCost =
+      (this.totalCacheReadInputTokens / 1_000_000) * pricing.cacheRead;
 
     return {
       inputCost,
       outputCost,
-      totalCost: inputCost + outputCost,
+      cacheWriteCost,
+      cacheReadCost,
+      totalCost: inputCost + outputCost + cacheWriteCost + cacheReadCost,
       currency: 'USD',
     };
   }
@@ -162,6 +198,8 @@ export class DOAgentService extends EventEmitter {
     this.messages = [];
     this.totalInputTokens = 0;
     this.totalOutputTokens = 0;
+    this.totalCacheCreationInputTokens = 0;
+    this.totalCacheReadInputTokens = 0;
 
     try {
       // Wait for the page to load (the tab is already created with the startUrl)
@@ -279,7 +317,7 @@ export class DOAgentService extends EventEmitter {
   }
 
   /**
-   * Log usage summary to console
+   * Log usage summary to console (including cache metrics)
    */
   private logUsageSummary(): void {
     const usage = this.getTokenUsage();
@@ -292,8 +330,29 @@ export class DOAgentService extends EventEmitter {
       `[DOAgentService] Output tokens: ${usage.outputTokens.toLocaleString()}`
     );
     console.log(
+      `[DOAgentService] Cache write tokens: ${usage.cacheCreationInputTokens.toLocaleString()}`
+    );
+    console.log(
+      `[DOAgentService] Cache read tokens: ${usage.cacheReadInputTokens.toLocaleString()}`
+    );
+    console.log(
       `[DOAgentService] Total tokens: ${usage.totalTokens.toLocaleString()}`
     );
+
+    // Calculate savings from caching
+    if (usage.cacheReadInputTokens > 0) {
+      const pricing = MODEL_PRICING[this.config.model] || {
+        input: 3.0,
+        cacheRead: 0.3,
+      };
+      const savedCost =
+        (usage.cacheReadInputTokens / 1_000_000) *
+        (pricing.input - pricing.cacheRead);
+      console.log(
+        `[DOAgentService] Cache savings: $${savedCost.toFixed(4)} USD (90% off cached tokens)`
+      );
+    }
+
     console.log(
       `[DOAgentService] Estimated cost: $${cost.totalCost.toFixed(4)} USD`
     );
@@ -301,25 +360,60 @@ export class DOAgentService extends EventEmitter {
   }
 
   /**
-   * Call Claude API with current conversation
+   * Call Claude API with current conversation (with prompt caching enabled)
    */
   private async callClaude(): Promise<Anthropic.Message> {
     console.log('[DOAgentService] Calling Claude API...');
 
+    // Prepare messages with cache_control on the last message for incremental caching
+    const messagesWithCache = this.prepareMessagesWithCache();
+
     const response = await this.client.messages.create({
       model: this.config.model,
       max_tokens: 4096,
-      system: AUTOPILOT_SYSTEM_PROMPT,
-      messages: this.messages,
+      // System prompt with cache_control for caching
+      system: [
+        {
+          type: 'text',
+          text: AUTOPILOT_SYSTEM_PROMPT,
+          cache_control: { type: 'ephemeral' },
+        },
+      ],
+      messages: messagesWithCache,
+      // Tools already have cache_control on the last tool (done tool)
       tools: AUTOPILOT_TOOLS,
     });
 
-    // Track token usage
+    // Track token usage including cache metrics
     if (response.usage) {
       this.totalInputTokens += response.usage.input_tokens;
       this.totalOutputTokens += response.usage.output_tokens;
+
+      // Track cache-specific tokens (these fields exist when caching is used)
+      const usage = response.usage as {
+        input_tokens: number;
+        output_tokens: number;
+        cache_creation_input_tokens?: number;
+        cache_read_input_tokens?: number;
+      };
+
+      if (usage.cache_creation_input_tokens) {
+        this.totalCacheCreationInputTokens += usage.cache_creation_input_tokens;
+      }
+      if (usage.cache_read_input_tokens) {
+        this.totalCacheReadInputTokens += usage.cache_read_input_tokens;
+      }
+
+      // Log with cache info
+      const cacheInfo =
+        usage.cache_read_input_tokens && usage.cache_read_input_tokens > 0
+          ? ` (cache hit: ${usage.cache_read_input_tokens} tokens)`
+          : usage.cache_creation_input_tokens &&
+              usage.cache_creation_input_tokens > 0
+            ? ` (cache write: ${usage.cache_creation_input_tokens} tokens)`
+            : '';
       console.log(
-        `[DOAgentService] Tokens this call - input: ${response.usage.input_tokens}, output: ${response.usage.output_tokens}`
+        `[DOAgentService] Tokens this call - input: ${response.usage.input_tokens}, output: ${response.usage.output_tokens}${cacheInfo}`
       );
     }
 
@@ -327,6 +421,61 @@ export class DOAgentService extends EventEmitter {
       `[DOAgentService] Claude response - stop_reason: ${response.stop_reason}`
     );
     return response;
+  }
+
+  /**
+   * Prepare messages with cache_control on the last message for incremental caching
+   */
+  private prepareMessagesWithCache(): Anthropic.MessageParam[] {
+    if (this.messages.length === 0) {
+      return [];
+    }
+
+    // Clone messages array
+    const messagesWithCache = [...this.messages];
+
+    // Add cache_control to the last message's content
+    const lastIndex = messagesWithCache.length - 1;
+    const lastMessage = messagesWithCache[lastIndex];
+
+    if (typeof lastMessage.content === 'string') {
+      // Convert string content to array format with cache_control
+      messagesWithCache[lastIndex] = {
+        ...lastMessage,
+        content: [
+          {
+            type: 'text',
+            text: lastMessage.content,
+            cache_control: { type: 'ephemeral' },
+          },
+        ],
+      };
+    } else if (Array.isArray(lastMessage.content)) {
+      // Add cache_control to the last content block
+      const contentArray = [...lastMessage.content];
+      const lastContentIndex = contentArray.length - 1;
+      const lastContentBlock = contentArray[lastContentIndex];
+
+      if (lastContentBlock.type === 'text') {
+        contentArray[lastContentIndex] = {
+          ...lastContentBlock,
+          cache_control: { type: 'ephemeral' },
+        } as Anthropic.TextBlockParam;
+      } else if (lastContentBlock.type === 'tool_result') {
+        // For tool results, add cache_control
+        contentArray[lastContentIndex] = {
+          ...lastContentBlock,
+          cache_control: { type: 'ephemeral' },
+        } as Anthropic.ToolResultBlockParam;
+      }
+
+      messagesWithCache[lastIndex] = {
+        ...lastMessage,
+        content: contentArray,
+      };
+    }
+
+    return messagesWithCache;
   }
 
   /**

@@ -61,12 +61,16 @@ export interface AgentStepResult {
 }
 
 /**
- * Token usage tracking
+ * Token usage tracking (includes cache metrics)
  */
 export interface TokenUsage {
   inputTokens: number;
   outputTokens: number;
   totalTokens: number;
+  /** Tokens written to cache (cache miss - full prompt processing) */
+  cacheCreationInputTokens: number;
+  /** Tokens read from cache (cache hit - reduced cost) */
+  cacheReadInputTokens: number;
 }
 
 /**
@@ -75,6 +79,10 @@ export interface TokenUsage {
 export interface UsageCost {
   inputCost: number;
   outputCost: number;
+  /** Cost for cache write operations */
+  cacheWriteCost: number;
+  /** Cost for cache read operations (much cheaper than input) */
+  cacheReadCost: number;
   totalCost: number;
   currency: string;
 }

@@ -438,8 +438,11 @@ export class AccessibilityTreeExtractor {
     isRoot = false
   ): void {
     const role = node.role?.value || '';
-    const name = node.name?.value || '';
-    const value = node.value?.value || '';
+    // Ensure name and value are strings (they could be numbers, booleans, etc.)
+    const rawName = node.name?.value;
+    const rawValue = node.value?.value;
+    const name = rawName != null ? String(rawName) : '';
+    const value = rawValue != null ? String(rawValue) : '';
 
     const NOISE_ROLES = new Set([
       'none',

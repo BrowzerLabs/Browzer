@@ -238,5 +238,7 @@ Include a clear message explaining the outcome.`,
       },
       required: ['success', 'message'],
     },
+    // Cache control on the last tool to cache all tool definitions
+    cache_control: { type: 'ephemeral' },
   },
 ];
