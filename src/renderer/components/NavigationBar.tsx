@@ -4,9 +4,7 @@ import {
   RotateCw,
   X,
   Circle,
-  Square,
   Settings,
-  Clock,
   MoreVertical,
   Video,
   ChevronRight,
@@ -16,6 +14,7 @@ import {
   DiamondIcon,
   Download,
   Bookmark,
+  Clock,
 } from 'lucide-react';
 
 import type { TabInfo } from '@/shared/types';
@@ -231,11 +230,6 @@ export function NavigationBar({
           <DropdownMenuItem onClick={() => onNavigate('browzer://recordings')}>
             <Video className="w-4 h-4 mr-2" />
             Recordings
-          </DropdownMenuItem>
-
-          <DropdownMenuItem onClick={() => onNavigate('browzer://automation')}>
-            <Clock className="w-4 h-4 mr-2" />
-            Automation
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem

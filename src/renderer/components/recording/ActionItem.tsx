@@ -1,25 +1,14 @@
-import {
-  Item,
-  ItemMedia,
-  ItemContent,
-  ItemTitle,
-  ItemDescription,
-} from '@/renderer/ui/item';
-import { RecordedAction } from '@/shared/types';
+import { Item, ItemMedia, ItemContent } from '@/renderer/ui/item';
+import { RecordingAction } from '@/shared/types';
 import { RecordingUtils } from '@/renderer/utils';
 
 interface ActionItemProps {
-  action: RecordedAction;
+  action: RecordingAction;
   index: number;
 }
 
 export function ActionItem({ action, index }: ActionItemProps) {
-  const {
-    icon: Icon,
-    title,
-    description,
-    color,
-  } = RecordingUtils.getActionDisplay(action);
+  const { icon: Icon, color } = RecordingUtils.getActionDisplay(action);
 
   return (
     <Item
@@ -32,12 +21,30 @@ export function ActionItem({ action, index }: ActionItemProps) {
       </ItemMedia>
 
       <ItemContent>
-        <ItemTitle className="text-xs font-semibold text-black dark:text-white">
-          {title}
-        </ItemTitle>
-        <ItemDescription className="text-xs text-gray-600 dark:text-gray-400">
-          {description}
-        </ItemDescription>
+        <h6 className="text-xs text-black dark:text-white">
+          <strong>{action.type}</strong>{' '}
+          {action.element?.role || action?.keys?.join('+')}
+        </h6>
+        <p className="text-xs text-gray-600 dark:text-gray-400">
+          {action.element?.name || action.url?.substring(0, 50)}
+        </p>
+        {action.element?.value && (
+          <p className="text-xs text-gray-400 dark:text-gray-500">
+            {action.element?.value?.substring(0, 50)}
+          </p>
+        )}
+        {action.element?.attributes && (
+          <table className="text-xs text-gray-400 dark:text-gray-500">
+            <tbody>
+              {Object.entries(action.element.attributes).map(([key, value]) => (
+                <tr key={key}>
+                  <td className="py-1 font-semibold">{key}</td>
+                  <td className="py-1">{value}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
       </ItemContent>
 
       <div className="text-xs text-gray-600 dark:text-gray-400">

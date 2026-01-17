@@ -57,7 +57,7 @@ interface AutomationStore {
     sessionId: string
   ) => void;
   loadStoredSession: (sessionId: string) => Promise<void>;
-  loadSessionHistory: () => Promise<void>;
+  // loadSessionHistory: () => Promise<void>;
   addEvent: (sessionId: string, event: AutomationProgressEvent) => void;
   completeAutomation: (sessionId: string, result: any) => void;
   errorAutomation: (sessionId: string, error: string) => void;
@@ -147,22 +147,22 @@ export const useAutomationStore = create<AutomationStore>()(
         }
       },
 
-      loadSessionHistory: async () => {
-        set({ isLoadingHistory: true });
+      // loadSessionHistory: async () => {
+      //   set({ isLoadingHistory: true });
 
-        try {
-          const history =
-            await window.browserAPI.getAutomationSessionHistory(5);
+      //   try {
+      //     const history =
+      //       await window.browserAPI.getAutomationSessionHistory(5);
 
-          set({
-            sessionHistory: history || [],
-            isLoadingHistory: false,
-          });
-        } catch (error) {
-          console.error('[AutomationStore] Failed to load history:', error);
-          set({ isLoadingHistory: false });
-        }
-      },
+      //     set({
+      //       sessionHistory: history || [],
+      //       isLoadingHistory: false,
+      //     });
+      //   } catch (error) {
+      //     console.error('[AutomationStore] Failed to load history:', error);
+      //     set({ isLoadingHistory: false });
+      //   }
+      // },
 
       addEvent: (sessionId, event) => {
         const { currentSession } = get();

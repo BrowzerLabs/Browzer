@@ -4,7 +4,7 @@ import path from 'node:path';
 
 import Store from 'electron-store';
 
-import { Tab, TabServiceEvents } from './types';
+import { Tab } from './types';
 import { NavigationService } from './NavigationService';
 import { DebuggerService } from './DebuggerService';
 import { ContextMenuService } from './ContextMenuService';
@@ -22,16 +22,15 @@ import {
   ClosedTabInfo,
 } from '@/shared/types';
 import { GROUP_COLORS } from '@/shared/constants/tabs';
-import { VideoRecorder } from '@/main/recording';
 import { PasswordManager } from '@/main/password/PasswordManager';
-import { BrowserAutomationExecutor } from '@/main/automation';
 import { HistoryService } from '@/main/history/HistoryService';
 import { BookmarkService } from '@/main/bookmark';
-import { PasswordAutomation } from '@/main/password';
 import {
   SettingsService,
   SettingsChangeEvent,
 } from '@/main/settings/SettingsService';
+import { RecordingService } from '@/main/recording/RecordingService';
+import { PasswordAutomation } from '@/main/password';
 
 const TAB_HEIGHT = {
   WITHOUT_BOOKMARKS: 75 as number,
@@ -39,20 +38,6 @@ const TAB_HEIGHT = {
 };
 
 export class TabService extends EventEmitter {
-  public on<K extends keyof TabServiceEvents>(
-    event: K,
-    listener: TabServiceEvents[K]
-  ): this {
-    return super.on(event, listener);
-  }
-
-  public emit<K extends keyof TabServiceEvents>(
-    event: K,
-    ...args: Parameters<TabServiceEvents[K]>
-  ): boolean {
-    return super.emit(event, ...args);
-  }
-
   private tabs = new Map<string, Tab>();
   private orderedTabIds: string[] = [];
   private activeTabId: string | null = null;
@@ -77,7 +62,8 @@ export class TabService extends EventEmitter {
     private historyService: HistoryService,
     private navigationService: NavigationService,
     private debuggerService: DebuggerService,
-    private bookmarkService: BookmarkService
+    private bookmarkService: BookmarkService,
+    private recordingService: RecordingService
   ) {
     super();
     this.sessionStore = new Store<{ lastSession: TabsSnapshot | null }>({
@@ -171,6 +157,42 @@ export class TabService extends EventEmitter {
     this.updateLayout(this.currentSidebarWidth);
   }
 
+  public async startRecording(): Promise<boolean> {
+    try {
+      const activeTab = this.getActiveTab();
+      const startUrl = activeTab?.info.url || 'browzer://home';
+      this.recordingService.startRecordingSession(startUrl);
+
+      const enablePromises = Array.from(this.tabs.values()).map((tab) =>
+        this.recordingService.enableClickTracking(tab).catch(console.error)
+      );
+
+      await Promise.allSettled(enablePromises);
+      return true;
+    } catch (error) {
+      console.error('[TabService] Failed to start recording:', error);
+      return false;
+    }
+  }
+
+  public async stopRecording(): Promise<{
+    actions: any[];
+    duration: number;
+    startUrl: string;
+  } | null> {
+    try {
+      const disablePromises = Array.from(this.tabs.values()).map((tab) =>
+        this.recordingService.disableClickTracking(tab).catch(console.error)
+      );
+
+      await Promise.allSettled(disablePromises);
+      return this.recordingService.stopRecordingSession();
+    } catch (error) {
+      console.error('[TabService] Failed to stop recording:', error);
+      return null;
+    }
+  }
+
   public createTab(url?: string): Tab {
     const previousActiveTabId = this.activeTabId;
     const tabId = `tab-${++this.tabCounter}`;
@@ -204,14 +226,12 @@ export class TabService extends EventEmitter {
       id: tabId,
       view,
       info: tabInfo,
-      videoRecorder: new VideoRecorder(view),
       passwordAutomation: new PasswordAutomation(
         view,
         this.passwordManager,
         tabId,
         this.handleCredentialSelected.bind(this)
       ),
-      automationExecutor: new BrowserAutomationExecutor(view, tabId),
     };
 
     this.tabs.set(tabId, tab);
@@ -222,6 +242,10 @@ export class TabService extends EventEmitter {
       .catch((err) =>
         console.error('[TabService] Failed to initialize debugger:', tabId, err)
       );
+
+    if (this.recordingService.isRecording()) {
+      this.recordingService.enableClickTracking(tab).catch(console.error);
+    }
     this.baseWindow.contentView.addChildView(view);
     this.updateTabViewBounds(view, this.currentSidebarWidth);
     view.webContents.loadURL(this.navigationService.normalizeURL(urlToLoad));
@@ -318,8 +342,17 @@ export class TabService extends EventEmitter {
     tab.view.setVisible(true);
     this.activeTabId = tabId;
     this.emit('tabs:changed');
-    if (previousTabId && previousTabId !== tabId)
+    if (previousTabId && previousTabId !== tabId) {
       this.emit('tab:switched', previousTabId, tab);
+      if (this.recordingService.isRecording()) {
+        this.recordingService.addAction({
+          type: 'tab-switch',
+          tabId: this.activeTabId,
+          url: tab.info.url,
+          timestamp: Date.now(),
+        });
+      }
+    }
     return true;
   }
 

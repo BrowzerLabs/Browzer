@@ -2,35 +2,37 @@ import { EventEmitter } from 'events';
 
 import { AutomationClient } from './clients/AutomationClient';
 import { AutomationStateManager } from './core/AutomationStateManager';
-import { SessionManager } from './session/SessionManager';
 import { IterativeAutomationResult } from './core/types';
 
 import { RecordingStore } from '@/main/recording';
-import { BrowserAutomationExecutor } from '@/main/automation/BrowserAutomationExecutor';
+import { ExecutionService } from '@/main/automation';
 import {
   AutomationProgressEvent,
   AutomationEventType,
   RecordingSession,
   AutomationStatus,
 } from '@/shared/types';
+import { WebContentsView } from 'electron';
 
 export class AutomationService extends EventEmitter {
-  private executor: BrowserAutomationExecutor;
   private recordingStore: RecordingStore;
   private recordedSession: RecordingSession | null = null;
   private automationClient: AutomationClient;
   private stateManager: AutomationStateManager;
-  private sessionManager: SessionManager;
+  private executionService: ExecutionService;
 
   constructor(
-    executor: BrowserAutomationExecutor,
     recordingStore: RecordingStore,
-    sessionManager: SessionManager
+    private view: WebContentsView,
+    private tabId: string
   ) {
     super();
-    this.executor = executor;
     this.recordingStore = recordingStore;
-    this.sessionManager = sessionManager;
+
+    this.executionService = new ExecutionService({
+      view: this.view,
+      tabId: this.tabId,
+    });
 
     this.automationClient = new AutomationClient();
     this.setupAutomationClientListeners();
@@ -80,9 +82,8 @@ export class AutomationService extends EventEmitter {
     this.stateManager = new AutomationStateManager(
       userGoal,
       this.recordedSession,
-      this.sessionManager,
       this.automationClient,
-      this.executor
+      this.executionService
     );
     this.stateManager.on('progress', (event: AutomationProgressEvent) => {
       this.emitProgress(event.type, event.data);

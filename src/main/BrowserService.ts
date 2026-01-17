@@ -1,9 +1,7 @@
-import { BaseWindow, WebContentsView, dialog } from 'electron';
+import { BaseWindow, WebContentsView } from 'electron';
 
-import { BrowserAutomationExecutor } from './automation';
 import {
   TabService,
-  RecordingService,
   AutomationManager,
   NavigationService,
   DebuggerService,
@@ -12,17 +10,15 @@ import { SettingsService } from './settings/SettingsService';
 import { DownloadService } from './download/DownloadService';
 import { AdBlockerService } from './adblocker/AdBlockerService';
 
-import { AutocompleteSuggestion, RecordedAction } from '@/shared/types';
-import { RecordingStore } from '@/main/recording';
+import { AutocompleteSuggestion } from '@/shared/types';
 import { HistoryService } from '@/main/history/HistoryService';
 import { PasswordManager } from '@/main/password/PasswordManager';
 import { BookmarkService } from '@/main/bookmark';
-import { SessionManager } from '@/main/llm/session/SessionManager';
+import { RecordingService } from './recording/RecordingService';
 
 export class BrowserService {
   // Modular components
   private tabService: TabService;
-  private recordingService: RecordingService;
   private automationManager: AutomationManager;
   private navigationService: NavigationService;
   private debuggerService: DebuggerService;
@@ -34,8 +30,7 @@ export class BrowserService {
   private historyService: HistoryService;
   private passwordManager: PasswordManager;
   private bookmarkService: BookmarkService;
-  private recordingStore: RecordingStore;
-  private sessionManager: SessionManager;
+  private recordingService: RecordingService;
 
   constructor(
     private baseWindow: BaseWindow,
@@ -43,11 +38,10 @@ export class BrowserService {
   ) {
     // Initialize services
     this.settingsService = new SettingsService(this.browserView);
-    this.recordingStore = new RecordingStore();
+    this.recordingService = new RecordingService(this.browserView);
     this.historyService = new HistoryService();
     this.passwordManager = new PasswordManager();
     this.bookmarkService = new BookmarkService(this.browserView);
-    this.sessionManager = new SessionManager();
     this.adBlockerService = new AdBlockerService();
 
     // Initialize managers
@@ -69,22 +63,17 @@ export class BrowserService {
       this.historyService,
       this.navigationService,
       this.debuggerService,
-      this.bookmarkService
+      this.bookmarkService,
+      this.recordingService
+    );
+
+    this.automationManager = new AutomationManager(
+      this.recordingService.getRecordingStore(),
+      this.browserView
     );
 
     this.setupTabEventListeners();
     this.setupAdBlocker();
-
-    this.recordingService = new RecordingService(
-      this.recordingStore,
-      this.browserView
-    );
-
-    this.automationManager = new AutomationManager(
-      this.recordingStore,
-      this.sessionManager,
-      this.browserView
-    );
   }
 
   public getTabService(): TabService {
@@ -100,54 +89,6 @@ export class BrowserService {
   ): Promise<AutocompleteSuggestion[]> {
     return this.navigationService.getAutocompleteSuggestions(query);
   }
-
-  public async startRecording(): Promise<boolean> {
-    const activeTab = this.tabService.getActiveTab();
-    if (!activeTab) {
-      dialog.showMessageBox({
-        type: 'error',
-        title: 'No tab active to record.',
-        message: 'Please ensure at least one tab is active for recording',
-      });
-      return false;
-    }
-
-    return this.recordingService.startRecording(activeTab);
-  }
-
-  public async stopRecording(): Promise<RecordedAction[]> {
-    return this.recordingService.stopRecording(this.tabService.getTabs());
-  }
-
-  public async saveRecording(
-    name: string,
-    description: string,
-    actions: RecordedAction[]
-  ): Promise<string> {
-    return this.recordingService.saveRecording(
-      name,
-      description,
-      actions,
-      this.tabService.getTabs()
-    );
-  }
-
-  public isRecordingActive(): boolean {
-    return this.recordingService.isRecordingActive();
-  }
-
-  public getRecordedActions(): RecordedAction[] {
-    return this.recordingService.getRecordedActions();
-  }
-
-  public getRecordingStore(): RecordingStore {
-    return this.recordingService.getRecordingStore();
-  }
-
-  public async deleteRecording(id: string): Promise<boolean> {
-    return this.recordingService.deleteRecording(id);
-  }
-
   public async executeIterativeAutomation(
     userGoal: string,
     recordedSessionId: string
@@ -166,30 +107,6 @@ export class BrowserService {
 
   public stopAutomation(sessionId: string): void {
     this.automationManager.stopAutomation(sessionId);
-  }
-
-  public async loadAutomationSession(sessionId: string): Promise<any> {
-    return this.automationManager.loadAutomationSession(sessionId);
-  }
-
-  public async getAutomationSessionHistory(limit = 5): Promise<any[]> {
-    return this.automationManager.getAutomationSessionHistory(limit);
-  }
-
-  public async getAutomationSessions(): Promise<any[]> {
-    return this.automationManager.getAutomationSessions();
-  }
-
-  public async getAutomationSessionDetails(sessionId: string): Promise<any> {
-    return this.automationManager.getAutomationSessionDetails(sessionId);
-  }
-
-  public async resumeAutomationSession(sessionId: string): Promise<any> {
-    return this.automationManager.resumeAutomationSession(sessionId);
-  }
-
-  public async deleteAutomationSession(sessionId: string): Promise<boolean> {
-    return this.automationManager.deleteAutomationSession(sessionId);
   }
 
   // Service Accessors (for IPCHandlers)
@@ -213,9 +130,8 @@ export class BrowserService {
     return this.downloadService;
   }
 
-  public getActiveAutomationExecutor(): BrowserAutomationExecutor | null {
-    const activeTab = this.tabService.getActiveTab();
-    return activeTab.automationExecutor;
+  public getRecordingService(): RecordingService {
+    return this.recordingService;
   }
 
   public updateLayout(
@@ -264,7 +180,6 @@ export class BrowserService {
     this.recordingService.destroy();
     this.automationManager.destroy();
     this.downloadService.destroy();
-    this.sessionManager.close();
   }
 
   private setupTabEventListeners(): void {
@@ -278,21 +193,6 @@ export class BrowserService {
         this.notifyTabReordered(data);
       }
     );
-
-    this.tabService.on('tab:switched', (previousTabId, newTab) => {
-      if (this.recordingService.isRecordingActive()) {
-        this.recordingService.handleTabSwitch(previousTabId, newTab);
-      }
-    });
-
-    this.tabService.on('context-menu-action', (event: RecordedAction) => {
-      if (this.recordingService.isRecordingActive()) {
-        this.recordingService.handleContextMenuAction({
-          ...event,
-          tabId: this.tabService.getActiveTabId(),
-        });
-      }
-    });
   }
 
   private setupAdBlocker(): void {

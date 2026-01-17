@@ -5,18 +5,13 @@ import { ActionItem } from './ActionItem';
 
 import { Badge } from '@/renderer/ui/badge';
 import { ItemGroup } from '@/renderer/ui/item';
-import { RecordedAction } from '@/shared/types';
+import { RecordingAction } from '@/shared/types';
 import { MAX_RECORDING_ACTIONS } from '@/shared/constants/limits';
 
 interface LiveRecordingViewProps {
-  actions: RecordedAction[];
+  actions: RecordingAction[];
   isRecording: boolean;
   showSaveForm: boolean;
-  recordingData: {
-    actions: RecordedAction[];
-    duration: number;
-    startUrl: string;
-  } | null;
   onSave: (name: string, description: string) => void;
   onDiscard: () => void;
 }
@@ -25,7 +20,6 @@ export function LiveRecordingView({
   actions,
   isRecording,
   showSaveForm,
-  recordingData,
   onSave,
   onDiscard,
 }: LiveRecordingViewProps) {
@@ -67,13 +61,8 @@ export function LiveRecordingView({
       </div>
 
       <div className="flex-1 overflow-y-auto">
-        {showSaveForm && recordingData ? (
-          <SaveRecordingForm
-            actionCount={recordingData.actions.length}
-            duration={recordingData.duration}
-            onSave={onSave}
-            onDiscard={onDiscard}
-          />
+        {showSaveForm ? (
+          <SaveRecordingForm onSave={onSave} onDiscard={onDiscard} />
         ) : actions.length === 0 ? (
           <section className="text-center py-12">
             <Play className="w-12 h-12 mx-auto text-gray-600 mb-3" />

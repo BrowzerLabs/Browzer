@@ -9,16 +9,12 @@ export interface AutomationStep {
 
 export interface AutomationPlan {
   steps: AutomationStep[];
-  planType: 'intermediate' | 'final';
-  planTypeToolId?: string;
 }
 
 export interface ExecutedStep {
   stepNumber: number;
   toolName: string;
-  success: boolean;
   result?: ToolExecutionResult;
-  error?: string;
 }
 
 export interface CompletedPlan {
