@@ -1,6 +1,8 @@
 import { Debugger, WebContentsView } from 'electron';
-import { ToolExecutionResult, AutomationError } from '@/shared/types';
+
 import { HandlerContext } from './BaseHandler';
+
+import { ToolExecutionResult, AutomationError } from '@/shared/types';
 
 export interface TypeParams {
   nodeId?: number;
@@ -22,13 +24,10 @@ export class TypeHandler {
     this.cdp = this.view.webContents.debugger;
   }
 
-  public async execute(
-    params: TypeParams
-  ): Promise<ToolExecutionResult> {
+  public async execute(params: TypeParams): Promise<ToolExecutionResult> {
     try {
-      const clearFirst = params.clearFirst !== false; // Default to true
+      const clearFirst = params.clearFirst !== false;
 
-      // MODE 1: Direct CDP node typing
       if (params.nodeId !== undefined) {
         await this.typeIntoNode(params.nodeId, params.value, clearFirst);
         return {
@@ -37,7 +36,6 @@ export class TypeHandler {
         };
       }
 
-      // MODE 2: Attribute-based element finding
       if (params.role || params.text || params.attributes) {
         const result = await this.findAndType(params, clearFirst);
         if (result.success) return result;
@@ -66,7 +64,6 @@ export class TypeHandler {
         pierce: true,
       });
 
-      // Build selector for input elements based on role
       const selector = params.role
         ? this.buildSelectorFromRole(params.role)
         : 'input, textarea, [contenteditable="true"], [role="textbox"], [role="searchbox"], [role="combobox"]';
@@ -76,14 +73,15 @@ export class TypeHandler {
         selector,
       });
 
-      console.log(`[TypeHandler] Found ${nodeIds.length} candidate input elements for role: ${params.role || 'any'}`);
+      console.log(
+        `[TypeHandler] Found ${nodeIds.length} candidate input elements for role: ${params.role || 'any'}`
+      );
 
-      // Score and find best matching element
       let bestMatch: { nodeId: number; score: number } | null = null;
 
       for (const nodeId of nodeIds) {
         const score = await this.scoreElementMatch(nodeId, params);
-        
+
         if (score > 0) {
           console.log(`[TypeHandler] Element ${nodeId} score: ${score}`);
           if (!bestMatch || score > bestMatch.score) {
@@ -93,7 +91,9 @@ export class TypeHandler {
       }
 
       if (bestMatch) {
-        console.log(`[TypeHandler] Typing into best match: nodeId=${bestMatch.nodeId}, score=${bestMatch.score}`);
+        console.log(
+          `[TypeHandler] Typing into best match: nodeId=${bestMatch.nodeId}, score=${bestMatch.score}`
+        );
         await this.typeIntoNode(bestMatch.nodeId, params.value, clearFirst);
         return {
           success: true,
@@ -120,25 +120,26 @@ export class TypeHandler {
     try {
       let score = 0;
 
-      // Check if element is actually typeable
       const isTypeable = await this.isElementTypeable(nodeId);
       if (!isTypeable) {
         return 0;
       }
 
       const elementText = await this.getElementText(nodeId);
-      
+
       if (params.text) {
         if (!elementText) {
           return 0;
         }
-        
+
         const textMatch = this.textMatches(elementText, params.text);
         if (!textMatch) {
           return 0;
         }
-        
-        if (elementText.toLowerCase().trim() === params.text.toLowerCase().trim()) {
+
+        if (
+          elementText.toLowerCase().trim() === params.text.toLowerCase().trim()
+        ) {
           score += 100;
         } else {
           score += 50;
@@ -152,13 +153,13 @@ export class TypeHandler {
 
         if (node.attributes) {
           const elementAttrs = this.parseAttributes(node.attributes);
-          
+
           let matchedAttributes = 0;
-          let totalAttributes = Object.keys(params.attributes).length;
+          const totalAttributes = Object.keys(params.attributes).length;
 
           for (const [key, value] of Object.entries(params.attributes)) {
             const elementValue = elementAttrs[key];
-            
+
             if (elementValue !== undefined) {
               if (elementValue === value) {
                 matchedAttributes++;
@@ -197,18 +198,27 @@ export class TypeHandler {
         nodeId,
       });
 
-      const attrs = node.attributes ? this.parseAttributes(node.attributes) : {};
-      
-      // Check if element is disabled or readonly
+      const attrs = node.attributes
+        ? this.parseAttributes(node.attributes)
+        : {};
+
       if (attrs['readonly'] !== undefined) {
         return false;
       }
 
-      // Check if it's a valid input type
       const nodeName = node.nodeName?.toLowerCase();
       if (nodeName === 'input') {
         const inputType = attrs['type']?.toLowerCase() || 'text';
-        const nonTypeableInputs = ['submit', 'button', 'reset', 'image', 'file', 'hidden', 'checkbox', 'radio'];
+        const nonTypeableInputs = [
+          'submit',
+          'button',
+          'reset',
+          'image',
+          'file',
+          'hidden',
+          'checkbox',
+          'radio',
+        ];
         if (nonTypeableInputs.includes(inputType)) {
           return false;
         }
@@ -225,15 +235,84 @@ export class TypeHandler {
     value: string,
     clearFirst: boolean
   ): Promise<void> {
-    // Focus the element first
-    await this.focusElement(nodeId);
+    const coords = await this.focusElementWithCoords(nodeId);
 
-    // Clear existing content if requested
-    if (clearFirst) {
-      await this.clearElement(nodeId);
+    if (!coords) {
+      throw new Error('Failed to focus element');
     }
 
-    // Type the value character by character for more realistic typing
+    const { object } = await this.cdp.sendCommand('DOM.resolveNode', {
+      backendNodeId: nodeId,
+    });
+
+    let isContentEditable = false;
+    if (object?.objectId) {
+      const editableCheck = await this.cdp.sendCommand(
+        'Runtime.callFunctionOn',
+        {
+          objectId: object.objectId,
+          functionDeclaration: `function() {
+            return this.isContentEditable || this.contentEditable === 'true' || this.contentEditable === 'plaintext-only';
+          }`,
+          returnByValue: true,
+        }
+      );
+      isContentEditable = editableCheck.result?.value === true;
+      console.log(
+        `[TypeHandler] Element isContentEditable: ${isContentEditable}`
+      );
+    }
+
+    if (clearFirst) {
+      if (isContentEditable) {
+        const isMac = process.platform === 'darwin';
+        const modifier = isMac ? 4 : 2;
+        console.log(
+          `[TypeHandler] Using ${isMac ? 'Cmd' : 'Ctrl'}+A to select all in contenteditable element`
+        );
+        await this.cdp.sendCommand('Input.dispatchKeyEvent', {
+          type: 'keyDown',
+          key: 'a',
+          code: 'KeyA',
+          windowsVirtualKeyCode: 65,
+          modifiers: modifier,
+        });
+        await this.sleep(10);
+        await this.cdp.sendCommand('Input.dispatchKeyEvent', {
+          type: 'keyUp',
+          key: 'a',
+          code: 'KeyA',
+          windowsVirtualKeyCode: 65,
+          modifiers: modifier,
+        });
+        await this.sleep(50);
+        console.log('[TypeHandler] Select-all completed for contenteditable');
+      } else {
+        console.log(
+          `[TypeHandler] Triple-clicking at (${coords.x}, ${coords.y}) to select all`
+        );
+
+        await this.cdp.sendCommand('Input.dispatchMouseEvent', {
+          type: 'mousePressed',
+          x: coords.x,
+          y: coords.y,
+          button: 'left',
+          clickCount: 3,
+        });
+        await this.sleep(10);
+
+        await this.cdp.sendCommand('Input.dispatchMouseEvent', {
+          type: 'mouseReleased',
+          x: coords.x,
+          y: coords.y,
+          button: 'left',
+          clickCount: 3,
+        });
+        await this.sleep(50);
+        console.log('[TypeHandler] Triple-click completed');
+      }
+    }
+
     for (const char of value) {
       await this.cdp.sendCommand('Input.dispatchKeyEvent', {
         type: 'keyDown',
@@ -248,33 +327,106 @@ export class TypeHandler {
       await this.sleep(1);
     }
 
-    // Small delay after typing
-    await this.sleep(1);
+    await this.sleep(10);
   }
 
-  private async focusElement(nodeId: number): Promise<void> {
+  private async focusElementWithCoords(
+    nodeId: number
+  ): Promise<{ x: number; y: number } | null> {
     try {
       const { object } = await this.cdp.sendCommand('DOM.resolveNode', {
         backendNodeId: nodeId,
       });
-      if(!object || !object.objectId) {
+      if (!object || !object.objectId) {
         throw new Error('Element not found');
       }
+
       await this.cdp.sendCommand('Runtime.callFunctionOn', {
         objectId: object.objectId,
         functionDeclaration: `
           function() {
-            this.scrollIntoView({
-              behavior: 'smooth',
-              block: 'center',
-              inline: 'center'
-            });
+            const findScrollableParent = (el) => {
+              let parent = el.parentElement;
+              while (parent && parent !== document.body) {
+                const style = window.getComputedStyle(parent);
+                const overflowY = style.overflowY;
+                const isScrollable = (overflowY === 'auto' || overflowY === 'scroll') && parent.scrollHeight > parent.clientHeight;
+                if (isScrollable) {
+                  return parent;
+                }
+                parent = parent.parentElement;
+              }
+              return null;
+            };
+
+            const scrollableParent = findScrollableParent(this);
+
+            if (scrollableParent) {
+              const rect = this.getBoundingClientRect();
+              const parentRect = scrollableParent.getBoundingClientRect();
+              const elementCenterY = rect.top + rect.height / 2;
+              const parentCenterY = parentRect.top + parentRect.height / 2;
+              const scrollOffset = elementCenterY - parentCenterY;
+              scrollableParent.scrollBy({ top: scrollOffset, behavior: 'instant' });
+            } else {
+              this.scrollIntoView({
+                behavior: 'instant',
+                block: 'center',
+                inline: 'center'
+              });
+            }
           }
         `,
         returnByValue: false,
       });
 
-      const { model } = await this.cdp.sendCommand('DOM.getBoxModel', { objectId: object.objectId });
+      await this.sleep(150);
+
+      const viewportCheck = await this.cdp.sendCommand(
+        'Runtime.callFunctionOn',
+        {
+          objectId: object.objectId,
+          functionDeclaration: `
+          function() {
+            const rect = this.getBoundingClientRect();
+            const viewHeight = window.innerHeight;
+            const viewWidth = window.innerWidth;
+            return {
+              inViewport: rect.top >= -5 && rect.bottom <= viewHeight + 5 && rect.left >= -5 && rect.right <= viewWidth + 5,
+              rect: { top: rect.top, bottom: rect.bottom, left: rect.left, right: rect.right },
+              viewport: { width: viewWidth, height: viewHeight }
+            };
+          }
+        `,
+          returnByValue: true,
+        }
+      );
+
+      const viewportInfo = viewportCheck.result?.value;
+      if (viewportInfo && !viewportInfo.inViewport) {
+        console.log(
+          `[TypeHandler] Element not fully in viewport after scroll:`,
+          viewportInfo
+        );
+        await this.cdp.sendCommand('Runtime.callFunctionOn', {
+          objectId: object.objectId,
+          functionDeclaration: `
+            function() {
+              this.scrollIntoView({
+                behavior: 'instant',
+                block: 'center',
+                inline: 'center'
+              });
+            }
+          `,
+          returnByValue: false,
+        });
+        await this.sleep(100);
+      }
+
+      const { model } = await this.cdp.sendCommand('DOM.getBoxModel', {
+        objectId: object.objectId,
+      });
       if (!model || !model.content || model.content.length < 8) {
         throw new Error('Element not visible or has no box model');
       }
@@ -284,76 +436,44 @@ export class TypeHandler {
       const centerY = (y1 + y2 + y3 + y4) / 4;
 
       await this.cdp.sendCommand('Input.dispatchMouseEvent', {
-          type: 'mouseMoved',
-          x: centerX,
-          y: centerY,
-          button: 'none',
-          clickCount: 0,
+        type: 'mouseMoved',
+        x: centerX,
+        y: centerY,
+        button: 'none',
+        clickCount: 0,
       });
-      await new Promise((resolve) => setTimeout(resolve, 10));
+      await this.sleep(10);
 
       await this.cdp.sendCommand('Input.dispatchMouseEvent', {
-          type: 'mousePressed',
-          x: centerX,
-          y: centerY,
-          button: 'left',
-          clickCount: 1,
+        type: 'mousePressed',
+        x: centerX,
+        y: centerY,
+        button: 'left',
+        clickCount: 1,
       });
-      await new Promise((resolve) => setTimeout(resolve, 10));
+      await this.sleep(10);
 
       await this.cdp.sendCommand('Input.dispatchMouseEvent', {
-          type: 'mouseReleased',
-          x: centerX,
-          y: centerY,
-          button: 'left',
-          clickCount: 1,
+        type: 'mouseReleased',
+        x: centerX,
+        y: centerY,
+        button: 'left',
+        clickCount: 1,
       });
-      await new Promise((resolve) => setTimeout(resolve, 10));
+      await this.sleep(10);
+
+      return { x: centerX, y: centerY };
     } catch (error) {
       console.error('[TypeHandler] Error focusing element:', error);
       throw new Error('Failed to focus element');
     }
   }
 
-  private async clearElement(nodeId: number): Promise<void> {
-    try {
-      const { object } = await this.cdp.sendCommand('DOM.resolveNode', { nodeId });
-
-      if (!object || !object.objectId) {
-        throw new Error('Could not resolve element to clear');
-      }
-
-      // Clear using JavaScript for reliability
-      await this.cdp.sendCommand('Runtime.callFunctionOn', {
-        objectId: object.objectId,
-        functionDeclaration: `
-          function() {
-            if (this.value !== undefined) {
-              this.value = '';
-            }
-            if (this.textContent !== undefined && this.getAttribute('contenteditable')) {
-              this.textContent = '';
-            }
-            // Trigger input event to notify frameworks (React, Vue, etc.)
-            this.dispatchEvent(new Event('input', { bubbles: true }));
-            this.dispatchEvent(new Event('change', { bubbles: true }));
-          }
-        `,
-        returnByValue: false,
-      });
-
-      await this.cdp.sendCommand('Runtime.releaseObject', {
-        objectId: object.objectId,
-      });
-    } catch (error) {
-      console.error('[TypeHandler] Error clearing element:', error);
-      // Don't throw - clearing is optional
-    }
-  }
-
   private async getElementText(nodeId: number): Promise<string | null> {
     try {
-      const { object } = await this.cdp.sendCommand('DOM.resolveNode', { nodeId });
+      const { object } = await this.cdp.sendCommand('DOM.resolveNode', {
+        nodeId,
+      });
 
       if (!object || !object.objectId) {
         return null;
@@ -421,7 +541,8 @@ export class TypeHandler {
 
   private buildSelectorFromRole(role: string): string {
     const roleMap: Record<string, string> = {
-      textbox: 'input[type="text"], input:not([type]), textarea, [role="textbox"]',
+      textbox:
+        'input[type="text"], input:not([type]), textarea, [role="textbox"]',
       searchbox: 'input[type="search"], [role="searchbox"]',
       combobox: 'select, input[list], [role="combobox"]',
       spinbutton: 'input[type="number"], [role="spinbutton"]',

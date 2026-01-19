@@ -66,7 +66,8 @@ export class RecordingStore {
           created_at INTEGER NOT NULL,
           duration INTEGER NOT NULL,
           start_url TEXT,
-          actions_json TEXT NOT NULL
+          actions_json TEXT NOT NULL,
+          action_count INTEGER DEFAULT 0
         );
 
         CREATE INDEX IF NOT EXISTS idx_created_at ON recordings(created_at DESC);
@@ -97,10 +98,50 @@ export class RecordingStore {
         END;
       `);
 
+      // Migration: Add action_count column if it doesn't exist (for existing databases)
+      this.migrateSchema();
+
       console.log('Recording database schema initialized successfully');
     } catch (error) {
       console.error('Error initializing recording database schema:', error);
       throw error;
+    }
+  }
+
+  private migrateSchema(): void {
+    // Check if action_count column exists
+    const tableInfo = this.db.pragma('table_info(recordings)') as Array<{
+      name: string;
+    }>;
+    const hasActionCount = tableInfo.some((col) => col.name === 'action_count');
+
+    if (!hasActionCount) {
+      console.log('Migrating database: adding action_count column...');
+      this.db.exec(
+        'ALTER TABLE recordings ADD COLUMN action_count INTEGER DEFAULT 0'
+      );
+
+      // Backfill action_count from actions_json for existing records
+      const rows = this.db
+        .prepare('SELECT id, actions_json FROM recordings')
+        .all() as Array<{ id: string; actions_json: string }>;
+
+      const updateStmt = this.db.prepare(
+        'UPDATE recordings SET action_count = ? WHERE id = ?'
+      );
+
+      for (const row of rows) {
+        try {
+          const actions = JSON.parse(row.actions_json);
+          updateStmt.run(Array.isArray(actions) ? actions.length : 0, row.id);
+        } catch {
+          updateStmt.run(0, row.id);
+        }
+      }
+
+      console.log(
+        'Migration complete: action_count column added and backfilled'
+      );
     }
   }
 

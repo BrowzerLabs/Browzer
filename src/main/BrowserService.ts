@@ -12,35 +12,34 @@ import { SettingsService } from './settings/SettingsService';
 import { DownloadService } from './download/DownloadService';
 import { AdBlockerService } from './adblocker/AdBlockerService';
 
-import { AutocompleteSuggestion } from '@/shared/types';
+import { AutocompleteSuggestion, RecordingSession } from '@/shared/types';
 import { HistoryService } from '@/main/history/HistoryService';
 import { PasswordManager } from '@/main/password/PasswordManager';
 import { BookmarkService } from '@/main/bookmark';
 import { SessionManager } from '@/main/llm/session/SessionManager';
+import { AutopilotManager } from '@/main/llm/agent';
 
 export class BrowserService {
-  // Modular components
   private tabService: TabService;
   private automationManager: AutomationManager;
+  private autopilotManager: AutopilotManager;
   private navigationService: NavigationService;
   private debuggerService: DebuggerService;
   private downloadService: DownloadService;
   private adBlockerService: AdBlockerService;
 
-  // Services (shared across managers)
   private settingsService: SettingsService;
   private historyService: HistoryService;
   private passwordManager: PasswordManager;
   private bookmarkService: BookmarkService;
   private sessionManager: SessionManager;
 
-   private recordingService: RecordingService;
+  private recordingService: RecordingService;
 
   constructor(
     private baseWindow: BaseWindow,
     private browserView: WebContentsView
   ) {
-    // Initialize services
     this.settingsService = new SettingsService(this.browserView);
     this.historyService = new HistoryService();
     this.passwordManager = new PasswordManager();
@@ -48,7 +47,6 @@ export class BrowserService {
     this.sessionManager = new SessionManager();
     this.adBlockerService = new AdBlockerService();
 
-    // Initialize managers
     this.navigationService = new NavigationService(
       this.settingsService,
       this.historyService
@@ -69,7 +67,7 @@ export class BrowserService {
       this.navigationService,
       this.debuggerService,
       this.bookmarkService,
-      this.recordingService,
+      this.recordingService
     );
 
     this.setupTabEventListeners();
@@ -79,6 +77,8 @@ export class BrowserService {
       this.browserView,
       this.recordingService.getRecordingStore()
     );
+
+    this.autopilotManager = new AutopilotManager(this.browserView);
   }
 
   public getTabService(): TabService {
@@ -138,7 +138,36 @@ export class BrowserService {
     return this.automationManager.deleteAutomationSession(sessionId);
   }
 
-  // Service Accessors (for IPCHandlers)
+  public async executeAutopilot(
+    userGoal: string,
+    startUrl?: string,
+    referenceRecording?: RecordingSession
+  ): Promise<{
+    success: boolean;
+    sessionId: string;
+    message: string;
+  }> {
+    const effectiveStartUrl = startUrl || referenceRecording?.startUrl;
+    const newTab = this.tabService.createTab(effectiveStartUrl);
+    return this.autopilotManager.executeAutopilot(
+      newTab,
+      userGoal,
+      effectiveStartUrl,
+      referenceRecording
+    );
+  }
+
+  public stopAutopilot(sessionId: string): void {
+    this.autopilotManager.stopAutopilot(sessionId);
+  }
+
+  public getAutopilotStatus(sessionId: string): {
+    exists: boolean;
+    status?: string;
+  } {
+    return this.autopilotManager.getSessionStatus(sessionId);
+  }
+
   public getSettingsService(): SettingsService {
     return this.settingsService;
   }
@@ -212,6 +241,7 @@ export class BrowserService {
   public destroy(): void {
     this.tabService.destroy();
     this.automationManager.destroy();
+    this.autopilotManager.destroy();
     this.downloadService.destroy();
     this.sessionManager.close();
   }
@@ -245,15 +275,11 @@ export class BrowserService {
       }
     });
 
-    // Register WebContents for cosmetic filtering when tabs are created
     this.tabService.on('tab:created', (tab) => {
       this.adBlockerService.registerWebContents(tab.view.webContents);
     });
   }
 
-  /**
-   * Notify renderer about tab changes
-   */
   private notifyTabsChanged(): void {
     if (this.baseWindow.isDestroyed()) {
       return;

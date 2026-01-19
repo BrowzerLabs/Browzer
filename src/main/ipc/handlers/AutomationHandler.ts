@@ -45,5 +45,30 @@ export class AutomationHandler extends BaseHandler {
     this.handle('automation:delete-session', async (_, sessionId: string) => {
       return await browserService.deleteAutomationSession(sessionId);
     });
+
+    this.handle(
+      'autopilot:execute',
+      async (
+        _,
+        userGoal: string,
+        startUrl?: string,
+        referenceRecording?: any
+      ) => {
+        return await browserService.executeAutopilot(
+          userGoal,
+          startUrl,
+          referenceRecording
+        );
+      }
+    );
+
+    this.handle('autopilot:stop', async (_, sessionId: string) => {
+      browserService.stopAutopilot(sessionId);
+      return { success: true };
+    });
+
+    this.handle('autopilot:status', async (_, sessionId: string) => {
+      return browserService.getAutopilotStatus(sessionId);
+    });
   }
 }
