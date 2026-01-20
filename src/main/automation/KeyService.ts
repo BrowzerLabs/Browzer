@@ -14,9 +14,9 @@ export class KeyService extends BaseActionService {
   public async execute(params: KeyParams): Promise<ToolExecutionResult> {
     try {
       await this.waitForNetworkIdle({
-        timeout: 10000,
-        idleTime: 300,
-        maxInflightRequests: 2,
+        timeout: 3000,
+        idleTime: 500,
+        maxInflightRequests: 0,
       });
 
       const modifiers = params.modifiers || [];

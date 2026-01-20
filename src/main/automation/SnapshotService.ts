@@ -17,9 +17,9 @@ export class SnapshotService extends BaseActionService {
   ): Promise<ToolExecutionResult> {
     try {
       await this.waitForNetworkIdle({
-        timeout: 10000,
-        idleTime: 300,
-        maxInflightRequests: 2,
+        timeout: 3000,
+        idleTime: 500,
+        maxInflightRequests: 0,
       });
 
       if (params.scrollTo && params.scrollTo !== 'current') {
