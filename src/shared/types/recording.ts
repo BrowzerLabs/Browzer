@@ -17,6 +17,7 @@ export interface RecordingAction {
     | 'file';
   url: string;
   element?: TargetElement;
+  filePaths?: string[];
   timestamp: number;
   keys?: string[];
 }

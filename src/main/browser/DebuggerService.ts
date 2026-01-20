@@ -22,6 +22,9 @@ export class DebuggerService {
       ]);
 
       await cdpDebugger.sendCommand('DOM.getDocument', { depth: -1 });
+      await cdpDebugger.sendCommand('Page.setInterceptFileChooserDialog', {
+        enabled: true,
+      });
     } catch (error) {
       console.error(`[Debugger] Failed to initialize for tab ${tabId}:`, error);
       throw error;
