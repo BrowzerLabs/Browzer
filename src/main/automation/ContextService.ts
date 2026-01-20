@@ -9,9 +9,9 @@ export class ContextService extends BaseActionService {
   public async execute(): Promise<ToolExecutionResult> {
     try {
       await this.waitForNetworkIdle({
-        timeout: 10000,
-        idleTime: 300,
-        maxInflightRequests: 2,
+        timeout: 3000,
+        idleTime: 500,
+        maxInflightRequests: 0,
       });
 
       const cdp = this.view.webContents.debugger;
@@ -77,8 +77,8 @@ export class ContextService extends BaseActionService {
     isRoot: boolean = false
   ): void {
     const role = node.role?.value || '';
-    const name = node.name?.value || '';
-    const value = node.value?.value || '';
+    const name = String(node.name?.value || '');
+    const value = String(node.value?.value || '');
 
     const NOISE_ROLES = new Set([
       'none',
@@ -108,16 +108,18 @@ export class ContextService extends BaseActionService {
       const indent = '  '.repeat(depth);
       let nodeStr = `${indent}[${role}]`;
 
-      if (name && name.trim().length > 0) {
-        name.length > 120
-          ? (nodeStr += ` "${name.trim().substring(0, 120)}..."`)
-          : (nodeStr += ` "${name.trim()}"`);
+      const trimmedName = name.trim();
+      if (trimmedName.length > 0) {
+        trimmedName.length > 120
+          ? (nodeStr += ` "${trimmedName.substring(0, 120)}..."`)
+          : (nodeStr += ` "${trimmedName}"`);
       }
 
-      if (value && value !== name && value.trim().length > 0) {
-        value.length > 120
-          ? (nodeStr += ` value="${value.trim().substring(0, 120)}..."`)
-          : (nodeStr += ` value="${value.trim()}"`);
+      const trimmedValue = value.trim();
+      if (trimmedValue.length > 0 && trimmedValue !== trimmedName) {
+        trimmedValue.length > 120
+          ? (nodeStr += ` value="${trimmedValue.substring(0, 120)}..."`)
+          : (nodeStr += ` value="${trimmedValue}"`);
       }
 
       if (node.properties) {

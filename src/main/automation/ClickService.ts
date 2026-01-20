@@ -1,11 +1,9 @@
-import { Debugger } from 'electron';
 import { ToolExecutionResult } from '@/shared/types';
 import {
   BaseActionService,
   ExecutionContext,
   NodeParams,
 } from './BaseActionService';
-// import { NetworkIdleService } from './NetworkIdleService';
 
 export interface ClickParams extends NodeParams {}
 
@@ -17,9 +15,9 @@ export class ClickService extends BaseActionService {
   public async execute(params: ClickParams): Promise<ToolExecutionResult> {
     try {
       await this.waitForNetworkIdle({
-        timeout: 10000,
-        idleTime: 300,
-        maxInflightRequests: 2,
+        timeout: 3000,
+        idleTime: 500,
+        maxInflightRequests: 0,
       });
 
       // MODE 1: Direct CDP node click

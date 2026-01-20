@@ -6,6 +6,7 @@ import { TypeService } from './TypeService';
 import { NavigateService } from './NavigateService';
 import { KeyService } from './KeyService';
 import { NotifyService } from './NotifyService';
+import { FileUploadService } from './FileUploadService';
 import { ExecutionContext } from './BaseActionService';
 
 export class ExecutionService {
@@ -16,16 +17,17 @@ export class ExecutionService {
   private navigateService: NavigateService;
   private keyService: KeyService;
   private notifyService: NotifyService;
+  private fileUploadService: FileUploadService;
 
   constructor(private context: ExecutionContext) {
     this.clickService = new ClickService(this.context);
     this.typeService = new TypeService(this.context);
     this.navigateService = new NavigateService(this.context);
     this.keyService = new KeyService(this.context);
+    this.notifyService = new NotifyService();
+    this.fileUploadService = new FileUploadService(this.context);
     this.snapshotService = new SnapshotService(this.context);
     this.contextService = new ContextService(this.context);
-
-    this.notifyService = new NotifyService();
   }
 
   public async executeTool(
@@ -57,6 +59,9 @@ export class ExecutionService {
 
       case 'notify':
         return this.notifyService.execute(params);
+
+      case 'file':
+        return this.fileUploadService.execute(params);
 
       default:
         return { success: false, error: `Unknown tool: ${toolName}` };

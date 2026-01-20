@@ -14,7 +14,7 @@ export class NavigateService extends BaseActionService {
       await this.waitForNetworkIdle({
         timeout: 30000,
         idleTime: 500,
-        maxInflightRequests: 2,
+        maxInflightRequests: 0,
       });
 
       return { success: true };

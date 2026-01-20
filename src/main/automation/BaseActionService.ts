@@ -22,8 +22,6 @@ export abstract class BaseActionService {
   protected view: WebContentsView;
   protected tabId: string;
   protected cdp: Debugger;
-  private inflightRequests: Set<string> = new Set();
-  private networkIdleTimer: NodeJS.Timeout | null = null;
 
   constructor(context: ExecutionContext) {
     this.view = context.view;
@@ -255,93 +253,131 @@ export abstract class BaseActionService {
     options: NetworkIdleOptions = {}
   ): Promise<void> {
     const {
-      timeout = 20000,
+      timeout = 5000,
       idleTime = 500,
-      maxInflightRequests = 2,
+      maxInflightRequests = 0,
     } = options;
 
-    return new Promise((resolve, reject) => {
-      const timeoutTimer = setTimeout(() => {
-        this.cleanup();
-        console.warn(
-          `[NetworkIdle] Timeout after ${timeout}ms, proceeding anyway`
-        );
+    return new Promise(async (resolve) => {
+      let timeoutTimer: NodeJS.Timeout | null = null;
+      let networkIdleTimer: NodeJS.Timeout | null = null;
+      let isResolved = false;
+      const inflightRequests = new Set<string>();
+
+      const resolveOnce = (reason: string) => {
+        if (isResolved) return;
+        isResolved = true;
+        console.log(`[NetworkIdle] ${reason}`);
+        cleanup();
         resolve();
+      };
+
+      const cleanup = () => {
+        if (timeoutTimer) clearTimeout(timeoutTimer);
+        if (networkIdleTimer) clearTimeout(networkIdleTimer);
+        this.cdp.removeListener('message', onRequestWillBeSent);
+        this.cdp.removeListener('message', onLoadingFinished);
+        this.cdp.removeListener('message', onLoadingFailed);
+        this.cdp.removeListener('message', onResponseReceived);
+      };
+
+      timeoutTimer = setTimeout(() => {
+        resolveOnce(
+          `Timeout after ${timeout}ms (${inflightRequests.size} pending requests)`
+        );
       }, timeout);
 
       const checkNetworkIdle = () => {
-        if (this.inflightRequests.size <= maxInflightRequests) {
-          if (this.networkIdleTimer) {
-            clearTimeout(this.networkIdleTimer);
+        if (isResolved) return;
+
+        if (inflightRequests.size <= maxInflightRequests) {
+          if (networkIdleTimer) {
+            clearTimeout(networkIdleTimer);
           }
 
-          this.networkIdleTimer = setTimeout(() => {
-            clearTimeout(timeoutTimer);
-            this.cleanup();
-            console.log(
-              `[NetworkIdle] Network idle achieved (${this.inflightRequests.size} requests)`
+          networkIdleTimer = setTimeout(() => {
+            resolveOnce(
+              `Network idle achieved (${inflightRequests.size} requests)`
             );
-            resolve();
           }, idleTime);
+        } else {
+          if (networkIdleTimer) {
+            clearTimeout(networkIdleTimer);
+            networkIdleTimer = null;
+          }
         }
       };
 
       const onRequestWillBeSent = (event: any, method: string, params: any) => {
         if (method === 'Network.requestWillBeSent') {
-          this.inflightRequests.add(params.requestId);
-          if (this.networkIdleTimer) {
-            clearTimeout(this.networkIdleTimer);
-            this.networkIdleTimer = null;
+          const type = params.type;
+          if (
+            type === 'Document' ||
+            type === 'Stylesheet' ||
+            type === 'Script' ||
+            type === 'XHR' ||
+            type === 'Fetch'
+          ) {
+            inflightRequests.add(params.requestId);
+            if (networkIdleTimer) {
+              clearTimeout(networkIdleTimer);
+              networkIdleTimer = null;
+            }
           }
         }
       };
 
       const onLoadingFinished = (event: any, method: string, params: any) => {
         if (method === 'Network.loadingFinished') {
-          this.inflightRequests.delete(params.requestId);
+          inflightRequests.delete(params.requestId);
           checkNetworkIdle();
         }
       };
 
       const onLoadingFailed = (event: any, method: string, params: any) => {
         if (method === 'Network.loadingFailed') {
-          this.inflightRequests.delete(params.requestId);
+          inflightRequests.delete(params.requestId);
           checkNetworkIdle();
         }
       };
 
-      const cleanup = () => {
-        this.cdp.removeListener('message', onRequestWillBeSent);
-        this.cdp.removeListener('message', onLoadingFinished);
-        this.cdp.removeListener('message', onLoadingFailed);
-        if (this.networkIdleTimer) {
-          clearTimeout(this.networkIdleTimer);
-          this.networkIdleTimer = null;
+      const onResponseReceived = (event: any, method: string, params: any) => {
+        if (method === 'Network.responseReceived') {
+          if (params.response?.status >= 400) {
+            inflightRequests.delete(params.requestId);
+          }
         }
       };
 
-      this.cleanup = cleanup;
-
-      this.cdp.on('message', onRequestWillBeSent);
-      this.cdp.on('message', onLoadingFinished);
-      this.cdp.on('message', onLoadingFailed);
-
-      this.cdp
-        .sendCommand('Network.enable')
-        .then(() => {
-          checkNetworkIdle();
-        })
-        .catch((error) => {
-          console.error(
-            '[NetworkIdle] Failed to enable Network domain:',
-            error
-          );
-          cleanup();
-          clearTimeout(timeoutTimer);
-          resolve();
+      try {
+        const readyState = await this.cdp.sendCommand('Runtime.evaluate', {
+          expression: 'document.readyState',
+          returnByValue: true,
         });
+
+        const isLoading = readyState.result?.value === 'loading';
+
+        this.cdp.on('message', onRequestWillBeSent);
+        this.cdp.on('message', onLoadingFinished);
+        this.cdp.on('message', onLoadingFailed);
+        this.cdp.on('message', onResponseReceived);
+
+        await this.cdp.sendCommand('Network.enable').catch(() => {});
+
+        if (!isLoading) {
+          await this.sleep(100);
+
+          if (inflightRequests.size <= maxInflightRequests) {
+            resolveOnce('Page already loaded and idle');
+            return;
+          }
+        }
+
+        checkNetworkIdle();
+      } catch (error) {
+        console.error('[NetworkIdle] Setup error:', error);
+        resolveOnce('Setup error, proceeding anyway');
+      }
     });
   }
-
-  private cleanup: () => void = () => {};
 }

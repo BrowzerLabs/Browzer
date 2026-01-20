@@ -516,7 +516,7 @@ export class AutomationStateManager extends EventEmitter {
           tool_use_id: step.toolUseId,
           content: executedStep.result?.success
             ? `✅`
-            : executedStep.result?.error || 'Unknown error',
+            : '❌ Error: ' + executedStep.result?.error || 'Unknown error',
         });
       } else {
         toolResults.push({
