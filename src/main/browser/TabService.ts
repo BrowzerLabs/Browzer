@@ -161,7 +161,7 @@ export class TabService extends EventEmitter {
     try {
       const activeTab = this.getActiveTab();
       const startUrl = activeTab?.info.url || 'browzer://home';
-      this.recordingService.startRecordingSession(startUrl);
+      await this.recordingService.startRecordingSession(startUrl);
 
       const enablePromises = Array.from(this.tabs.values()).map((tab) =>
         this.recordingService.enableClickTracking(tab).catch(console.error)
@@ -175,21 +175,16 @@ export class TabService extends EventEmitter {
     }
   }
 
-  public async stopRecording(): Promise<{
-    actions: any[];
-    duration: number;
-    startUrl: string;
-  } | null> {
+  public async stopRecording(): Promise<boolean> {
     try {
       const disablePromises = Array.from(this.tabs.values()).map((tab) =>
         this.recordingService.disableClickTracking(tab).catch(console.error)
       );
-
       await Promise.allSettled(disablePromises);
-      return this.recordingService.stopRecordingSession();
+      return await this.recordingService.stopRecordingSession();
     } catch (error) {
       console.error('[TabService] Failed to stop recording:', error);
-      return null;
+      return false;
     }
   }
 

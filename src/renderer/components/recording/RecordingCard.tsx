@@ -5,10 +5,7 @@ import {
   Video,
   MousePointerClick,
   Calendar,
-  Download,
   ExternalLink,
-  HardDrive,
-  Camera,
   FileJson,
 } from 'lucide-react';
 
@@ -23,21 +20,21 @@ import {
   CardHeader,
   CardTitle,
 } from '@/renderer/ui/card';
-import {
-  formatDate,
-  formatDuration,
-  formatFileSize,
-} from '@/renderer/lib/utils';
+import { formatDate, formatDuration } from '@/renderer/lib/utils';
 
 interface RecordingCardProps {
   recording: RecordingSession;
+  onPlay: (recording: RecordingSession) => void;
   onDelete: (id: string) => void;
+  onOpenVideo: (videoPath: string) => void;
   onExport: (id: string) => void;
 }
 
 export function RecordingCard({
   recording,
+  onPlay,
   onDelete,
+  onOpenVideo,
   onExport,
 }: RecordingCardProps) {
   return (
@@ -60,18 +57,61 @@ export function RecordingCard({
               )}
             </CardDescription>
           </div>
+          <div className="flex gap-1 shrink-0">
+            {recording.videoPath && (
+              <Badge
+                variant="secondary"
+                className="bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"
+              >
+                <Video className="w-3 h-3 mr-1" />
+                Video
+              </Badge>
+            )}
+          </div>
         </div>
       </CardHeader>
 
+      <CardContent className="space-y-3">
+        {/* URL */}
+        {recording.startUrl && (
+          <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
+            <ExternalLink className="w-4 h-4 shrink-0" />
+            <span className="truncate">{recording.startUrl}</span>
+          </div>
+        )}
+
+        {/* Stats */}
+        <div className="flex items-center gap-4 text-sm">
+          <div className="flex items-center gap-1 text-gray-600 dark:text-gray-400">
+            <MousePointerClick className="w-4 h-4" />
+            <span>{recording.actions.length} actions</span>
+          </div>
+          <div className="flex items-center gap-1 text-gray-600 dark:text-gray-400">
+            <Clock className="w-4 h-4" />
+            <span>{formatDuration(recording.duration)}</span>
+          </div>
+        </div>
+
+        {/* Date */}
+        <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
+          <Calendar className="w-4 h-4" />
+          <span>{formatDate(recording.createdAt)}</span>
+        </div>
+      </CardContent>
+
       <CardFooter className="flex gap-2 pt-4 border-t">
-        <Button
+        <Button onClick={() => onPlay(recording)} className="flex-1" size="sm">
+          <Play className="w-4 h-4 mr-2" />
+          View
+        </Button>
+        {/* <Button
           onClick={() => onExport(recording.id)}
           variant="outline"
           size="sm"
           title="Export as JSON"
         >
           <FileJson className="w-4 h-4" />
-        </Button>
+        </Button> */}
         <Button
           onClick={() => onDelete(recording.id)}
           variant="ghost"

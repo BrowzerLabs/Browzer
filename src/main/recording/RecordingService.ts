@@ -1,12 +1,16 @@
-/* eslint-disable no-useless-escape */
-import { BaseWindow, Debugger, WebContentsView, dialog } from 'electron';
+import { BaseWindow, Debugger, WebContentsView, app, dialog } from 'electron';
 import { EventEmitter } from 'events';
 import { randomUUID } from 'crypto';
+import { writeFile, mkdir } from 'fs/promises';
+import { join } from 'path';
+import { existsSync } from 'fs';
 
 import { RecordingStore } from '../recording';
 import { Tab } from '../browser';
 
-import { AXNode, RecordingAction, RecordingSession } from '@/shared/types';
+import { ScreenRecordingService } from './ScreenRecordingService';
+
+import { RecordingAction, RecordingSession } from '@/shared/types';
 
 const CLICK_MARKER = '__browzer_click__';
 const INPUT_MARKER = '__browzer_input__';
@@ -14,9 +18,10 @@ const KEY_MARKER = '__browzer_key__';
 
 export class RecordingService extends EventEmitter {
   private recordingStore: RecordingStore;
+  private screenRecordingService: ScreenRecordingService;
   private currentSession: RecordingSession | null = null;
   private recordingStartTime = 0;
-  private recordingStartUrl = '';
+  private snapshotsDir: string;
 
   constructor(
     private baseWindow: BaseWindow,
@@ -24,45 +29,63 @@ export class RecordingService extends EventEmitter {
   ) {
     super();
     this.recordingStore = new RecordingStore();
+    this.screenRecordingService = new ScreenRecordingService(baseWindow);
+    this.snapshotsDir = join(
+      app.getPath('userData'),
+      'recordings',
+      'snapshots'
+    );
   }
 
   public getRecordingStore(): RecordingStore {
     return this.recordingStore;
   }
 
-  public startRecordingSession(startUrl: string): void {
+  public async startRecordingSession(startUrl: string): Promise<void> {
     this.recordingStartTime = Date.now();
-    this.recordingStartUrl = startUrl;
+    const sessionId = randomUUID();
     this.currentSession = {
-      id: randomUUID(),
+      id: sessionId,
       name: `Recording ${new Date().toLocaleString()}`,
       actions: [],
       createdAt: this.recordingStartTime,
       duration: 0,
       startUrl,
     };
+
+    const screenRecordingStarted =
+      await this.screenRecordingService.startRecording(sessionId);
+    if (!screenRecordingStarted) {
+      this.currentSession = null;
+      this.recordingStartTime = 0;
+      this.browserView.webContents.send('toast', {
+        message: 'Recording Failed',
+        description:
+          process.platform === 'darwin'
+            ? 'Screen recording permission may be required. Check System Settings > Privacy & Security > Screen Recording.'
+            : 'Screen recording failed to start',
+        variant: 'error',
+      });
+      throw new Error('Screen recording failed to start');
+    }
+
     this.browserView.webContents.send('recording:started');
   }
 
-  public stopRecordingSession(): {
-    actions: RecordingAction[];
-    duration: number;
-    startUrl: string;
-  } | null {
+  public async stopRecordingSession(): Promise<boolean> {
     if (!this.currentSession) {
-      return null;
+      return false;
+    }
+
+    const videoPath = await this.screenRecordingService.stopRecording();
+    if (videoPath) {
+      this.currentSession.videoPath = videoPath;
     }
 
     this.browserView.webContents.send('recording:stopped');
     const duration = Date.now() - this.recordingStartTime;
     this.currentSession.duration = duration;
-
-    const result = {
-      actions: [...this.currentSession.actions],
-      duration,
-      startUrl: this.recordingStartUrl,
-    };
-    return result;
+    return true;
   }
 
   public saveRecording(name: string, description?: string): boolean {
@@ -77,9 +100,8 @@ export class RecordingService extends EventEmitter {
 
     try {
       this.recordingStore.saveRecording(this.currentSession);
-      const sessionId = this.currentSession.id;
-      console.log('💾 Recording saved:', sessionId);
-      this.discardRecording();
+      this.currentSession = null;
+      this.recordingStartTime = 0;
       return true;
     } catch (error) {
       console.error('Failed to save recording:', error);
@@ -87,13 +109,12 @@ export class RecordingService extends EventEmitter {
     }
   }
 
-  public discardRecording(): void {
+  public async discardRecording(): Promise<void> {
     if (this.currentSession) {
-      console.log('🗑️ Recording discarded:', this.currentSession.id);
+      await this.screenRecordingService.discardRecording();
     }
     this.currentSession = null;
     this.recordingStartTime = 0;
-    this.recordingStartUrl = '';
   }
 
   public getCurrentActions(): RecordingAction[] {
@@ -171,6 +192,25 @@ export class RecordingService extends EventEmitter {
       this.emit('tracking-disabled', tab.id);
     } catch (error) {
       console.error(error);
+    }
+  }
+
+  private async captureViewportSnapshot(tab: Tab): Promise<string | null> {
+    try {
+      if (!existsSync(this.snapshotsDir)) {
+        await mkdir(this.snapshotsDir, { recursive: true });
+      }
+
+      const timestamp = Date.now();
+      const filename = `snapshot-${timestamp}.png`;
+      const snapshotPath = join(this.snapshotsDir, filename);
+      const image = await tab.view.webContents.capturePage();
+      const buffer = image.toPNG();
+      await writeFile(snapshotPath, buffer);
+      return snapshotPath;
+    } catch (error) {
+      console.error('[RecordingService] Failed to capture snapshot:', error);
+      return null;
     }
   }
 
@@ -883,6 +923,10 @@ export class RecordingService extends EventEmitter {
         case 'Runtime.consoleAPICalled':
           if (params.args?.[0]?.value === CLICK_MARKER) {
             const clickEvent = await this.processClickEvent(tab, cdp);
+            const snapshotPath = await this.captureViewportSnapshot(tab);
+            if (snapshotPath) {
+              clickEvent.snapshotPath = snapshotPath;
+            }
             this.addAction(clickEvent);
           } else if (params.args?.[0]?.value === INPUT_MARKER) {
             const inputEvent = await this.processInputEvent(tab, cdp);
@@ -933,7 +977,6 @@ export class RecordingService extends EventEmitter {
                     backendNodeId: params.backendNodeId,
                   }
                 );
-                console.log('Files set successfully');
               } catch (err) {
                 console.error('Error setting files:', err);
               }
@@ -982,8 +1025,8 @@ export class RecordingService extends EventEmitter {
       type: 'click',
       url: tab.view.webContents.getURL(),
       element: {
-        role: data.role || '',
-        name: data.name || '',
+        role: data.role,
+        name: data.name,
         value: data.value,
         attributes: data.attributes,
       },
@@ -1030,6 +1073,7 @@ export class RecordingService extends EventEmitter {
   }
 
   public destroy(): void {
+    this.screenRecordingService.destroy();
     this.currentSession = null;
   }
 }

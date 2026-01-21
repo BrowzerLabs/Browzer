@@ -27,7 +27,7 @@ export function ActionList({ actions }: ActionListProps) {
   }
 
   return (
-    <div className="p-2 space-y-2">
+    <div className="p-2 space-y-2 overflow-y-auto h-full max-h-full">
       {actions.map((action, index) => {
         const colorClass = getActionColor(action);
         const description = getActionDescription(action);

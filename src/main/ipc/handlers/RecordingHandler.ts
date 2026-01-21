@@ -12,7 +12,7 @@ export class RecordingHandler extends BaseHandler {
     });
 
     this.handle('stop-recording', async () => {
-      return tabService.stopRecording();
+      return await tabService.stopRecording();
     });
 
     this.handle(
@@ -23,7 +23,7 @@ export class RecordingHandler extends BaseHandler {
     );
 
     this.handle('discard-recording', async () => {
-      recordingService.discardRecording();
+      await recordingService.discardRecording();
       return true;
     });
 
@@ -58,10 +58,6 @@ export class RecordingHandler extends BaseHandler {
         console.error('Failed to open video file:', error);
         throw error;
       }
-    });
-
-    this.handle('video:get-file-url', async (_, videoPath: string) => {
-      return `video-file://${encodeURIComponent(videoPath)}`;
     });
   }
 }
