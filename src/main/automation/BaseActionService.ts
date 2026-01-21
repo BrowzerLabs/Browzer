@@ -252,11 +252,7 @@ export abstract class BaseActionService {
   public async waitForNetworkIdle(
     options: NetworkIdleOptions = {}
   ): Promise<void> {
-    const {
-      timeout = 5000,
-      idleTime = 500,
-      maxInflightRequests = 0,
-    } = options;
+    const { timeout = 5000, idleTime = 500, maxInflightRequests = 0 } = options;
 
     return new Promise(async (resolve) => {
       let timeoutTimer: NodeJS.Timeout | null = null;

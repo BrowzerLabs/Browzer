@@ -26,7 +26,9 @@ export function ActionItem({ action, index }: ActionItemProps) {
           {action.element?.role || action?.keys?.join('+')}
         </h6>
         <p className="text-xs text-gray-600 dark:text-gray-400">
-          {action.element?.name || action?.filePaths?.join(', ') || action.url?.substring(0, 50)}
+          {action.element?.name ||
+            action?.filePaths?.join(', ') ||
+            action.url?.substring(0, 50)}
         </p>
         {action.element?.value && (
           <p className="text-xs text-gray-400 dark:text-gray-500">

@@ -283,7 +283,7 @@ export class AutomationStateManager extends EventEmitter {
       const executedStep: ExecutedStep = {
         stepNumber,
         toolName: step.toolName,
-        result: result
+        result: result,
       };
 
       this.addExecutedStep(executedStep);
@@ -330,7 +330,7 @@ export class AutomationStateManager extends EventEmitter {
         result: {
           success: false,
           error: error.message,
-        }
+        },
       };
       this.addExecutedStep(executedStep);
 

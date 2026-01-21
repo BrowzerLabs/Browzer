@@ -61,7 +61,8 @@ export class FileUploadService extends BaseActionService {
 
       return {
         success: false,
-        error: 'Either nodeId, selector, or element attributes must be provided',
+        error:
+          'Either nodeId, selector, or element attributes must be provided',
       };
     } catch (error) {
       console.error('[FileUploadService] Error:', error);

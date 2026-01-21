@@ -694,10 +694,13 @@ export class TabService extends EventEmitter {
         this.bypassCertificateError(tab.id);
     });
 
-    wc.on('did-navigate', (_, url) => this.handleNavigation(info, wc, url));
-    wc.on('did-navigate-in-page', (_, url) =>
-      this.handleNavigation(info, wc, url)
-    );
+    wc.on('did-navigate', (_, url) => {
+      this.handleNavigation(info, wc, url);
+    });
+    wc.on('did-navigate-in-page', (_, url, isMainFrame) => {
+      if (!isMainFrame) return;
+      this.handleNavigation(info, wc, url);
+    });
 
     wc.on('page-favicon-updated', (_, favicons) => {
       if (
@@ -851,7 +854,13 @@ export class TabService extends EventEmitter {
       info.title = internalPageInfo.title;
       info.favicon = internalPageInfo.favicon;
     } else {
+      const oldUrl = info.url;
       info.url = url;
+      if (oldUrl !== url) {
+        console.log(
+          `[TabService] URL updated: ${info.id} from ${oldUrl} to ${url}`
+        );
+      }
     }
     info.canGoBack = wc.navigationHistory.canGoBack();
     info.canGoForward = wc.navigationHistory.canGoForward();

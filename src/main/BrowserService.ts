@@ -38,7 +38,10 @@ export class BrowserService {
   ) {
     // Initialize services
     this.settingsService = new SettingsService(this.browserView);
-    this.recordingService = new RecordingService(this.baseWindow, this.browserView);
+    this.recordingService = new RecordingService(
+      this.baseWindow,
+      this.browserView
+    );
     this.historyService = new HistoryService();
     this.passwordManager = new PasswordManager();
     this.bookmarkService = new BookmarkService(this.browserView);

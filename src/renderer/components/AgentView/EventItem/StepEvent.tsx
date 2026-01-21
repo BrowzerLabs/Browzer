@@ -47,18 +47,18 @@ export function StepEvent({ event, isLatest }: EventItemProps) {
 
         <div className="flex-1 min-w-0">
           <p className={cn('text-sm font-medium', getTextColor())}>
-             {event.data.stepNumber}  {event.data?.toolName}
+            {event.data.stepNumber} {event.data?.toolName}
           </p>
           {event.data.params && (
-              <details className="cursor-pointer">
-                <summary className="text-xs text-muted-foreground hover:text-foreground">
-                  View Params
-                </summary>
-                <pre className="mt-2 p-2 bg-muted/50 rounded overflow-x-auto text-xs">
-                  {JSON.stringify(event.data.params, null, 2)}
-                </pre>
-              </details>
-            )}
+            <details className="cursor-pointer">
+              <summary className="text-xs text-muted-foreground hover:text-foreground">
+                View Params
+              </summary>
+              <pre className="mt-2 p-2 bg-muted/50 rounded overflow-x-auto text-xs">
+                {JSON.stringify(event.data.params, null, 2)}
+              </pre>
+            </details>
+          )}
           {event.data && event.data?.error && (
             <p className="mt-2 p-3 bg-red-100 dark:bg-red-900/30 rounded text-sm text-red-700 dark:text-red-300">
               {event.data.error}

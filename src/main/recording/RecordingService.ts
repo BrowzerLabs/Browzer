@@ -499,7 +499,10 @@ export class RecordingService extends EventEmitter {
         case 'Page.fileChooserOpened':
           const { dialog } = require('electron');
           const result = await dialog.showOpenDialog(this.baseWindow, {
-            properties: params.mode === 'selectMultiple' ? ['openFile', 'multiSelections'] : ['openFile']
+            properties:
+              params.mode === 'selectMultiple'
+                ? ['openFile', 'multiSelections']
+                : ['openFile'],
           });
           if (!result.canceled && result.filePaths.length > 0) {
             const fileAction: RecordingAction = {
@@ -508,20 +511,23 @@ export class RecordingService extends EventEmitter {
               url: tab.view.webContents.getURL(),
               timestamp: Date.now(),
               filePaths: result.filePaths,
-            }
+            };
             this.addAction(fileAction);
             if (params.backendNodeId) {
               try {
-                await tab.view.webContents.debugger.sendCommand('DOM.setFileInputFiles', {
-                  files: result.filePaths,
-                  backendNodeId: params.backendNodeId
-                });
+                await tab.view.webContents.debugger.sendCommand(
+                  'DOM.setFileInputFiles',
+                  {
+                    files: result.filePaths,
+                    backendNodeId: params.backendNodeId,
+                  }
+                );
                 console.log('Files set successfully');
               } catch (err) {
                 console.error('Error setting files:', err);
               }
             }
-          };
+          }
           break;
         default:
       }
