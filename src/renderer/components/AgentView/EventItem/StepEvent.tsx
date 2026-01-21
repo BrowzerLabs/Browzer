@@ -1,14 +1,125 @@
-import { Play, CheckCircle2, XCircle, Loader2 } from 'lucide-react';
+import {
+  Play,
+  CheckCircle2,
+  XCircle,
+  Loader2,
+  MousePointerClick,
+  Type,
+  Navigation,
+  KeyRound,
+  Upload,
+  Bell,
+} from 'lucide-react';
+import { type LucideIcon } from 'lucide-react';
 
 import { EventItemProps } from '../types';
 
 import { Card } from '@/renderer/ui/card';
 import { cn } from '@/renderer/lib/utils';
+import { shrinkUrl } from '@/shared/utils';
+
+interface StepDescription {
+  action: string;
+  target?: string;
+  detail?: string;
+  icon: LucideIcon;
+}
+
+const getStepDescription = (toolName: string, params: any): StepDescription => {
+  const truncate = (str: string, maxLength: number) => {
+    if (!str) return '';
+    if (str.length <= maxLength) return str;
+    return str.substring(0, maxLength) + '...';
+  };
+
+  switch (toolName) {
+    case 'navigate':
+      return {
+        action: 'Navigating to',
+        target: shrinkUrl(params?.url || 'page'),
+        icon: Navigation,
+      };
+
+    case 'click':
+      const target =
+        params?.name ||
+        (params?.nodeId ? `node: ${params.nodeId}` : params?.role || 'element');
+      const detail =
+        params?.role ??
+        (params?.attributes?.href
+          ? truncate(params.attributes.href, 50)
+          : undefined);
+
+      return {
+        action: 'Clicking on',
+        target,
+        detail,
+        icon: MousePointerClick,
+      };
+
+    case 'type':
+      const targetName = params?.name
+        ? `${params?.name} (${params?.role})`
+        : params.nodeId;
+      const value = params?.value || '';
+      return {
+        action: params?.clearFirst === false ? 'Appending to' : 'Typing into',
+        target: targetName,
+        detail: value ? truncate(value, 50) : undefined,
+        icon: Type,
+      };
+
+    case 'key':
+      const modifiers = params?.modifiers || [];
+      const key = params?.key || 'key';
+      const keyCombo =
+        modifiers.length > 0 ? `${modifiers.join(' + ')} + ${key}` : key;
+      return {
+        action: 'Pressing',
+        target: keyCombo,
+        icon: KeyRound,
+      };
+
+    case 'file':
+      const fileCount = params?.filePaths?.length || 0;
+      const fileName = params?.filePaths?.[0]?.split('/').pop() || 'file';
+      return {
+        action: 'Uploading',
+        target:
+          fileCount > 1 ? `${fileCount} files` : fileName.substring(0, 40),
+        detail:
+          params?.name || params?.selector
+            ? `to ${params.name || params.selector}`
+            : undefined,
+        icon: Upload,
+      };
+
+    case 'notify':
+      return {
+        action: 'Sending notification',
+        target: params?.title || 'User notification',
+        detail: params?.message ? truncate(params.message, 60) : undefined,
+        icon: Bell,
+      };
+
+    default:
+      return {
+        action: toolName,
+        target: params?.name || params?.url || 'element',
+        icon: Play,
+      };
+  }
+};
 
 export function StepEvent({ event, isLatest }: EventItemProps) {
   const isRunning = event.type === 'step_start';
   const isSuccess = event.type === 'step_complete';
   const isError = event.type === 'step_error';
+
+  const description = getStepDescription(
+    event.data?.toolName || '',
+    event.data?.params || {}
+  );
 
   const getStatusColor = () => {
     if (isRunning)
@@ -43,26 +154,38 @@ export function StepEvent({ event, isLatest }: EventItemProps) {
       )}
     >
       <div className="flex items-start gap-3">
-        <div className="flex-shrink-0 mt-0.5">{getIcon()}</div>
-
         <div className="flex-1 min-w-0">
-          <p className={cn('text-sm font-medium', getTextColor())}>
-             {event.data.stepNumber}  {event.data?.toolName}
-          </p>
-          {event.data.params && (
-              <details className="cursor-pointer">
-                <summary className="text-xs text-muted-foreground hover:text-foreground">
-                  View Params
-                </summary>
-                <pre className="mt-2 p-2 bg-muted/50 rounded overflow-x-auto text-xs">
-                  {JSON.stringify(event.data.params, null, 2)}
-                </pre>
-              </details>
-            )}
+          <div className="flex items-start gap-2 text-sm mb-1">
+            {getIcon()}
+            <span className={cn('text-muted-foreground', getTextColor())}>
+              {description.action}{' '}
+              <strong className={cn('font-medium ml-1', getTextColor())}>
+                {description.target}
+              </strong>
+            </span>
+          </div>
+
+          {description.detail && (
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+              {description.detail}
+            </p>
+          )}
+
           {event.data && event.data?.error && (
             <p className="mt-2 p-3 bg-red-100 dark:bg-red-900/30 rounded text-sm text-red-700 dark:text-red-300">
               {event.data.error}
             </p>
+          )}
+
+          {event.data.params && (
+            <details className="cursor-pointer mt-2">
+              <summary className="text-xs text-muted-foreground hover:text-foreground">
+                View Details
+              </summary>
+              <pre className="mt-2 p-2 bg-muted/50 rounded overflow-x-auto text-xs">
+                {JSON.stringify(event.data.params, null, 2)}
+              </pre>
+            </details>
           )}
         </div>
       </div>

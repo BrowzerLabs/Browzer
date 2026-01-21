@@ -1,14 +1,22 @@
-import { useRef, useEffect } from 'react';
+import { useRef, useEffect, useState } from 'react';
+import { Loader2 } from 'lucide-react';
 
 import { EventItem } from './EventItem';
+import { RecordingActions } from './RecordingActions';
 import { AgentChatAreaProps } from './types';
+
+import { RecordingSession } from '@/shared/types';
 
 export function AgentChatArea({
   agentMode,
   viewMode,
   currentSession,
+  selectedRecordingId,
 }: AgentChatAreaProps) {
   const chatEndRef = useRef<HTMLDivElement>(null);
+  const [selectedRecording, setSelectedRecording] =
+    useState<RecordingSession | null>(null);
+  const [isLoadingRecording, setIsLoadingRecording] = useState(false);
 
   useEffect(() => {
     if (viewMode === 'existing_session' && chatEndRef.current) {
@@ -16,7 +24,44 @@ export function AgentChatArea({
     }
   }, [currentSession?.events, viewMode]);
 
+  useEffect(() => {
+    const fetchRecording = async () => {
+      if (!selectedRecordingId) {
+        setSelectedRecording(null);
+        return;
+      }
+
+      setIsLoadingRecording(true);
+      try {
+        const recording =
+          await window.recordingAPI.getRecording(selectedRecordingId);
+        setSelectedRecording(recording);
+      } catch (error) {
+        console.error('[AgentChatArea] Failed to fetch recording:', error);
+        setSelectedRecording(null);
+      } finally {
+        setIsLoadingRecording(false);
+      }
+    };
+
+    fetchRecording();
+  }, [selectedRecordingId]);
+
   if (viewMode === 'new_session') {
+    if (agentMode === 'automate' && selectedRecordingId) {
+      if (isLoadingRecording) {
+        return (
+          <div className="flex items-center justify-center h-full">
+            <Loader2 className="animate-spin" />
+          </div>
+        );
+      }
+
+      if (selectedRecording) {
+        return <RecordingActions actions={selectedRecording.actions} />;
+      }
+    }
+
     return (
       <div className="flex flex-col items-center justify-center h-full text-center px-6">
         <h3 className="text-lg font-semibold mb-2">
