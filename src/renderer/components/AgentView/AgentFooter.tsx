@@ -1,5 +1,5 @@
 import React from 'react';
-import { ArrowUp, Square, MessageSquare, Bot, Rocket } from 'lucide-react';
+import { ArrowUp, Square, MessageSquare, Bot } from 'lucide-react';
 
 import { AgentFooterProps } from './types';
 
@@ -18,12 +18,11 @@ import {
 import { Button } from '@/renderer/ui/button';
 
 export function AgentFooter({
-  userPrompt,
+  userGoal,
   selectedRecordingId,
-  isSubmitting,
-  isDisabled,
+  isRunning,
   agentMode,
-  onPromptChange,
+  onGoalChange,
   onSubmit,
   onStop,
   onModeChange,
@@ -35,15 +34,10 @@ export function AgentFooter({
     }
   };
 
-  // In ask mode, only need prompt content; in automate mode, need recording selection too
-  // In autopilot mode, only need prompt content (no recording needed)
   const canSubmit =
     agentMode === 'ask' // || agentMode === 'autopilot'
-      ? userPrompt.trim() && !isSubmitting
-      : userPrompt.trim() &&
-        selectedRecordingId &&
-        !isSubmitting &&
-        !isDisabled;
+      ? userGoal.trim() && !isRunning
+      : userGoal.trim() && selectedRecordingId && !isRunning;
 
   const placeholder =
     agentMode === 'ask'
@@ -59,11 +53,13 @@ export function AgentFooter({
       <InputGroup>
         <InputGroupTextarea
           placeholder={placeholder}
-          value={userPrompt}
-          onChange={(e) => onPromptChange(e.target.value)}
+          value={userGoal}
+          onChange={(e) => onGoalChange(e.target.value)}
           onKeyDown={handleKeyDown}
           disabled={
-            agentMode === 'automate' ? isDisabled || isSubmitting : isSubmitting
+            agentMode === 'automate'
+              ? !selectedRecordingId || isRunning
+              : isRunning
           }
           rows={3}
           className="resize-none"
@@ -110,11 +106,11 @@ export function AgentFooter({
             variant="default"
             className="rounded-full ml-auto"
             size="icon-xs"
-            disabled={isSubmitting ? false : !canSubmit}
-            onClick={isSubmitting ? onStop : onSubmit}
-            title={isSubmitting ? 'Stop automation' : 'Send message'}
+            disabled={isRunning ? false : !canSubmit}
+            onClick={isRunning ? onStop : onSubmit}
+            title={isRunning ? 'Stop automation' : 'Send message'}
           >
-            {isSubmitting ? (
+            {isRunning ? (
               <Square className="size-2 bg-white" />
             ) : (
               <ArrowUp className="w-4 h-4" />

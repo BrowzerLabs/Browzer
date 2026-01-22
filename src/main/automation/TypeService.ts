@@ -39,6 +39,18 @@ export class TypeService extends BaseActionService {
         return await this.findAndTypeByAttributes(params, clearFirst);
       }
 
+      const focusCheck = await this.cdp.sendCommand('Runtime.evaluate', {
+        expression: 'document.activeElement?.tagName',
+        returnByValue: true,
+      });
+
+      if (!focusCheck.result?.value || focusCheck.result.value === 'BODY') {
+        return {
+          success: false,
+          error: `No element focussed for typing`,
+        };
+      }
+
       for (const char of params.value) {
         await this.cdp.sendCommand('Input.dispatchKeyEvent', {
           type: 'keyDown',

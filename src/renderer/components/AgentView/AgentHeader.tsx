@@ -1,4 +1,4 @@
-import { Plus, Loader2, CheckCircle2, XCircle, Clock } from 'lucide-react';
+import { Plus, Loader2, CheckCircle2, XCircle } from 'lucide-react';
 
 import { AgentHeaderProps } from './types';
 
@@ -13,16 +13,14 @@ import { Button } from '@/renderer/ui/button';
 import { AutomationStatus } from '@/shared/types';
 
 export function AgentHeader({
-  viewMode,
   agentMode,
   selectedRecordingId,
   recordings,
   currentSession,
   onRecordingSelect,
   onNewSession,
-  isDisabled,
 }: AgentHeaderProps) {
-  const isExistingSession = viewMode === 'existing_session';
+  const isRunning = currentSession?.status === AutomationStatus.RUNNING;
   const isAutopilotMode = agentMode === 'autopilot';
 
   // Find the selected recording to display only its name in the trigger
@@ -42,7 +40,7 @@ export function AgentHeader({
           onValueChange={(value) =>
             onRecordingSelect(value === 'none' ? null : value)
           }
-          disabled={isDisabled || isExistingSession}
+          disabled={isRunning || currentSession !== null}
         >
           <SelectTrigger className="w-64 max-w-xs h-auto min-h-9">
             <SelectValue placeholder="Select a workflow...">
