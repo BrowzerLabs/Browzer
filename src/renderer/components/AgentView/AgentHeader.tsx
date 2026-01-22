@@ -80,14 +80,14 @@ export function AgentHeader({
         )}
       </div>
       <div className="flex items-center gap-2">
-        <Button
+        {/* <Button
           size="icon"
           onClick={() =>
             window.browserAPI.navigate('1', 'browzer://automation')
           }
         >
           <Clock />
-        </Button>
+        </Button> */}
         <Button
           variant="ghost"
           size="icon"
