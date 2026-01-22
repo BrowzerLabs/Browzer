@@ -1,10 +1,12 @@
 import { Debugger } from 'electron';
-import { ToolExecutionResult } from '@/shared/types';
+
 import {
   BaseActionService,
   ExecutionContext,
   NodeParams,
 } from './BaseActionService';
+
+import { ToolExecutionResult } from '@/shared/types';
 
 export interface TypeParams extends NodeParams {
   value: string;
