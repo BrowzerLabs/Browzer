@@ -1,10 +1,16 @@
 import { app, dialog } from 'electron';
+import { existsSync } from 'fs';
+import { writeFile, unlink } from 'fs/promises';
 import path from 'path';
+
 import Database from 'better-sqlite3';
-import { writeFile } from 'fs/promises';
+
+import { FormatService } from '../llm/utils/FormatService';
+
+import { MigrationService } from './MigrationService';
+import { migrations } from './migrations';
 
 import { RecordingSession } from '@/shared/types';
-import { FormatService } from '../llm/utils/FormatService';
 export class RecordingStore {
   private db: Database.Database;
 
@@ -31,7 +37,12 @@ export class RecordingStore {
     this.db.pragma('page_size = 4096');
     this.db.pragma('cache_size = -64000');
 
-    this.initializeDatabase();
+    const migrationManager = new MigrationService(this.db, dbPath);
+    try {
+      migrationManager.migrateSync(migrations);
+    } catch (error) {
+      console.error('❌ Migration failed:', error);
+    }
 
     this.stmts = {
       insert: this.db.prepare(`
@@ -53,54 +64,6 @@ export class RecordingStore {
     };
 
     console.log('RecordingStore initialized with SQLite at:', dbPath);
-  }
-
-  private initializeDatabase(): void {
-    try {
-      this.db.exec(`
-        CREATE TABLE IF NOT EXISTS recordings (
-          id TEXT PRIMARY KEY,
-          name TEXT NOT NULL,
-          description TEXT,
-          created_at INTEGER NOT NULL,
-          duration INTEGER NOT NULL,
-          start_url TEXT,
-          actions_json TEXT NOT NULL
-        );
-
-        CREATE INDEX IF NOT EXISTS idx_created_at ON recordings(created_at DESC);
-        CREATE INDEX IF NOT EXISTS idx_name ON recordings(name);
-        CREATE INDEX IF NOT EXISTS idx_duration ON recordings(duration DESC);
-
-        CREATE VIRTUAL TABLE IF NOT EXISTS recordings_fts USING fts5(
-          id UNINDEXED,
-          name,
-          description,
-          content='recordings',
-          content_rowid='rowid'
-        );
-
-        CREATE TRIGGER IF NOT EXISTS recordings_fts_insert AFTER INSERT ON recordings BEGIN
-          INSERT INTO recordings_fts(rowid, id, name, description)
-          VALUES (new.rowid, new.id, new.name, COALESCE(new.description, ''));
-        END;
-
-        CREATE TRIGGER IF NOT EXISTS recordings_fts_delete AFTER DELETE ON recordings BEGIN
-          DELETE FROM recordings_fts WHERE rowid = old.rowid;
-        END;
-
-        CREATE TRIGGER IF NOT EXISTS recordings_fts_update AFTER UPDATE ON recordings BEGIN
-          DELETE FROM recordings_fts WHERE rowid = old.rowid;
-          INSERT INTO recordings_fts(rowid, id, name, description)
-          VALUES (new.rowid, new.id, new.name, COALESCE(new.description, ''));
-        END;
-      `);
-
-      console.log('Recording database schema initialized successfully');
-    } catch (error) {
-      console.error('Error initializing recording database schema:', error);
-      throw error;
-    }
   }
 
   private rowToSession(row: any): RecordingSession {
