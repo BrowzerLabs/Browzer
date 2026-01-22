@@ -1,16 +1,15 @@
 {
   "env": {
-    "browser": true,
-    "es6": true,
+    "es2024": true,
     "node": true
   },
   "extends": [
     "eslint:recommended",
-    "plugin:@typescript-eslint/eslint-recommended",
     "plugin:@typescript-eslint/recommended",
     "plugin:import/recommended",
     "plugin:import/electron",
-    "plugin:import/typescript"
+    "plugin:import/typescript",
+    "prettier" 
   ],
   "parser": "@typescript-eslint/parser",
   "parserOptions": {
@@ -27,5 +26,22 @@
   },
   "rules": {
     "@typescript-eslint/no-explicit-any": "off",
-  }
+    "import/order": ["error", { "newlines-between": "always" }]
+  },
+  "overrides": [
+    {
+      "files": ["src/renderer/**/*"],
+      "env": {
+        "browser": true,
+        "node": false
+      }
+    },
+    {
+      "files": ["src/main/**/*", "src/preload/**/*"],
+      "env": {
+        "browser": false,
+        "node": true
+      }
+    }
+  ]
 }

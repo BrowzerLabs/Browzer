@@ -1,10 +1,26 @@
 import { useEffect, useState, useCallback } from 'react';
-import { Search, Trash2, Star, Folder, ExternalLink, Edit2, MoreVertical, Loader2, FolderPlus, ChevronRight, ChevronDown, FolderInput, ArrowRight } from 'lucide-react';
+import {
+  Search,
+  Trash2,
+  Star,
+  Folder,
+  ExternalLink,
+  Edit2,
+  MoreVertical,
+  Loader2,
+  FolderPlus,
+  ChevronRight,
+  ChevronDown,
+  FolderInput,
+  ArrowRight,
+} from 'lucide-react';
+import { toast } from 'sonner';
+
 import type { Bookmark, BookmarkTreeNode } from '../../shared/types';
 import { BOOKMARK_BAR_ID, OTHER_BOOKMARKS_ID } from '../../shared/types';
+
 import { Button } from '@/renderer/ui/button';
 import { Input } from '@/renderer/ui/input';
-import { toast } from 'sonner';
 import { useBrowserAPI } from '@/renderer/hooks/useBrowserAPI';
 import {
   DropdownMenu,
@@ -48,8 +64,10 @@ export function Bookmarks() {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [viewMode, setViewMode] = useState<'list' | 'tree'>('list');
-  const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set([BOOKMARK_BAR_ID, OTHER_BOOKMARKS_ID]));
-  
+  const [expandedFolders, setExpandedFolders] = useState<Set<string>>(
+    new Set([BOOKMARK_BAR_ID, OTHER_BOOKMARKS_ID])
+  );
+
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [editingBookmark, setEditingBookmark] = useState<Bookmark | null>(null);
   const [editTitle, setEditTitle] = useState('');
@@ -57,18 +75,28 @@ export function Bookmarks() {
 
   const [createFolderDialogOpen, setCreateFolderDialogOpen] = useState(false);
   const [newFolderName, setNewFolderName] = useState('');
-  const [newFolderParent, setNewFolderParent] = useState<string>(BOOKMARK_BAR_ID);
+  const [newFolderParent, setNewFolderParent] =
+    useState<string>(BOOKMARK_BAR_ID);
 
   const [editFolderDialogOpen, setEditFolderDialogOpen] = useState(false);
-  const [editingFolder, setEditingFolder] = useState<BookmarkTreeNode | null>(null);
+  const [editingFolder, setEditingFolder] = useState<BookmarkTreeNode | null>(
+    null
+  );
   const [editFolderName, setEditFolderName] = useState('');
 
   const [moveDialogOpen, setMoveDialogOpen] = useState(false);
-  const [movingItem, setMovingItem] = useState<{ id: string; title: string; isFolder: boolean } | null>(null);
-  const [moveTargetFolder, setMoveTargetFolder] = useState<string>(BOOKMARK_BAR_ID);
+  const [movingItem, setMovingItem] = useState<{
+    id: string;
+    title: string;
+    isFolder: boolean;
+  } | null>(null);
+  const [moveTargetFolder, setMoveTargetFolder] =
+    useState<string>(BOOKMARK_BAR_ID);
 
   const [deleteFolderDialogOpen, setDeleteFolderDialogOpen] = useState(false);
-  const [deletingFolder, setDeletingFolder] = useState<BookmarkTreeNode | null>(null);
+  const [deletingFolder, setDeletingFolder] = useState<BookmarkTreeNode | null>(
+    null
+  );
 
   const loadBookmarks = useCallback(async () => {
     try {
@@ -243,7 +271,12 @@ export function Bookmarks() {
   };
 
   // Move item handlers (works for both bookmarks and folders)
-  const handleMoveClick = (item: { id: string; title: string; isFolder: boolean; parentId?: string | null }) => {
+  const handleMoveClick = (item: {
+    id: string;
+    title: string;
+    isFolder: boolean;
+    parentId?: string | null;
+  }) => {
     setMovingItem({ id: item.id, title: item.title, isFolder: item.isFolder });
     setMoveTargetFolder(item.parentId || BOOKMARK_BAR_ID);
     setMoveDialogOpen(true);
@@ -270,20 +303,20 @@ export function Bookmarks() {
   // Get folders excluding the item being moved (to prevent moving into itself)
   const getAvailableFolders = (excludeId?: string) => {
     const folders: { id: string; title: string; depth: number }[] = [];
-    
+
     const traverse = (node: BookmarkTreeNode, depth: number) => {
       if (node.isFolder && node.id !== excludeId) {
         folders.push({ id: node.id, title: node.title, depth });
-        node.children?.forEach(child => traverse(child, depth + 1));
+        node.children?.forEach((child) => traverse(child, depth + 1));
       }
     };
-    
-    bookmarkTree.forEach(node => traverse(node, 0));
+
+    bookmarkTree.forEach((node) => traverse(node, 0));
     return folders;
   };
 
   const toggleFolder = (folderId: string) => {
-    setExpandedFolders(prev => {
+    setExpandedFolders((prev) => {
       const next = new Set(prev);
       if (next.has(folderId)) {
         next.delete(folderId);
@@ -294,26 +327,29 @@ export function Bookmarks() {
     });
   };
 
-  const getAllFolders = (nodes: BookmarkTreeNode[]): { id: string; title: string; depth: number }[] => {
+  const getAllFolders = (
+    nodes: BookmarkTreeNode[]
+  ): { id: string; title: string; depth: number }[] => {
     const folders: { id: string; title: string; depth: number }[] = [];
-    
+
     const traverse = (node: BookmarkTreeNode, depth: number) => {
       if (node.isFolder) {
         folders.push({ id: node.id, title: node.title || 'Untitled', depth });
-        node.children?.forEach(child => traverse(child, depth + 1));
+        node.children?.forEach((child) => traverse(child, depth + 1));
       }
     };
-    
-    nodes.forEach(node => traverse(node, 0));
+
+    nodes.forEach((node) => traverse(node, 0));
     return folders;
   };
 
-  const isRootFolder = (id: string) => id === BOOKMARK_BAR_ID || id === OTHER_BOOKMARKS_ID;
+  const isRootFolder = (id: string) =>
+    id === BOOKMARK_BAR_ID || id === OTHER_BOOKMARKS_ID;
 
   const renderTreeNode = (node: BookmarkTreeNode, depth = 0) => {
     const isExpanded = expandedFolders.has(node.id);
     const isRoot = isRootFolder(node.id);
-    
+
     if (node.isFolder) {
       return (
         <div key={node.id}>
@@ -330,30 +366,43 @@ export function Bookmarks() {
               )}
             </button>
             <Folder className="w-4 h-4 text-yellow-500 flex-shrink-0" />
-            <span className="font-medium truncate flex-1">{node.title || 'Untitled'}</span>
-            <span className="text-xs text-muted-foreground flex-shrink-0 mr-2">
-              {node.children?.filter(c => !c.isFolder).length || 0} bookmarks
+            <span className="font-medium truncate flex-1">
+              {node.title || 'Untitled'}
             </span>
-            {
-              !isRoot && (
-                <DropdownMenu>
-                <DropdownMenuTrigger asChild onClick={(e: React.MouseEvent) => e.stopPropagation()}>
+            <span className="text-xs text-muted-foreground flex-shrink-0 mr-2">
+              {node.children?.filter((c) => !c.isFolder).length || 0} bookmarks
+            </span>
+            {!isRoot && (
+              <DropdownMenu>
+                <DropdownMenuTrigger
+                  asChild
+                  onClick={(e: React.MouseEvent) => e.stopPropagation()}
+                >
                   <Button variant="ghost" size="icon" className="h-7 w-7">
                     <MoreVertical className="w-4 h-4" />
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
-                  <DropdownMenuItem onClick={(e: React.MouseEvent) => {
-                    e.stopPropagation();
-                    handleEditFolder(node);
-                  }}>
+                  <DropdownMenuItem
+                    onClick={(e: React.MouseEvent) => {
+                      e.stopPropagation();
+                      handleEditFolder(node);
+                    }}
+                  >
                     <Edit2 className="w-4 h-4 mr-2" />
                     Rename
                   </DropdownMenuItem>
-                  <DropdownMenuItem onClick={(e: React.MouseEvent) => {
-                    e.stopPropagation();
-                    handleMoveClick({ id: node.id, title: node.title || 'Untitled', isFolder: true, parentId: node.parentId });
-                  }}>
+                  <DropdownMenuItem
+                    onClick={(e: React.MouseEvent) => {
+                      e.stopPropagation();
+                      handleMoveClick({
+                        id: node.id,
+                        title: node.title || 'Untitled',
+                        isFolder: true,
+                        parentId: node.parentId,
+                      });
+                    }}
+                  >
                     <FolderInput className="w-4 h-4 mr-2" />
                     Move to...
                   </DropdownMenuItem>
@@ -363,17 +412,17 @@ export function Bookmarks() {
                       e.stopPropagation();
                       handleDeleteFolderClick(node);
                     }}
-                    variant='destructive'
+                    variant="destructive"
                   >
                     <Trash2 className="w-4 h-4 mr-2" />
                     Delete
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
-              )
-            }
+            )}
           </div>
-          {isExpanded && node.children?.map((child) => renderTreeNode(child, depth + 1))}
+          {isExpanded &&
+            node.children?.map((child) => renderTreeNode(child, depth + 1))}
         </div>
       );
     }
@@ -386,47 +435,73 @@ export function Bookmarks() {
         onClick={() => node.url && handleOpen(node.url)}
       >
         {node.favicon ? (
-          <img src={node.favicon} alt="" className="w-4 h-4 rounded flex-shrink-0" />
+          <img
+            src={node.favicon}
+            alt=""
+            className="w-4 h-4 rounded flex-shrink-0"
+          />
         ) : (
           <Star className="w-4 h-4 text-yellow-500 flex-shrink-0" />
         )}
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-medium truncate">{node.title || <span className="text-muted-foreground italic">No title (favicon only)</span>}</p>
+          <p className="text-sm font-medium truncate">
+            {node.title || (
+              <span className="text-muted-foreground italic">
+                No title (favicon only)
+              </span>
+            )}
+          </p>
           <p className="text-xs text-muted-foreground truncate">{node.url}</p>
         </div>
         <div className="opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
           <DropdownMenu>
-            <DropdownMenuTrigger asChild onClick={(e: React.MouseEvent) => e.stopPropagation()}>
+            <DropdownMenuTrigger
+              asChild
+              onClick={(e: React.MouseEvent) => e.stopPropagation()}
+            >
               <Button variant="ghost" size="icon" className="h-8 w-8">
                 <MoreVertical className="w-4 h-4" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={(e: React.MouseEvent) => {
-                e.stopPropagation();
-                node.url && handleOpen(node.url);
-              }}>
+              <DropdownMenuItem
+                onClick={(e: React.MouseEvent) => {
+                  e.stopPropagation();
+                  node.url && handleOpen(node.url);
+                }}
+              >
                 <ArrowRight className="w-4 h-4 mr-2" />
                 Open in Current Tab
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={(e: React.MouseEvent) => {
-                e.stopPropagation();
-                node.url && handleOpenNewTab(node.url);
-              }}>
+              <DropdownMenuItem
+                onClick={(e: React.MouseEvent) => {
+                  e.stopPropagation();
+                  node.url && handleOpenNewTab(node.url);
+                }}
+              >
                 <ExternalLink className="w-4 h-4 mr-2" />
                 Open in New Tab
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={(e: React.MouseEvent) => {
-                e.stopPropagation();
-                handleEdit(node as Bookmark);
-              }}>
+              <DropdownMenuItem
+                onClick={(e: React.MouseEvent) => {
+                  e.stopPropagation();
+                  handleEdit(node as Bookmark);
+                }}
+              >
                 <Edit2 className="w-4 h-4 mr-2" />
                 Edit
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={(e: React.MouseEvent) => {
-                e.stopPropagation();
-                handleMoveClick({ id: node.id, title: node.title || 'Untitled', isFolder: false, parentId: node.parentId });
-              }}>
+              <DropdownMenuItem
+                onClick={(e: React.MouseEvent) => {
+                  e.stopPropagation();
+                  handleMoveClick({
+                    id: node.id,
+                    title: node.title || 'Untitled',
+                    isFolder: false,
+                    parentId: node.parentId,
+                  });
+                }}
+              >
                 <FolderInput className="w-4 h-4 mr-2" />
                 Move to...
               </DropdownMenuItem>
@@ -460,7 +535,8 @@ export function Bookmarks() {
             <div>
               <h1 className="text-2xl font-bold">Bookmarks</h1>
               <p className="text-sm text-muted-foreground mt-1">
-                {bookmarks.length} bookmark{bookmarks.length !== 1 ? 's' : ''} saved
+                {bookmarks.length} bookmark{bookmarks.length !== 1 ? 's' : ''}{' '}
+                saved
               </p>
             </div>
             <div className="flex items-center gap-2">
@@ -494,21 +570,19 @@ export function Bookmarks() {
             </div>
           </div>
 
-         {
-          viewMode === 'list' && (
+          {viewMode === 'list' && (
             <div className="mb-6">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-              <Input
-                placeholder="Search bookmarks..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10 bg-muted/30"
-              />
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search bookmarks..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-10 bg-muted/30"
+                />
+              </div>
             </div>
-          </div>
-          )
-         }
+          )}
 
           <div className="rounded-lg border bg-card">
             {loading ? (
@@ -521,7 +595,9 @@ export function Bookmarks() {
                 {filteredBookmarks.length === 0 ? (
                   <div className="text-center py-16">
                     <Star className="w-12 h-12 mx-auto text-muted-foreground/30 mb-4" />
-                    <h3 className="text-lg font-medium mb-2">No bookmarks yet</h3>
+                    <h3 className="text-lg font-medium mb-2">
+                      No bookmarks yet
+                    </h3>
                     <p className="text-sm text-muted-foreground">
                       Click the star icon in the address bar to bookmark pages
                     </p>
@@ -534,50 +610,78 @@ export function Bookmarks() {
                       onClick={() => handleOpen(bookmark.url)}
                     >
                       {bookmark.favicon ? (
-                        <img src={bookmark.favicon} alt="" className="w-5 h-5 rounded flex-shrink-0" />
+                        <img
+                          src={bookmark.favicon}
+                          alt=""
+                          className="w-5 h-5 rounded flex-shrink-0"
+                        />
                       ) : (
                         <Star className="w-5 h-5 text-yellow-500 flex-shrink-0" />
                       )}
                       <div className="flex-1 min-w-0">
                         <p className="font-medium truncate">{bookmark.title}</p>
-                        <p className="text-sm text-muted-foreground truncate">{bookmark.url}</p>
+                        <p className="text-sm text-muted-foreground truncate">
+                          {bookmark.url}
+                        </p>
                       </div>
                       <span className="text-xs text-muted-foreground hidden sm:block flex-shrink-0">
                         {formatDate(bookmark.dateAdded)}
                       </span>
                       <div className="opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
                         <DropdownMenu>
-                          <DropdownMenuTrigger asChild onClick={(e: React.MouseEvent) => e.stopPropagation()}>
-                            <Button variant="ghost" size="icon" className="h-8 w-8">
+                          <DropdownMenuTrigger
+                            asChild
+                            onClick={(e: React.MouseEvent) =>
+                              e.stopPropagation()
+                            }
+                          >
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8"
+                            >
                               <MoreVertical className="w-4 h-4" />
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={(e: React.MouseEvent) => {
-                              e.stopPropagation();
-                              handleOpen(bookmark.url);
-                            }}>
+                            <DropdownMenuItem
+                              onClick={(e: React.MouseEvent) => {
+                                e.stopPropagation();
+                                handleOpen(bookmark.url);
+                              }}
+                            >
                               <ArrowRight className="w-4 h-4 mr-2" />
                               Open in Current Tab
                             </DropdownMenuItem>
-                            <DropdownMenuItem onClick={(e: React.MouseEvent) => {
-                              e.stopPropagation();
-                              handleOpenNewTab(bookmark.url);
-                            }}>
+                            <DropdownMenuItem
+                              onClick={(e: React.MouseEvent) => {
+                                e.stopPropagation();
+                                handleOpenNewTab(bookmark.url);
+                              }}
+                            >
                               <ExternalLink className="w-4 h-4 mr-2" />
                               Open in New Tab
                             </DropdownMenuItem>
-                            <DropdownMenuItem onClick={(e: React.MouseEvent) => {
-                              e.stopPropagation();
-                              handleEdit(bookmark);
-                            }}>
+                            <DropdownMenuItem
+                              onClick={(e: React.MouseEvent) => {
+                                e.stopPropagation();
+                                handleEdit(bookmark);
+                              }}
+                            >
                               <Edit2 className="w-4 h-4 mr-2" />
                               Edit
                             </DropdownMenuItem>
-                            <DropdownMenuItem onClick={(e: React.MouseEvent) => {
-                              e.stopPropagation();
-                              handleMoveClick({ id: bookmark.id, title: bookmark.title, isFolder: false, parentId: bookmark.parentId });
-                            }}>
+                            <DropdownMenuItem
+                              onClick={(e: React.MouseEvent) => {
+                                e.stopPropagation();
+                                handleMoveClick({
+                                  id: bookmark.id,
+                                  title: bookmark.title,
+                                  isFolder: false,
+                                  parentId: bookmark.parentId,
+                                });
+                              }}
+                            >
                               <FolderInput className="w-4 h-4 mr-2" />
                               Move to...
                             </DropdownMenuItem>
@@ -587,7 +691,7 @@ export function Bookmarks() {
                                 e.stopPropagation();
                                 handleDelete(bookmark.id);
                               }}
-                              variant='destructive'
+                              variant="destructive"
                             >
                               <Trash2 className="w-4 h-4 mr-2" />
                               Delete
@@ -604,7 +708,9 @@ export function Bookmarks() {
                 {bookmarkTree.length === 0 ? (
                   <div className="text-center py-16">
                     <Folder className="w-12 h-12 mx-auto text-muted-foreground/30 mb-4" />
-                    <h3 className="text-lg font-medium mb-2">No bookmarks yet</h3>
+                    <h3 className="text-lg font-medium mb-2">
+                      No bookmarks yet
+                    </h3>
                     <p className="text-sm text-muted-foreground">
                       Click the star icon in the address bar to bookmark pages
                     </p>
@@ -657,7 +763,10 @@ export function Bookmarks() {
       </Dialog>
 
       {/* Create Folder Dialog */}
-      <Dialog open={createFolderDialogOpen} onOpenChange={setCreateFolderDialogOpen}>
+      <Dialog
+        open={createFolderDialogOpen}
+        onOpenChange={setCreateFolderDialogOpen}
+      >
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Create New Folder</DialogTitle>
@@ -678,7 +787,10 @@ export function Bookmarks() {
             </div>
             <div className="space-y-2">
               <Label htmlFor="folder-parent">Location</Label>
-              <Select value={newFolderParent} onValueChange={setNewFolderParent}>
+              <Select
+                value={newFolderParent}
+                onValueChange={setNewFolderParent}
+              >
                 <SelectTrigger>
                   <SelectValue placeholder="Select a folder" />
                 </SelectTrigger>
@@ -695,11 +807,14 @@ export function Bookmarks() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => {
-              setCreateFolderDialogOpen(false);
-              setNewFolderName('');
-              setNewFolderParent(BOOKMARK_BAR_ID);
-            }}>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setCreateFolderDialogOpen(false);
+                setNewFolderName('');
+                setNewFolderParent(BOOKMARK_BAR_ID);
+              }}
+            >
               Cancel
             </Button>
             <Button onClick={handleCreateFolder}>Create Folder</Button>
@@ -708,7 +823,10 @@ export function Bookmarks() {
       </Dialog>
 
       {/* Edit Folder Dialog */}
-      <Dialog open={editFolderDialogOpen} onOpenChange={setEditFolderDialogOpen}>
+      <Dialog
+        open={editFolderDialogOpen}
+        onOpenChange={setEditFolderDialogOpen}
+      >
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Rename Folder</DialogTitle>
@@ -729,10 +847,13 @@ export function Bookmarks() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => {
-              setEditFolderDialogOpen(false);
-              setEditingFolder(null);
-            }}>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setEditFolderDialogOpen(false);
+                setEditingFolder(null);
+              }}
+            >
               Cancel
             </Button>
             <Button onClick={handleSaveFolderEdit}>Save</Button>
@@ -743,7 +864,9 @@ export function Bookmarks() {
       <Dialog open={moveDialogOpen} onOpenChange={setMoveDialogOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Move {movingItem?.isFolder ? 'Folder' : 'Bookmark'}</DialogTitle>
+            <DialogTitle>
+              Move {movingItem?.isFolder ? 'Folder' : 'Bookmark'}
+            </DialogTitle>
             <DialogDescription>
               Choose a new location for "{movingItem?.title}".
             </DialogDescription>
@@ -751,12 +874,17 @@ export function Bookmarks() {
           <div className="space-y-4 py-4">
             <div className="space-y-2">
               <Label>Destination Folder</Label>
-              <Select value={moveTargetFolder} onValueChange={setMoveTargetFolder}>
+              <Select
+                value={moveTargetFolder}
+                onValueChange={setMoveTargetFolder}
+              >
                 <SelectTrigger>
                   <SelectValue placeholder="Select a folder" />
                 </SelectTrigger>
                 <SelectContent>
-                  {getAvailableFolders(movingItem?.isFolder ? movingItem.id : undefined).map((folder) => (
+                  {getAvailableFolders(
+                    movingItem?.isFolder ? movingItem.id : undefined
+                  ).map((folder) => (
                     <SelectItem key={folder.id} value={folder.id}>
                       <div className="flex items-center gap-2">
                         <Folder className="w-4 h-4 text-yellow-500" />
@@ -771,10 +899,13 @@ export function Bookmarks() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => {
-              setMoveDialogOpen(false);
-              setMovingItem(null);
-            }}>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setMoveDialogOpen(false);
+                setMovingItem(null);
+              }}
+            >
               Cancel
             </Button>
             <Button onClick={handleConfirmMove}>Move</Button>
@@ -783,29 +914,36 @@ export function Bookmarks() {
       </Dialog>
 
       {/* Delete Folder Confirmation */}
-      <AlertDialog open={deleteFolderDialogOpen} onOpenChange={setDeleteFolderDialogOpen}>
+      <AlertDialog
+        open={deleteFolderDialogOpen}
+        onOpenChange={setDeleteFolderDialogOpen}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Folder</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete "{deletingFolder?.title}"? 
-              {deletingFolder?.children && deletingFolder.children.length > 0 && (
-                <span className="block mt-2 font-medium text-destructive">
-                  This folder contains {deletingFolder.children.length} item(s) that will also be deleted.
-                </span>
-              )}
+              Are you sure you want to delete "{deletingFolder?.title}"?
+              {deletingFolder?.children &&
+                deletingFolder.children.length > 0 && (
+                  <span className="block mt-2 font-medium text-destructive">
+                    This folder contains {deletingFolder.children.length}{' '}
+                    item(s) that will also be deleted.
+                  </span>
+                )}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => {
-              setDeleteFolderDialogOpen(false);
-              setDeletingFolder(null);
-            }}>
+            <AlertDialogCancel
+              onClick={() => {
+                setDeleteFolderDialogOpen(false);
+                setDeletingFolder(null);
+              }}
+            >
               Cancel
             </AlertDialogCancel>
             <AlertDialogAction
               onClick={handleConfirmDeleteFolder}
-              className='bg-red-600 hover:bg-red-700'
+              className="bg-red-600 hover:bg-red-700"
             >
               Delete
             </AlertDialogAction>

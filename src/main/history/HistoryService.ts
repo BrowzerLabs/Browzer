@@ -1,8 +1,15 @@
-import Database from 'better-sqlite3';
 import { app } from 'electron';
 import path from 'path';
 import { randomUUID } from 'crypto';
-import { HistoryEntry, HistoryTransition, HistoryQuery, HistoryStats } from '@/shared/types';
+
+import Database from 'better-sqlite3';
+
+import {
+  HistoryEntry,
+  HistoryTransition,
+  HistoryQuery,
+  HistoryStats,
+} from '@/shared/types';
 
 export class HistoryService {
   private db: Database.Database;
@@ -20,9 +27,9 @@ export class HistoryService {
   constructor() {
     const userDataPath = app.getPath('userData');
     const dbPath = path.join(userDataPath, 'history.db');
-    
+
     this.db = new Database(dbPath);
-    
+
     this.db.pragma('journal_mode = WAL');
     this.db.pragma('synchronous = NORMAL');
     this.db.pragma('foreign_keys = ON');
@@ -30,9 +37,9 @@ export class HistoryService {
     this.db.pragma('mmap_size = 30000000000');
     this.db.pragma('page_size = 4096'); // Optimal page size
     this.db.pragma('cache_size = -64000'); // 64MB cache
-    
+
     this.initializeDatabase();
-    
+
     // Prepare frequently used statements
     this.stmts = {
       getByUrl: this.db.prepare('SELECT * FROM history_entries WHERE url = ?'),
@@ -66,7 +73,7 @@ export class HistoryService {
         LIMIT ?
       `),
     };
-    
+
     console.log('HistoryService initialized with SQLite at:', dbPath);
   }
 
@@ -152,7 +159,11 @@ export class HistoryService {
     transition: HistoryTransition = HistoryTransition.LINK,
     favicon?: string
   ): Promise<HistoryEntry | null> {
-    if (url.startsWith('browzer://') || url.startsWith('chrome://') || url.startsWith('about:')) {
+    if (
+      url.startsWith('browzer://') ||
+      url.startsWith('chrome://') ||
+      url.startsWith('about:')
+    ) {
       return null;
     }
 
@@ -163,7 +174,7 @@ export class HistoryService {
 
       if (existing) {
         const typedIncrement = transition === HistoryTransition.TYPED ? 1 : 0;
-        
+
         this.stmts.update.run(
           now,
           title || existing.title,
@@ -212,13 +223,13 @@ export class HistoryService {
   public async getAll(limit?: number): Promise<HistoryEntry[]> {
     try {
       let query = 'SELECT * FROM history_entries ORDER BY last_visit_time DESC';
-      
+
       if (limit) {
         query += ` LIMIT ${limit}`;
       }
 
       const rows = this.db.prepare(query).all();
-      return rows.map(row => this.rowToEntry(row));
+      return rows.map((row) => this.rowToEntry(row));
     } catch (error) {
       console.error('Error getting all history:', error);
       return [];
@@ -260,20 +271,27 @@ export class HistoryService {
       }
 
       const rows = this.db.prepare(sql).all(...params);
-      return rows.map(row => this.rowToEntry(row));
+      return rows.map((row) => this.rowToEntry(row));
     } catch (error) {
       console.error('Error searching history:', error);
       return [];
     }
   }
 
-  public async getByDateRange(startTime: number, endTime: number): Promise<HistoryEntry[]> {
+  public async getByDateRange(
+    startTime: number,
+    endTime: number
+  ): Promise<HistoryEntry[]> {
     return this.search({ startTime, endTime });
   }
 
   public async getToday(): Promise<HistoryEntry[]> {
     const now = new Date();
-    const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    const startOfDay = new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      now.getDate()
+    ).getTime();
     const endOfDay = startOfDay + 24 * 60 * 60 * 1000;
 
     return this.getByDateRange(startOfDay, endOfDay);
@@ -290,11 +308,11 @@ export class HistoryService {
     try {
       const result = this.stmts.deleteById.run(id);
       const deleted = result.changes > 0;
-      
+
       if (deleted) {
         console.log(`Deleted history entry with id: ${id}`);
       }
-      
+
       return deleted;
     } catch (error) {
       console.error('Error deleting history entry:', error);
@@ -322,12 +340,19 @@ export class HistoryService {
     }
   }
 
-  public async deleteByDateRange(startTime: number, endTime: number): Promise<number> {
+  public async deleteByDateRange(
+    startTime: number,
+    endTime: number
+  ): Promise<number> {
     try {
-      const result = this.db.prepare(`
+      const result = this.db
+        .prepare(
+          `
         DELETE FROM history_entries 
         WHERE last_visit_time >= ? AND last_visit_time <= ?
-      `).run(startTime, endTime);
+      `
+        )
+        .run(startTime, endTime);
 
       console.log(`Deleted ${result.changes} entries from date range`);
       return result.changes;
@@ -350,29 +375,47 @@ export class HistoryService {
 
   public async getStats(): Promise<HistoryStats> {
     try {
-      const totals = this.db.prepare(`
+      const totals = this.db
+        .prepare(
+          `
         SELECT 
           COUNT(*) as totalEntries,
           SUM(visit_count) as totalVisits
         FROM history_entries
-      `).get() as { totalEntries: number; totalVisits: number };
+      `
+        )
+        .get() as { totalEntries: number; totalVisits: number };
 
       const now = new Date();
-      const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-      const todayStats = this.db.prepare(`
+      const startOfDay = new Date(
+        now.getFullYear(),
+        now.getMonth(),
+        now.getDate()
+      ).getTime();
+      const todayStats = this.db
+        .prepare(
+          `
         SELECT SUM(visit_count) as todayVisits
         FROM history_entries
         WHERE last_visit_time >= ?
-      `).get(startOfDay) as { todayVisits: number | null };
+      `
+        )
+        .get(startOfDay) as { todayVisits: number | null };
 
       const startOfWeek = now.getTime() - 7 * 24 * 60 * 60 * 1000;
-      const weekStats = this.db.prepare(`
+      const weekStats = this.db
+        .prepare(
+          `
         SELECT SUM(visit_count) as weekVisits
         FROM history_entries
         WHERE last_visit_time >= ?
-      `).get(startOfWeek) as { weekVisits: number | null };
+      `
+        )
+        .get(startOfWeek) as { weekVisits: number | null };
 
-      const topDomainsRaw = this.db.prepare(`
+      const topDomainsRaw = this.db
+        .prepare(
+          `
         SELECT 
           SUBSTR(url, INSTR(url, '://') + 3, 
                  CASE 
@@ -387,7 +430,9 @@ export class HistoryService {
         GROUP BY domain
         ORDER BY count DESC
         LIMIT 10
-      `).all() as Array<{ domain: string; count: number }>;
+      `
+        )
+        .all() as Array<{ domain: string; count: number }>;
 
       return {
         totalEntries: totals.totalEntries || 0,
@@ -410,13 +455,17 @@ export class HistoryService {
 
   public async getMostVisited(limit = 10): Promise<HistoryEntry[]> {
     try {
-      const rows = this.db.prepare(`
+      const rows = this.db
+        .prepare(
+          `
         SELECT * FROM history_entries 
         ORDER BY visit_count DESC 
         LIMIT ?
-      `).all(limit);
+      `
+        )
+        .all(limit);
 
-      return rows.map(row => this.rowToEntry(row));
+      return rows.map((row) => this.rowToEntry(row));
     } catch (error) {
       console.error('Error getting most visited:', error);
       return [];
@@ -425,16 +474,20 @@ export class HistoryService {
 
   public async getRecentlyVisited(limit = 20): Promise<HistoryEntry[]> {
     const oneDayAgo = Date.now() - 24 * 60 * 60 * 1000;
-    
+
     try {
-      const rows = this.db.prepare(`
+      const rows = this.db
+        .prepare(
+          `
         SELECT * FROM history_entries 
         WHERE last_visit_time >= ?
         ORDER BY last_visit_time DESC 
         LIMIT ?
-      `).all(oneDayAgo, limit);
+      `
+        )
+        .all(oneDayAgo, limit);
 
-      return rows.map(row => this.rowToEntry(row));
+      return rows.map((row) => this.rowToEntry(row));
     } catch (error) {
       console.error('Error getting recently visited:', error);
       return [];
@@ -470,7 +523,10 @@ export class HistoryService {
     }
   }
 
-  public async getAutocompleteSuggestions(query: string, limit = 8): Promise<HistoryEntry[]> {
+  public async getAutocompleteSuggestions(
+    query: string,
+    limit = 8
+  ): Promise<HistoryEntry[]> {
     if (!query || query.trim().length === 0) {
       return this.getMostVisited(limit);
     }
@@ -478,7 +534,9 @@ export class HistoryService {
     const searchQuery = query.trim().toLowerCase();
 
     try {
-      const rows = this.db.prepare(`
+      const rows = this.db
+        .prepare(
+          `
         SELECT *,
           CASE
             WHEN LOWER(url) LIKE ? THEN 100
@@ -498,18 +556,20 @@ export class HistoryService {
           visit_count DESC,
           last_visit_time DESC
         LIMIT ?
-      `).all(
-        `%://${searchQuery}%`,      // URL starts with query after protocol
-        `%://%${searchQuery}%`,     // URL contains query
-        `${searchQuery}%`,          // Title starts with query
-        `%${searchQuery}%`,         // URL contains query anywhere
-        `%${searchQuery}%`,         // Title contains query anywhere
-        `%${searchQuery}%`,         // WHERE: URL contains
-        `%${searchQuery}%`,         // WHERE: Title contains
-        limit
-      );
+      `
+        )
+        .all(
+          `%://${searchQuery}%`, // URL starts with query after protocol
+          `%://%${searchQuery}%`, // URL contains query
+          `${searchQuery}%`, // Title starts with query
+          `%${searchQuery}%`, // URL contains query anywhere
+          `%${searchQuery}%`, // Title contains query anywhere
+          `%${searchQuery}%`, // WHERE: URL contains
+          `%${searchQuery}%`, // WHERE: Title contains
+          limit
+        );
 
-      return rows.map(row => this.rowToEntry(row));
+      return rows.map((row) => this.rowToEntry(row));
     } catch (error) {
       console.error('Error getting autocomplete suggestions:', error);
       return [];

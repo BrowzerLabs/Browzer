@@ -1,4 +1,5 @@
 import { app, BaseWindow, WebContents } from 'electron';
+
 import { getRouteFromURL } from '@/shared/routes';
 
 export class DeepLinkService {
@@ -6,10 +7,7 @@ export class DeepLinkService {
   private webContents: WebContents | null = null;
   private pendingDeepLink: string | null = null;
 
-  constructor(
-    baseWindow: BaseWindow,
-    webContents: WebContents
-  ) {
+  constructor(baseWindow: BaseWindow, webContents: WebContents) {
     this.baseWindow = baseWindow;
     this.webContents = webContents;
     this.setupDeepLinkHandlers();
@@ -28,9 +26,10 @@ export class DeepLinkService {
     });
 
     app.on('second-instance', (event, commandLine) => {
-      
-      const deepLinkUrl = commandLine.find(arg => arg.startsWith('browzer://'));
-      
+      const deepLinkUrl = commandLine.find((arg) =>
+        arg.startsWith('browzer://')
+      );
+
       if (deepLinkUrl) {
         this.handleDeepLink(deepLinkUrl);
       }
@@ -39,14 +38,18 @@ export class DeepLinkService {
     });
 
     if (process.platform !== 'darwin') {
-      const deepLinkUrl = process.argv.find(arg => arg.startsWith('browzer://'));
+      const deepLinkUrl = process.argv.find((arg) =>
+        arg.startsWith('browzer://')
+      );
       if (deepLinkUrl) {
         this.handleDeepLink(deepLinkUrl);
       }
     }
   }
 
-  private parseDeepLink(url: string): { path: string; params?: string; fragment?: string } | null {
+  private parseDeepLink(
+    url: string
+  ): { path: string; params?: string; fragment?: string } | null {
     try {
       if (!url.startsWith('browzer://')) {
         return null;
@@ -80,7 +83,7 @@ export class DeepLinkService {
     }
 
     this.focusMainWindow();
-    
+
     let fullPath = data.path;
     if (data.fragment) {
       fullPath += `#${data.fragment}`;
@@ -90,7 +93,6 @@ export class DeepLinkService {
     }
     this.webContents.send('deeplink:navigate', fullPath);
   }
-
 
   private focusMainWindow(): void {
     if (this.baseWindow) {

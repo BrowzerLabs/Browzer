@@ -1,4 +1,20 @@
-import { Clock, type LucideIcon, Settings, Video, Bot, User, CreditCard, MailCheck, KeyRound, CheckCircle, XCircle, Loader2, Download, BookmarkIcon, Home } from "lucide-react";
+import {
+  Clock,
+  type LucideIcon,
+  Settings,
+  Video,
+  Bot,
+  User,
+  CreditCard,
+  MailCheck,
+  KeyRound,
+  CheckCircle,
+  XCircle,
+  Loader2,
+  Download,
+  BookmarkIcon,
+  Home,
+} from 'lucide-react';
 
 export interface RouteConfig {
   path: string;
@@ -39,11 +55,6 @@ export const ROUTES: Record<string, RouteConfig> = {
     title: 'Home',
     favicon: 'home',
   },
-  pricing: {
-    path: '/pricing',
-    title: 'Pricing',
-    favicon: 'credit-card',
-  },
   settings: {
     path: '/settings',
     title: 'Settings',
@@ -64,11 +75,11 @@ export const ROUTES: Record<string, RouteConfig> = {
     title: 'Downloads',
     favicon: 'download',
   },
-  automation: {
-    path: '/automation',
-    title: 'Automation',
-    favicon: 'bot',
-  },
+  // automation: {
+  //   path: '/automation',
+  //   title: 'Automation',
+  //   favicon: 'bot',
+  // },
   profile: {
     path: '/profile',
     title: 'Profile',
@@ -87,20 +98,20 @@ export const ROUTES: Record<string, RouteConfig> = {
 };
 
 export const ICON_MAP: Record<string, LucideIcon> = {
-  'settings': Settings,
-  'clock': Clock,
-  'video': Video,
-  'bot': Bot,
-  'user': User,
+  settings: Settings,
+  clock: Clock,
+  video: Video,
+  bot: Bot,
+  user: User,
   'credit-card': CreditCard,
   'mail-check': MailCheck,
   'key-round': KeyRound,
   'check-circle': CheckCircle,
   'x-circle': XCircle,
-  'loader': Loader2,
-  'download': Download,
-  'star': BookmarkIcon,
-  'home': Home,
+  loader: Loader2,
+  download: Download,
+  star: BookmarkIcon,
+  home: Home,
 };
 
 export function getRouteFromURL(url: string): RouteConfig | null {
@@ -110,11 +121,11 @@ export function getRouteFromURL(url: string): RouteConfig | null {
     const urlWithoutProtocol = url.replace('browzer://', '');
     const hashIndex = urlWithoutProtocol.indexOf('#');
     const queryIndex = urlWithoutProtocol.indexOf('?');
-    
+
     let pathPart: string;
     let queryPart = '';
     let fragmentPart = '';
-    
+
     if (hashIndex !== -1 && (queryIndex === -1 || hashIndex < queryIndex)) {
       // Has fragment, might have query after it
       pathPart = urlWithoutProtocol.substring(0, hashIndex);
@@ -140,25 +151,25 @@ export function getRouteFromURL(url: string): RouteConfig | null {
     } else {
       pathPart = urlWithoutProtocol;
     }
-    
+
     // Remove trailing slash
     pathPart = pathPart.replace(/\/$/, '');
-    
+
     // Try to match the full path first (e.g., "auth/confirm-signup")
     // If not found, try the last segment (e.g., "confirm-signup")
     let route = ROUTES[pathPart];
-    
+
     if (!route) {
       const segments = pathPart.split('/');
       const lastSegment = segments[segments.length - 1];
       route = ROUTES[lastSegment];
     }
-    
+
     if (!route) {
       console.warn('[getRouteFromURL] No route found for:', pathPart);
       return null;
     }
-    
+
     // Return route with preserved params and fragment
     return {
       ...route,

@@ -1,7 +1,9 @@
-import { AppSettings } from '@/shared/types';
 import { WebContentsView } from 'electron';
-import Store from 'electron-store';
 import { EventEmitter } from 'events';
+
+import Store from 'electron-store';
+
+import { AppSettings } from '@/shared/types';
 import { DEFAULT_SEARCH_ENGINE_ID } from '@/shared/searchEngines';
 
 const defaultSettings: AppSettings = {
@@ -21,7 +23,9 @@ const defaultSettings: AppSettings = {
   },
 };
 
-export interface SettingsChangeEvent<K extends keyof AppSettings = keyof AppSettings> {
+export interface SettingsChangeEvent<
+  K extends keyof AppSettings = keyof AppSettings,
+> {
   category: K;
   key?: keyof AppSettings[K];
   value: Partial<AppSettings[K]> | AppSettings[K][keyof AppSettings[K]];
@@ -53,9 +57,7 @@ export class SettingsService extends EventEmitter {
     return super.emit(event, ...args);
   }
 
-  constructor(
-    private browserView: WebContentsView
-  ) {
+  constructor(private browserView: WebContentsView) {
     super();
     this.store = new Store<AppSettings>({
       name: 'settings',
@@ -68,14 +70,14 @@ export class SettingsService extends EventEmitter {
   }
 
   public getSetting<K extends keyof AppSettings>(category: K): AppSettings[K];
-  public getSetting<K extends keyof AppSettings, T extends keyof AppSettings[K]>(
-    category: K,
-    key: T
-  ): AppSettings[K][T];
-  public getSetting<K extends keyof AppSettings, T extends keyof AppSettings[K]>(
-    category: K,
-    key?: T
-  ): AppSettings[K] | AppSettings[K][T] {
+  public getSetting<
+    K extends keyof AppSettings,
+    T extends keyof AppSettings[K],
+  >(category: K, key: T): AppSettings[K][T];
+  public getSetting<
+    K extends keyof AppSettings,
+    T extends keyof AppSettings[K],
+  >(category: K, key?: T): AppSettings[K] | AppSettings[K][T] {
     if (key) {
       const categoryData = this.store.get(category) as AppSettings[K];
       return categoryData[key];
@@ -83,15 +85,14 @@ export class SettingsService extends EventEmitter {
     return this.store.get(category) as AppSettings[K];
   }
 
-  public updateSetting<K extends keyof AppSettings, T extends keyof AppSettings[K]>(
-    category: K,
-    key: T,
-    value: AppSettings[K][T]
-  ): void {
+  public updateSetting<
+    K extends keyof AppSettings,
+    T extends keyof AppSettings[K],
+  >(category: K, key: T, value: AppSettings[K][T]): void {
     const previousValue = this.store.get(category) as AppSettings[K];
     const newValue = { ...previousValue, [key]: value };
     this.store.set(category, newValue);
-    
+
     const event: SettingsChangeEvent<K> = {
       category,
       key,
@@ -99,9 +100,13 @@ export class SettingsService extends EventEmitter {
       previousValue,
       newValue,
     };
-    
+
     this.emitSettingsEvent(category, event);
-    this.browserView.webContents.send('settings:changed', { category, key, value });
+    this.browserView.webContents.send('settings:changed', {
+      category,
+      key,
+      value,
+    });
   }
 
   public updateCategory<K extends keyof AppSettings>(
@@ -118,7 +123,7 @@ export class SettingsService extends EventEmitter {
       previousValue,
       newValue,
     };
-    
+
     this.emitSettingsEvent(category, event);
   }
 

@@ -1,30 +1,37 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/renderer/ui/card';
+import { Loader2, Mail, CheckCircle, ArrowLeft } from 'lucide-react';
+import { toast } from 'sonner';
+
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/renderer/ui/card';
 import { Button } from '@/renderer/ui/button';
 import { Input } from '@/renderer/ui/input';
 import { Label } from '@/renderer/ui/label';
 import { Alert, AlertDescription } from '@/renderer/ui/alert';
-import { Loader2, Mail, CheckCircle, ArrowLeft } from 'lucide-react';
-import { toast } from 'sonner';
 
 /**
  * OTP Verification Page
  * Route: /auth/verify-otp
- * 
+ *
  * User enters the 6-digit OTP code sent to their email
  */
 export function VerifyOTPPage() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const email = searchParams.get('email') || '';
-  
+
   const [otp, setOtp] = useState(['', '', '', '', '', '']);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [resending, setResending] = useState(false);
   const [resendCooldown, setResendCooldown] = useState(0);
-  
+
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
 
   // Redirect if no email provided
@@ -38,7 +45,10 @@ export function VerifyOTPPage() {
   // Handle resend cooldown
   useEffect(() => {
     if (resendCooldown > 0) {
-      const timer = setTimeout(() => setResendCooldown(resendCooldown - 1), 1000);
+      const timer = setTimeout(
+        () => setResendCooldown(resendCooldown - 1),
+        1000
+      );
       return () => clearTimeout(timer);
     }
   }, [resendCooldown]);
@@ -58,12 +68,15 @@ export function VerifyOTPPage() {
     }
   };
 
-  const handleKeyDown = (index: number, e: React.KeyboardEvent<HTMLInputElement>) => {
+  const handleKeyDown = (
+    index: number,
+    e: React.KeyboardEvent<HTMLInputElement>
+  ) => {
     // Handle backspace
     if (e.key === 'Backspace' && !otp[index] && index > 0) {
       inputRefs.current[index - 1]?.focus();
     }
-    
+
     // Handle paste
     if (e.key === 'v' && (e.metaKey || e.ctrlKey)) {
       e.preventDefault();
@@ -83,7 +96,7 @@ export function VerifyOTPPage() {
 
   const handleVerify = async () => {
     const otpCode = otp.join('');
-    
+
     if (otpCode.length !== 6) {
       setError('Please enter the complete 6-digit code');
       return;
@@ -158,11 +171,14 @@ export function VerifyOTPPage() {
             </div>
             <CardTitle className="text-center">Verify Your Email</CardTitle>
             <CardDescription className="text-center">
-              We've sent a 6-digit code to<br />
-              <strong className="text-slate-900 dark:text-white">{email}</strong>
+              We've sent a 6-digit code to
+              <br />
+              <strong className="text-slate-900 dark:text-white">
+                {email}
+              </strong>
             </CardDescription>
           </CardHeader>
-          
+
           <CardContent className="space-y-6">
             {error && (
               <Alert variant="destructive">
@@ -172,12 +188,16 @@ export function VerifyOTPPage() {
 
             {/* OTP Input */}
             <div className="space-y-2">
-              <Label className="text-center block">Enter Verification Code</Label>
+              <Label className="text-center block">
+                Enter Verification Code
+              </Label>
               <div className="flex gap-2 justify-center">
                 {otp.map((digit, index) => (
                   <Input
                     key={index}
-                    ref={(el) => { inputRefs.current[index] = el; }}
+                    ref={(el) => {
+                      inputRefs.current[index] = el;
+                    }}
                     type="text"
                     inputMode="numeric"
                     maxLength={1}

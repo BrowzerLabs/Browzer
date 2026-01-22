@@ -3,7 +3,10 @@ import { ipcRenderer } from 'electron';
 /**
  * Type-safe IPC invoke wrapper
  */
-export const invoke = <T = any>(channel: string, ...args: any[]): Promise<T> => {
+export const invoke = <T = any>(
+  channel: string,
+  ...args: any[]
+): Promise<T> => {
   return ipcRenderer.invoke(channel, ...args);
 };
 
@@ -17,7 +20,8 @@ export const createEventListener = <T = any>(
   channel: string,
   callback: (data: T) => void
 ): (() => void) => {
-  const subscription = (_event: Electron.IpcRendererEvent, data: T) => callback(data);
+  const subscription = (_event: Electron.IpcRendererEvent, data: T) =>
+    callback(data);
   ipcRenderer.on(channel, subscription);
   return () => ipcRenderer.removeListener(channel, subscription);
 };
@@ -32,7 +36,8 @@ export const createMultiArgListener = (
   channel: string,
   callback: (...args: any[]) => void
 ): (() => void) => {
-  const subscription = (_event: Electron.IpcRendererEvent, ...args: any[]) => callback(...args);
+  const subscription = (_event: Electron.IpcRendererEvent, ...args: any[]) =>
+    callback(...args);
   ipcRenderer.on(channel, subscription);
   return () => ipcRenderer.removeListener(channel, subscription);
 };

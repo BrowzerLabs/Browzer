@@ -24,20 +24,21 @@ const DEFAULT_STATE: FindState = {
 export const useFindStore = create<FindStore>((set, get) => ({
   state: DEFAULT_STATE,
 
-  setState: (newState) => set((store) => ({
-    state: {
-      ...store.state,
-      ...newState
-    }
-  })),
+  setState: (newState) =>
+    set((store) => ({
+      state: {
+        ...store.state,
+        ...newState,
+      },
+    })),
 
   toggleFindBar: () => {
     const currentState = get().state;
     set({
       state: {
         ...currentState,
-        isVisible: !currentState.isVisible
-      }
+        isVisible: !currentState.isVisible,
+      },
     });
   },
 
@@ -46,9 +47,8 @@ export const useFindStore = create<FindStore>((set, get) => ({
     set({
       state: {
         ...currentState,
-        isVisible: false
-      }
+        isVisible: false,
+      },
     });
-  }
+  },
 }));
-

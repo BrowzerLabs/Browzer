@@ -1,9 +1,7 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { DotLottieReact } from '@lottiefiles/dotlottie-react';
-import { Button } from '@/renderer/ui/button';
 import { ChevronRight, ChevronLeft } from 'lucide-react';
-import { useOnboardingStore } from '@/renderer/stores/onboardingStore';
 import { useNavigate } from 'react-router-dom';
 
 // Import assets from the same directory
@@ -14,6 +12,9 @@ import lockAnimation from './lock.lottie';
 import aiCircleAnimation from './ai_circle.lottie';
 import cosmicAudio from './cosmic.mp3';
 
+import { useOnboardingStore } from '@/renderer/stores/onboardingStore';
+import { Button } from '@/renderer/ui/button';
+
 interface OnboardingSlide {
   title: string;
   description: string;
@@ -23,17 +24,20 @@ interface OnboardingSlide {
 const slides: OnboardingSlide[] = [
   {
     title: 'Welcome to Browzer',
-    description: 'Your intelligent browser that learns and automates your repetitive workflows.',
+    description:
+      'Your intelligent browser that learns and automates your repetitive workflows.',
     animationPath: aiLogoAnimation,
   },
   {
     title: 'Record Your Processes',
-    description: 'Teach Browzer how you work, instead of letting AI assume "your" processes',
+    description:
+      'Teach Browzer how you work, instead of letting AI assume "your" processes',
     animationPath: automationAnimation,
   },
   {
     title: 'Automate Your Tasks',
-    description: 'Browzer understands your workflows (truly), to automate them the way you do it!',
+    description:
+      'Browzer understands your workflows (truly), to automate them the way you do it!',
     animationPath: aAnimation,
   },
   {
@@ -43,8 +47,9 @@ const slides: OnboardingSlide[] = [
   },
   {
     title: 'Always Present',
-    description: 'Invoke with a click of the button to chat with your Browzer Assistant',
-    animationPath: aiCircleAnimation
+    description:
+      'Invoke with a click of the button to chat with your Browzer Assistant',
+    animationPath: aiCircleAnimation,
   },
 ];
 
@@ -61,9 +66,9 @@ export function OnboardingFlow() {
     audio.loop = true;
     audio.volume = 0.2;
     const playPromise = audio.play();
-    
+
     if (playPromise !== undefined) {
-      playPromise.catch(error => {
+      playPromise.catch((error) => {
         console.log('Audio autoplay prevented:', error);
       });
     }
@@ -142,8 +147,8 @@ export function OnboardingFlow() {
                 index === currentSlide
                   ? 'w-8 bg-primary'
                   : index < currentSlide
-                  ? 'w-6 bg-primary/50'
-                  : 'w-6 bg-slate-700'
+                    ? 'w-6 bg-primary/50'
+                    : 'w-6 bg-slate-700'
               }`}
               initial={{ scale: 0.8 }}
               animate={{ scale: index === currentSlide ? 1 : 0.8 }}
@@ -165,49 +170,36 @@ export function OnboardingFlow() {
             }}
             className="flex flex-col items-center w-full"
           >
-            <section className='h-[350px]'>
-              <DotLottieReact
-                src={slide.animationPath}
-                loop
-                autoplay
-              />
+            <section className="h-[350px]">
+              <DotLottieReact src={slide.animationPath} loop autoplay />
             </section>
-              
-            <h1 className='mt-10 mb-2 text-5xl text-slate-200 font-bold text-center'>
+
+            <h1 className="mt-10 mb-2 text-5xl text-slate-200 font-bold text-center">
               {slide.title}
             </h1>
-            <p className='text-slate-400 text-sm text-center max-w-2xl'>
+            <p className="text-slate-400 text-sm text-center max-w-2xl">
               {slide.description}
             </p>
           </motion.div>
         </AnimatePresence>
       </div>
 
-          
-            <div className="flex items-center justify-between fixed bottom-7 w-3xl">
-              <Button
-                  variant="ghost"
-                  onClick={handlePrevious}
-                  disabled={isFirstSlide}
-                  size='lg'
-                >
-                    <ChevronLeft className="w-5 h-5 mr-1 group-hover:text-white transition-colors" />
-                    <span>Previous</span>
-                </Button>
+      <div className="flex items-center justify-between fixed bottom-7 w-3xl">
+        <Button
+          variant="ghost"
+          onClick={handlePrevious}
+          disabled={isFirstSlide}
+          size="lg"
+        >
+          <ChevronLeft className="w-5 h-5 mr-1 group-hover:text-white transition-colors" />
+          <span>Previous</span>
+        </Button>
 
-
-            <Button
-              onClick={handleNext}
-              size='lg'
-            >
-              {isLastSlide ? (
-                'Get Started'
-                ) : (
-                 'Continue'
-                )}
-                <ChevronRight className="w-5 h-5" />
-            </Button>
-            </div>
+        <Button onClick={handleNext} size="lg">
+          {isLastSlide ? 'Get Started' : 'Continue'}
+          <ChevronRight className="w-5 h-5" />
+        </Button>
+      </div>
     </div>
   );
 }

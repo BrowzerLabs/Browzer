@@ -1,4 +1,17 @@
 import { useEffect, useState } from 'react';
+import {
+  Trash2,
+  Clock,
+  CheckCircle2,
+  XCircle,
+  Pause,
+  MessageSquare,
+  ListChecks,
+  Calendar,
+  Loader2Icon,
+} from 'lucide-react';
+import { format } from 'date-fns';
+
 import { SessionListItem } from '@/renderer/stores/automationStore';
 import {
   Dialog,
@@ -11,8 +24,6 @@ import { Button } from '@/renderer/ui/button';
 import { Badge } from '@/renderer/ui/badge';
 import { ScrollArea } from '@/renderer/ui/scroll-area';
 import { Separator } from '@/renderer/ui/separator';
-import { Trash2, Clock, CheckCircle2, XCircle, Pause, MessageSquare, ListChecks, Calendar, Loader2Icon } from 'lucide-react';
-import { format } from 'date-fns';
 import { AutomationStatus } from '@/shared/types';
 
 interface AutomationDialogProps {
@@ -23,7 +34,13 @@ interface AutomationDialogProps {
   onDelete: (sessionId: string) => void;
 }
 
-export function AutomationDialog({ session, open, onOpenChange, onResume, onDelete }: AutomationDialogProps) {
+export function AutomationDialog({
+  session,
+  open,
+  onOpenChange,
+  onResume,
+  onDelete,
+}: AutomationDialogProps) {
   const [sessionDetails, setSessionDetails] = useState<any>(null);
   const [loading, setLoading] = useState(false);
 
@@ -38,7 +55,9 @@ export function AutomationDialog({ session, open, onOpenChange, onResume, onDele
 
     try {
       setLoading(true);
-      const details = await window.browserAPI.getAutomationSessionDetails(session.sessionId);
+      const details = await window.browserAPI.getAutomationSessionDetails(
+        session.sessionId
+      );
       setSessionDetails(details);
     } catch (error) {
       console.error('Failed to load session details:', error);
@@ -79,12 +98,12 @@ export function AutomationDialog({ session, open, onOpenChange, onResume, onDele
     }
   };
 
-  if(loading){
+  if (loading) {
     return (
-      <div className='flex items-center justify-center'>
-        <Loader2Icon className='size-7' />
+      <div className="flex items-center justify-center">
+        <Loader2Icon className="size-7" />
       </div>
-    )
+    );
   }
 
   return (
@@ -97,7 +116,10 @@ export function AutomationDialog({ session, open, onOpenChange, onResume, onDele
                 {getStatusIcon()}
                 Automation Session
               </DialogTitle>
-              <DialogDescription className="mt-2 line-clamp-2" title={session.userGoal}>
+              <DialogDescription
+                className="mt-2 line-clamp-2"
+                title={session.userGoal}
+              >
                 {session.userGoal}
               </DialogDescription>
             </div>
@@ -110,20 +132,32 @@ export function AutomationDialog({ session, open, onOpenChange, onResume, onDele
         <ScrollArea className="flex-1 min-h-0  overflow-auto">
           <div className="space-y-6 pr-5">
             <div className="space-y-3">
-              <h3 className="font-semibold text-sm text-gray-900 dark:text-white">Session Information</h3>
-              
+              <h3 className="font-semibold text-sm text-gray-900 dark:text-white">
+                Session Information
+              </h3>
+
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
                 <div className="min-w-0">
-                  <p className="text-gray-600 dark:text-gray-400 mb-1 text-xs font-medium">Session ID</p>
-                  <p className="font-mono text-xs bg-gray-100 dark:bg-gray-800 p-2 rounded truncate" title={session.sessionId}>
+                  <p className="text-gray-600 dark:text-gray-400 mb-1 text-xs font-medium">
+                    Session ID
+                  </p>
+                  <p
+                    className="font-mono text-xs bg-gray-100 dark:bg-gray-800 p-2 rounded truncate"
+                    title={session.sessionId}
+                  >
                     {session.sessionId}
                   </p>
                 </div>
 
                 {session.recordingId && (
                   <div className="min-w-0">
-                    <p className="text-gray-600 dark:text-gray-400 mb-1 text-xs font-medium">Recording ID</p>
-                    <p className="font-mono text-xs bg-gray-100 dark:bg-gray-800 p-2 rounded truncate" title={session.recordingId}>
+                    <p className="text-gray-600 dark:text-gray-400 mb-1 text-xs font-medium">
+                      Recording ID
+                    </p>
+                    <p
+                      className="font-mono text-xs bg-gray-100 dark:bg-gray-800 p-2 rounded truncate"
+                      title={session.recordingId}
+                    >
                       {session.recordingId}
                     </p>
                   </div>
@@ -156,16 +190,22 @@ export function AutomationDialog({ session, open, onOpenChange, onResume, onDele
             <Separator />
 
             <div className="space-y-3">
-              <h3 className="font-semibold text-sm text-gray-900 dark:text-white">Statistics</h3>
-              
+              <h3 className="font-semibold text-sm text-gray-900 dark:text-white">
+                Statistics
+              </h3>
+
               <div className="grid grid-cols-2 gap-4">
                 <div className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
                   <div className="p-2 bg-purple-100 dark:bg-purple-900/20 rounded">
                     <ListChecks className="w-4 h-4 text-purple-600 dark:text-purple-400" />
                   </div>
                   <div>
-                    <p className="text-xs text-gray-600 dark:text-gray-400">Steps Executed</p>
-                    <p className="text-lg font-bold text-gray-900 dark:text-white">{session.stepCount}</p>
+                    <p className="text-xs text-gray-600 dark:text-gray-400">
+                      Steps Executed
+                    </p>
+                    <p className="text-lg font-bold text-gray-900 dark:text-white">
+                      {session.stepCount}
+                    </p>
                   </div>
                 </div>
 
@@ -174,8 +214,12 @@ export function AutomationDialog({ session, open, onOpenChange, onResume, onDele
                     <MessageSquare className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
                   </div>
                   <div>
-                    <p className="text-xs text-gray-600 dark:text-gray-400">Messages</p>
-                    <p className="text-lg font-bold text-gray-900 dark:text-white">{session.messageCount}</p>
+                    <p className="text-xs text-gray-600 dark:text-gray-400">
+                      Messages
+                    </p>
+                    <p className="text-lg font-bold text-gray-900 dark:text-white">
+                      {session.messageCount}
+                    </p>
                   </div>
                 </div>
               </div>
@@ -186,7 +230,9 @@ export function AutomationDialog({ session, open, onOpenChange, onResume, onDele
               <>
                 <Separator />
                 <div className="space-y-3">
-                  <h3 className="font-semibold text-sm text-gray-900 dark:text-white">Session Details</h3>
+                  <h3 className="font-semibold text-sm text-gray-900 dark:text-white">
+                    Session Details
+                  </h3>
                   <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-lg overflow-hidden">
                     <pre className="text-xs overflow-x-auto whitespace-pre-wrap break-all">
                       {JSON.stringify(sessionDetails, null, 2)}

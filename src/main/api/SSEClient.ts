@@ -1,6 +1,8 @@
 import { WebContents } from 'electron';
 import { EventEmitter } from 'events';
+
 import { EventSource } from 'eventsource';
+
 import { tokenManager } from '@/main/auth/TokenManager';
 
 export interface SSEConfig {
@@ -40,17 +42,20 @@ export class SSEClient extends EventEmitter {
     this.url = config.url;
     this.electronId = config.electronId;
     this.browserUIWebContents = config.browserUIWebContents;
-    
+
     this.reconnectInterval = config.reconnectInterval || 3000;
     this.heartbeatTimeout = config.heartbeatTimeout || 29000;
-    this.maxReconnectAttempts = 20 
+    this.maxReconnectAttempts = 20;
   }
 
   /**
    * Connect to SSE endpoint
    */
   async connect(): Promise<void> {
-    if (this.state === SSEConnectionState.CONNECTING || this.state === SSEConnectionState.CONNECTED) {
+    if (
+      this.state === SSEConnectionState.CONNECTING ||
+      this.state === SSEConnectionState.CONNECTED
+    ) {
       console.log('[SSEClient] Already connected or connecting');
       return;
     }
@@ -64,12 +69,12 @@ export class SSEClient extends EventEmitter {
       const headers: Record<string, string> = {
         'X-Electron-ID': this.electronId,
       };
-      
+
       const accessToken = tokenManager.getAccessToken();
       if (accessToken) {
         headers['Authorization'] = `Bearer ${accessToken}`;
       }
-      
+
       this.eventSource = new EventSource(sseUrl, {
         fetch: (input, init) => {
           return fetch(input, {
@@ -77,13 +82,12 @@ export class SSEClient extends EventEmitter {
             headers: {
               ...init?.headers,
               ...headers,
-            }
+            },
           });
-        }
+        },
       });
 
       this.setupEventListeners();
-
     } catch (error) {
       console.error('[SSEClient] Connection failed:', error);
       this.setState(SSEConnectionState.ERROR);
@@ -107,7 +111,7 @@ export class SSEClient extends EventEmitter {
     this.eventSource.onmessage = (event: any) => {
       try {
         const data = JSON.parse(event.data);
-        console.log("Generic message handler: ", data);
+        console.log('Generic message handler: ', data);
         this.handleMessage(data);
       } catch (error) {
         console.error('[SSEClient] Failed to parse message:', error);
@@ -116,14 +120,14 @@ export class SSEClient extends EventEmitter {
 
     this.eventSource.onerror = (error: any) => {
       console.error('[SSEClient] SSE error:', error.message);
-      
+
       // EventSource automatically tries to reconnect, but we want more control
       // readyState: 0 = CONNECTING, 1 = OPEN, 2 = CLOSED
       if (this.eventSource?.readyState === 2) {
         console.log('[SSEClient] Connection closed, will attempt reconnection');
         this.cleanup();
         this.emit('disconnected');
-        
+
         if (this.shouldReconnect) {
           this.scheduleReconnect();
         }
@@ -144,10 +148,13 @@ export class SSEClient extends EventEmitter {
    */
   private setupCustomEventListeners(): void {
     // Connection established event
-    this.eventSource.addEventListener('connection_established', (event: MessageEvent) => {
+    this.eventSource.addEventListener(
+      'connection_established',
+      (event: MessageEvent) => {
         const data = JSON.parse(event.data);
         this.emit('connection_established', data);
-    });
+      }
+    );
 
     // Heartbeat event
     this.eventSource.addEventListener('heartbeat', (event: MessageEvent) => {
@@ -228,15 +235,18 @@ export class SSEClient extends EventEmitter {
 
     // Exponential backoff with max delay cap
     const delay = Math.min(
-      this.reconnectInterval * Math.pow(2, Math.min(this.reconnectAttempts - 1, 6)),
+      this.reconnectInterval *
+        Math.pow(2, Math.min(this.reconnectAttempts - 1, 6)),
       60000
     );
 
-    console.log(`[SSEClient] Scheduling reconnect in ${delay}ms (attempt ${this.reconnectAttempts})`);
+    console.log(
+      `[SSEClient] Scheduling reconnect in ${delay}ms (attempt ${this.reconnectAttempts})`
+    );
 
     this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = null;
-      this.connect().catch(err => {
+      this.connect().catch((err) => {
         console.error('[SSEClient] Reconnection attempt failed:', err);
         // Will be handled by onerror and schedule another attempt
       });

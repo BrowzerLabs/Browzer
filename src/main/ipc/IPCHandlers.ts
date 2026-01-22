@@ -1,9 +1,6 @@
 import { BaseWindow, ipcMain } from 'electron';
-import { BrowserService } from '@/main/BrowserService';
-import { AuthService } from '@/main/auth';
-import { SubscriptionService } from '@/main/subscription/SubscriptionService';
-import { ThemeService } from '@/main/theme';
 import { EventEmitter } from 'events';
+
 import {
   IPCContext,
   IIPCHandler,
@@ -26,26 +23,32 @@ import {
   ThemeHandler,
 } from './handlers';
 
+import { BrowserService } from '@/main/BrowserService';
+import { AuthService } from '@/main/auth';
+import { SubscriptionService } from '@/main/subscription/SubscriptionService';
+import { ThemeService } from '@/main/theme';
+
 export class IPCHandlers extends EventEmitter {
   private context: IPCContext;
   private handlers: IIPCHandler[] = [];
 
   constructor(
-    baseWindow: BaseWindow,
+    private baseWindow: BaseWindow,
     private browserService: BrowserService,
-    authService: AuthService,
+    private authService: AuthService,
+    private themeService: ThemeService
   ) {
     super();
     this.context = {
-      baseWindow,
-      browserService,
-      authService,
+      baseWindow: this.baseWindow,
+      browserService: this.browserService,
+      authService: this.authService,
       subscriptionService: new SubscriptionService(),
-      themeService: ThemeService.getInstance(),
-      passwordManager: browserService.getPasswordManager(),
-      bookmarkService: browserService.getBookmarkService(),
-      tabService: browserService.getTabService(),
-      settingsService: browserService.getSettingsService(),
+      themeService: this.themeService,
+      passwordManager: this.browserService.getPasswordManager(),
+      bookmarkService: this.browserService.getBookmarkService(),
+      tabService: this.browserService.getTabService(),
+      settingsService: this.browserService.getSettingsService(),
       eventEmitter: this,
     };
 
@@ -72,15 +75,15 @@ export class IPCHandlers extends EventEmitter {
       new AutocompleteHandler(this.context),
       new ThemeHandler(this.context),
     ];
-    this.handlers.forEach(handler => handler.register());
+    this.handlers.forEach((handler) => handler.register());
   }
 
   public getRegisteredChannels(): string[] {
-    return this.handlers.flatMap(handler => handler.getChannels());
+    return this.handlers.flatMap((handler) => handler.getChannels());
   }
 
   public cleanup(): void {
-    this.handlers.forEach(handler => handler.cleanup());
+    this.handlers.forEach((handler) => handler.cleanup());
     this.handlers = [];
     ipcMain.removeAllListeners();
   }

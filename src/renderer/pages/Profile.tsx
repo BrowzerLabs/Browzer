@@ -1,27 +1,34 @@
 import { useState, useEffect } from 'react';
+import {
+  User,
+  Mail,
+  Calendar,
+  Shield,
+  Loader2,
+  Check,
+  Trash2,
+  CheckCircle2Icon,
+} from 'lucide-react';
+import { toast } from 'sonner';
+
 import { useAuth } from '@/renderer/hooks/useAuth';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/renderer/ui/card';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/renderer/ui/card';
 import { Button } from '@/renderer/ui/button';
 import { Input } from '@/renderer/ui/input';
 import { Label } from '@/renderer/ui/label';
 import { Avatar, AvatarFallback, AvatarImage } from '@/renderer/ui/avatar';
 import { Separator } from '@/renderer/ui/separator';
 import { Alert, AlertDescription } from '@/renderer/ui/alert';
-import { 
-  User, 
-  Mail, 
-  Calendar, 
-  Shield, 
-  Loader2, 
-  Check,
-  Trash2,
-  CheckCircle2Icon
-} from 'lucide-react';
-import { toast } from 'sonner';
 
 export default function Profile() {
   const { user, updateProfile, loading } = useAuth();
-  
+
   const [display_name, setdisplay_name] = useState('');
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -41,7 +48,7 @@ export default function Profile() {
     setIsSaving(true);
     try {
       const result = await updateProfile({ display_name: display_name.trim() });
-      
+
       if (result.success) {
         toast.success('Profile updated successfully');
         setIsEditing(false);
@@ -58,7 +65,7 @@ export default function Profile() {
   const getInitials = (name: string) => {
     return name
       .split(' ')
-      .map(n => n[0])
+      .map((n) => n[0])
       .join('')
       .toUpperCase()
       .slice(0, 2);
@@ -68,7 +75,7 @@ export default function Profile() {
     return new Date(dateString).toLocaleDateString('en-US', {
       year: 'numeric',
       month: 'long',
-      day: 'numeric'
+      day: 'numeric',
     });
   };
 
@@ -82,14 +89,14 @@ export default function Profile() {
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-900">
-       <div className="max-w-4xl mx-auto px-6 py-8">
-          <h1 className="text-3xl font-bold text-slate-900 dark:text-white">
-            Profile
-          </h1>
-          <p className="text-slate-600 dark:text-slate-400 mt-2">
-            Manage your account settings and preferences
-          </p>
-        </div>
+      <div className="max-w-4xl mx-auto px-6 py-8">
+        <h1 className="text-3xl font-bold text-slate-900 dark:text-white">
+          Profile
+        </h1>
+        <p className="text-slate-600 dark:text-slate-400 mt-2">
+          Manage your account settings and preferences
+        </p>
+      </div>
 
       {/* Content */}
       <div className="max-w-4xl mx-auto px-6 py-8 space-y-6">
@@ -141,9 +148,7 @@ export default function Profile() {
                   />
                 </div>
                 {!isEditing ? (
-                  <Button onClick={() => setIsEditing(true)}>
-                    Edit
-                  </Button>
+                  <Button onClick={() => setIsEditing(true)}>Edit</Button>
                 ) : (
                   <>
                     <Button
@@ -194,9 +199,7 @@ export default function Profile() {
         <Card>
           <CardHeader>
             <CardTitle>Account Information</CardTitle>
-            <CardDescription>
-              Details about your account
-            </CardDescription>
+            <CardDescription>Details about your account</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex items-center justify-between py-3 border-b border-slate-200 dark:border-slate-800 last:border-0">
@@ -274,17 +277,14 @@ export default function Profile() {
                   Permanently delete your account and all data
                 </p>
               </div>
-              <Button
-                variant="destructive"
-                disabled
-                className="opacity-50"
-              >
+              <Button variant="destructive" disabled className="opacity-50">
                 <Trash2 className="h-4 w-4 mr-2" />
                 Delete Account
               </Button>
             </div>
             <p className="text-xs text-slate-500">
-              Account deletion is currently disabled. Contact support to delete your account.
+              Account deletion is currently disabled. Contact support to delete
+              your account.
             </p>
           </CardContent>
         </Card>

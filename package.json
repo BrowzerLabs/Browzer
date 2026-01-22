@@ -13,9 +13,15 @@
     "make:dmg": "NODE_ENV=production electron-forge make --platform darwin --arch x64",
     "make:arm64": "NODE_ENV=production electron-forge make --platform darwin --arch arm64",
     "make:universal": "NODE_ENV=production electron-forge make --platform darwin --arch universal",
-    "make:win": "electron-forge make --platform=win32",
-    "make:linux": "electron-forge make --platform=linux",
-    "lint": "eslint --ext .ts,.tsx ."
+    "make:win": "NODE_ENV=production electron-forge make --platform=win32",
+    "make:win-x64": "NODE_ENV=production electron-forge make --platform=win32 --arch=x64",
+    "make:win-arm64": "NODE_ENV=production electron-forge make --platform=win32 --arch=arm64",
+    "make:linux": "NODE_ENV=production electron-forge make --platform=linux",
+    "prepare": "husky",
+    "lint": "eslint \"src/**/*.{ts,tsx,js}\"",
+    "lint:fix": "eslint \"src/**/*.{ts,tsx,js}\" --fix",
+    "format": "prettier --write \"src/**/*.{ts,tsx,js,json,css,scss}\"",
+    "quality": "npm run lint:fix && npm run format"
   },
   "keywords": [],
   "author": {
@@ -41,6 +47,12 @@
       "unrs-resolver"
     ]
   },
+  "lint-staged": {
+    "*.{ts,tsx}": [
+      "eslint --fix",
+      "prettier --write"
+    ]
+  },
   "devDependencies": {
     "@electron-forge/cli": "^7.9.0",
     "@electron-forge/maker-deb": "^7.9.0",
@@ -64,9 +76,13 @@
     "dotenv": "^17.2.3",
     "electron": "38.2.1",
     "eslint": "^8.57.1",
+    "eslint-config-prettier": "^10.1.8",
     "eslint-import-resolver-typescript": "^4.4.4",
     "eslint-plugin-import": "^2.32.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.2.7",
     "postcss": "^8.5.6",
+    "prettier": "^3.7.4",
     "tailwindcss": "^4.1.14",
     "typescript": "~4.5.5",
     "vite": "^5.4.20"

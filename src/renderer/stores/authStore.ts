@@ -1,9 +1,10 @@
 import { create } from 'zustand';
+
 import { AuthState, User, AuthSession } from '@/shared/types';
 
 /**
  * Auth Store - Centralized authentication state management
- * 
+ *
  * Architecture:
  * - Single source of truth for auth state
  * - Immutable state updates
@@ -13,14 +14,14 @@ import { AuthState, User, AuthSession } from '@/shared/types';
 interface AuthStore extends AuthState {
   // Prevents duplicate initialization
   initialized: boolean;
-  
+
   // State setters - simple and predictable
   setUser: (user: User | null) => void;
   setSession: (session: AuthSession | null) => void;
   setLoading: (loading: boolean) => void;
   setError: (error: string | null) => void;
   setInitialized: (initialized: boolean) => void;
-  
+
   // Composite actions
   setAuthData: (user: User, session: AuthSession) => void;
   clearAuth: () => void;
@@ -39,27 +40,27 @@ export const useAuthStore = create<AuthStore>((set) => ({
   initialized: false,
 
   setUser: (user) => set({ user, is_authenticated: !!user }),
-  
+
   setSession: (session) => set({ session }),
-  
+
   setLoading: (loading) => set({ loading }),
-  
+
   setError: (error) => set({ error }),
-  
+
   setInitialized: (initialized) => set({ initialized }),
-  
-  setAuthData: (user, session) => 
-    set({ 
-      user, 
-      session, 
+
+  setAuthData: (user, session) =>
+    set({
+      user,
+      session,
       is_authenticated: true,
-      error: null 
+      error: null,
     }),
-  
-  clearAuth: () => 
-    set({ 
-      ...initialState, 
-      loading: false, 
-      initialized: true 
+
+  clearAuth: () =>
+    set({
+      ...initialState,
+      loading: false,
+      initialized: true,
     }),
 }));

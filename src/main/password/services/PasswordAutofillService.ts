@@ -1,11 +1,12 @@
 import { WebContentsView } from 'electron';
+
 import { PasswordManager } from '@/main/password/PasswordManager';
 import { AutofillSuggestion, DetectedForm } from '@/main/password/types';
 import { jsonStringifyForJS } from '@/main/utils/jsEscape';
 
 /**
  * PasswordAutofillService - Chrome-like autofill UI and logic
- * 
+ *
  * Features:
  * - Native-looking autofill dropdown
  * - Keyboard navigation (arrow keys, Enter, Esc)
@@ -37,7 +38,7 @@ export class PasswordAutofillService {
 
       if (credentials.length === 0) return;
 
-      const suggestions: AutofillSuggestion[] = credentials.map(cred => ({
+      const suggestions: AutofillSuggestion[] = credentials.map((cred) => ({
         credentialId: cred.id,
         username: cred.username,
         lastUsed: cred.lastUsed,
@@ -47,9 +48,14 @@ export class PasswordAutofillService {
       await this.injectAutofillListeners(forms, suggestions, origin);
       this.isSetup = true;
 
-      console.log(`[PasswordAutofillService] Setup autofill for ${forms.length} forms with ${suggestions.length} credentials`);
+      console.log(
+        `[PasswordAutofillService] Setup autofill for ${forms.length} forms with ${suggestions.length} credentials`
+      );
     } catch (error) {
-      console.error('[PasswordAutofillService] Error setting up autofill:', error);
+      console.error(
+        '[PasswordAutofillService] Error setting up autofill:',
+        error
+      );
     }
   }
 
@@ -63,10 +69,12 @@ export class PasswordAutofillService {
   ): Promise<void> {
     // Build field selectors
     const fieldSelectors: string[] = [];
-    
-    forms.forEach(form => {
-      if (form.usernameField?.selector) fieldSelectors.push(form.usernameField.selector);
-      if (form.emailField?.selector) fieldSelectors.push(form.emailField.selector);
+
+    forms.forEach((form) => {
+      if (form.usernameField?.selector)
+        fieldSelectors.push(form.usernameField.selector);
+      if (form.emailField?.selector)
+        fieldSelectors.push(form.emailField.selector);
     });
 
     if (fieldSelectors.length === 0) return;
@@ -135,7 +143,7 @@ export class PasswordAutofillService {
 
           console.log('[Browzer] ✅ Autofill setup complete');
         })();
-      `
+      `,
     });
   }
 
@@ -149,18 +157,24 @@ export class PasswordAutofillService {
     try {
       const password = this.passwordManager.getPassword(credentialId);
       if (!password) {
-        console.error('[PasswordAutofillService] Password not found for credential:', credentialId);
+        console.error(
+          '[PasswordAutofillService] Password not found for credential:',
+          credentialId
+        );
         return false;
       }
 
-      const credentials = this.passwordManager.getCredentialsForOrigin(form.origin);
-      const credential = credentials.find(c => c.id === credentialId);
+      const credentials = this.passwordManager.getCredentialsForOrigin(
+        form.origin
+      );
+      const credential = credentials.find((c) => c.id === credentialId);
       if (!credential) return false;
 
       const username = credential.username;
 
       // Fill username/email field
-      const usernameSelector = form.usernameField?.selector || form.emailField?.selector;
+      const usernameSelector =
+        form.usernameField?.selector || form.emailField?.selector;
       if (usernameSelector) {
         await this.fillField(usernameSelector, username);
       }
@@ -170,10 +184,15 @@ export class PasswordAutofillService {
         await this.fillField(form.passwordField.selector, password);
       }
 
-      console.log('[PasswordAutofillService] ✅ Credentials filled successfully');
+      console.log(
+        '[PasswordAutofillService] ✅ Credentials filled successfully'
+      );
       return true;
     } catch (error) {
-      console.error('[PasswordAutofillService] Error filling credentials:', error);
+      console.error(
+        '[PasswordAutofillService] Error filling credentials:',
+        error
+      );
       return false;
     }
   }
@@ -206,7 +225,7 @@ export class PasswordAutofillService {
             console.error('[Browzer] Error filling field:', error);
           }
         })();
-      `
+      `,
     });
   }
 
@@ -353,7 +372,7 @@ export class PasswordAutofillService {
             document.body.appendChild(dropdown);
             console.log('[Browzer] ✅ Autofill dropdown shown with', suggestions.length, 'suggestions');
           })();
-        `
+        `,
       });
     } catch (error) {
       console.error('[PasswordAutofillService] Error showing dropdown:', error);
@@ -371,7 +390,7 @@ export class PasswordAutofillService {
             const dropdown = document.getElementById('browzer-autofill-dropdown');
             if (dropdown) dropdown.remove();
           })();
-        `
+        `,
       });
     } catch (error) {
       console.error('[PasswordAutofillService] Error hiding dropdown:', error);

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
-import type { UpdateProgress } from '@/shared/types';
 import { toast } from 'sonner';
+
+import type { UpdateProgress } from '@/shared/types';
 
 interface UpdateState {
   isDownloading: boolean;
@@ -29,12 +30,14 @@ export function useUpdateProgress() {
     });
 
     // Listen for download progress
-    const unsubscribeProgress = window.updaterAPI.onDownloadProgress((progress: UpdateProgress) => {
-      setUpdateState(prev => ({
-        ...prev,
-        progress: progress.percent,
-      }));
-    });
+    const unsubscribeProgress = window.updaterAPI.onDownloadProgress(
+      (progress: UpdateProgress) => {
+        setUpdateState((prev) => ({
+          ...prev,
+          progress: progress.percent,
+        }));
+      }
+    );
 
     // Listen for download complete
     const unsubscribeDownloaded = window.updaterAPI.onUpdateDownloaded(() => {

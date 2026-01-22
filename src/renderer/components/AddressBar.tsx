@@ -1,5 +1,13 @@
 import { useState, useEffect, useRef, useCallback, KeyboardEvent } from 'react';
-import { Lock, Globe, Search, Clock, ExternalLink, Loader2 } from 'lucide-react';
+import {
+  Lock,
+  Globe,
+  Search,
+  Clock,
+  ExternalLink,
+  Loader2,
+} from 'lucide-react';
+
 import { cn } from '@/renderer/lib/utils';
 import { useAddressBar } from '@/renderer/hooks/useAddressBar';
 import { AutocompleteSuggestionType } from '@/shared/types';
@@ -78,9 +86,9 @@ export function AddressBar({
 
   useEffect(() => {
     const unsubscribe = window.browserAPI.onRequestAddressBarFocus(() => {
-      setFocusTrigger(prev => prev + 1);
+      setFocusTrigger((prev) => prev + 1);
     });
-    
+
     return () => unsubscribe();
   }, []);
 
@@ -93,40 +101,55 @@ export function AddressBar({
     }, 150);
   }, [setIsOpen]);
 
-  const handleKeyDown = useCallback((e: KeyboardEvent<HTMLInputElement>) => {
-    const navigateUrl = handleAutocompleteKeyDown(e);
-    
-    if (navigateUrl) {
-      onNavigate(navigateUrl);
+  const handleKeyDown = useCallback(
+    (e: KeyboardEvent<HTMLInputElement>) => {
+      const navigateUrl = handleAutocompleteKeyDown(e);
+
+      if (navigateUrl) {
+        onNavigate(navigateUrl);
+        setIsEditing(false);
+        clearSuggestions();
+        inputRef.current?.blur();
+      }
+
+      if (e.key === 'Escape') {
+        setInputValueSilent(currentUrl);
+        setIsEditing(false);
+        clearSuggestions();
+        inputRef.current?.blur();
+      }
+    },
+    [
+      handleAutocompleteKeyDown,
+      onNavigate,
+      setInputValueSilent,
+      currentUrl,
+      clearSuggestions,
+    ]
+  );
+
+  const handleSuggestionClick = useCallback(
+    (suggestion: AutocompleteSuggestion) => {
+      setInputValueSilent(suggestion.url);
+      onNavigate(suggestion.url);
+      setIsOpen(false);
       setIsEditing(false);
       clearSuggestions();
-      inputRef.current?.blur();
-    }
-    
-    if (e.key === 'Escape') {
-      setInputValueSilent(currentUrl);
+    },
+    [setInputValueSilent, onNavigate, setIsOpen, clearSuggestions]
+  );
+
+  const handleSearchSuggestionClick = useCallback(
+    (query: string) => {
+      const searchUrl = `https://www.google.com/search?q=${encodeURIComponent(query)}`;
+      setInputValueSilent(searchUrl);
+      onNavigate(searchUrl);
+      setIsOpen(false);
       setIsEditing(false);
       clearSuggestions();
-      inputRef.current?.blur();
-    }
-  }, [handleAutocompleteKeyDown, onNavigate, setInputValueSilent, currentUrl, clearSuggestions]);
-
-  const handleSuggestionClick = useCallback((suggestion: AutocompleteSuggestion) => {
-    setInputValueSilent(suggestion.url);
-    onNavigate(suggestion.url);
-    setIsOpen(false);
-    setIsEditing(false);
-    clearSuggestions();
-  }, [setInputValueSilent, onNavigate, setIsOpen, clearSuggestions]);
-
-  const handleSearchSuggestionClick = useCallback((query: string) => {
-    const searchUrl = `https://www.google.com/search?q=${encodeURIComponent(query)}`;
-    setInputValueSilent(searchUrl);
-    onNavigate(searchUrl);
-    setIsOpen(false);
-    setIsEditing(false);
-    clearSuggestions();
-  }, [setInputValueSilent, onNavigate, setIsOpen, clearSuggestions]);
+    },
+    [setInputValueSilent, onNavigate, setIsOpen, clearSuggestions]
+  );
 
   const getSuggestionIcon = (type: AutocompleteSuggestionType) => {
     switch (type) {
@@ -141,7 +164,8 @@ export function AddressBar({
     }
   };
 
-  const showDropdown = isOpen && (suggestions.length > 0 || searchSuggestions.length > 0);
+  const showDropdown =
+    isOpen && (suggestions.length > 0 || searchSuggestions.length > 0);
 
   return (
     <div className={cn('relative flex-1', className)}>
@@ -208,7 +232,6 @@ export function AddressBar({
   );
 }
 
-
 interface SuggestionItemProps {
   suggestion: AutocompleteSuggestion;
   isSelected: boolean;
@@ -249,14 +272,13 @@ function SuggestionItem({
       </div>
 
       <div className="flex-1 min-w-0">
-        <div className="text-sm font-medium truncate">
-          {suggestion.title}
-        </div>
-        {suggestion.subtitle && suggestion.type !== AutocompleteSuggestionType.URL && (
-          <div className="text-xs text-muted-foreground truncate">
-            {suggestion.subtitle}
-          </div>
-        )}
+        <div className="text-sm font-medium truncate">{suggestion.title}</div>
+        {suggestion.subtitle &&
+          suggestion.type !== AutocompleteSuggestionType.URL && (
+            <div className="text-xs text-muted-foreground truncate">
+              {suggestion.subtitle}
+            </div>
+          )}
       </div>
 
       {suggestion.type === AutocompleteSuggestionType.HISTORY && (

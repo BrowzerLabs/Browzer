@@ -1,8 +1,10 @@
 import { useState, useCallback, useEffect } from 'react';
+import { toast } from 'sonner';
+
+import { AgentMode } from '../types';
+
 import { useAutomationStore } from '@/renderer/stores/automationStore';
 import { RecordingSession } from '@/shared/types';
-import { AgentMode } from '../types';
-import { toast } from 'sonner';
 
 export function useAutomation() {
   const {
@@ -18,7 +20,7 @@ export function useAutomation() {
     startAutomation,
     startNewSession,
     loadStoredSession,
-    loadSessionHistory,
+    // loadSessionHistory,
     addEvent,
     completeAutomation,
     errorAutomation,
@@ -30,15 +32,18 @@ export function useAutomation() {
   const [agentMode, setAgentMode] = useState<AgentMode>('automate');
 
   useEffect(() => {
+    const unsubProgress = window.browserAPI.onAutomationProgress(
+      (data: any) => {
+        addEvent(data.sessionId, data.event);
+      }
+    );
 
-    const unsubProgress = window.browserAPI.onAutomationProgress((data: any) => {
-      addEvent(data.sessionId, data.event);
-    });
-
-    const unsubComplete = window.browserAPI.onAutomationComplete((data: any) => {
-      completeAutomation(data.sessionId, data.result);
-      setIsSubmitting(false);
-    });
+    const unsubComplete = window.browserAPI.onAutomationComplete(
+      (data: any) => {
+        completeAutomation(data.sessionId, data.result);
+        setIsSubmitting(false);
+      }
+    );
 
     const unsubError = window.browserAPI.onAutomationError((data: any) => {
       errorAutomation(data.sessionId, data.error);
@@ -52,13 +57,13 @@ export function useAutomation() {
     };
   }, [addEvent, completeAutomation, errorAutomation]);
 
-  useEffect(() => {
-    loadSessionHistory();
-  }, [loadSessionHistory]);
+  // useEffect(() => {
+  //   loadSessionHistory();
+  // }, [loadSessionHistory]);
 
   const loadRecordings = useCallback(async () => {
     try {
-      const allRecordings = await window.browserAPI.getAllRecordings();
+      const allRecordings = await window.recordingAPI.getAllRecordings();
       setRecordings(allRecordings);
     } catch (error) {
       console.error('[useAutomation] Failed to load recordings:', error);
@@ -88,21 +93,30 @@ export function useAutomation() {
     }
   }, [userPrompt, selectedRecordingId, isSubmitting, startAutomation]);
 
-  const handleSessionSelect = useCallback(async (sessionId: string) => {
-    await loadStoredSession(sessionId);
-  }, [loadStoredSession]);
+  const handleSessionSelect = useCallback(
+    async (sessionId: string) => {
+      await loadStoredSession(sessionId);
+    },
+    [loadStoredSession]
+  );
 
   const handleNewSession = useCallback(() => {
     startNewSession();
   }, [startNewSession]);
 
-  const handleRecordingSelect = useCallback((recordingId: string | null) => {
-    setSelectedRecording(recordingId);
-  }, [setSelectedRecording]);
+  const handleRecordingSelect = useCallback(
+    (recordingId: string | null) => {
+      setSelectedRecording(recordingId);
+    },
+    [setSelectedRecording]
+  );
 
-  const handlePromptChange = useCallback((prompt: string) => {
-    setUserPrompt(prompt);
-  }, [setUserPrompt]);
+  const handlePromptChange = useCallback(
+    (prompt: string) => {
+      setUserPrompt(prompt);
+    },
+    [setUserPrompt]
+  );
 
   const handleStopAutomation = useCallback(async () => {
     if (currentSession && isSubmitting) {

@@ -1,12 +1,15 @@
-import { useEffect, useState, useRef } from 'react';
-import { useBrowserAPI } from '@/renderer/hooks/useBrowserAPI';
-import { useSidebarStore } from '@/renderer/store/useSidebarStore';
+import { useEffect, useState } from 'react';
+
 import { TabBar } from './TabBar';
 import { NavigationBar } from './NavigationBar';
 import { BookmarkBar } from './BookmarkBar';
 import { Sidebar } from './Sidebar';
 import { RestoreSessionPopup } from './RestoreSessionPopup';
 import { FindBar } from './FindBar';
+
+import { useOverlayVisibility } from '@/renderer/hooks/useBrowserViewLayer';
+import { useSidebarStore } from '@/renderer/store/useSidebarStore';
+import { useBrowserAPI } from '@/renderer/hooks/useBrowserAPI';
 import { useFindStore } from '@/renderer/stores/findStore';
 import { useScrollForwarding } from '@/renderer/hooks/useScrollForwarding';
 
@@ -16,9 +19,9 @@ export function BrowserChrome() {
   const { isVisible: isSidebarVisible, showSidebar } = useSidebarStore();
   const [showBookmarksBar, setShowBookmarksBar] = useState(false);
   const [showRestorePopup, setShowRestorePopup] = useState(false);
-  const { toggleFindBar, closeFindBar } = useFindStore();
-  const [tabCount, setTabCount] = useState(0);
-  const lastRestorePopupState = useRef<boolean | null>(null);
+  const { toggleFindBar } = useFindStore();
+
+  useOverlayVisibility('restore-session-popup', showRestorePopup);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -38,27 +41,15 @@ export function BrowserChrome() {
     };
   }, [browserAPI.activeTabId, toggleFindBar]);
 
-  // When a new tab is opened (tab count increases),
-  // hide the FindBar but keep its last search text.
   useEffect(() => {
-    const currentCount = browserAPI.tabs.length;
-    setTabCount((prev) => {
-      if (currentCount > prev) {
-        closeFindBar();
-      }
-      return currentCount;
+    const unsubRestore = window.browserAPI.onShowRestoreSession(() => {
+      setShowRestorePopup(true);
     });
-  }, [browserAPI.tabs.length, closeFindBar]);
+
+    return () => unsubRestore();
+  }, []);
 
   useEffect(() => {
-    const checkRestore = async () => {
-      const canRestore = await window.browserAPI.checkRestoreSession();
-      if (canRestore) {
-        setShowRestorePopup(true);
-      }
-    };
-    checkRestore();
-
     const loadSetting = async () => {
       const settings = await window.browserAPI.getAllSettings();
       setShowBookmarksBar(settings.appearance.showBookmarksBar as boolean);
@@ -66,37 +57,18 @@ export function BrowserChrome() {
 
     loadSetting();
 
-    const unsubSettings = window.browserAPI.onSettingsChanged((data: { category: string; key: string; value: unknown }) => {
-      if (data.category === 'appearance' && data.key === 'showBookmarksBar') {
-        setShowBookmarksBar(data.value as boolean);
+    const unsubSettings = window.browserAPI.onSettingsChanged(
+      (data: { category: string; key: string; value: unknown }) => {
+        if (data.category === 'appearance' && data.key === 'showBookmarksBar') {
+          setShowBookmarksBar(data.value as boolean);
+        }
       }
-    });
+    );
 
     return () => {
       unsubSettings();
     };
   }, []);
-
-  useEffect(() => {
-    if (lastRestorePopupState.current === showRestorePopup) {
-      return;
-    }
-    lastRestorePopupState.current = showRestorePopup;
-
-    if (showRestorePopup) {
-      void window.browserAPI.bringBrowserViewToFront();
-    } else {
-      void window.browserAPI.bringBrowserViewToBottom();
-    }
-  }, [showRestorePopup]);
-
-  useEffect(() => {
-    const unsubStart = window.browserAPI.onRecordingStarted(() => {
-      showSidebar();
-    });
-    
-    return () => unsubStart();
-  }, [showSidebar]);
 
   return (
     <div className="h-full w-full flex flex-col select-none">
@@ -147,11 +119,13 @@ export function BrowserChrome() {
         />
 
         {showBookmarksBar && (
-          <BookmarkBar onNavigate={(url) => {
-          if (browserAPI.activeTabId) {
-            browserAPI.navigate(browserAPI.activeTabId, url);
-          }
-        }} />
+          <BookmarkBar
+            onNavigate={(url) => {
+              if (browserAPI.activeTabId) {
+                browserAPI.navigate(browserAPI.activeTabId, url);
+              }
+            }}
+          />
         )}
       </div>
 

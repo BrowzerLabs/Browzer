@@ -18,14 +18,14 @@ export class AdBlockerService {
     'adsystem.com',
     'adservice.google.com',
     'pagead2.googlesyndication.com',
-    
+
     // Social media trackers
     'facebook.net',
     'connect.facebook.net',
     'facebook.com/tr',
     'facebook.com/plugins',
     'graph.facebook.com',
-    
+
     // Analytics and trackers
     'mixpanel.com',
     'segment.com',
@@ -35,7 +35,7 @@ export class AdBlockerService {
     'mouseflow.com',
     'crazyegg.com',
     'amplitude.com',
-    
+
     // Ad exchanges and networks
     'adnxs.com',
     'adsafeprotected.com',
@@ -48,14 +48,14 @@ export class AdBlockerService {
     'ads.twitter.com',
     'ads.linkedin.com',
     'ads.youtube.com',
-    
+
     // Tracking pixels
     'quantserve.com',
     'scorecardresearch.com',
     'pixel.facebook.com',
     'bat.bing.com',
     'analytics.twitter.com',
-    
+
     // Pop-ups and malicious
     'popads.net',
     'popcash.net',
@@ -190,14 +190,15 @@ export class AdBlockerService {
 
   constructor() {
     this.blockedDomainsSet = new Set(this.blockedDomains);
-    this.blockedPatterns = this.blockedPatternStrings.map(pattern => 
-      new RegExp(pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i')
+    this.blockedPatterns = this.blockedPatternStrings.map(
+      (pattern) =>
+        new RegExp(pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i')
     );
   }
 
   public enable(): void {
     if (this.enabled) return;
-    
+
     this.enabled = true;
     this.setupRequestInterceptor();
     this.injectCosmeticFiltersToAll();
@@ -205,7 +206,7 @@ export class AdBlockerService {
 
   public disable(): void {
     if (!this.enabled) return;
-    
+
     this.enabled = false;
     this.removeRequestInterceptor();
     this.removeCosmeticFiltersFromAll();
@@ -213,32 +214,38 @@ export class AdBlockerService {
 
   public registerWebContents(webContents: WebContents): void {
     if (this.registeredWebContents.has(webContents)) return;
-    
+
     // Don't register the browser UI view (it handles browzer:// pages)
     // Only register actual web tab views
     const url = webContents.getURL();
-    if (url && (
-      url.startsWith('browzer://') || 
-      url.startsWith('file://') || 
-      url.startsWith('about:') ||
-      url.includes('#/settings') ||
-      url.includes('#/passwords') ||
-      url.includes('#/privacy') ||
-      url.includes('#/appearance')
-    )) {
+    if (
+      url &&
+      (url.startsWith('browzer://') ||
+        url.startsWith('file://') ||
+        url.startsWith('about:') ||
+        url.includes('#/settings') ||
+        url.includes('#/passwords') ||
+        url.includes('#/privacy') ||
+        url.includes('#/appearance'))
+    ) {
       console.log('[AdBlocker] Skipping registration for internal page:', url);
       return;
     }
-    
+
     this.registeredWebContents.add(webContents);
-    
+
     if (this.enabled) {
       this.injectCosmeticFilters(webContents);
     }
 
     webContents.on('did-navigate', () => {
       const url = webContents.getURL();
-      if (url && (url.startsWith('browzer://') || url.startsWith('file://') || url.includes('#/settings'))) {
+      if (
+        url &&
+        (url.startsWith('browzer://') ||
+          url.startsWith('file://') ||
+          url.includes('#/settings'))
+      ) {
         this.removeCosmeticFilters(webContents);
         return;
       }
@@ -249,7 +256,12 @@ export class AdBlockerService {
 
     webContents.on('did-navigate-in-page', () => {
       const url = webContents.getURL();
-      if (url && (url.startsWith('browzer://') || url.startsWith('file://') || url.includes('#/settings'))) {
+      if (
+        url &&
+        (url.startsWith('browzer://') ||
+          url.startsWith('file://') ||
+          url.includes('#/settings'))
+      ) {
         this.removeCosmeticFilters(webContents);
         return;
       }
@@ -260,7 +272,12 @@ export class AdBlockerService {
 
     webContents.on('did-finish-load', () => {
       const url = webContents.getURL();
-      if (url && (url.startsWith('browzer://') || url.startsWith('file://') || url.includes('#/settings'))) {
+      if (
+        url &&
+        (url.startsWith('browzer://') ||
+          url.startsWith('file://') ||
+          url.includes('#/settings'))
+      ) {
         this.removeCosmeticFilters(webContents);
         return;
       }
@@ -287,20 +304,23 @@ export class AdBlockerService {
 
   private setupRequestInterceptor(): void {
     const filter = {
-      urls: ['*://*/*']
+      urls: ['*://*/*'],
     };
 
-    session.defaultSession.webRequest.onBeforeRequest(filter, (details, callback) => {
-      if (!this.enabled) {
-        callback({ cancel: false });
-        return;
+    session.defaultSession.webRequest.onBeforeRequest(
+      filter,
+      (details, callback) => {
+        if (!this.enabled) {
+          callback({ cancel: false });
+          return;
+        }
+
+        const url = details.url.toLowerCase();
+        const shouldBlock = this.shouldBlockRequest(url);
+
+        callback({ cancel: shouldBlock });
       }
-
-      const url = details.url.toLowerCase();
-      const shouldBlock = this.shouldBlockRequest(url);
-
-      callback({ cancel: shouldBlock });
-    });
+    );
   }
 
   private removeRequestInterceptor(): void {
@@ -309,7 +329,12 @@ export class AdBlockerService {
 
   private shouldBlockRequest(url: string): boolean {
     try {
-      if (url.startsWith('browzer://') || url.startsWith('file://') || url.startsWith('about:') || url.startsWith('data:')) {
+      if (
+        url.startsWith('browzer://') ||
+        url.startsWith('file://') ||
+        url.startsWith('about:') ||
+        url.startsWith('data:')
+      ) {
         return false;
       }
 
@@ -317,7 +342,10 @@ export class AdBlockerService {
       const hostname = urlObj.hostname;
 
       for (const blockedDomain of this.blockedDomainsSet) {
-        if (hostname === blockedDomain || hostname.endsWith(`.${blockedDomain}`)) {
+        if (
+          hostname === blockedDomain ||
+          hostname.endsWith(`.${blockedDomain}`)
+        ) {
           return true;
         }
       }
@@ -347,7 +375,13 @@ export class AdBlockerService {
     if (webContents.isDestroyed()) return;
 
     const url = webContents.getURL();
-    if (!url || url.startsWith('browzer://') || url.startsWith('file://') || url.startsWith('about:') || url === '') {
+    if (
+      !url ||
+      url.startsWith('browzer://') ||
+      url.startsWith('file://') ||
+      url.startsWith('about:') ||
+      url === ''
+    ) {
       return;
     }
 
@@ -572,7 +606,7 @@ export class AdBlockerService {
       })();
     `;
 
-    webContents.executeJavaScript(filterCode).catch(err => {
+    webContents.executeJavaScript(filterCode).catch((err) => {
       console.error('[AdBlocker] Failed to inject cosmetic filters:', err);
     });
   }
@@ -581,7 +615,11 @@ export class AdBlockerService {
     if (webContents.isDestroyed()) return;
 
     const url = webContents.getURL();
-    if (url.startsWith('browzer://') || url.startsWith('file://') || url.startsWith('about:')) {
+    if (
+      url.startsWith('browzer://') ||
+      url.startsWith('file://') ||
+      url.startsWith('about:')
+    ) {
       return;
     }
 
@@ -602,19 +640,19 @@ export class AdBlockerService {
       })();
     `;
 
-    webContents.executeJavaScript(removeCode).catch(err => {
+    webContents.executeJavaScript(removeCode).catch((err) => {
       console.error('[AdBlocker] Failed to remove cosmetic filters:', err);
     });
   }
 
   private injectCosmeticFiltersToAll(): void {
-    this.registeredWebContents.forEach(webContents => {
+    this.registeredWebContents.forEach((webContents) => {
       this.injectCosmeticFilters(webContents);
     });
   }
 
   private removeCosmeticFiltersFromAll(): void {
-    this.registeredWebContents.forEach(webContents => {
+    this.registeredWebContents.forEach((webContents) => {
       this.removeCosmeticFilters(webContents);
     });
   }
@@ -623,4 +661,3 @@ export class AdBlockerService {
     return { blockedCount: 0 };
   }
 }
-

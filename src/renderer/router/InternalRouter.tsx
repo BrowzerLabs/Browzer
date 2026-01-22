@@ -1,5 +1,13 @@
 import { useEffect, useState } from 'react';
-import { History, Recordings, Automation, Settings, Downloads, Bookmarks } from '@/renderer/screens';
+
+import {
+  History,
+  Recordings,
+  Automation,
+  Settings,
+  Downloads,
+  Bookmarks,
+} from '@/renderer/screens';
 import Profile from '@/renderer/pages/Profile';
 import { ROUTES } from '@/shared/routes';
 import { SubscriptionPage, Home } from '@/renderer/pages';
@@ -22,20 +30,22 @@ const ROUTE_COMPONENTS: Record<string, React.ComponentType> = {
 export type InternalRouteName = keyof typeof ROUTES;
 
 export function InternalRouter() {
-  const [currentRoute, setCurrentRoute] = useState<InternalRouteName | null>(null);
+  const [currentRoute, setCurrentRoute] = useState<InternalRouteName | null>(
+    null
+  );
 
   useEffect(() => {
     const checkRoute = () => {
       const hash = window.location.hash;
       console.log('InternalRouter: Checking route:', hash);
-      
+
       // Extract route name from hash (e.g., #/settings -> settings)
       const routeName = hash.replace('#/', '') as InternalRouteName;
-      
+
       if (routeName && ROUTES[routeName]) {
         console.log('InternalRouter: Matched route:', routeName);
         setCurrentRoute(routeName);
-        
+
         // Update document title
         document.title = `${ROUTES[routeName].title} - Browzer`;
       } else {
@@ -46,23 +56,21 @@ export function InternalRouter() {
 
     checkRoute();
     window.addEventListener('hashchange', checkRoute);
-    
+
     return () => window.removeEventListener('hashchange', checkRoute);
   }, []);
 
   if (!currentRoute) {
     return (
-      <main className='w-full h-full flex items-center justify-center'>
+      <main className="w-full h-full flex items-center justify-center">
         <h1>InternalRouter: No matching route</h1>
       </main>
-    )
+    );
   }
 
   const RouteComponent = ROUTE_COMPONENTS[currentRoute];
 
-  return (
-    <RouteComponent />
-  );
+  return <RouteComponent />;
 }
 
 export function useIsInternalPage(): boolean {
@@ -77,20 +85,22 @@ export function useIsInternalPage(): boolean {
 
     checkRoute();
     window.addEventListener('hashchange', checkRoute);
-    
+
     return () => window.removeEventListener('hashchange', checkRoute);
   }, []);
 
   return isInternal;
 }
 
-export function getCurrentInternalRoute(): typeof ROUTES[InternalRouteName] | null {
+export function getCurrentInternalRoute():
+  | (typeof ROUTES)[InternalRouteName]
+  | null {
   const hash = window.location.hash;
   const routeName = hash.replace('#/', '') as InternalRouteName;
-  
+
   if (routeName && ROUTES[routeName]) {
     return ROUTES[routeName];
   }
-  
+
   return null;
 }

@@ -1,5 +1,10 @@
 import { BaseHandler } from './base';
-import { SignUpCredentials, SignInCredentials, UpdateProfileRequest } from '@/shared/types';
+
+import {
+  SignUpCredentials,
+  SignInCredentials,
+  UpdateProfileRequest,
+} from '@/shared/types';
 
 export class AuthHandler extends BaseHandler {
   register(): void {
@@ -33,13 +38,19 @@ export class AuthHandler extends BaseHandler {
       return authService.refreshSession();
     });
 
-    this.handle('auth:update-profile', async (_, updates: UpdateProfileRequest) => {
-      return authService.updateProfile(updates);
-    });
+    this.handle(
+      'auth:update-profile',
+      async (_, updates: UpdateProfileRequest) => {
+        return authService.updateProfile(updates);
+      }
+    );
 
-    this.handle('auth:verify-token', async (_, tokenHash: string, type: string) => {
-      return authService.verifyToken(tokenHash, type);
-    });
+    this.handle(
+      'auth:verify-token',
+      async (_, tokenHash: string, type: string) => {
+        return authService.verifyToken(tokenHash, type);
+      }
+    );
 
     this.handle('auth:resend-confirmation', async (_, email: string) => {
       return authService.resendConfirmation(email);
@@ -49,8 +60,11 @@ export class AuthHandler extends BaseHandler {
       return authService.sendPasswordReset(email);
     });
 
-    this.handle('auth:update-password', async (_, newPassword: string, accessToken: string) => {
-      return authService.updatePassword(newPassword, accessToken);
-    });
+    this.handle(
+      'auth:update-password',
+      async (_, newPassword: string, accessToken: string) => {
+        return authService.updatePassword(newPassword, accessToken);
+      }
+    );
   }
 }

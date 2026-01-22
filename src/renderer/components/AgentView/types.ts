@@ -1,5 +1,8 @@
 import { AutomationProgressEvent, RecordingSession } from '@/shared/types';
-import { AutomationSession, SessionListItem } from '@/renderer/stores/automationStore';
+import {
+  AutomationSession,
+  SessionListItem,
+} from '@/renderer/stores/automationStore';
 
 export type AgentViewMode = 'new_session' | 'existing_session';
 export type AgentMode = 'ask' | 'automate';

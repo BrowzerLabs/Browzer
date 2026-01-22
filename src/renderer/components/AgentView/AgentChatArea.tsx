@@ -1,4 +1,5 @@
 import { useRef, useEffect } from 'react';
+
 import { EventItem } from './EventItem';
 import { AgentChatAreaProps } from './types';
 
@@ -18,9 +19,11 @@ export function AgentChatArea({
   if (viewMode === 'new_session') {
     return (
       <div className="flex flex-col items-center justify-center h-full text-center px-6">
-        <h3 className="text-lg font-semibold mb-2">{
-          agentMode === 'ask' ? 'Ask anything about the current page...' : 'Describe what you want to automate...'
-        }</h3>
+        <h3 className="text-lg font-semibold mb-2">
+          {agentMode === 'ask'
+            ? 'Ask anything about the current page...'
+            : 'Describe what you want to automate...'}
+        </h3>
       </div>
     );
   }
@@ -34,7 +37,7 @@ export function AgentChatArea({
             <p className="text-sm">{currentSession.userGoal}</p>
           </div>
 
-            <div className="space-y-2 px-6">
+          <div className="space-y-2 px-6">
             {currentSession.events.map((event, index) => (
               <EventItem
                 key={event.id}
@@ -42,7 +45,6 @@ export function AgentChatArea({
                 isLatest={index === currentSession.events.length - 1}
               />
             ))}
-
           </div>
           <div ref={chatEndRef} className="h-1" />
         </div>

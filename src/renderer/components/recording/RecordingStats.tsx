@@ -1,4 +1,5 @@
 import { Video, MousePointerClick, Clock, HardDrive } from 'lucide-react';
+
 import { formatDuration, formatFileSize } from '@/renderer/lib/utils';
 
 interface RecordingStatsProps {
@@ -9,12 +10,12 @@ interface RecordingStatsProps {
   totalSnapshotSize: number;
 }
 
-export function RecordingStats({ 
-  total, 
-  totalActions, 
-  totalDuration, 
+export function RecordingStats({
+  total,
+  totalActions,
+  totalDuration,
   totalVideoSize,
-  totalSnapshotSize
+  totalSnapshotSize,
 }: RecordingStatsProps) {
   const totalStorageSize = totalVideoSize + totalSnapshotSize;
 
@@ -46,7 +47,11 @@ export function RecordingStats({
         label="Storage Used"
         value={formatFileSize(totalStorageSize)}
         bgColor="bg-orange-100"
-        subtitle={totalSnapshotSize > 0 ? `${formatFileSize(totalSnapshotSize)} snapshots` : undefined}
+        subtitle={
+          totalSnapshotSize > 0
+            ? `${formatFileSize(totalSnapshotSize)} snapshots`
+            : undefined
+        }
       />
     </div>
   );
@@ -64,14 +69,16 @@ function StatCard({ icon, label, value, bgColor, subtitle }: StatCardProps) {
   return (
     <div className="rounded-xl border p-4 shadow-sm bg-white dark:bg-black">
       <div className="flex items-center gap-3">
-        <div className={`p-2 ${bgColor} rounded-lg`}>
-          {icon}
-        </div>
+        <div className={`p-2 ${bgColor} rounded-lg`}>{icon}</div>
         <div className="flex-1">
           <p className="text-sm text-gray-600 dark:text-gray-400">{label}</p>
-          <p className="text-2xl font-bold text-gray-900 dark:text-white">{value}</p>
+          <p className="text-2xl font-bold text-gray-900 dark:text-white">
+            {value}
+          </p>
           {subtitle && (
-            <p className="text-xs text-gray-500 dark:text-gray-500 mt-0.5">{subtitle}</p>
+            <p className="text-xs text-gray-500 dark:text-gray-500 mt-0.5">
+              {subtitle}
+            </p>
           )}
         </div>
       </div>

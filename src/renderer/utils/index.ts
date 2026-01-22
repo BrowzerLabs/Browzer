@@ -1,7 +1,3 @@
-import { RecordingUtils } from "./RecordingUtils";
+import { RecordingUtils } from './RecordingUtils';
 
-
-
-export {
-    RecordingUtils
-}
+export { RecordingUtils };

@@ -1,36 +1,21 @@
 import { WebContentsView } from 'electron';
-import { TabInfo } from '@/shared/types';
-import { VideoRecorder } from '@/main/recording';
-import { BrowserAutomationExecutor } from '@/main/automation';
-import { PasswordAutomation } from '@/main/password';
 
-/**
- * Internal tab structure with WebContentsView and associated services
- */
+import { TabInfo } from '@/shared/types';
+import { PasswordAutomation } from '../password';
+
+export type ClickTrackingHandler = (
+  event: any,
+  method: string,
+  params: any
+) => Promise<void>;
+
 export interface Tab {
   id: string;
   view: WebContentsView;
   info: TabInfo;
-  videoRecorder?: VideoRecorder;
+  clickTrackingHandler?: ClickTrackingHandler;
   passwordAutomation?: PasswordAutomation;
-  automationExecutor: BrowserAutomationExecutor;
-  // Track selected credential for multi-step flows
   selectedCredentialId?: string;
   selectedCredentialUsername?: string;
   bypassedCertificateHosts?: Set<string>;
-}
-
-export interface TabServiceEvents {
-  'tab:created': (tab: Tab, previousActiveTabId: string | null) => void;
-  'tab:closed': (closedTabId: string, newActiveTabId: string | null, wasActiveTab: boolean) => void;
-  'tab:switched': (previousTabId: string, newTab: Tab) => void;
-  'tab:reordered': (data: { tabId: string; from: number; to: number }) => void;
-  'tabs:changed': () => void;
-}
-
-export interface RecordingState {
-  isRecording: boolean;
-  recordingId: string | null;
-  startTime: number;
-  startUrl: string;
 }

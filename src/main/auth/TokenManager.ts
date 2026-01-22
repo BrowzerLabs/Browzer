@@ -1,8 +1,15 @@
 import { app } from 'electron';
-import Store from 'electron-store';
-import { createCipheriv, createDecipheriv, randomBytes, pbkdf2Sync, scryptSync } from 'crypto';
-import { machineIdSync } from 'node-machine-id';
+import {
+  createCipheriv,
+  createDecipheriv,
+  randomBytes,
+  pbkdf2Sync,
+  scryptSync,
+} from 'crypto';
 import { EventEmitter } from 'events';
+
+import Store from 'electron-store';
+import { machineIdSync } from 'node-machine-id';
 
 interface TokenData {
   access_token: string;
@@ -15,7 +22,7 @@ export class TokenManager extends EventEmitter {
   private store: Store;
   private cachedTokens: TokenData | null = null;
   private refreshTimer: NodeJS.Timeout | null = null;
-  private isRefreshing: boolean = false;
+  private isRefreshing = false;
   private refreshPromise: Promise<boolean> | null = null;
   private encryptionKey: Buffer;
 
@@ -23,23 +30,25 @@ export class TokenManager extends EventEmitter {
   private readonly KEY_LENGTH = 32;
   private readonly IV_LENGTH = 16;
   private readonly AUTH_TAG_LENGTH = 16;
-  
+
   private readonly APP_CONTEXT = 'browzer-token-storage-v1';
 
   private constructor() {
     super();
     this.store = new Store({
       name: 'browzer',
-      encryptionKey: 'browzer-store-encryption-key'
+      encryptionKey: 'browzer-store-encryption-key',
     });
-    
+
     this.encryptionKey = this.deriveEncryptionKey();
   }
 
   private deriveEncryptionKey(): Buffer {
     try {
-      let installationSalt = this.store.get('installation_salt') as string | undefined;
-      
+      let installationSalt = this.store.get('installation_salt') as
+        | string
+        | undefined;
+
       if (!installationSalt) {
         // Generate a cryptographically random salt on first run
         installationSalt = randomBytes(32).toString('base64');
@@ -50,11 +59,11 @@ export class TokenManager extends EventEmitter {
       // Combine multiple entropy sources
       const machineId = machineIdSync();
       const appPath = app.getAppPath();
-      
+
       // Create composite key material
       // NOTE: Do NOT include app version here - it causes encryption to break during updates
       const keyMaterial = `${machineId}|${this.APP_CONTEXT}|${appPath}`;
-      
+
       // Use scrypt
       const derivedKey = scryptSync(
         keyMaterial,
@@ -62,16 +71,18 @@ export class TokenManager extends EventEmitter {
         this.KEY_LENGTH,
         {
           N: 16384, // CPU/memory cost (higher = more secure but slower)
-          r: 8,     // Block size
-          p: 1,     // Parallelization
+          r: 8, // Block size
+          p: 1, // Parallelization
         }
       );
-      
+
       return derivedKey;
     } catch (error) {
       console.error('[TokenManager] Failed to derive encryption key:', error);
       // Fallback: generate random key (will lose tokens but prevents crashes)
-      console.warn('[TokenManager] Using fallback random key - tokens may be lost');
+      console.warn(
+        '[TokenManager] Using fallback random key - tokens may be lost'
+      );
       return randomBytes(this.KEY_LENGTH);
     }
   }
@@ -80,18 +91,18 @@ export class TokenManager extends EventEmitter {
     try {
       const iv = randomBytes(this.IV_LENGTH);
       const cipher = createCipheriv(this.ALGORITHM, this.encryptionKey, iv);
-      
+
       let encrypted = cipher.update(plaintext, 'utf8', 'base64');
       encrypted += cipher.final('base64');
-      
+
       const authTag = cipher.getAuthTag();
-      
+
       const combined = Buffer.concat([
         iv,
         Buffer.from(encrypted, 'base64'),
-        authTag
+        authTag,
       ]);
-      
+
       return combined.toString('base64');
     } catch (error) {
       console.error('[TokenManager] Encryption failed:', error);
@@ -102,17 +113,24 @@ export class TokenManager extends EventEmitter {
   private decrypt(ciphertext: string): string {
     try {
       const combined = Buffer.from(ciphertext, 'base64');
-      
+
       const iv = combined.subarray(0, this.IV_LENGTH);
       const authTag = combined.subarray(combined.length - this.AUTH_TAG_LENGTH);
-      const encrypted = combined.subarray(this.IV_LENGTH, combined.length - this.AUTH_TAG_LENGTH);
-      
+      const encrypted = combined.subarray(
+        this.IV_LENGTH,
+        combined.length - this.AUTH_TAG_LENGTH
+      );
+
       const decipher = createDecipheriv(this.ALGORITHM, this.encryptionKey, iv);
       decipher.setAuthTag(authTag);
-      
-      let decrypted = decipher.update(encrypted.toString('base64'), 'base64', 'utf8');
+
+      let decrypted = decipher.update(
+        encrypted.toString('base64'),
+        'base64',
+        'utf8'
+      );
       decrypted += decipher.final('utf8');
-      
+
       return decrypted;
     } catch (error) {
       console.error('[TokenManager] Decryption failed:', error);
@@ -127,7 +145,11 @@ export class TokenManager extends EventEmitter {
     return TokenManager.instance;
   }
 
-  public saveTokens(accessToken: string, refreshToken: string, expiresAt: number): void {
+  public saveTokens(
+    accessToken: string,
+    refreshToken: string,
+    expiresAt: number
+  ): void {
     try {
       const tokenData: TokenData = {
         access_token: accessToken,
@@ -159,8 +181,10 @@ export class TokenManager extends EventEmitter {
     }
 
     try {
-      const encrypted = this.store.get('encrypted_tokens') as string | undefined;
-      
+      const encrypted = this.store.get('encrypted_tokens') as
+        | string
+        | undefined;
+
       if (!encrypted) {
         return null;
       }
@@ -169,7 +193,11 @@ export class TokenManager extends EventEmitter {
       const tokenData: TokenData = JSON.parse(decrypted);
 
       // Validate token structure
-      if (!tokenData.access_token || !tokenData.refresh_token || !tokenData.expires_at) {
+      if (
+        !tokenData.access_token ||
+        !tokenData.refresh_token ||
+        !tokenData.expires_at
+      ) {
         console.error('[TokenManager] Invalid token data structure');
         return null;
       }
@@ -206,7 +234,7 @@ export class TokenManager extends EventEmitter {
 
     const now = Math.floor(Date.now() / 1000);
     const expiresIn = tokens.expires_at - now;
-    
+
     // Token is expired if it expires in less than 5 minutes OR already expired
     return expiresIn < 300;
   }
@@ -247,7 +275,9 @@ export class TokenManager extends EventEmitter {
           this.scheduleTokenRefresh(tokens.expires_at);
           console.log('[TokenManager] Tokens restored');
         } else {
-          console.log('[TokenManager] Stored tokens expired, but refresh token available - will attempt refresh');
+          console.log(
+            '[TokenManager] Stored tokens expired, but refresh token available - will attempt refresh'
+          );
           // Don't clear yet - let the caller attempt refresh
           // Emit event to trigger refresh attempt
           this.emit('token-refresh-needed');
@@ -264,9 +294,11 @@ export class TokenManager extends EventEmitter {
 
     if (expiresAt) {
       const expiresIn = expiresAt * 1000 - Date.now() - 5 * 60 * 1000;
-      
+
       if (expiresIn > 0) {
-        console.log(`[TokenManager] Token refresh scheduled in ${Math.floor(expiresIn / 1000 / 60)} minutes`);
+        console.log(
+          `[TokenManager] Token refresh scheduled in ${Math.floor(expiresIn / 1000 / 60)} minutes`
+        );
         this.refreshTimer = setTimeout(() => {
           console.log('[TokenManager] Token refresh triggered');
           this.emit('token-refresh-needed');
@@ -288,7 +320,7 @@ export class TokenManager extends EventEmitter {
   public setRefreshing(promise: Promise<boolean>): void {
     this.isRefreshing = true;
     this.refreshPromise = promise;
-    
+
     promise.finally(() => {
       this.isRefreshing = false;
       this.refreshPromise = null;

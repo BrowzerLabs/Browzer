@@ -8,9 +8,12 @@ export class PasswordHandler extends BaseHandler {
       return passwordManager.getAllCredentials();
     });
 
-    this.handle('password:save', async (_, origin: string, username: string, password: string) => {
-      return passwordManager.saveCredential(origin, username, password);
-    });
+    this.handle(
+      'password:save',
+      async (_, origin: string, username: string, password: string) => {
+        return passwordManager.saveCredential(origin, username, password);
+      }
+    );
 
     this.handle('password:get-for-origin', async (_, origin: string) => {
       return passwordManager.getCredentialsForOrigin(origin);
@@ -20,17 +23,27 @@ export class PasswordHandler extends BaseHandler {
       return passwordManager.getPassword(credentialId);
     });
 
-    this.handle('password:update', async (_, credentialId: string, username: string, password: string) => {
-      return passwordManager.updateCredential(credentialId, username, password);
-    });
+    this.handle(
+      'password:update',
+      async (_, credentialId: string, username: string, password: string) => {
+        return passwordManager.updateCredential(
+          credentialId,
+          username,
+          password
+        );
+      }
+    );
 
     this.handle('password:delete', async (_, credentialId: string) => {
       return passwordManager.deleteCredential(credentialId);
     });
 
-    this.handle('password:delete-multiple', async (_, credentialIds: string[]) => {
-      return passwordManager.deleteMultipleCredentials(credentialIds);
-    });
+    this.handle(
+      'password:delete-multiple',
+      async (_, credentialIds: string[]) => {
+        return passwordManager.deleteMultipleCredentials(credentialIds);
+      }
+    );
 
     this.handle('password:search', async (_, query: string) => {
       return passwordManager.searchCredentials(query);

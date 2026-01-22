@@ -26,8 +26,11 @@ export class WindowHandler extends BaseHandler {
       return true;
     });
 
-    this.handle('browser:scroll', async (_event, deltaX: number, deltaY: number, x: number, y: number) => {
-      return tabService.handleScroll(deltaX, deltaY, x, y);
-    });
+    this.handle(
+      'browser:scroll',
+      async (_event, deltaX: number, deltaY: number, x: number, y: number) => {
+        return tabService.handleScroll(deltaX, deltaY, x, y);
+      }
+    );
   }
 }

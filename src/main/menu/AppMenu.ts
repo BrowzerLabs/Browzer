@@ -1,4 +1,5 @@
 import { app, BaseWindow, BrowserWindow, Menu } from 'electron';
+
 import { TabService } from '@/main/browser/TabService';
 import { UpdateService } from '@/main/UpdateService';
 
@@ -20,14 +21,11 @@ export class AppMenu {
     nextTab: this.isMac ? 'Cmd+Option+Right' : 'Ctrl+Tab',
     prevTab: this.isMac ? 'Cmd+Option+Left' : 'Ctrl+Shift+Tab',
     history: this.isMac ? 'Cmd+Y' : 'Ctrl+H',
-    settings: this.isMac ? 'Cmd+,': 'Ctrl+,',
+    settings: this.isMac ? 'Cmd+,' : 'Ctrl+,',
     downloads: this.isMac ? 'Cmd+Shift+J' : 'Ctrl+J',
   };
 
-  constructor(
-    tabService: TabService,
-    updateService: UpdateService
-  ) {
+  constructor(tabService: TabService, updateService: UpdateService) {
     this.tabService = tabService;
     this.updateService = updateService;
   }
@@ -220,7 +218,7 @@ export class AppMenu {
             label: 'Downloads',
             accelerator: this.keys.downloads,
             click: () => {
-              if (this.ensureWindow()){
+              if (this.ensureWindow()) {
                 this.tabService.createTab('browzer://downloads');
               }
             },
@@ -263,10 +261,7 @@ export class AppMenu {
                 { type: 'separator' as const },
                 { role: 'window' as const },
               ]
-            : [
-                { type: 'separator' as const },
-                { role: 'close' as const },
-              ]),
+            : []),
         ],
       },
 

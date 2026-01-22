@@ -1,11 +1,19 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/renderer/ui/card';
-import { Button } from '@/renderer/ui/button';
 import { Loader2, CheckCircle2 } from 'lucide-react';
-import { AuthLayout } from './AuthLayout';
 import { toast } from 'sonner';
-import { FaRegFaceSadTear } from "react-icons/fa6";
+import { FaRegFaceSadTear } from 'react-icons/fa6';
+
+import { AuthLayout } from './AuthLayout';
+
+import { Button } from '@/renderer/ui/button';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/renderer/ui/card';
 
 type VerificationState = 'verifying' | 'success' | 'error';
 
@@ -24,11 +32,11 @@ export function ConfirmSignupPage() {
       // Parse hash fragment for Supabase auth tokens
       const hash = location.hash.substring(1); // Remove leading #
       const params = new URLSearchParams(hash);
-      
+
       // Check for error from Supabase
       const error = params.get('error');
       const errorDescription = params.get('error_description');
-      
+
       if (error) {
         setState('error');
         setError(errorDescription || error);
@@ -48,7 +56,7 @@ export function ConfirmSignupPage() {
 
       setState('success');
       toast.success('Email verified successfully!');
-      
+
       // Wait a moment then redirect to app
       setTimeout(() => {
         navigate('/');
@@ -103,14 +111,19 @@ export function ConfirmSignupPage() {
             <div className="flex flex-col items-center justify-center py-8 space-y-6">
               <FaRegFaceSadTear className="h-12 w-12 text-destructive" />
               <div className="text-center space-y-2">
-                <p className="font-medium text-destructive">Verification Failed</p>
+                <p className="font-medium text-destructive">
+                  Verification Failed
+                </p>
                 <p className="text-sm text-muted-foreground">{error}</p>
               </div>
               <div className="flex flex-col gap-2 w-full">
                 <Button onClick={handleResend}>
                   Resend Confirmation Email
                 </Button>
-                <Button onClick={() => navigate('/auth/signin')} variant="ghost">
+                <Button
+                  onClick={() => navigate('/auth/signin')}
+                  variant="ghost"
+                >
                   Back to Sign In
                 </Button>
               </div>

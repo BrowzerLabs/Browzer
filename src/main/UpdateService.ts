@@ -1,4 +1,5 @@
 import { app, WebContents, dialog } from 'electron';
+
 import { autoUpdater, UpdateInfo, ProgressInfo } from 'electron-updater';
 import log from 'electron-log';
 
@@ -9,9 +10,7 @@ export class UpdateService {
   private downloadedUpdateInfo: UpdateInfo | null = null;
   private shouldShowNoUpdateDialog = false;
 
-  constructor(
-    webContents: WebContents
-  ) {
+  constructor(webContents: WebContents) {
     this.webContents = webContents;
     this.setupAutoUpdater();
 
@@ -21,15 +20,18 @@ export class UpdateService {
       repo: 'Browzer',
       releaseType: 'release',
     });
-    
+
     setTimeout(() => {
       this.checkForUpdates(false);
     }, 5000);
 
-    this.updateCheckInterval = setInterval(() => {
-      log.info('[Updater] Hourly update check triggered');
-      this.checkForUpdates(false);
-    }, 60 * 60 * 1000); // Every hour
+    this.updateCheckInterval = setInterval(
+      () => {
+        log.info('[Updater] Hourly update check triggered');
+        this.checkForUpdates(false);
+      },
+      60 * 60 * 1000
+    ); // Every hour
   }
 
   private setupAutoUpdater(): void {
@@ -53,8 +55,10 @@ export class UpdateService {
 
     autoUpdater.on('update-available', (info: UpdateInfo) => {
       const currentVersion = app.getVersion();
-      log.info(`[Updater] Update available: v${info.version} (current: v${currentVersion})`);
-      
+      log.info(
+        `[Updater] Update available: v${info.version} (current: v${currentVersion})`
+      );
+
       if (info.version === currentVersion) {
         log.warn('[Updater] Update version same as current, skipping');
         return;
@@ -74,33 +78,37 @@ export class UpdateService {
         detail: `Current version: ${currentVersion}\n\nThe update will be downloaded in the background. You'll be notified when it's ready to install.`,
         buttons: ['OK'],
         defaultId: 0,
-      })
+      });
     });
 
     autoUpdater.on('update-not-available', (info: UpdateInfo) => {
-      if(this.shouldShowNoUpdateDialog){
-        dialog.showMessageBox({
-          type: 'info',
-          title: 'Update Not Available',
-          message: `No updates available.`,
-          detail: `Current version: ${info.version}\n\n`,
-          buttons: ['OK'],
-          defaultId: 0,
-        }).then(() => {
-          this.shouldShowNoUpdateDialog = false;
-        });
+      if (this.shouldShowNoUpdateDialog) {
+        dialog
+          .showMessageBox({
+            type: 'info',
+            title: 'Update Not Available',
+            message: `No updates available.`,
+            detail: `Current version: ${info.version}\n\n`,
+            buttons: ['OK'],
+            defaultId: 0,
+          })
+          .then(() => {
+            this.shouldShowNoUpdateDialog = false;
+          });
       }
 
-      log.info(`[Updater] No updates available. Current version: ${info.version}`);
+      log.info(
+        `[Updater] No updates available. Current version: ${info.version}`
+      );
     });
 
     autoUpdater.on('download-progress', (progress: ProgressInfo) => {
       const { bytesPerSecond, percent, transferred, total } = progress;
-      
+
       log.info(
         `[Updater] Download progress: ${percent.toFixed(2)}% ` +
-        `(${this.formatBytes(transferred)}/${this.formatBytes(total)}) ` +
-        `@ ${this.formatBytes(bytesPerSecond)}/s`
+          `(${this.formatBytes(transferred)}/${this.formatBytes(total)}) ` +
+          `@ ${this.formatBytes(bytesPerSecond)}/s`
       );
 
       this.sendToRenderer('update:download-progress', {
@@ -127,22 +135,25 @@ export class UpdateService {
       });
 
       // Show install dialog
-      dialog.showMessageBox({
-        type: 'info',
-        title: 'Update Ready',
-        message: `Version ${info.version} has been downloaded`,
-        detail: 'The update is ready to install. Would you like to restart now or install it later?\n\nNote: The update will be automatically installed when you quit the app.',
-        buttons: ['Quit and Install', 'Install Later'],
-        defaultId: 0,
-        cancelId: 1,
-      }).then(result => {
-        if (result.response === 0) {
-          log.info('[Updater] User chose to install update now');
-          this.installUpdate();
-        } else {
-          log.info('[Updater] User chose to install update later');
-        }
-      })
+      dialog
+        .showMessageBox({
+          type: 'info',
+          title: 'Update Ready',
+          message: `Version ${info.version} has been downloaded`,
+          detail:
+            'The update is ready to install. Would you like to restart now or install it later?\n\nNote: The update will be automatically installed when you quit the app.',
+          buttons: ['Quit and Install', 'Install Later'],
+          defaultId: 0,
+          cancelId: 1,
+        })
+        .then((result) => {
+          if (result.response === 0) {
+            log.info('[Updater] User chose to install update now');
+            this.installUpdate();
+          } else {
+            log.info('[Updater] User chose to install update later');
+          }
+        });
     });
 
     autoUpdater.on('error', (error: Error) => {
@@ -157,12 +168,12 @@ export class UpdateService {
 
       // Show error dialog only for critical errors
       dialog.showMessageBox({
-          type: 'error',
-          title: 'Update Error',
-          message: 'Failed to check for updates',
-          detail: error.message,
-          buttons: ['OK'],
-        })
+        type: 'error',
+        title: 'Update Error',
+        message: 'Failed to check for updates',
+        detail: error.message,
+        buttons: ['OK'],
+      });
     });
   }
 
@@ -171,26 +182,30 @@ export class UpdateService {
    */
   public async checkForUpdates(isManual = false): Promise<void> {
     try {
-      log.info(`[Updater] ${isManual ? 'Manual' : 'Automatic'} update check initiated`);
+      log.info(
+        `[Updater] ${isManual ? 'Manual' : 'Automatic'} update check initiated`
+      );
 
       this.shouldShowNoUpdateDialog = isManual;
-      
+
       const result = await autoUpdater.checkForUpdates();
-      
+
       if (result && result.updateInfo) {
-        log.info(`[Updater] Check complete. Latest version: ${result.updateInfo.version}`);
+        log.info(
+          `[Updater] Check complete. Latest version: ${result.updateInfo.version}`
+        );
       }
     } catch (error) {
       log.error('[Updater] Error checking for updates:', error);
       this.shouldShowNoUpdateDialog = false;
-      
+
       dialog.showMessageBox({
-          type: 'error',
-          title: 'Update Error',
-          message: 'Failed to check for updates',
-          detail: error.message,
-          buttons: ['OK'],
-        })
+        type: 'error',
+        title: 'Update Error',
+        message: 'Failed to check for updates',
+        detail: error.message,
+        buttons: ['OK'],
+      });
     }
   }
 
@@ -206,22 +221,22 @@ export class UpdateService {
     try {
       log.info('[Updater] Starting update download...');
       this.isDownloading = true;
-      
+
       this.sendToRenderer('update:download-started');
-      
+
       await autoUpdater.downloadUpdate();
     } catch (error) {
       log.error('[Updater] Error downloading update:', error);
       this.isDownloading = false;
-      
+
       dialog.showMessageBox({
         type: 'error',
         title: 'Update Error',
         message: 'Failed to download update',
         detail: error.message,
         buttons: ['OK'],
-      })
-      
+      });
+
       throw error;
     }
   }
@@ -239,12 +254,14 @@ export class UpdateService {
         detail: `Current version: ${this.getCurrentVersion()}`,
         buttons: ['OK'],
         defaultId: 0,
-      })
+      });
       return;
     }
 
-    log.info(`[Updater] Installing update v${this.downloadedUpdateInfo.version} and restarting...`);
-    
+    log.info(
+      `[Updater] Installing update v${this.downloadedUpdateInfo.version} and restarting...`
+    );
+
     // This will quit the app and install the update
     autoUpdater.quitAndInstall(false, true);
   }
@@ -291,11 +308,11 @@ export class UpdateService {
    */
   private formatBytes(bytes: number): string {
     if (bytes === 0) return '0 B';
-    
+
     const k = 1024;
     const sizes = ['B', 'KB', 'MB', 'GB'];
     const i = Math.floor(Math.log(bytes) / Math.log(k));
-    
+
     return `${parseFloat((bytes / Math.pow(k, i)).toFixed(2))} ${sizes[i]}`;
   }
 

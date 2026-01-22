@@ -1,7 +1,13 @@
 import { Copy, Check } from 'lucide-react';
 import { useState } from 'react';
-import { InputGroup, InputGroupInput, InputGroupAddon, InputGroupButton } from '@/renderer/ui/input-group';
 import { toast } from 'sonner';
+
+import {
+  InputGroup,
+  InputGroupInput,
+  InputGroupAddon,
+  InputGroupButton,
+} from '@/renderer/ui/input-group';
 
 interface CopyableInputProps {
   value: string;
@@ -17,7 +23,7 @@ export function CopyableInput({ value, label, className }: CopyableInputProps) {
       await navigator.clipboard.writeText(value);
       setCopied(true);
       toast.success('Copied to clipboard');
-      
+
       // Reset the check icon after 2 seconds
       setTimeout(() => setCopied(false), 2000);
     } catch (error) {
@@ -29,28 +35,26 @@ export function CopyableInput({ value, label, className }: CopyableInputProps) {
   return (
     <div className={className}>
       {label && (
-        <label className='text-sm font-medium mb-2 block'>
-          {label}
-        </label>
+        <label className="text-sm font-medium mb-2 block">{label}</label>
       )}
       <InputGroup>
         <InputGroupInput
-          type='text'
+          type="text"
           value={value}
           readOnly
-          className='font-mono'
+          className="font-mono"
         />
-        <InputGroupAddon align='inline-end'>
+        <InputGroupAddon align="inline-end">
           <InputGroupButton
-            size='icon-sm'
+            size="icon-sm"
             onClick={handleCopy}
-            aria-label='Copy to clipboard'
-            title='Copy to clipboard'
+            aria-label="Copy to clipboard"
+            title="Copy to clipboard"
           >
             {copied ? (
-              <Check className='h-4 w-4 text-green-500' />
+              <Check className="h-4 w-4 text-green-500" />
             ) : (
-              <Copy className='h-4 w-4' />
+              <Copy className="h-4 w-4" />
             )}
           </InputGroupButton>
         </InputGroupAddon>

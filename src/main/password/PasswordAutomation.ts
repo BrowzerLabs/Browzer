@@ -1,4 +1,5 @@
 import { WebContentsView } from 'electron';
+
 import { PasswordManager } from './PasswordManager';
 import { FormDetectorService } from './services/FormDetectorService';
 import { PasswordAutofillService } from './services/PasswordAutofillService';
@@ -7,36 +8,44 @@ import { DetectedForm, FormSubmission } from './types';
 
 /**
  * PasswordAutomation - Modern password automation system
- * 
+ *
  * Orchestrates form detection, autofill, and save prompts
  */
 export class PasswordAutomation {
   private view: WebContentsView;
   private debugger: Electron.Debugger;
   private tabId: string;
-  
+
   private formDetector: FormDetectorService;
   private autofillService: PasswordAutofillService;
   private promptService: PasswordPromptService;
-  
+
   private isEnabled = false;
   private detectedForms: DetectedForm[] = [];
   private lastUrl = '';
   private selectedCredentialId?: string;
-  
-  private onCredentialSelected?: (tabId: string, credentialId: string, username: string) => void;
+
+  private onCredentialSelected?: (
+    tabId: string,
+    credentialId: string,
+    username: string
+  ) => void;
 
   constructor(
     view: WebContentsView,
     passwordManager: PasswordManager,
     tabId: string,
-    onCredentialSelected?: (tabId: string, credentialId: string, username: string) => void
+    onCredentialSelected?: (
+      tabId: string,
+      credentialId: string,
+      username: string
+    ) => void
   ) {
     this.view = view;
     this.debugger = view.webContents.debugger;
     this.tabId = tabId;
     this.onCredentialSelected = onCredentialSelected;
-    
+
     this.formDetector = new FormDetectorService(view);
     this.autofillService = new PasswordAutofillService(view, passwordManager);
     this.promptService = new PasswordPromptService(view, passwordManager);
@@ -44,15 +53,16 @@ export class PasswordAutomation {
 
   public async start(): Promise<void> {
     if (this.isEnabled) return;
-    
+
     try {
-      
       // Check if debugger is attached
       if (!this.debugger.isAttached()) {
-        console.log('[PasswordAutomation] Debugger not attached yet, skipping setup');
+        console.log(
+          '[PasswordAutomation] Debugger not attached yet, skipping setup'
+        );
         return;
       }
-      
+
       this.setupEventListeners();
       await this.scanPage();
       this.isEnabled = true;
@@ -63,7 +73,7 @@ export class PasswordAutomation {
 
   public async stop(): Promise<void> {
     if (!this.isEnabled) return;
-    
+
     try {
       this.debugger.removeAllListeners();
       this.detectedForms = [];
@@ -108,7 +118,11 @@ export class PasswordAutomation {
   private async scanPage(): Promise<void> {
     try {
       const currentUrl = this.view.webContents.getURL();
-      if (!currentUrl || currentUrl === 'about:blank' || currentUrl.startsWith('browzer://')) {
+      if (
+        !currentUrl ||
+        currentUrl === 'about:blank' ||
+        currentUrl.startsWith('browzer://')
+      ) {
         return;
       }
 
@@ -124,14 +138,17 @@ export class PasswordAutomation {
     }
   }
 
-  private async setupFormSubmissionMonitoring(forms: DetectedForm[]): Promise<void> {
+  private async setupFormSubmissionMonitoring(
+    forms: DetectedForm[]
+  ): Promise<void> {
     try {
-      const formData = forms.map(form => ({
+      const formData = forms.map((form) => ({
         formId: form.formId,
         formSelector: form.formSelector,
-        usernameSelector: form.usernameField?.selector || form.emailField?.selector,
+        usernameSelector:
+          form.usernameField?.selector || form.emailField?.selector,
         passwordSelector: form.passwordField?.selector,
-        origin: form.origin
+        origin: form.origin,
       }));
 
       await this.debugger.sendCommand('Runtime.evaluate', {
@@ -182,10 +199,13 @@ export class PasswordAutomation {
 
             console.log('[Browzer] Form monitoring setup');
           })();
-        `
+        `,
       });
     } catch (error) {
-      console.error('[PasswordAutomation] Error setting up form monitoring:', error);
+      console.error(
+        '[PasswordAutomation] Error setting up form monitoring:',
+        error
+      );
     }
   }
 
@@ -216,13 +236,18 @@ export class PasswordAutomation {
         this.handlePasswordDismiss();
       }
     } catch (error) {
-      console.error('[PasswordAutomation] Error handling console message:', error);
+      console.error(
+        '[PasswordAutomation] Error handling console message:',
+        error
+      );
     }
   }
 
   private async handleShowAutofill(message: string): Promise<void> {
     try {
-      const data = JSON.parse(message.replace('BROWZER_SHOW_AUTOFILL', '').trim());
+      const data = JSON.parse(
+        message.replace('BROWZER_SHOW_AUTOFILL', '').trim()
+      );
       await this.autofillService.showAutofillDropdown(
         data.suggestions,
         data.fieldRect,
@@ -235,7 +260,9 @@ export class PasswordAutomation {
 
   private async handleAutofillSelect(message: string): Promise<void> {
     try {
-      const data = JSON.parse(message.replace('BROWZER_AUTOFILL_SELECT', '').trim());
+      const data = JSON.parse(
+        message.replace('BROWZER_AUTOFILL_SELECT', '').trim()
+      );
       const { credentialId, username, origin } = data;
 
       this.selectedCredentialId = credentialId;
@@ -243,12 +270,15 @@ export class PasswordAutomation {
         this.onCredentialSelected(this.tabId, credentialId, username);
       }
 
-      const form = this.detectedForms.find(f => f.origin === origin);
+      const form = this.detectedForms.find((f) => f.origin === origin);
       if (form) {
         await this.autofillService.fillCredentials(credentialId, form);
       }
     } catch (error) {
-      console.error('[PasswordAutomation] Error handling autofill select:', error);
+      console.error(
+        '[PasswordAutomation] Error handling autofill select:',
+        error
+      );
     }
   }
 
@@ -267,7 +297,7 @@ export class PasswordAutomation {
         username: data.username,
         password: data.password,
         timestamp: data.timestamp,
-        url: this.view.webContents.getURL()
+        url: this.view.webContents.getURL(),
       };
 
       setTimeout(async () => {
@@ -281,8 +311,14 @@ export class PasswordAutomation {
 
   private async handlePasswordSave(message: string): Promise<void> {
     try {
-      const data = JSON.parse(message.replace('BROWZER_PASSWORD_SAVE', '').trim());
-      await this.promptService.handleSavePassword(data.origin, data.username, data.password);
+      const data = JSON.parse(
+        message.replace('BROWZER_PASSWORD_SAVE', '').trim()
+      );
+      await this.promptService.handleSavePassword(
+        data.origin,
+        data.username,
+        data.password
+      );
     } catch (error) {
       console.error('[PasswordAutomation] Error saving password:', error);
     }
@@ -290,8 +326,14 @@ export class PasswordAutomation {
 
   private async handlePasswordUpdate(message: string): Promise<void> {
     try {
-      const data = JSON.parse(message.replace('BROWZER_PASSWORD_UPDATE', '').trim());
-      await this.promptService.handleUpdatePassword(data.origin, data.username, data.password);
+      const data = JSON.parse(
+        message.replace('BROWZER_PASSWORD_UPDATE', '').trim()
+      );
+      await this.promptService.handleUpdatePassword(
+        data.origin,
+        data.username,
+        data.password
+      );
     } catch (error) {
       console.error('[PasswordAutomation] Error updating password:', error);
     }
@@ -299,7 +341,9 @@ export class PasswordAutomation {
 
   private handlePasswordNever(message: string): void {
     try {
-      const data = JSON.parse(message.replace('BROWZER_PASSWORD_NEVER', '').trim());
+      const data = JSON.parse(
+        message.replace('BROWZER_PASSWORD_NEVER', '').trim()
+      );
       this.promptService.handleNeverSave(data.origin);
     } catch (error) {
       console.error('[PasswordAutomation] Error handling never save:', error);

@@ -1,6 +1,5 @@
 import { AutomationStatus, ToolExecutionResult } from '@/shared/types';
 
-
 export interface AutomationStep {
   toolName: string;
   toolUseId: string;
@@ -8,25 +7,19 @@ export interface AutomationStep {
   order: number;
 }
 
-export interface ParsedAutomationPlan {
+export interface AutomationPlan {
   steps: AutomationStep[];
-  analysis?: string;
-  totalSteps: number;
-  planType: 'intermediate' | 'final';
-  metadataToolUseId?: string;
 }
 
 export interface ExecutedStep {
   stepNumber: number;
   toolName: string;
-  success: boolean;
   result?: ToolExecutionResult;
-  error?: string;
 }
 
 export interface CompletedPlan {
   phaseNumber: number;
-  plan: ParsedAutomationPlan;
+  plan: AutomationPlan;
   stepsExecuted: number;
 }
 
@@ -38,7 +31,7 @@ export interface PlanExecutionResult {
 
 export interface IterativeAutomationResult {
   success: boolean;
-  plan?: ParsedAutomationPlan;
+  plan?: AutomationPlan;
   executionResults: any[];
   error?: string;
   analysis?: string;

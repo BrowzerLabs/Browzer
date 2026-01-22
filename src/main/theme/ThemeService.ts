@@ -1,4 +1,5 @@
-import { nativeTheme } from 'electron';
+import { nativeTheme, BaseWindow } from 'electron';
+
 import Store from 'electron-store';
 
 type ThemeMode = 'light' | 'dark' | 'system';
@@ -8,25 +9,21 @@ interface ThemeStore {
 }
 
 export class ThemeService {
-  private static instance: ThemeService | null = null;
   private store: Store<ThemeStore>;
 
-  private constructor() {
+  public constructor(private baseWindow: BaseWindow) {
     this.store = new Store<ThemeStore>({
       name: 'theme-preferences',
       defaults: {
         theme: 'system',
-      }
+      },
     });
 
     this.applyTheme(this.getTheme());
-  }
 
-  public static getInstance(): ThemeService {
-    if (!ThemeService.instance) {
-      ThemeService.instance = new ThemeService();
-    }
-    return ThemeService.instance;
+    nativeTheme.on('updated', () => {
+      this.updateWindowTitleBarOverlay();
+    });
   }
 
   public getTheme(): ThemeMode {
@@ -40,8 +37,19 @@ export class ThemeService {
 
   private applyTheme(theme: ThemeMode): void {
     nativeTheme.themeSource = theme;
+    this.updateWindowTitleBarOverlay();
   }
-  
+
+  private updateWindowTitleBarOverlay(): void {
+    const isDark = nativeTheme.shouldUseDarkColors;
+    if (process.platform === 'win32') {
+      this.baseWindow.setTitleBarOverlay({
+        symbolColor: isDark ? '#ffffff' : '#000000',
+        height: 32,
+      });
+    }
+  }
+
   public isDarkMode(): boolean {
     return nativeTheme.shouldUseDarkColors;
   }
@@ -50,5 +58,11 @@ export class ThemeService {
     const handler = () => callback(nativeTheme.shouldUseDarkColors);
     nativeTheme.on('updated', handler);
     return () => nativeTheme.off('updated', handler);
+  }
+
+  public destroy() {
+    nativeTheme.off('updated', () => {
+      this.updateWindowTitleBarOverlay();
+    });
   }
 }

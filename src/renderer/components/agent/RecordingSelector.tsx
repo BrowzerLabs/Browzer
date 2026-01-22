@@ -1,5 +1,12 @@
 import React from 'react';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/renderer/ui/select';
+
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/renderer/ui/select';
 import { Badge } from '@/renderer/ui/badge';
 import { RecordingSession } from '@/shared/types';
 
@@ -14,10 +21,14 @@ export function RecordingSelector({
   sessions,
   selectedSession,
   onSessionChange,
-  disabled = false
+  disabled = false,
 }: RecordingSelectorProps) {
   return (
-    <Select value={selectedSession} onValueChange={onSessionChange} disabled={disabled}>
+    <Select
+      value={selectedSession}
+      onValueChange={onSessionChange}
+      disabled={disabled}
+    >
       <SelectTrigger className="w-full h-8 text-xs">
         <SelectValue placeholder="Select a recording..." />
       </SelectTrigger>

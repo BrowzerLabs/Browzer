@@ -1,12 +1,30 @@
-import { ArrowLeft, ArrowRight, RotateCw, X, Circle, Square, Settings, Clock, MoreVertical, Video, ChevronRight, ChevronLeft, Loader2, LogOut, DiamondIcon, Download, Bookmark } from 'lucide-react';
+import {
+  ArrowLeft,
+  ArrowRight,
+  RotateCw,
+  X,
+  Circle,
+  Settings,
+  MoreVertical,
+  Video,
+  ChevronRight,
+  ChevronLeft,
+  Loader2,
+  LogOut,
+  DiamondIcon,
+  Download,
+  Bookmark,
+  Clock,
+} from 'lucide-react';
+
 import type { TabInfo } from '@/shared/types';
 import { cn } from '@/renderer/lib/utils';
 import { useSidebarStore } from '@/renderer/store/useSidebarStore';
 import { useRecording } from '@/renderer/hooks/useRecording';
 import { useAuth } from '@/renderer/hooks/useAuth';
 import { useUpdateProgress } from '@/renderer/hooks/useUpdateProgress';
+import { useBrowserViewLayer } from '@/renderer/hooks/useBrowserViewLayer';
 import ThemeToggle from '@/renderer/ui/theme-toggle';
-import { Button } from '@/renderer/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/renderer/ui/avatar';
 import {
   DropdownMenu,
@@ -41,6 +59,7 @@ export function NavigationBar({
   const { isRecording, isLoading, toggleRecording } = useRecording();
   const { user, signOut, loading } = useAuth();
   const { isDownloading, progress, version } = useUpdateProgress();
+  const { createOverlayHandler } = useBrowserViewLayer();
 
   const handleSignOut = async () => {
     await signOut();
@@ -92,26 +111,32 @@ export function NavigationBar({
         favicon={activeTab?.favicon}
       />
 
-      {
-        isDownloading && (
-          <Tooltip>
-            <TooltipTrigger>
-              <p className="text-xs font-bold">{progress}%</p>
-            </TooltipTrigger>
-            <TooltipContent>
-              <p>Downloading update v{version} - {progress}%</p>
-            </TooltipContent>
-          </Tooltip>
-        )
-      }
+      {isDownloading && (
+        <Tooltip>
+          <TooltipTrigger>
+            <p className="text-xs font-bold">{progress}%</p>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>
+              Downloading update v{version} - {progress}%
+            </p>
+          </TooltipContent>
+        </Tooltip>
+      )}
 
       <DownloadsDropdown onNavigate={onNavigate} />
-      
+
       <Tooltip>
         <TooltipTrigger
           onClick={toggleRecording}
           disabled={isLoading}
-          title={isLoading ? 'Processing...' : isRecording ? 'Stop Recording' : 'Start Recording'}
+          title={
+            isLoading
+              ? 'Processing...'
+              : isRecording
+                ? 'Stop Recording'
+                : 'Start Recording'
+          }
           className={cn(
             'bg-red-50 dark:bg-red-950 p-2 rounded-full',
             isRecording && 'border-red-500',
@@ -126,64 +151,61 @@ export function NavigationBar({
             <Circle className="w-4 h-4 text-red-500" />
           )}
         </TooltipTrigger>
-      <TooltipContent>
+        <TooltipContent>
           {isRecording ? 'Stop Recording' : 'Start Recording'}
-      </TooltipContent>
+        </TooltipContent>
       </Tooltip>
 
       <ThemeToggle className="bg-blue-50 dark:bg-blue-950 p-2 rounded-full" />
 
       <Tooltip>
         <TooltipTrigger
-        onClick={toggleSidebar} 
-        className='bg-blue-50 dark:bg-blue-950 p-2 rounded-full'
-        title={isSidebarVisible ? 'Hide Agent Panel' : 'Show Agent Panel'}
-      >
-        {isSidebarVisible ? (
-          <ChevronRight className="w-4 h-4" />
-        ) : (
-          <ChevronLeft className="w-4 h-4" />
-        )}
+          onClick={toggleSidebar}
+          className="bg-blue-50 dark:bg-blue-950 p-2 rounded-full"
+          title={isSidebarVisible ? 'Hide Agent Panel' : 'Show Agent Panel'}
+        >
+          {isSidebarVisible ? (
+            <ChevronRight className="w-4 h-4" />
+          ) : (
+            <ChevronLeft className="w-4 h-4" />
+          )}
         </TooltipTrigger>
-      <TooltipContent>
+        <TooltipContent>
           {isSidebarVisible ? 'Hide Agent Panel' : 'Show Agent Panel'}
-      </TooltipContent>
+        </TooltipContent>
       </Tooltip>
-      <DropdownMenu
-        onOpenChange={(open) => {
-          if (open) {
-            void window.browserAPI.bringBrowserViewToFront();
-          } else {
-            void window.browserAPI.bringBrowserViewToBottom();
-          }
-        }}
-      >
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <DropdownMenuTrigger 
-                className='bg-blue-50 dark:bg-blue-950 p-2 rounded-full size-8'
-                asChild
-              >
-                <MoreVertical />
-              </DropdownMenuTrigger>
-            </TooltipTrigger>
-            <TooltipContent>
-              More options
-            </TooltipContent>
-          </Tooltip>
+      <DropdownMenu onOpenChange={createOverlayHandler('nav-more-menu')}>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <DropdownMenuTrigger
+              className="bg-blue-50 dark:bg-blue-950 p-2 rounded-full size-8"
+              asChild
+            >
+              <MoreVertical />
+            </DropdownMenuTrigger>
+          </TooltipTrigger>
+          <TooltipContent>More options</TooltipContent>
+        </Tooltip>
         <DropdownMenuContent align="end" className="w-56">
           <DropdownMenuItem onClick={() => onNavigate('browzer://profile')}>
             <Avatar className="size-7">
               <AvatarImage src={user?.photo_url || undefined} />
               <AvatarFallback className="bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-400 text-sm">
-                {user?.display_name 
-                  ? user.display_name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
+                {user?.display_name
+                  ? user.display_name
+                      .split(' ')
+                      .map((n) => n[0])
+                      .join('')
+                      .toUpperCase()
+                      .slice(0, 2)
                   : user?.email?.slice(0, 2).toUpperCase() || 'U'}
               </AvatarFallback>
             </Avatar>
             {user?.display_name || 'Profile'}
           </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => onNavigate('browzer://subscription')}>
+          <DropdownMenuItem
+            onClick={() => onNavigate('browzer://subscription')}
+          >
             <DiamondIcon className="w-4 h-4 mr-2" />
             Subscription
           </DropdownMenuItem>
@@ -209,16 +231,11 @@ export function NavigationBar({
             <Video className="w-4 h-4 mr-2" />
             Recordings
           </DropdownMenuItem>
-          
-          <DropdownMenuItem onClick={() => onNavigate('browzer://automation')}>
-            <Clock className="w-4 h-4 mr-2" />
-            Automation
-          </DropdownMenuItem>
           <DropdownMenuSeparator />
-          <DropdownMenuItem 
+          <DropdownMenuItem
             onClick={handleSignOut}
             disabled={loading}
-            variant='destructive'
+            variant="destructive"
           >
             {loading ? (
               <Loader2 className="w-4 h-4 mr-2 animate-spin" />

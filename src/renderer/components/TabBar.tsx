@@ -18,11 +18,13 @@ import {
   arrayMove,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+
 import type { TabGroup, TabInfo } from '@/shared/types';
 import { cn } from '@/renderer/lib/utils';
 import { Button } from '@/renderer/ui/button';
 import { GROUP_COLORS, LAYOUT } from '@/shared/constants/tabs';
 import { ICON_MAP } from '@/shared/routes';
+import { useBrowserViewLayer } from '@/renderer/hooks/useBrowserViewLayer';
 import {
   ContextMenu,
   ContextMenuContent,
@@ -53,18 +55,22 @@ interface TabBarProps {
   onMoveTabLeft?: () => void;
   onMoveTabRight?: () => void;
   onCreateGroup?: (name?: string, color?: string) => Promise<TabGroup>;
-  onUpdateGroup?: (groupId: string, name?: string, color?: string) => Promise<boolean>;
+  onUpdateGroup?: (
+    groupId: string,
+    name?: string,
+    color?: string
+  ) => Promise<boolean>;
   onAssignGroup?: (tabId: string, groupId: string | null) => Promise<boolean>;
   onRemoveTabGroup?: (groupId: string) => Promise<boolean>;
   onToggleGroupCollapse?: (groupId: string) => Promise<boolean>;
 }
 
-export function TabBar({ 
-  tabs, 
-  activeTabId, 
+export function TabBar({
+  tabs,
+  activeTabId,
   tabGroups,
-  onTabClick, 
-  onTabClose, 
+  onTabClick,
+  onTabClose,
   onNewTab,
   onMoveTabLeft,
   onMoveTabRight,
@@ -76,90 +82,89 @@ export function TabBar({
 }: TabBarProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [tabWidth, setTabWidth] = useState<number>(LAYOUT.MAX_TAB_WIDTH);
+  const [shouldFixButton, setShouldFixButton] = useState<boolean>(false);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [localTabs, setLocalTabs] = useState(tabs);
-  
+
   const visibleTabs = localTabs.filter((tab) => {
     if (!tab.group) return true;
     if (!tab.group.collapsed) return true;
     if (tab.id === activeTabId) return true;
-    
-    const activeTabInGroup = localTabs.find(t => t.group?.id === tab.group?.id && t.id === activeTabId);
+
+    const activeTabInGroup = localTabs.find(
+      (t) => t.group?.id === tab.group?.id && t.id === activeTabId
+    );
     if (activeTabInGroup) return false;
-    
-    const firstGroupIndex = localTabs.findIndex(t => t.group?.id === tab.group?.id);
+
+    const firstGroupIndex = localTabs.findIndex(
+      (t) => t.group?.id === tab.group?.id
+    );
     return localTabs[firstGroupIndex].id === tab.id;
   });
 
-  // Calculate group labels separately - find first visible tab for each group
-  const groupLabels = new Map<string, { group: TabGroup; firstTabId: string }>();
-  visibleTabs.forEach((tab) => {
-    if (tab.group && !groupLabels.has(tab.group.id)) {
-      groupLabels.set(tab.group.id, { group: tab.group, firstTabId: tab.id });
-    }
-  });
-
   const [isFullScreen, setIsFullScreen] = useState(false);
-  const [pendingGroupTabId, setPendingGroupTabId] = useState<string | null>(null);
+  const [platform, setPlatform] = useState<'darwin' | 'win32' | 'linux'>(
+    'darwin'
+  );
+  const [pendingGroupTabId, setPendingGroupTabId] = useState<string | null>(
+    null
+  );
   const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
   const [isGroupDialogOpen, setIsGroupDialogOpen] = useState(false);
   const [newGroupName, setNewGroupName] = useState('');
   const [newGroupColor, setNewGroupColor] = useState<string>(GROUP_COLORS[0]);
-  const overlayRefs = useRef(new Set<string>());
+  const { createOverlayHandler } = useBrowserViewLayer();
 
-  const updateOverlayLayer = useCallback(() => {
-    const hasOverlay = overlayRefs.current.size > 0;
-    if (hasOverlay) {
-      void window.browserAPI.bringBrowserViewToFront();
-    } else {
-      void window.browserAPI.bringBrowserViewToBottom();
-    }
-  }, []);
+  const handleMenuOpenChange = createOverlayHandler('tab-menu');
+  const handleGroupDialogChange = createOverlayHandler('tab-group-dialog');
 
-  const toggleOverlay = useCallback((id: string, open: boolean) => {
-    if (open) {
-      overlayRefs.current.add(id);
-    } else {
-      overlayRefs.current.delete(id);
-    }
-    updateOverlayLayer();
-  }, [updateOverlayLayer]);
+  const handleGroupDialogOpenChange = useCallback(
+    (open: boolean) => {
+      setIsGroupDialogOpen(open);
+      handleGroupDialogChange(open);
+      if (!open) {
+        setPendingGroupTabId(null);
+        setEditingGroupId(null);
+        setNewGroupName('');
+      }
+    },
+    [handleGroupDialogChange]
+  );
 
-  const handleMenuOpenChange = useCallback((open: boolean) => {
-    toggleOverlay('tab-menu', open);
-  }, [toggleOverlay]);
-
-  const handleGroupDialogOpenChange = useCallback((open: boolean) => {
-    setIsGroupDialogOpen(open);
-    toggleOverlay('group-dialog', open);
-    if (!open) {
-      setPendingGroupTabId(null);
-      setEditingGroupId(null);
+  const startCreateGroup = useCallback(
+    (tabId: string) => {
+      setPendingGroupTabId(tabId);
       setNewGroupName('');
-    }
-  }, [toggleOverlay]);
+      const nextColor = GROUP_COLORS[tabGroups.length % GROUP_COLORS.length];
+      setNewGroupColor(nextColor);
+      handleGroupDialogOpenChange(true);
+    },
+    [tabGroups.length, handleGroupDialogOpenChange]
+  );
 
-  const startCreateGroup = useCallback((tabId: string) => {
-    setPendingGroupTabId(tabId);
-    setNewGroupName('');
-    const nextColor = GROUP_COLORS[(tabGroups.length) % GROUP_COLORS.length];
-    setNewGroupColor(nextColor);
-    handleGroupDialogOpenChange(true);
-  }, [tabGroups.length, handleGroupDialogOpenChange]);
-
-  const startEditGroup = useCallback((group: TabGroup) => {
-    setEditingGroupId(group.id);
-    setNewGroupName(group.name);
-    setNewGroupColor(group.color);
-    handleGroupDialogOpenChange(true);
-  }, [handleGroupDialogOpenChange]);
+  const startEditGroup = useCallback(
+    (group: TabGroup) => {
+      setEditingGroupId(group.id);
+      setNewGroupName(group.name);
+      setNewGroupColor(group.color);
+      handleGroupDialogOpenChange(true);
+    },
+    [handleGroupDialogOpenChange]
+  );
 
   const handleCreateGroupSubmit = useCallback(async () => {
     try {
       if (editingGroupId && onUpdateGroup) {
-        await onUpdateGroup(editingGroupId, newGroupName.trim() || undefined, newGroupColor);
+        await onUpdateGroup(
+          editingGroupId,
+          newGroupName.trim() || undefined,
+          newGroupColor
+        );
       } else if (onCreateGroup) {
-        const group = await onCreateGroup(newGroupName.trim() || undefined, newGroupColor);
+        const group = await onCreateGroup(
+          newGroupName.trim() || undefined,
+          newGroupColor
+        );
         if (group && pendingGroupTabId) {
           await onAssignGroup?.(pendingGroupTabId, group.id);
         }
@@ -169,13 +174,25 @@ export function TabBar({
     } finally {
       handleGroupDialogOpenChange(false);
     }
-  }, [newGroupColor, newGroupName, onAssignGroup, onCreateGroup, onUpdateGroup, editingGroupId, pendingGroupTabId, handleGroupDialogOpenChange]);
-  
+  }, [
+    newGroupColor,
+    newGroupName,
+    onAssignGroup,
+    onCreateGroup,
+    onUpdateGroup,
+    editingGroupId,
+    pendingGroupTabId,
+    handleGroupDialogOpenChange,
+  ]);
+
   useEffect(() => {
     setLocalTabs(tabs);
   }, [tabs]);
 
   useEffect(() => {
+    const detectedPlatform = window.browserAPI.getPlatform();
+    setPlatform(detectedPlatform);
+
     const initFullScreenState = async () => {
       try {
         const fullScreen = await window.browserAPI.isFullScreen?.();
@@ -190,14 +207,20 @@ export function TabBar({
     const unsubscribe =
       window.browserAPI.onFullScreenChanged?.((full: boolean) => {
         setIsFullScreen(full);
-      }) ?? (() => {});
+      }) ??
+      (() => {
+        // No-op unsubscribe when listener is not available
+      });
 
     initFullScreenState();
 
     return () => unsubscribe();
   }, []);
-  
-  const gap = visibleTabs.length > LAYOUT.COMPACT_THRESHOLD ? LAYOUT.GAP_COMPACT : LAYOUT.GAP_NORMAL;
+
+  const gap =
+    visibleTabs.length > LAYOUT.COMPACT_THRESHOLD
+      ? LAYOUT.GAP_COMPACT
+      : LAYOUT.GAP_NORMAL;
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -218,16 +241,21 @@ export function TabBar({
   const handleDragEnd = async (event: DragEndEvent) => {
     const { active, over } = event;
     setActiveId(null);
-    
+
     if (!over || active.id === over.id) return;
 
-    const realOldIndex = localTabs.findIndex(t => t.id === active.id);
-    const realNewIndex = localTabs.findIndex(t => t.id === over.id);
-    
-    if (realOldIndex === -1 || realNewIndex === -1 || realOldIndex === realNewIndex) return;
-    
-    setLocalTabs(prev => arrayMove(prev, realOldIndex, realNewIndex));
-    
+    const realOldIndex = localTabs.findIndex((t) => t.id === active.id);
+    const realNewIndex = localTabs.findIndex((t) => t.id === over.id);
+
+    if (
+      realOldIndex === -1 ||
+      realNewIndex === -1 ||
+      realOldIndex === realNewIndex
+    )
+      return;
+
+    setLocalTabs((prev) => arrayMove(prev, realOldIndex, realNewIndex));
+
     try {
       await window.browserAPI.reorderTab(active.id as string, realNewIndex);
     } catch (error) {
@@ -236,17 +264,20 @@ export function TabBar({
     }
   };
 
-  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
-    if ((e.ctrlKey || e.metaKey) && e.shiftKey) {
-      if (e.key === 'ArrowLeft') {
-        e.preventDefault();
-        onMoveTabLeft?.();
-      } else if (e.key === 'ArrowRight') {
-        e.preventDefault();
-        onMoveTabRight?.();
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey) {
+        if (e.key === 'ArrowLeft') {
+          e.preventDefault();
+          onMoveTabLeft?.();
+        } else if (e.key === 'ArrowRight') {
+          e.preventDefault();
+          onMoveTabRight?.();
+        }
       }
-    }
-  }, [onMoveTabLeft, onMoveTabRight]);
+    },
+    [onMoveTabLeft, onMoveTabRight]
+  );
 
   useEffect(() => {
     const calculateTabWidth = () => {
@@ -256,115 +287,180 @@ export function TabBar({
       if (tabCount === 0) return;
 
       const containerWidth = containerRef.current.offsetWidth;
-      const currentGap = tabCount > LAYOUT.COMPACT_THRESHOLD ? LAYOUT.GAP_COMPACT : LAYOUT.GAP_NORMAL;
+      const currentGap =
+        tabCount > LAYOUT.COMPACT_THRESHOLD
+          ? LAYOUT.GAP_COMPACT
+          : LAYOUT.GAP_NORMAL;
       const gapSpace = (tabCount - 1) * currentGap;
-      const paddingLeft = isFullScreen ? 2 : LAYOUT.PADDING_LEFT;
-      
-      const availableSpace = containerWidth - paddingLeft - LAYOUT.PADDING_RIGHT - LAYOUT.NEW_TAB_BUTTON_SPACE - gapSpace;
-      const calculatedWidth = Math.floor(availableSpace / tabCount);
-      
-      setTabWidth(Math.max(LAYOUT.MIN_TAB_WIDTH, Math.min(LAYOUT.MAX_TAB_WIDTH, calculatedWidth)));
+
+      const isMac = platform === 'darwin';
+      const isWindows = platform === 'win32';
+      const paddingLeft = isFullScreen ? 2 : isMac ? LAYOUT.PADDING_LEFT : 8;
+      const paddingRight = isWindows
+        ? LAYOUT.WINDOWS_CONTROLS_WIDTH
+        : LAYOUT.PADDING_RIGHT;
+
+      const availableSpace =
+        containerWidth -
+        paddingLeft -
+        paddingRight -
+        LAYOUT.NEW_TAB_BUTTON_SPACE -
+        gapSpace;
+      const calculatedWidthFixed = Math.floor(availableSpace / tabCount);
+
+      // Allow tabs to shrink down to just show favicon + minimal padding (16px icon + 8px padding (px-1) = 24px minimum)
+      const minRequiredWidth = 24;
+      setTabWidth(
+        Math.max(
+          minRequiredWidth,
+          Math.min(LAYOUT.MAX_TAB_WIDTH, calculatedWidthFixed)
+        )
+      );
     };
 
     calculateTabWidth();
     window.addEventListener('resize', calculateTabWidth);
     return () => window.removeEventListener('resize', calculateTabWidth);
-  }, [visibleTabs.length, isFullScreen]);
+  }, [visibleTabs.length, isFullScreen, platform]);
 
-  const activeTab = activeId ? localTabs.find(t => t.id === activeId) : null;
+  const activeTab = activeId ? localTabs.find((t) => t.id === activeId) : null;
 
   return (
     <>
-      <div 
+      <div
         ref={containerRef}
         className={cn(
-          'flex items-center h-9 pr-2 tab-bar-draggable overflow-hidden bg-background',
-          isFullScreen ? 'pl-2' : 'pl-20'
+          'flex items-center h-9 tab-bar-draggable overflow-hidden bg-background',
+          isFullScreen
+            ? 'pl-2 pr-2'
+            : platform === 'darwin'
+              ? 'pl-20 pr-2'
+              : 'pl-2 pr-36'
         )}
-        style={{ gap: `${gap}px` }}
         onDoubleClick={handleDoubleClick}
         onKeyDown={handleKeyDown}
         role="tablist"
         aria-label="Browser tabs"
       >
-        <DndContext
-          sensors={sensors}
-          collisionDetection={closestCenter}
-          onDragStart={handleDragStart}
-          onDragEnd={handleDragEnd}
+        <div
+          className={cn(
+            'flex items-center',
+            shouldFixButton ? 'flex-1 overflow-hidden pr-2' : 'overflow-hidden'
+          )}
+          style={{
+            gap: `${gap}px`,
+            paddingRight: shouldFixButton ? '0' : '8px',
+          }}
         >
-          <SortableContext items={visibleTabs.map(t => t.id)} strategy={horizontalListSortingStrategy}>
-            {visibleTabs.flatMap((tab, index) => {
-              const prevTab = index > 0 ? visibleTabs[index - 1] : null;
-              const isGroupStart = tab.group && (!prevTab || prevTab.group?.id !== tab.group.id);
-              const groupLabelInfo = isGroupStart && tab.group ? groupLabels.get(tab.group.id) : null;
-              // Only show group label if this tab is actually the first tab of this group
-              const shouldShowGroupLabel = groupLabelInfo && groupLabelInfo.firstTabId === tab.id;
-              
-              return [
-                shouldShowGroupLabel && (
-                  <GroupLabel
-                    key={`group-label-${groupLabelInfo.group.id}`}
-                    group={groupLabelInfo.group}
-                    isCollapsed={tab.group?.collapsed && tab.id !== activeTabId}
-                    onToggleCollapse={() => tab.group?.id ? onToggleGroupCollapse?.(tab.group.id) : undefined}
-                    onEditGroup={() => tab.group ? startEditGroup(tab.group) : undefined}
-                    onDeleteGroup={() => tab.group?.id ? onRemoveTabGroup?.(tab.group.id) : undefined}
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragStart={handleDragStart}
+            onDragEnd={handleDragEnd}
+          >
+            <SortableContext
+              items={visibleTabs.map((t) => t.id)}
+              strategy={horizontalListSortingStrategy}
+            >
+              {visibleTabs.map((tab) => {
+                const index = visibleTabs.indexOf(tab);
+                const prevTab = index > 0 ? visibleTabs[index - 1] : null;
+                const isGroupStart =
+                  tab.group && (!prevTab || prevTab.group?.id !== tab.group.id);
+
+                return (
+                  <SortableTab
+                    key={tab.id}
+                    tab={tab}
+                    isActive={tab.id === activeTabId}
+                    isDragging={tab.id === activeId}
+                    onClick={() => onTabClick(tab.id)}
+                    onClose={() => onTabClose(tab.id)}
+                    width={tabWidth}
+                    tabGroups={tabGroups}
+                    isGroupStart={!!isGroupStart}
+                    isGroupCollapsed={
+                      tab.group?.collapsed && tab.id !== activeTabId
+                    }
+                    isAnyDragging={activeId !== null}
+                    onAssignGroup={(groupId) =>
+                      onAssignGroup?.(tab.id, groupId)
+                    }
+                    onCreateGroupRequested={() => startCreateGroup(tab.id)}
+                    onEditGroupRequested={() =>
+                      tab.group ? startEditGroup(tab.group) : undefined
+                    }
                     onMenuOpenChange={(open) => handleMenuOpenChange(open)}
+                    onRemoveGroup={() => onAssignGroup?.(tab.id, null)}
+                    onDeleteGroup={() =>
+                      tab.group?.id
+                        ? onRemoveTabGroup?.(tab.group.id)
+                        : undefined
+                    }
+                    onToggleCollapse={() =>
+                      tab.group?.id
+                        ? onToggleGroupCollapse?.(tab.group.id)
+                        : undefined
+                    }
                   />
-                ),
-                <SortableTab
-                  key={tab.id}
-                  tab={tab}
-                  isActive={tab.id === activeTabId}
-                  isDragging={tab.id === activeId}
-                  onClick={() => onTabClick(tab.id)}
-                  onClose={() => onTabClose(tab.id)}
+                );
+              })}
+            </SortableContext>
+
+            <DragOverlay>
+              {activeTab ? (
+                <TabContent
+                  tab={activeTab}
+                  isActive={activeTab.id === activeTabId}
                   width={tabWidth}
-                  tabGroups={tabGroups}
-                  isGroupCollapsed={tab.group?.collapsed && tab.id !== activeTabId}
-                  isAnyDragging={activeId !== null}
-                  onAssignGroup={(groupId) => onAssignGroup?.(tab.id, groupId)}
-                  onCreateGroupRequested={() => startCreateGroup(tab.id)}
-                  onEditGroupRequested={() => tab.group ? startEditGroup(tab.group) : undefined}
-                  onMenuOpenChange={(open) => handleMenuOpenChange(open)}
-                  onRemoveGroup={() => onAssignGroup?.(tab.id, null)}
-                  onDeleteGroup={() => tab.group?.id ? onRemoveTabGroup?.(tab.group.id) : undefined}
-                  onToggleCollapse={() => tab.group?.id ? onToggleGroupCollapse?.(tab.group.id) : undefined}
+                  isOverlay
                 />
-              ].filter(Boolean);
-            })}
-          </SortableContext>
+              ) : null}
+            </DragOverlay>
+          </DndContext>
 
-          <DragOverlay>
-            {activeTab ? (
-              <TabContent
-                tab={activeTab}
-                isActive={activeTab.id === activeTabId}
-                width={tabWidth}
-                isOverlay
-              />
-            ) : null}
-          </DragOverlay>
-        </DndContext>
+          {!shouldFixButton && (
+            <Button
+              onClick={onNewTab}
+              title="New Tab (Ctrl+T)"
+              size="icon-sm"
+              variant="outline"
+              className="interactive flex-shrink-0"
+            >
+              <Plus className="w-4 h-4" />
+            </Button>
+          )}
+        </div>
 
-        <Button
-          onClick={onNewTab}
-          title="New Tab (Ctrl+T)"
-          size='icon-sm'
-          variant='outline'
-          className="interactive"
-        >
-          <Plus className="w-4 h-4" />
-        </Button>
+        {shouldFixButton && (
+          <Button
+            onClick={onNewTab}
+            title="New Tab (Ctrl+T)"
+            size="icon-sm"
+            variant="outline"
+            className="interactive flex-shrink-0"
+          >
+            <Plus className="w-4 h-4" />
+          </Button>
+        )}
       </div>
 
-      <Dialog open={isGroupDialogOpen} onOpenChange={handleGroupDialogOpenChange}>
-        <DialogContent className="max-w-sm" onOpenAutoFocus={(e) => e.preventDefault()}>
+      <Dialog
+        open={isGroupDialogOpen}
+        onOpenChange={handleGroupDialogOpenChange}
+      >
+        <DialogContent
+          className="max-w-sm"
+          onOpenAutoFocus={(e) => e.preventDefault()}
+        >
           <DialogHeader>
-            <DialogTitle>{editingGroupId ? 'Edit group' : 'New group'}</DialogTitle>
+            <DialogTitle>
+              {editingGroupId ? 'Edit group' : 'New group'}
+            </DialogTitle>
             <DialogDescription className="text-sm">
-              {editingGroupId ? 'Update the label and color for this group.' : 'Create a clean label and color, then assign it to the tab.'}
+              {editingGroupId
+                ? 'Update the label and color for this group.'
+                : 'Create a clean label and color, then assign it to the tab.'}
             </DialogDescription>
           </DialogHeader>
 
@@ -402,7 +498,10 @@ export function TabBar({
           </div>
 
           <DialogFooter className="mt-2">
-            <Button variant="outline" onClick={() => handleGroupDialogOpenChange(false)}>
+            <Button
+              variant="outline"
+              onClick={() => handleGroupDialogOpenChange(false)}
+            >
               Cancel
             </Button>
             <Button onClick={handleCreateGroupSubmit}>
@@ -430,26 +529,46 @@ interface SortableTabProps {
   onRemoveGroup?: () => void;
   onDeleteGroup?: () => void;
   onToggleCollapse?: () => void;
+  isGroupStart?: boolean;
   isGroupCollapsed?: boolean;
   isAnyDragging?: boolean;
 }
 
-interface GroupLabelProps {
-  group: TabGroup;
-  isCollapsed: boolean;
-  onToggleCollapse?: () => void;
-  onEditGroup?: () => void;
-  onDeleteGroup?: () => void;
-  onMenuOpenChange?: (open: boolean) => void;
-}
+function SortableTab({
+  tab,
+  isActive,
+  isDragging,
+  onClick,
+  onClose,
+  width,
+  tabGroups,
+  onAssignGroup,
+  onCreateGroupRequested,
+  onEditGroupRequested,
+  onMenuOpenChange,
+  onRemoveGroup,
+  onDeleteGroup,
+  onToggleCollapse,
+  isGroupStart,
+  isGroupCollapsed,
+  isAnyDragging,
+}: SortableTabProps) {
+  const { attributes, listeners, setNodeRef, transform, transition } =
+    useSortable({ id: tab.id });
 
-function GroupLabel({ group, isCollapsed, onToggleCollapse, onEditGroup, onDeleteGroup, onMenuOpenChange }: GroupLabelProps) {
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    width: isGroupCollapsed ? 'auto' : `${width}px`,
+    minWidth: isGroupCollapsed ? 'auto' : '24px',
+  };
+
   const groupContextMenu = (
     <ContextMenuContent className="w-48">
       <ContextMenuItem onSelect={() => onToggleCollapse?.()}>
-        {isCollapsed ? 'Expand group' : 'Collapse group'}
+        {isGroupCollapsed ? 'Expand group' : 'Collapse group'}
       </ContextMenuItem>
-      <ContextMenuItem onSelect={() => onEditGroup?.()}>
+      <ContextMenuItem onSelect={() => onEditGroupRequested?.()}>
         Edit group name
       </ContextMenuItem>
       <ContextMenuSeparator />
@@ -458,53 +577,6 @@ function GroupLabel({ group, isCollapsed, onToggleCollapse, onEditGroup, onDelet
       </ContextMenuItem>
     </ContextMenuContent>
   );
-
-  return (
-    <motion.div
-      key={`group-label-${group.id}`}
-      layout="position"
-      initial={false}
-      transition={{
-        layout: { duration: 0.2, ease: "easeInOut" }
-      }}
-    >
-      <ContextMenu onOpenChange={onMenuOpenChange}>
-        <ContextMenuTrigger asChild>
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onToggleCollapse?.();
-            }}
-            className={cn(
-              "flex items-center px-2 h-7 rounded-sm mr-0.5 whitespace-nowrap text-xs font-medium text-white shadow-sm transition-opacity hover:opacity-90",
-              "interactive focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-blue-500"
-            )}
-            style={{ backgroundColor: group.color }}
-            title={isCollapsed ? "Expand group" : "Collapse group"}
-          >
-            {group.name}
-          </button>
-        </ContextMenuTrigger>
-        {groupContextMenu}
-      </ContextMenu>
-    </motion.div>
-  );
-}
-
-function SortableTab({ tab, isActive, isDragging, onClick, onClose, width, tabGroups, onAssignGroup, onCreateGroupRequested, onEditGroupRequested, onMenuOpenChange, onRemoveGroup, onDeleteGroup, onToggleCollapse, isGroupCollapsed, isAnyDragging }: SortableTabProps) {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-  } = useSortable({ id: tab.id });
-
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    width: isGroupCollapsed ? 'auto' : `${width}px`,
-  };
 
   const tabContextMenu = (
     <ContextMenuContent className="w-48">
@@ -564,13 +636,38 @@ function SortableTab({ tab, isActive, isDragging, onClick, onClose, width, tabGr
   );
 
   return (
-    <motion.div 
+    <motion.div
       className="flex items-center gap-0.5"
-      layout={!isAnyDragging ? "position" : false}
+      layout={!isAnyDragging ? 'position' : false}
       transition={{
-        layout: { duration: 0.2, ease: "easeInOut" }
+        layout: { duration: 0.2, ease: 'easeInOut' },
       }}
     >
+      {isGroupStart && tab.group && (
+        <ContextMenu onOpenChange={onMenuOpenChange}>
+          <ContextMenuTrigger asChild>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onToggleCollapse?.();
+              }}
+              {...(isGroupCollapsed
+                ? { ref: setNodeRef, ...attributes, ...listeners }
+                : {})}
+              className={cn(
+                'flex items-center px-2 h-7 rounded-sm mr-0.5 whitespace-nowrap text-xs font-medium text-white shadow-sm transition-opacity hover:opacity-90',
+                'interactive focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-blue-500'
+              )}
+              style={{ backgroundColor: tab.group.color }}
+              title={isGroupCollapsed ? 'Expand group' : 'Collapse group'}
+            >
+              {tab.group.name}
+            </button>
+          </ContextMenuTrigger>
+          {groupContextMenu}
+        </ContextMenu>
+      )}
+
       {!isGroupCollapsed && (
         <ContextMenu onOpenChange={onMenuOpenChange}>
           <ContextMenuTrigger asChild>
@@ -584,43 +681,53 @@ function SortableTab({ tab, isActive, isDragging, onClick, onClose, width, tabGr
               aria-selected={isActive}
               tabIndex={isActive ? 0 : -1}
               className={cn(
-                'relative flex items-center gap-1.5 h-7 px-2.5 rounded-xl group tab-item flex-shrink-0',
+                'relative flex items-center h-7 rounded-xl group tab-item flex-shrink-0 min-w-0',
                 'transition-colors duration-150',
                 isDragging && 'opacity-40',
                 isActive
                   ? 'dark:bg-slate-900 bg-slate-50'
-                  : 'bg-slate-300 dark:bg-slate-600 dark:hover:bg-[#2a2a2a]'
+                  : 'bg-slate-300 dark:bg-slate-600 dark:hover:bg-[#2a2a2a]',
+                // Reduce padding and gap at small widths to fit icon
+                width <= 45 ? 'px-1 gap-0.5 justify-center' : 'px-2.5 gap-1.5'
               )}
             >
               {/* Colored border for grouped tabs */}
               {tab.group && (
-                <div 
+                <div
                   className="absolute inset-0 rounded-xl pointer-events-none"
-                  style={{ 
+                  style={{
                     border: `2px solid ${tab.group.color}`,
                   }}
                 />
               )}
-              
-              <TabIcon tab={tab} />
-              
-              {width > 100 && (
+
+              {/* When width <= 45 and tab is active, show only close button. Otherwise show favicon */}
+              {!(width <= 45 && isActive) && <TabIcon tab={tab} />}
+
+              {width > 70 && (
                 <span className="flex-1 truncate text-sm min-w-0 z-10">
-                  {tab.isLoading ? <span className="text-gray-500">Loading...</span> : tab.title || 'New Tab'}
+                  {tab.isLoading ? (
+                    <span className="text-gray-500">Loading...</span>
+                  ) : (
+                    tab.title || 'New Tab'
+                  )}
                 </span>
               )}
 
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onClose();
-                }}
-                className="flex items-center justify-center size-5 rounded-full hover:bg-slate-200 dark:hover:bg-slate-600 z-10"
-                title="Close Tab (Ctrl+W)"
-                aria-label={`Close ${tab.title || 'tab'}`}
-              >
-                <X className="w-3 h-3" />
-              </button>
+              {/* Show close button when: width > 45 (enough space for favicon + close) OR (tab is active) */}
+              {(width > 45 || isActive) && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onClose();
+                  }}
+                  className="flex items-center justify-center size-5 rounded-full hover:bg-slate-200 dark:hover:bg-slate-600 z-10"
+                  title="Close Tab (Ctrl+W)"
+                  aria-label={`Close ${tab.title || 'tab'}`}
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              )}
             </div>
           </ContextMenuTrigger>
           {tabContextMenu}
@@ -648,15 +755,18 @@ function TabContent({ tab, isActive, width, isOverlay }: TabContentProps) {
     <div
       style={style}
       className={cn(
-        'relative flex items-center gap-1.5 h-7 px-2.5 rounded-xl group tab-item flex-shrink-0',
+        'relative flex items-center h-7 rounded-xl group tab-item flex-shrink-0',
         isOverlay && 'shadow-lg scale-105',
         isActive
           ? 'dark:bg-slate-900 bg-slate-50'
-          : 'bg-slate-300 dark:bg-slate-600'
+          : 'bg-slate-300 dark:bg-slate-600',
+        // Reduce padding and gap at small widths to fit icon
+        width <= 45 ? 'px-1 gap-0.5 justify-center' : 'px-2.5 gap-1.5'
       )}
     >
       {tab.group?.color && <GroupBadge color={tab.group.color} />}
-      <TabIcon tab={tab} />
+      {/* When width <= 45 and tab is active, show only close button. Otherwise show favicon */}
+      {!(width <= 45 && isActive) && <TabIcon tab={tab} />}
       {tab.group && (
         <span
           className="px-2 py-[3px] text-[10px] font-medium rounded-full border"
@@ -669,16 +779,22 @@ function TabContent({ tab, isActive, width, isOverlay }: TabContentProps) {
           {tab.group.name}
         </span>
       )}
-      
-      {width > 100 && (
+
+      {width > 70 && (
         <span className="flex-1 truncate text-sm min-w-0">
-          {tab.isLoading ? <span className="text-gray-500">Loading...</span> : tab.title || 'New Tab'}
+          {tab.isLoading ? (
+            <span className="text-gray-500">Loading...</span>
+          ) : (
+            tab.title || 'New Tab'
+          )}
         </span>
       )}
 
-      <div className="flex items-center justify-center size-5 rounded-full">
-        <X className="w-3 h-3" />
-      </div>
+      {(width > 45 || isActive) && (
+        <div className="flex items-center justify-center size-5 rounded-full">
+          <X className="w-3 h-3" />
+        </div>
+      )}
     </div>
   );
 }
@@ -695,16 +811,24 @@ function GroupBadge({ color }: { color: string }) {
 
 function TabIcon({ tab }: { tab: TabInfo }) {
   if (tab.isLoading) {
-    return <Loader2 className="w-4 h-4 flex-shrink-0 animate-spin text-muted-foreground" />;
+    return (
+      <Loader2 className="w-4 h-4 flex-shrink-0 animate-spin text-muted-foreground" />
+    );
   }
-  
+
   if (tab.favicon) {
-    if(ICON_MAP[tab.favicon]){
+    if (ICON_MAP[tab.favicon]) {
       const IconComponent = ICON_MAP[tab.favicon];
       return <IconComponent className="w-4 h-4 flex-shrink-0" />;
     }
-    return <img src={tab.favicon} alt="" className="w-4 h-4 flex-shrink-0 rounded-sm" />;
+    return (
+      <img
+        src={tab.favicon}
+        alt=""
+        className="w-4 h-4 flex-shrink-0 rounded-sm"
+      />
+    );
   }
-  
+
   return <Globe className="w-4 h-4 flex-shrink-0 text-muted-foreground" />;
 }

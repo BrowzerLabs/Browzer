@@ -25,7 +25,7 @@ export class SubscriptionService {
   async getPlans(): Promise<PlansResponse> {
     try {
       const response = await api.get<PlansResponse>('/subscription/plans');
-      
+
       if (!response.success || !response.data) {
         return {
           success: false,
@@ -50,8 +50,10 @@ export class SubscriptionService {
    */
   async getCurrentSubscription(): Promise<SubscriptionResponse> {
     try {
-      const response = await api.get<SubscriptionResponse>('/subscription/current');
-      
+      const response = await api.get<SubscriptionResponse>(
+        '/subscription/current'
+      );
+
       if (!response.success || !response.data) {
         return {
           success: false,
@@ -85,7 +87,7 @@ export class SubscriptionService {
         '/subscription/checkout',
         request
       );
-      
+
       if (!response.success || !response.data) {
         return {
           success: false,
@@ -95,7 +97,10 @@ export class SubscriptionService {
 
       return response.data;
     } catch (error: any) {
-      console.error('[SubscriptionService] Failed to create checkout session:', error);
+      console.error(
+        '[SubscriptionService] Failed to create checkout session:',
+        error
+      );
       return {
         success: false,
         error: error.message || 'Failed to create checkout session',
@@ -114,7 +119,7 @@ export class SubscriptionService {
         '/subscription/portal',
         request
       );
-      
+
       if (!response.success || !response.data) {
         return {
           success: false,
@@ -124,7 +129,10 @@ export class SubscriptionService {
 
       return response.data;
     } catch (error: any) {
-      console.error('[SubscriptionService] Failed to create portal session:', error);
+      console.error(
+        '[SubscriptionService] Failed to create portal session:',
+        error
+      );
       return {
         success: false,
         error: error.message || 'Failed to create portal session',
@@ -135,7 +143,7 @@ export class SubscriptionService {
   /**
    * Use automation credits
    */
-  async useCredits(creditsToUse: number = 1): Promise<CreditUsageResponse> {
+  async useCredits(creditsToUse = 1): Promise<CreditUsageResponse> {
     try {
       const request: CreditUsageRequest = {
         credits_to_use: creditsToUse,
@@ -145,7 +153,7 @@ export class SubscriptionService {
         '/subscription/use-credits',
         request
       );
-      
+
       if (!response.success || !response.data) {
         return {
           success: false,
@@ -157,7 +165,8 @@ export class SubscriptionService {
 
       // Update cached subscription credits
       if (this.currentSubscription) {
-        this.currentSubscription.credits_remaining = response.data.credits_remaining;
+        this.currentSubscription.credits_remaining =
+          response.data.credits_remaining;
         this.currentSubscription.credits_used = response.data.credits_used;
       }
 
@@ -178,8 +187,9 @@ export class SubscriptionService {
    */
   async syncSubscription(): Promise<SubscriptionResponse> {
     try {
-      const response = await api.post<SubscriptionResponse>('/subscription/sync');
-      
+      const response =
+        await api.post<SubscriptionResponse>('/subscription/sync');
+
       if (!response.success || !response.data) {
         return {
           success: false,
@@ -194,7 +204,10 @@ export class SubscriptionService {
 
       return response.data;
     } catch (error: any) {
-      console.error('[SubscriptionService] Failed to sync subscription:', error);
+      console.error(
+        '[SubscriptionService] Failed to sync subscription:',
+        error
+      );
       return {
         success: false,
         error: error.message || 'Failed to sync subscription',
@@ -212,7 +225,7 @@ export class SubscriptionService {
   /**
    * Check if user has sufficient credits
    */
-  hasCredits(creditsNeeded: number = 1): boolean {
+  hasCredits(creditsNeeded = 1): boolean {
     if (!this.currentSubscription) {
       return false;
     }

@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback, KeyboardEvent } from 'react';
 import { Search, Loader2 } from 'lucide-react';
+
 import { cn } from '@/renderer/lib/utils';
 import { Input } from '@/renderer/ui/input';
 
@@ -36,47 +37,57 @@ function useSearchBox(
 
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
 
-  const fetchSuggestions = useCallback(async (query: string) => {
-    if (query.length < minChars) {
-      setSuggestions([]);
-      setIsOpen(false);
-      return;
-    }
+  const fetchSuggestions = useCallback(
+    async (query: string) => {
+      if (query.length < minChars) {
+        setSuggestions([]);
+        setIsOpen(false);
+        return;
+      }
 
-    setIsLoading(true);
+      setIsLoading(true);
 
-    try {
-      const searchSuggestions = await window.browserAPI.getSearchSuggestions(query);
-      setSuggestions(searchSuggestions.slice(0, 12));
-      setIsOpen(searchSuggestions.length > 0);
-      setSelectedIndex(-1);
-    } catch (error) {
-      console.error('Error fetching search suggestions:', error);
-      setSuggestions([]);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [minChars]);
+      try {
+        const searchSuggestions =
+          await window.browserAPI.getSearchSuggestions(query);
+        setSuggestions(searchSuggestions.slice(0, 12));
+        setIsOpen(searchSuggestions.length > 0);
+        setSelectedIndex(-1);
+      } catch (error) {
+        console.error('Error fetching search suggestions:', error);
+        setSuggestions([]);
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [minChars]
+  );
 
-  const setInputValue = useCallback((value: string) => {
-    setInputValueState(value);
-    setOriginalInputValue(value);
+  const setInputValue = useCallback(
+    (value: string) => {
+      setInputValueState(value);
+      setOriginalInputValue(value);
 
-    if (debounceTimerRef.current) {
-      clearTimeout(debounceTimerRef.current);
-    }
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+      }
 
-    debounceTimerRef.current = setTimeout(() => {
-      fetchSuggestions(value);
-    }, debounceMs);
-  }, [debounceMs, fetchSuggestions]);
+      debounceTimerRef.current = setTimeout(() => {
+        fetchSuggestions(value);
+      }, debounceMs);
+    },
+    [debounceMs, fetchSuggestions]
+  );
 
-  const getValueForIndex = useCallback((index: number): string => {
-    if (index === -1) {
-      return originalInputValue;
-    }
-    return suggestions[index] || originalInputValue;
-  }, [suggestions, originalInputValue]);
+  const getValueForIndex = useCallback(
+    (index: number): string => {
+      if (index === -1) {
+        return originalInputValue;
+      }
+      return suggestions[index] || originalInputValue;
+    },
+    [suggestions, originalInputValue]
+  );
 
   const openSuggestions = useCallback(() => {
     if (!isOpen && inputValue) {
@@ -88,52 +99,69 @@ function useSearchBox(
     return false;
   }, [fetchSuggestions, inputValue, isOpen]);
 
-  const cycleSelection = useCallback((direction: 1 | -1) => {
-    if (!suggestions.length) {
-      return;
-    }
+  const cycleSelection = useCallback(
+    (direction: 1 | -1) => {
+      if (!suggestions.length) {
+        return;
+      }
 
-    const atStart = selectedIndex <= 0;
-    const atEnd = selectedIndex >= suggestions.length - 1;
+      const atStart = selectedIndex <= 0;
+      const atEnd = selectedIndex >= suggestions.length - 1;
 
-    const newIndex = direction === 1
-      ? (atEnd ? 0 : selectedIndex + 1)
-      : (atStart ? suggestions.length - 1 : selectedIndex - 1);
+      const newIndex =
+        direction === 1
+          ? atEnd
+            ? 0
+            : selectedIndex + 1
+          : atStart
+            ? suggestions.length - 1
+            : selectedIndex - 1;
 
-    setSelectedIndex(newIndex);
-    setInputValueState(getValueForIndex(newIndex));
-  }, [getValueForIndex, selectedIndex, suggestions]);
+      setSelectedIndex(newIndex);
+      setInputValueState(getValueForIndex(newIndex));
+    },
+    [getValueForIndex, selectedIndex, suggestions]
+  );
 
-  const handleKeyDown = useCallback((e: KeyboardEvent<HTMLInputElement>) => {
-    const actions: Record<string, () => void> = {
-      ArrowDown: () => {
-        if (!openSuggestions()) {
-          cycleSelection(1);
-        }
-      },
-      ArrowUp: () => cycleSelection(-1),
-      Enter: () => {
-        if (inputValue.trim()) {
-          onNavigate(inputValue.trim());
+  const handleKeyDown = useCallback(
+    (e: KeyboardEvent<HTMLInputElement>) => {
+      const actions: Record<string, () => void> = {
+        ArrowDown: () => {
+          if (!openSuggestions()) {
+            cycleSelection(1);
+          }
+        },
+        ArrowUp: () => cycleSelection(-1),
+        Enter: () => {
+          if (inputValue.trim()) {
+            onNavigate(inputValue.trim());
+            setIsOpen(false);
+            setSuggestions([]);
+          }
+        },
+        Escape: () => {
           setIsOpen(false);
-          setSuggestions([]);
-        }
-      },
-      Escape: () => {
-        setIsOpen(false);
-        setSelectedIndex(-1);
-        setInputValueState(originalInputValue);
-      },
-    };
+          setSelectedIndex(-1);
+          setInputValueState(originalInputValue);
+        },
+      };
 
-    const action = actions[e.key];
-    if (!action) {
-      return;
-    }
+      const action = actions[e.key];
+      if (!action) {
+        return;
+      }
 
-    e.preventDefault();
-    action();
-  }, [cycleSelection, inputValue, onNavigate, openSuggestions, originalInputValue]);
+      e.preventDefault();
+      action();
+    },
+    [
+      cycleSelection,
+      inputValue,
+      onNavigate,
+      openSuggestions,
+      originalInputValue,
+    ]
+  );
 
   const clearSuggestions = useCallback(() => {
     setSuggestions([]);
@@ -195,13 +223,6 @@ export function Home() {
   });
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      inputRef.current?.focus();
-    }, 100);
-    return () => clearTimeout(timer);
-  }, []);
-
-  useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (
         dropdownRef.current &&
@@ -225,29 +246,28 @@ export function Home() {
     }, 150);
   }, [setIsOpen]);
 
-  const handleSuggestionClick = useCallback((suggestion: string) => {
-    handleNavigate(suggestion);
-    clearSuggestions();
-  }, [handleNavigate, clearSuggestions]);
+  const handleSuggestionClick = useCallback(
+    (suggestion: string) => {
+      handleNavigate(suggestion);
+      clearSuggestions();
+    },
+    [handleNavigate, clearSuggestions]
+  );
 
   const showDropdown = isOpen && suggestions.length > 0;
 
   return (
     <div className="min-h-screen  flex flex-col items-center justify-start pt-[18vh] bg-background">
       <h1 className="text-6xl font-bold tracking-tight mb-10">
-          <span className="bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 bg-clip-text text-transparent">
-            Browzer
-          </span>
+        <span className="bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 bg-clip-text text-transparent">
+          Browzer
+        </span>
       </h1>
 
       <div className="w-full max-w-[700px] relative">
-        <div
-          className={cn(
-            "relative flex items-center",
-          )}
-        >
+        <div className={cn('relative flex items-center')}>
           <Search className="absolute left-4 size-4 text-muted-foreground/70" />
-          
+
           <Input
             ref={inputRef}
             value={inputValue}
@@ -257,8 +277,8 @@ export function Home() {
             placeholder="Search Browzer"
             spellCheck={false}
             className={cn(
-              "pl-12 pr-12 rounded-full shadow-xl border-1",
-              "h-12 font-semibold"
+              'pl-12 pr-12 rounded-full shadow-xl border-1',
+              'h-12 font-semibold'
             )}
           />
 
@@ -271,7 +291,7 @@ export function Home() {
           <div
             ref={dropdownRef}
             className={cn(
-              "bg-background/70 backdrop-blur-sm rounded-2xl z-10 shadow-xl border-1 border-primary/70",
+              'bg-background/70 backdrop-blur-sm rounded-2xl z-10 shadow-xl border-1 border-primary/70'
             )}
           >
             <ul className="py-2">
@@ -279,11 +299,11 @@ export function Home() {
                 <li
                   key={index}
                   className={cn(
-                    "flex items-center gap-4 px-5 py-3",
-                    "cursor-pointer transition-colors",
-                    selectedIndex === index 
-                      ? "bg-accent/80" 
-                      : "hover:bg-accent/40"
+                    'flex items-center gap-4 px-5 py-3',
+                    'cursor-pointer transition-colors',
+                    selectedIndex === index
+                      ? 'bg-accent/80'
+                      : 'hover:bg-accent/40'
                   )}
                   onMouseDown={(e) => {
                     e.preventDefault();

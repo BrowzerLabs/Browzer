@@ -1,7 +1,8 @@
 import React from 'react';
+import { Play, StopCircle } from 'lucide-react';
+
 import { Textarea } from '@/renderer/ui/textarea';
 import { Button } from '@/renderer/ui/button';
-import { Play, StopCircle } from 'lucide-react';
 
 interface PromptInputProps {
   value: string;
@@ -18,7 +19,7 @@ export function PromptInput({
   onExecute,
   onCancel,
   isExecuting,
-  disabled
+  disabled,
 }: PromptInputProps) {
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
@@ -51,7 +52,11 @@ export function PromptInput({
             Execute
           </Button>
         ) : (
-          <Button onClick={onCancel} variant="destructive" className="flex-1 h-8 text-xs">
+          <Button
+            onClick={onCancel}
+            variant="destructive"
+            className="flex-1 h-8 text-xs"
+          >
             <StopCircle className="w-3.5 h-3.5 mr-1.5" />
             Cancel
           </Button>
@@ -59,7 +64,8 @@ export function PromptInput({
       </div>
 
       <p className="text-[10px] text-gray-500 text-center">
-        Press {navigator.platform.includes('Mac') ? '⌘' : 'Ctrl'} + Enter to execute
+        Press {navigator.platform.includes('Mac') ? '⌘' : 'Ctrl'} + Enter to
+        execute
       </p>
     </div>
   );

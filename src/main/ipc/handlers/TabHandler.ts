@@ -1,4 +1,5 @@
 import { FindInPageOptions } from 'electron';
+
 import { BaseHandler } from './base';
 
 export class TabHandler extends BaseHandler {
@@ -6,7 +7,7 @@ export class TabHandler extends BaseHandler {
     const { tabService } = this.context;
 
     this.handle('browser:initialize', async () => {
-        tabService.initializeAfterAuth();
+      tabService.initializeAfterAuth();
       return true;
     });
 
@@ -31,21 +32,33 @@ export class TabHandler extends BaseHandler {
       return tabService.getAllTabs();
     });
 
-    this.handle('browser:reorder-tab', async (_, tabId: string, newIndex: number) => {
-      return tabService.reorderTab(tabId, newIndex);
-    });
+    this.handle(
+      'browser:reorder-tab',
+      async (_, tabId: string, newIndex: number) => {
+        return tabService.reorderTab(tabId, newIndex);
+      }
+    );
 
-    this.handle('browser:create-tab-group', async (_event, name?: string, color?: string) => {
-      return tabService.createTabGroup(name, color);
-    });
+    this.handle(
+      'browser:create-tab-group',
+      async (_event, name?: string, color?: string) => {
+        return tabService.createTabGroup(name, color);
+      }
+    );
 
-    this.handle('browser:update-tab-group', async (_event, groupId: string, name?: string, color?: string) => {
-      return tabService.updateTabGroup(groupId, name, color);
-    });
+    this.handle(
+      'browser:update-tab-group',
+      async (_event, groupId: string, name?: string, color?: string) => {
+        return tabService.updateTabGroup(groupId, name, color);
+      }
+    );
 
-    this.handle('browser:assign-tab-group', async (_event, tabId: string, groupId: string | null) => {
-      return tabService.assignTabToGroup(tabId, groupId);
-    });
+    this.handle(
+      'browser:assign-tab-group',
+      async (_event, tabId: string, groupId: string | null) => {
+        return tabService.assignTabToGroup(tabId, groupId);
+      }
+    );
 
     this.handle('browser:remove-tab-group', async (_event, groupId: string) => {
       return tabService.removeTabGroup(groupId);
@@ -55,13 +68,12 @@ export class TabHandler extends BaseHandler {
       return tabService.getTabGroups();
     });
 
-    this.handle('browser:toggle-tab-group-collapse', async (_event, groupId: string) => {
-      return tabService.toggleTabGroupCollapse(groupId);
-    });
-
-    this.handle('browser:check-restore-session', async () => {
-      return tabService.checkRestoreSession();
-    });
+    this.handle(
+      'browser:toggle-tab-group-collapse',
+      async (_event, groupId: string) => {
+        return tabService.toggleTabGroupCollapse(groupId);
+      }
+    );
 
     this.handle('browser:restore-session', async () => {
       return tabService.restoreSession();
@@ -71,12 +83,22 @@ export class TabHandler extends BaseHandler {
       return tabService.discardSession();
     });
 
-    this.handle('browser:find-in-page', async (_, tabId: string, text: string, options: FindInPageOptions) => {
-      return tabService.startFindInPage(tabId, text, options);
-    });
+    this.handle(
+      'browser:find-in-page',
+      async (_, tabId: string, text: string, options: FindInPageOptions) => {
+        return tabService.startFindInPage(tabId, text, options);
+      }
+    );
 
-    this.handle('browser:stop-find-in-page', async (_, tabId: string, action: 'clearSelection' | 'keepSelection' | 'activateSelection') => {
-      return tabService.stopFindInPage(tabId, action);
-    });
+    this.handle(
+      'browser:stop-find-in-page',
+      async (
+        _,
+        tabId: string,
+        action: 'clearSelection' | 'keepSelection' | 'activateSelection'
+      ) => {
+        return tabService.stopFindInPage(tabId, action);
+      }
+    );
   }
 }
