@@ -695,9 +695,10 @@ export class TabService extends EventEmitter {
     });
 
     wc.on('did-navigate', (_, url) => this.handleNavigation(info, wc, url));
-    wc.on('did-navigate-in-page', (_, url) =>
-      this.handleNavigation(info, wc, url)
-    );
+    wc.on('did-navigate-in-page', (_, url, isMainFrame) => {
+      if (!isMainFrame) return;
+      this.handleNavigation(info, wc, url);
+    });
 
     wc.on('page-favicon-updated', (_, favicons) => {
       if (
