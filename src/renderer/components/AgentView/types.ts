@@ -26,6 +26,7 @@ export interface AgentChatAreaProps {
   isLoadingSession: boolean;
   isLoadingHistory: boolean;
   onSessionSelect: (sessionId: string) => void;
+  selectedRecordingId: string | null;
 }
 
 export interface AgentFooterProps {

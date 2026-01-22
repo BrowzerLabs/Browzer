@@ -57,6 +57,7 @@ export default function AgentView() {
         isLoadingSession={isLoadingSession}
         isLoadingHistory={isLoadingHistory}
         onSessionSelect={handleSessionSelect}
+        selectedRecordingId={selectedRecordingId}
       />
 
       <AgentFooter
