@@ -1,9 +1,11 @@
-import { BaseWindow, Debugger, WebContentsView } from 'electron';
+import { BaseWindow, Debugger, WebContentsView, dialog } from 'electron';
 import { EventEmitter } from 'events';
-import { AXNode, RecordingAction, RecordingSession } from '@/shared/types';
-import { RecordingStore } from '../recording';
 import { randomUUID } from 'crypto';
+
+import { RecordingStore } from '../recording';
 import { Tab } from '../browser';
+
+import { AXNode, RecordingAction, RecordingSession } from '@/shared/types';
 
 const CLICK_MARKER = '__browzer_click__';
 const INPUT_MARKER = '__browzer_input__';
@@ -12,8 +14,8 @@ const KEY_MARKER = '__browzer_key__';
 export class RecordingService extends EventEmitter {
   private recordingStore: RecordingStore;
   private currentSession: RecordingSession | null = null;
-  private recordingStartTime: number = 0;
-  private recordingStartUrl: string = '';
+  private recordingStartTime = 0;
+  private recordingStartUrl = '';
 
   constructor(
     private baseWindow: BaseWindow,
@@ -497,9 +499,11 @@ export class RecordingService extends EventEmitter {
           }
           break;
         case 'Page.fileChooserOpened':
-          const { dialog } = require('electron');
           const result = await dialog.showOpenDialog(this.baseWindow, {
-            properties: params.mode === 'selectMultiple' ? ['openFile', 'multiSelections'] : ['openFile']
+            properties:
+              params.mode === 'selectMultiple'
+                ? ['openFile', 'multiSelections']
+                : ['openFile'],
           });
           if (!result.canceled && result.filePaths.length > 0) {
             const fileAction: RecordingAction = {
@@ -508,20 +512,23 @@ export class RecordingService extends EventEmitter {
               url: tab.view.webContents.getURL(),
               timestamp: Date.now(),
               filePaths: result.filePaths,
-            }
+            };
             this.addAction(fileAction);
             if (params.backendNodeId) {
               try {
-                await tab.view.webContents.debugger.sendCommand('DOM.setFileInputFiles', {
-                  files: result.filePaths,
-                  backendNodeId: params.backendNodeId
-                });
+                await tab.view.webContents.debugger.sendCommand(
+                  'DOM.setFileInputFiles',
+                  {
+                    files: result.filePaths,
+                    backendNodeId: params.backendNodeId,
+                  }
+                );
                 console.log('Files set successfully');
               } catch (err) {
                 console.error('Error setting files:', err);
               }
             }
-          };
+          }
           break;
         default:
       }
@@ -680,7 +687,7 @@ export class RecordingService extends EventEmitter {
     nodeMap: Map<string, any>,
     lines: string[],
     depth: number,
-    isRoot: boolean = false
+    isRoot = false
   ): void {
     const role = node.role?.value || '';
     const name = node.name?.value || '';

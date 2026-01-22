@@ -76,7 +76,9 @@ const getActionDescription = (action: RecordingAction) => {
       return {
         action: 'Typed into',
         target: action.element?.name || action.element?.role || 'field',
-        detail: action.element?.value ? truncate(action.element.value, 50) : undefined,
+        detail: action.element?.value
+          ? truncate(action.element.value, 50)
+          : undefined,
       };
     case 'navigate':
       return {
@@ -145,7 +147,9 @@ export function ActionList({ actions }: ActionListProps) {
               </div>
               <div className="flex-1 min-w-0">
                 <div className="text-sm mb-1">
-                  <span className="text-muted-foreground">{description.action}</span>{' '}
+                  <span className="text-muted-foreground">
+                    {description.action}
+                  </span>{' '}
                   <strong className="font-medium">{description.target}</strong>
                 </div>
                 {description.detail && (

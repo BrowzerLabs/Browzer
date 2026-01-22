@@ -13,7 +13,7 @@ export function escapeXml(str: string | undefined | null): string {
 export function shrinkUrl(fullUrl: string) {
   try {
     const { hostname, pathname } = new URL(fullUrl);
-    
+
     if (!pathname || pathname === '/') {
       return hostname;
     }

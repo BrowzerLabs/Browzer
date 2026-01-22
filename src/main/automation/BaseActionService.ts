@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-empty-function */
+/* eslint-disable no-async-promise-executor */
 import { Debugger, WebContentsView } from 'electron';
 
 export interface ExecutionContext {
@@ -218,7 +220,7 @@ export abstract class BaseActionService {
     }
 
     let matchedCount = 0;
-    let totalCount = Object.keys(targetAttributes).length;
+    const totalCount = Object.keys(targetAttributes).length;
 
     const nodeProps = new Map<string, any>();
     for (const prop of node.properties) {
@@ -252,11 +254,7 @@ export abstract class BaseActionService {
   public async waitForNetworkIdle(
     options: NetworkIdleOptions = {}
   ): Promise<void> {
-    const {
-      timeout = 5000,
-      idleTime = 500,
-      maxInflightRequests = 0,
-    } = options;
+    const { timeout = 5000, idleTime = 500, maxInflightRequests = 0 } = options;
 
     return new Promise(async (resolve) => {
       let timeoutTimer: NodeJS.Timeout | null = null;

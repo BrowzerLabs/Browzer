@@ -26,7 +26,8 @@
   },
   "rules": {
     "@typescript-eslint/no-explicit-any": "off",
-    "import/order": ["error", { "newlines-between": "always" }]
+    "import/order": ["warn", { "newlines-between": "always" }],
+    "no-case-declarations": "off"
   },
   "overrides": [
     {

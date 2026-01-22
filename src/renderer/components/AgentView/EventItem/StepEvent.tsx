@@ -42,11 +42,14 @@ const getStepDescription = (toolName: string, params: any): StepDescription => {
 
     case 'click':
       const target =
-        params?.name || (params?.nodeId ? `node: ${params.nodeId}` : params?.role || 'element');
+        params?.name ||
+        (params?.nodeId ? `node: ${params.nodeId}` : params?.role || 'element');
       const detail =
         params?.role ??
-        (params?.attributes?.href ? truncate(params.attributes.href, 50) : undefined);
-        
+        (params?.attributes?.href
+          ? truncate(params.attributes.href, 50)
+          : undefined);
+
       return {
         action: 'Clicking on',
         target,
@@ -55,7 +58,9 @@ const getStepDescription = (toolName: string, params: any): StepDescription => {
       };
 
     case 'type':
-      const targetName = params?.name ? `${params?.name} (${params?.role})` : params.nodeId;
+      const targetName = params?.name
+        ? `${params?.name} (${params?.role})`
+        : params.nodeId;
       const value = params?.value || '';
       return {
         action: params?.clearFirst === false ? 'Appending to' : 'Typing into',
@@ -80,7 +85,8 @@ const getStepDescription = (toolName: string, params: any): StepDescription => {
       const fileName = params?.filePaths?.[0]?.split('/').pop() || 'file';
       return {
         action: 'Uploading',
-        target: fileCount > 1 ? `${fileCount} files` : fileName.substring(0, 40),
+        target:
+          fileCount > 1 ? `${fileCount} files` : fileName.substring(0, 40),
         detail:
           params?.name || params?.selector
             ? `to ${params.name || params.selector}`
@@ -152,7 +158,8 @@ export function StepEvent({ event, isLatest }: EventItemProps) {
           <div className="flex items-start gap-2 text-sm mb-1">
             {getIcon()}
             <span className={cn('text-muted-foreground', getTextColor())}>
-              {description.action} <strong className={cn('font-medium ml-1', getTextColor())}>
+              {description.action}{' '}
+              <strong className={cn('font-medium ml-1', getTextColor())}>
                 {description.target}
               </strong>
             </span>

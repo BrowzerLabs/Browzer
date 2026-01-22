@@ -1,4 +1,5 @@
 import { Notification } from 'electron';
+
 import { ToolExecutionResult } from '@/shared/types';
 
 export interface NotifyParams {

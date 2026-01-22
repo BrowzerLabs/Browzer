@@ -1,11 +1,12 @@
-import { ToolExecutionResult } from '@/shared/types';
 import {
   BaseActionService,
   ExecutionContext,
   NodeParams,
 } from './BaseActionService';
 
-export interface ClickParams extends NodeParams {}
+import { ToolExecutionResult } from '@/shared/types';
+
+export type ClickParams = NodeParams;
 
 export class ClickService extends BaseActionService {
   constructor(context: ExecutionContext) {
