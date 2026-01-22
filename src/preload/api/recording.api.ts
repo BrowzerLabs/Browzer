@@ -1,5 +1,7 @@
 import { ipcRenderer } from 'electron';
+
 import { RecordingAPI } from '../types/recording.types';
+
 import { createSimpleListener, invoke } from '@/preload/utils/ipc-helpers';
 import { RecordingAction } from '@/shared/types';
 

@@ -2,9 +2,9 @@ import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 
 import AgentView from './AgentView';
+import { RecordingView } from './recording/RecordingView';
 
 import { RecordingAction } from '@/shared/types';
-import { RecordingView } from './recording/RecordingView';
 
 export function Sidebar() {
   const [actions, setActions] = useState<RecordingAction[]>([]);

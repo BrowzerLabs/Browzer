@@ -1,11 +1,21 @@
-import { Play, CheckCircle2, XCircle, Loader2, MousePointerClick, Type, Navigation, KeyRound, Upload, Bell } from 'lucide-react';
+import {
+  Play,
+  CheckCircle2,
+  XCircle,
+  Loader2,
+  MousePointerClick,
+  Type,
+  Navigation,
+  KeyRound,
+  Upload,
+  Bell,
+} from 'lucide-react';
+import { type LucideIcon } from 'lucide-react';
 
 import { EventItemProps } from '../types';
 
 import { Card } from '@/renderer/ui/card';
 import { cn } from '@/renderer/lib/utils';
-
-import { type LucideIcon } from 'lucide-react';
 
 interface StepDescription {
   action: string;
@@ -56,9 +66,8 @@ const getStepDescription = (toolName: string, params: any): StepDescription => {
     case 'key':
       const modifiers = params?.modifiers || [];
       const key = params?.key || 'key';
-      const keyCombo = modifiers.length > 0 
-        ? `${modifiers.join(' + ')} + ${key}`
-        : key;
+      const keyCombo =
+        modifiers.length > 0 ? `${modifiers.join(' + ')} + ${key}` : key;
       return {
         action: 'Pressing',
         target: keyCombo,
@@ -71,7 +80,10 @@ const getStepDescription = (toolName: string, params: any): StepDescription => {
       return {
         action: 'Uploading',
         target: fileCount > 1 ? `${fileCount} files` : fileName,
-        detail: params?.name || params?.selector ? `to ${params.name || params.selector}` : undefined,
+        detail:
+          params?.name || params?.selector
+            ? `to ${params.name || params.selector}`
+            : undefined,
         icon: Upload,
       };
 
@@ -96,8 +108,11 @@ export function StepEvent({ event, isLatest }: EventItemProps) {
   const isRunning = event.type === 'step_start';
   const isSuccess = event.type === 'step_complete';
   const isError = event.type === 'step_error';
-  
-  const description = getStepDescription(event.data?.toolName || '', event.data?.params || {});
+
+  const description = getStepDescription(
+    event.data?.toolName || '',
+    event.data?.params || {}
+  );
   const StepIcon = description.icon;
 
   const getStatusColor = () => {
@@ -140,11 +155,22 @@ export function StepEvent({ event, isLatest }: EventItemProps) {
             <span className="text-xs font-semibold text-muted-foreground">
               Step {event.data.stepNumber}
             </span>
-            <div className={cn('p-1 rounded', isRunning ? 'bg-yellow-100 dark:bg-yellow-950' : isSuccess ? 'bg-green-100 dark:bg-green-950' : isError ? 'bg-red-100 dark:bg-red-950' : 'bg-muted')}>
+            <div
+              className={cn(
+                'p-1 rounded',
+                isRunning
+                  ? 'bg-yellow-100 dark:bg-yellow-950'
+                  : isSuccess
+                    ? 'bg-green-100 dark:bg-green-950'
+                    : isError
+                      ? 'bg-red-100 dark:bg-red-950'
+                      : 'bg-muted'
+              )}
+            >
               <StepIcon className="w-3 h-3" />
             </div>
           </div>
-          
+
           <div className="text-sm mb-1">
             <span className="text-muted-foreground">{description.action}</span>{' '}
             {description.target && (
@@ -153,19 +179,19 @@ export function StepEvent({ event, isLatest }: EventItemProps) {
               </strong>
             )}
           </div>
-          
+
           {description.detail && (
             <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
               {description.detail}
             </p>
           )}
-          
+
           {event.data && event.data?.error && (
             <p className="mt-2 p-3 bg-red-100 dark:bg-red-900/30 rounded text-sm text-red-700 dark:text-red-300">
               {event.data.error}
             </p>
           )}
-          
+
           {event.data.params && (
             <details className="cursor-pointer mt-2">
               <summary className="text-xs text-muted-foreground hover:text-foreground">

@@ -1,9 +1,10 @@
 import { EventEmitter } from 'events';
+import { randomUUID } from 'crypto';
 
 import Anthropic from '@anthropic-ai/sdk';
 
 import { AutomationClient } from '..';
-import { ExecutionService } from '@/main/automation';
+import { FormatService } from '../utils/FormatService';
 
 import {
   ExecutedStep,
@@ -11,7 +12,9 @@ import {
   AutomationStep,
   AutomationPlan,
 } from './types';
+import { ContextWindowService } from './ContextWindowService';
 
+import { ExecutionService } from '@/main/automation';
 import {
   RecordingSession,
   AutomationStatus,
@@ -20,9 +23,6 @@ import {
   SystemPromptType,
 } from '@/shared/types';
 import { MAX_AUTOMATION_STEPS } from '@/shared/constants/limits';
-import { ContextWindowService } from './ContextWindowService';
-import { FormatService } from '../utils/FormatService';
-import { randomUUID } from 'crypto';
 
 export class AutomationStateManager extends EventEmitter {
   private session_id: string;
@@ -283,7 +283,7 @@ export class AutomationStateManager extends EventEmitter {
       const executedStep: ExecutedStep = {
         stepNumber,
         toolName: step.toolName,
-        result: result
+        result: result,
       };
 
       this.addExecutedStep(executedStep);
@@ -330,7 +330,7 @@ export class AutomationStateManager extends EventEmitter {
         result: {
           success: false,
           error: error.message,
-        }
+        },
       };
       this.addExecutedStep(executedStep);
 

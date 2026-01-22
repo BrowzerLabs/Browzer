@@ -1,4 +1,5 @@
 import { EventEmitter } from 'events';
+import { WebContentsView } from 'electron';
 
 import { AutomationClient } from './clients/AutomationClient';
 import { AutomationStateManager } from './core/AutomationStateManager';
@@ -12,7 +13,6 @@ import {
   RecordingSession,
   AutomationStatus,
 } from '@/shared/types';
-import { WebContentsView } from 'electron';
 
 export class AutomationService extends EventEmitter {
   private recordingStore: RecordingStore;
