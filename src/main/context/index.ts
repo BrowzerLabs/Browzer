@@ -1,1 +1,0 @@
-export { XMLExtractor } from './XMLExtractor';
