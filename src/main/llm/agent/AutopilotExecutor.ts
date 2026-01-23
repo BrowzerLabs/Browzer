@@ -384,6 +384,13 @@ export class AutopilotExecutor extends EventEmitter {
         };
       }
 
+      case 'load_website_knowledge': {
+        return {
+          success: true,
+          content: 'Website knowledge loading handled by backend',
+        };
+      }
+
       default:
         throw new Error(`Unknown tool: ${toolName}`);
     }
