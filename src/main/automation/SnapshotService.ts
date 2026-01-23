@@ -3,8 +3,8 @@ import { BaseActionService, ExecutionContext } from './BaseActionService';
 import { ToolExecutionResult } from '@/shared/types';
 
 export class SnapshotService extends BaseActionService {
-  private readonly JPEG_QUALITY = 70;
-  private readonly MAX_DIMENSION = 900;
+  private readonly JPEG_QUALITY = 80;
+  private readonly MAX_DIMENSION = 1024;
 
   constructor(context: ExecutionContext) {
     super(context);

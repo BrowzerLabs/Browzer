@@ -21,16 +21,8 @@ export class KeyService extends BaseActionService {
       });
 
       const modifiers = params.modifiers || [];
-
-      console.log(
-        `[KeyHandler] Pressing key: ${params.key} with modifiers: ${modifiers.join('+')}`
-      );
-
       await this.pressKey(params.key, modifiers);
-
-      return {
-        success: true,
-      };
+      return { success: true };
     } catch (error) {
       console.error('[KeyHandler] Error:', error);
       return {

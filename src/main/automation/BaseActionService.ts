@@ -33,7 +33,10 @@ export abstract class BaseActionService {
     return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
-  protected findBestMatchingNode(nodes: any[], params: NodeParams): any | null {
+  protected async findBestMatchingNode(
+    nodes: any[],
+    params: NodeParams
+  ): Promise<any | null> {
     interface ScoredNode {
       node: any;
       score: number;
@@ -79,7 +82,7 @@ export abstract class BaseActionService {
       const nodeRole = node.role?.value?.toLowerCase() || '';
       if (NOISE_ROLES.has(nodeRole)) continue;
 
-      const score = this.calculateMatchScore(node, params);
+      const score = await this.calculateMatchScore(node, params);
 
       if (score > 0) {
         candidates.push({ node, score });
@@ -97,7 +100,10 @@ export abstract class BaseActionService {
     return bestCandidate.node;
   }
 
-  protected calculateMatchScore(node: any, params: NodeParams): number {
+  protected async calculateMatchScore(
+    node: any,
+    params: NodeParams
+  ): Promise<number> {
     let score = 0;
 
     const nodeRole = node.role?.value?.toLowerCase() || '';
@@ -130,11 +136,10 @@ export abstract class BaseActionService {
     }
 
     if (params.attributes && Object.keys(params.attributes).length > 0) {
-      const attrScore = this.calculateAttributeScore(node, params.attributes);
-
-      if (attrScore === 0) {
-        return 0;
-      }
+      const attrScore = await this.calculateAttributeScore(
+        node,
+        params.attributes
+      );
 
       score += attrScore;
     }
@@ -209,44 +214,72 @@ export abstract class BaseActionService {
     return matrix[str2.length][str1.length];
   }
 
-  private calculateAttributeScore(
+  private async calculateAttributeScore(
     node: any,
     targetAttributes: Record<string, string>
-  ): number {
-    if (!node.properties || node.properties.length === 0) {
+  ): Promise<number> {
+    if (!node.backendDOMNodeId) {
       return 0;
     }
 
-    let matchedCount = 0;
-    const totalCount = Object.keys(targetAttributes).length;
+    try {
+      const domNode = await this.cdp.sendCommand('DOM.resolveNode', {
+        backendNodeId: node.backendDOMNodeId,
+      });
 
-    const nodeProps = new Map<string, any>();
-    for (const prop of node.properties) {
-      nodeProps.set(prop.name, prop.value?.value);
-    }
+      if (!domNode || !domNode.object || !domNode.object.objectId) {
+        console.log('Failed to resolve DOM node');
+        return 0;
+      }
 
-    for (const [attrName, attrValue] of Object.entries(targetAttributes)) {
-      const nodePropValue = nodeProps.get(attrName);
+      const attributesResult = await this.cdp.sendCommand(
+        'Runtime.callFunctionOn',
+        {
+          objectId: domNode.object.objectId,
+          functionDeclaration: `function() {
+          const attrs = {};
+          if (this.attributes) {
+            for (let i = 0; i < this.attributes.length; i++) {
+              const attr = this.attributes[i];
+              attrs[attr.name] = attr.value;
+            }
+          }
+          return attrs;
+        }`,
+          returnByValue: true,
+        }
+      );
 
-      if (nodePropValue !== undefined && nodePropValue !== null) {
-        const targetValueLower = String(attrValue).toLowerCase();
-        const nodePropValueLower = String(nodePropValue).toLowerCase();
+      const htmlAttributes = attributesResult.result?.value || {};
+      let matchedCount = 0;
+      const totalCount = Object.keys(targetAttributes).length;
 
-        if (nodePropValueLower === targetValueLower) {
-          matchedCount += 1;
-        } else if (nodePropValueLower.includes(targetValueLower)) {
-          matchedCount += 0.7;
-        } else if (targetValueLower.includes(nodePropValueLower)) {
-          matchedCount += 0.5;
+      for (const [attrName, attrValue] of Object.entries(targetAttributes)) {
+        const htmlAttrValue = htmlAttributes[attrName];
+
+        if (htmlAttrValue !== undefined && htmlAttrValue !== null) {
+          const targetValueLower = String(attrValue).toLowerCase();
+          const htmlAttrValueLower = String(htmlAttrValue).toLowerCase();
+
+          if (htmlAttrValueLower === targetValueLower) {
+            matchedCount += 1;
+          } else if (htmlAttrValueLower.includes(targetValueLower)) {
+            matchedCount += 0.7;
+          } else if (targetValueLower.includes(htmlAttrValueLower)) {
+            matchedCount += 0.5;
+          }
         }
       }
-    }
 
-    if (matchedCount === 0) {
+      if (matchedCount === 0) {
+        return 0;
+      }
+
+      return Math.floor(150 * (matchedCount / totalCount));
+    } catch (error) {
+      console.error('Error calculating attribute score:', error);
       return 0;
     }
-
-    return Math.floor(150 * (matchedCount / totalCount));
   }
 
   public async waitForNetworkIdle(

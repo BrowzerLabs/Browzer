@@ -42,34 +42,33 @@ const getStepDescription = (toolName: string, params: any): StepDescription => {
 
     case 'click':
       const target =
-        params?.name ||
-        (params?.nodeId ? `node: ${params.nodeId}` : params?.role || 'element');
-      const detail =
-        params?.role ??
-        (params?.attributes?.href
-          ? truncate(params.attributes.href, 50)
-          : undefined);
+        params?.nodeId || params.backend_node_id
+          ? `node: ${params.nodeId || params.backend_node_id}`
+          : `${params?.name} (${params?.role})`;
 
       return {
         action: 'Clicking on',
         target,
-        detail,
         icon: MousePointerClick,
       };
 
     case 'type':
       const targetName = params?.name
         ? `${params?.name} (${params?.role})`
-        : params.nodeId;
-      const value = params?.value || '';
+        : params.nodeId || params.backend_node_id;
+      let value = params?.value || params.text || '';
+      targetName
+        ? (value = truncate(value, 50) + ` into ${targetName}`)
+        : (value = truncate(value, 50));
+
       return {
-        action: params?.clearFirst === false ? 'Appending to' : 'Typing into',
-        target: targetName,
-        detail: value ? truncate(value, 50) : undefined,
+        action: params?.clearFirst === false ? 'Appending' : 'Typing',
+        target: value,
         icon: Type,
       };
 
     case 'key':
+    case 'keyPress':
       const modifiers = params?.modifiers || [];
       const key = params?.key || 'key';
       const keyCombo =
@@ -78,6 +77,44 @@ const getStepDescription = (toolName: string, params: any): StepDescription => {
         action: 'Pressing',
         target: keyCombo,
         icon: KeyRound,
+      };
+
+    case 'scroll':
+      const direction = params?.direction || 'down';
+      const amount = params?.amount || 100;
+      return {
+        action: 'Scrolling',
+        target: `${direction} by ${amount}px`,
+        icon: Navigation,
+      };
+
+    case 'wait':
+      if (params?.waitForNetwork) {
+        return {
+          action: 'Waiting for',
+          target: 'network idle',
+          detail: params?.timeout ? `timeout: ${params.timeout}ms` : undefined,
+          icon: Play,
+        };
+      }
+      return {
+        action: 'Waiting',
+        target: `${params?.duration || 0}ms`,
+        icon: Play,
+      };
+
+    case 'done':
+      return {
+        action: params?.success ? 'Completed' : 'Failed',
+        target: params?.message || 'Task finished',
+        icon: params?.success ? CheckCircle2 : XCircle,
+      };
+
+    case 'extract_context':
+      return {
+        action: 'Extracting',
+        target: 'page context',
+        icon: Play,
       };
 
     case 'file':
@@ -157,7 +194,7 @@ export function StepEvent({ event, isLatest }: EventItemProps) {
         <div className="flex-1 min-w-0">
           <div className="flex items-start gap-2 text-sm mb-1">
             {getIcon()}
-            <span className={cn('text-muted-foreground', getTextColor())}>
+            <span className={cn('text-muted-foreground')}>
               {description.action}{' '}
               <strong className={cn('font-medium ml-1', getTextColor())}>
                 {description.target}

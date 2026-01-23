@@ -207,10 +207,14 @@ export class AutopilotExecutionService extends EventEmitter {
     const results: ToolResult[] = [];
 
     for (const toolCall of toolCalls) {
+      this.stepCount++;
+      const stepNumber = this.stepCount;
+
       this.emitProgress('step_start', {
+        stepNumber,
         toolName: toolCall.name,
-        toolInput: toolCall.input,
-        stepNumber: this.stepCount,
+        toolUseId: toolCall.id,
+        params: toolCall.input,
       });
 
       try {
@@ -220,9 +224,10 @@ export class AutopilotExecutionService extends EventEmitter {
         );
 
         this.emitProgress('step_complete', {
+          toolUseId: toolCall.id,
           toolName: toolCall.name,
-          success: result.success,
-          stepNumber: this.stepCount,
+          params: toolCall.input,
+          status: 'success',
         });
 
         results.push({
@@ -235,9 +240,11 @@ export class AutopilotExecutionService extends EventEmitter {
           error instanceof Error ? error.message : 'Unknown error';
 
         this.emitProgress('step_error', {
+          toolUseId: toolCall.id,
           toolName: toolCall.name,
+          params: toolCall.input,
           error: errorMessage,
-          stepNumber: this.stepCount,
+          status: 'error',
         });
 
         results.push({

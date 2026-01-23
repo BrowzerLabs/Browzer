@@ -11,7 +11,7 @@ export class NavigateService extends BaseActionService {
     try {
       await this.view.webContents.loadURL(params.url);
       await this.waitForNetworkIdle({
-        timeout: 30000,
+        timeout: 3000,
         idleTime: 500,
         maxInflightRequests: 0,
       });
