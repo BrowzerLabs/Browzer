@@ -5,7 +5,7 @@ import {
 } from '@/renderer/stores/automationStore';
 
 export type AgentViewMode = 'new_session' | 'existing_session';
-export type AgentMode = 'ask' | 'automate';
+export type AgentMode = 'ask' | 'automate' | 'autopilot';
 
 export interface AgentHeaderProps {
   viewMode: AgentViewMode;

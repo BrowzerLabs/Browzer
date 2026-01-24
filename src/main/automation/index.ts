@@ -6,3 +6,5 @@ export * from './TypeService';
 export * from './NavigateService';
 export * from './KeyService';
 export * from './SnapshotService';
+export * from './ScrollService';
+export * from './AccessibilityTreeExtractor';

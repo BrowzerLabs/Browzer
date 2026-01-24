@@ -20,7 +20,6 @@ export function useAutomation() {
     startAutomation,
     startNewSession,
     loadStoredSession,
-    // loadSessionHistory,
     addEvent,
     completeAutomation,
     errorAutomation,
@@ -56,10 +55,6 @@ export function useAutomation() {
       unsubError();
     };
   }, [addEvent, completeAutomation, errorAutomation]);
-
-  // useEffect(() => {
-  //   loadSessionHistory();
-  // }, [loadSessionHistory]);
 
   const loadRecordings = useCallback(async () => {
     try {
@@ -139,6 +134,67 @@ export function useAutomation() {
     setUserPrompt('');
   }, [userPrompt, setUserPrompt]);
 
+  const handleAutopilotSubmit = useCallback(async () => {
+    if (!userPrompt.trim() || isSubmitting) {
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    try {
+      const result = await window.browserAPI.executeAutopilot(
+        userPrompt,
+        undefined,
+        selectedRecordingId
+      );
+
+      if (result.success) {
+        startAutomation(
+          userPrompt,
+          selectedRecordingId || 'autopilot',
+          result.sessionId
+        );
+      } else {
+        toast.error(result.message || 'Failed to start autopilot');
+        setIsSubmitting(false);
+      }
+    } catch (error) {
+      console.error('[useAutomation] Autopilot error:', error);
+      toast.error('Failed to start autopilot');
+      setIsSubmitting(false);
+    }
+  }, [
+    userPrompt,
+    isSubmitting,
+    startAutomation,
+    selectedRecordingId,
+    recordings,
+  ]);
+
+  const handleUnifiedSubmit = useCallback(() => {
+    if (agentMode === 'autopilot') {
+      return handleAutopilotSubmit();
+    }
+    if (agentMode === 'ask') {
+      return handleAskSubmit();
+    }
+    return handleSubmit();
+  }, [agentMode, handleAutopilotSubmit, handleAskSubmit, handleSubmit]);
+
+  const handleUnifiedStop = useCallback(async () => {
+    if (!currentSession || !isSubmitting) {
+      return;
+    }
+
+    setIsSubmitting(false);
+
+    if (agentMode === 'autopilot') {
+      await window.browserAPI.stopAutopilot(currentSession.sessionId);
+    } else {
+      stopAutomation(currentSession.sessionId);
+    }
+  }, [currentSession, isSubmitting, agentMode, stopAutomation]);
+
   return {
     viewState,
     currentSession,
@@ -159,6 +215,9 @@ export function useAutomation() {
     handleStopAutomation,
     handleModeChange,
     handleAskSubmit,
+    handleAutopilotSubmit,
+    handleUnifiedSubmit,
+    handleUnifiedStop,
     setIsSubmitting,
   };
 }
