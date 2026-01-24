@@ -176,6 +176,16 @@ export const createBrowserAPI = (): BrowserAPI => ({
   executeLLMAutomation: (userGoal: string, recordedSessionId: string) =>
     invoke('automation:execute-llm', userGoal, recordedSessionId),
 
+  // Autopilot (DO Agent) API
+  executeAutopilot: (
+    userGoal: string,
+    startUrl?: string,
+    referenceRecordingId?: string
+  ) => invoke('autopilot:execute', userGoal, startUrl, referenceRecordingId),
+  stopAutopilot: (sessionId: string) => invoke('autopilot:stop', sessionId),
+  getAutopilotStatus: (sessionId: string) =>
+    invoke('autopilot:status', sessionId),
+
   // Session Management API
   loadAutomationSession: (sessionId: string) =>
     invoke('automation:load-session', sessionId),

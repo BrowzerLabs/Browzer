@@ -18,5 +18,30 @@ export class AutomationHandler extends BaseHandler {
       browserService.stopAutomation(sessionId);
       return { success: true };
     });
+
+    this.handle(
+      'autopilot:execute',
+      async (
+        _,
+        userGoal: string,
+        startUrl?: string,
+        referenceRecordingId?: string
+      ) => {
+        return await browserService.executeAutopilot(
+          userGoal,
+          startUrl,
+          referenceRecordingId
+        );
+      }
+    );
+
+    this.handle('autopilot:stop', async (_, sessionId: string) => {
+      browserService.stopAutopilot(sessionId);
+      return { success: true };
+    });
+
+    this.handle('autopilot:status', async (_, sessionId: string) => {
+      return browserService.getAutopilotStatus(sessionId);
+    });
   }
 }

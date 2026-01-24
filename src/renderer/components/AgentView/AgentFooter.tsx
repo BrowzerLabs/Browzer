@@ -1,5 +1,5 @@
 import React from 'react';
-import { ArrowUp, Square, MessageSquare, Bot } from 'lucide-react';
+import { ArrowUp, Square, MessageSquare, Bot, Rocket } from 'lucide-react';
 
 import { AgentFooterProps } from './types';
 
@@ -36,8 +36,9 @@ export function AgentFooter({
   };
 
   // In ask mode, only need prompt content; in automate mode, need recording selection too
+  // In autopilot mode, only need prompt content (no recording needed)
   const canSubmit =
-    agentMode === 'ask'
+    agentMode === 'ask' || agentMode === 'autopilot'
       ? userPrompt.trim() && !isSubmitting
       : userPrompt.trim() &&
         selectedRecordingId &&
@@ -47,9 +48,11 @@ export function AgentFooter({
   const placeholder =
     agentMode === 'ask'
       ? 'Ask anything about the current page...'
-      : selectedRecordingId
-        ? 'Continue the conversation...'
-        : 'Describe what you want to automate...';
+      : agentMode === 'autopilot'
+        ? 'Describe what you want to accomplish...'
+        : selectedRecordingId
+          ? 'Continue the conversation...'
+          : 'Describe what you want to automate...';
 
   return (
     <section className="p-3 flex-shrink-0">
@@ -73,6 +76,10 @@ export function AgentFooter({
                   <span className="flex items-center gap-2">
                     <MessageSquare className="size-3" /> Ask
                   </span>
+                ) : agentMode === 'autopilot' ? (
+                  <span className="flex items-center gap-2">
+                    <Rocket className="size-3" /> Autopilot
+                  </span>
                 ) : (
                   <span className="flex items-center gap-2">
                     <Bot className="size-3" /> Automate
@@ -92,6 +99,10 @@ export function AgentFooter({
               <DropdownMenuItem onClick={() => onModeChange('automate')}>
                 <Bot className="w-4 h-4 mr-2" />
                 Automate
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => onModeChange('autopilot')}>
+                <Rocket className="w-4 h-4 mr-2" />
+                Autopilot
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
