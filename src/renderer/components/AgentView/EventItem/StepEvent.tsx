@@ -139,6 +139,13 @@ const getStepDescription = (toolName: string, params: any): StepDescription => {
         icon: Bell,
       };
 
+    case 'create_tab':
+      return {
+        action: 'Creating tab',
+        target: shrinkUrl(params?.url || 'browzer://home'),
+        icon: Play,
+      };
+
     default:
       return {
         action: toolName,
