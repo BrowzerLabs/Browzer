@@ -10,6 +10,7 @@ import {
   HardDrive,
   Camera,
   FileJson,
+  Cloud,
 } from 'lucide-react';
 
 import type { RecordingSession } from '@/shared/types';
@@ -33,12 +34,14 @@ interface RecordingCardProps {
   recording: RecordingSession;
   onDelete: (id: string) => void;
   onExport: (id: string) => void;
+  onPublish: (id: string) => void;
 }
 
 export function RecordingCard({
   recording,
   onDelete,
   onExport,
+  onPublish,
 }: RecordingCardProps) {
   return (
     <Card className="group hover:shadow-lg transition-all duration-200 hover:border-blue-300 dark:hover:border-blue-700">
@@ -64,6 +67,15 @@ export function RecordingCard({
       </CardHeader>
 
       <CardFooter className="flex gap-2 pt-4 border-t">
+        <Button
+          onClick={() => onPublish(recording.id)}
+          variant="outline"
+          size="sm"
+          title="Publish to Slack"
+          className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+        >
+          <Cloud className="w-4 h-4" />
+        </Button>
         <Button
           onClick={() => onExport(recording.id)}
           variant="outline"

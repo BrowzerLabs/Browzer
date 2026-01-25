@@ -102,6 +102,23 @@ export function Recordings() {
     }
   };
 
+  const handlePublish = async (id: string) => {
+    try {
+      toast.info('Publishing to Slack...');
+      const result = await window.recordingAPI.publishRecording(id);
+
+      if (result.success && result.cloudId) {
+        toast.success('Workflow published! You can now run it from Slack.');
+      } else if (result.error) {
+        toast.error(`Publish failed: ${result.error}`);
+        return;
+      }
+    } catch (error) {
+      console.error('Failed to publish recording:', error);
+      toast.error('Failed to publish recording to Slack');
+    }
+  };
+
   if (loading) {
     return (
       <div className="h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-black">
@@ -166,6 +183,7 @@ export function Recordings() {
                 recording={recording}
                 onDelete={handleDelete}
                 onExport={handleExport}
+                onPublish={handlePublish}
               />
             ))}
           </div>

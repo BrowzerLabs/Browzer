@@ -1,5 +1,7 @@
 import { ipcRenderer } from 'electron';
+
 import { RecordingAPI } from '../types/recording.types';
+
 import { createSimpleListener, invoke } from '@/preload/utils/ipc-helpers';
 import { RecordingAction } from '@/shared/types';
 
@@ -13,6 +15,7 @@ export const createRecordingAPI = (): RecordingAPI => ({
   getAllRecordings: () => invoke('get-all-recordings'),
   getRecording: (id: string) => invoke('get-recording', id),
   exportRecording: (id: string) => invoke('export-recording', id),
+  publishRecording: (id: string) => invoke('publish-recording', id),
   deleteRecording: (id: string) => invoke('delete-recording', id),
   isRecording: () => invoke('is-recording'),
   onActionRecorded: (callback: (action: RecordingAction) => void) => {

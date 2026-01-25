@@ -15,6 +15,9 @@ export interface RecordingAPI {
   exportRecording: (
     id: string
   ) => Promise<{ success: boolean; filePath?: string; error: string }>;
+  publishRecording: (
+    id: string
+  ) => Promise<{ success: boolean; cloudId?: string; error?: string }>;
   deleteRecording: (id: string) => Promise<boolean>;
   isRecording: () => Promise<boolean>;
   onActionRecorded: (callback: (action: RecordingAction) => void) => () => void;

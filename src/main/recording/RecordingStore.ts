@@ -234,6 +234,52 @@ export class RecordingStore {
     }
   }
 
+  /**
+   * Publish a recording to the cloud (Supabase) for Slack workflow execution.
+   * Requires the yc-hackathon Python backend running on localhost:8000.
+   */
+  async publishRecording(
+    id: string
+  ): Promise<{ success: boolean; cloudId?: string; error?: string }> {
+    try {
+      const recording = this.getRecording(id);
+      if (!recording) {
+        return { success: false, error: 'Recording not found' };
+      }
+
+      const apiUrl = 'http://localhost:8001/api/recordings';
+
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          id: recording.id,
+          name: recording.name,
+          description: recording.description,
+          actions: recording.actions,
+          start_url: recording.startUrl,
+          duration: recording.duration,
+          created_at: recording.createdAt,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`API error: ${response.status} - ${errorText}`);
+      }
+
+      const result = await response.json();
+      console.log('☁️ Recording published:', recording.name, result.id);
+
+      return { success: true, cloudId: result.id };
+    } catch (error) {
+      console.error('Error publishing recording:', error);
+      return { success: false, error: String(error) };
+    }
+  }
+
   updateRecording(id: string, updates: Partial<RecordingSession>): boolean {
     try {
       const recording = this.getRecording(id);
