@@ -1,9 +1,10 @@
 import { WebContentsView } from 'electron';
 
-export interface AccessibilityTreeResult {
-  tree?: string;
-  error?: string;
-}
+import { TabService } from '../browser';
+
+import { BaseActionService } from './BaseActionService';
+
+import { ToolExecutionResult } from '@/shared/types';
 
 interface VisibilityContext {
   hasActiveModal: boolean;
@@ -18,12 +19,23 @@ interface VisibilityContext {
   };
 }
 
-export class AccessibilityTreeExtractor {
-  constructor(private view: WebContentsView) {}
+export class AccessibilityTreeExtractor extends BaseActionService {
+  constructor(tabService: TabService) {
+    super(tabService);
+  }
 
-  public async extractContext(): Promise<AccessibilityTreeResult> {
+  public async execute(params: {
+    tabId: string;
+  }): Promise<ToolExecutionResult> {
     try {
-      const cdp = this.view.webContents.debugger;
+      const cdp = this.getCDP(params.tabId);
+      const view = this.getView(params.tabId);
+      if (!cdp || !view) {
+        return {
+          success: false,
+          error: 'Tab not found or debugger not attached!',
+        };
+      }
 
       await cdp.sendCommand('Accessibility.enable');
 
@@ -36,7 +48,7 @@ export class AccessibilityTreeExtractor {
       await cdp.sendCommand('Accessibility.disable');
 
       if (!nodes || nodes.length === 0) {
-        return { error: 'No accessibility nodes found' };
+        return { success: false, error: 'No accessibility nodes found' };
       }
 
       const visibilityContext = await this.analyzeVisibilityContext(
@@ -51,11 +63,12 @@ export class AccessibilityTreeExtractor {
         cdp
       );
 
-      const treeString = this.formatAccessibilityTree(visibleNodes);
-      return { tree: treeString };
+      const treeString = this.formatAccessibilityTree(view, visibleNodes);
+      return { success: true, value: treeString };
     } catch (error) {
       console.error('[AccessibilityTreeExtractor] Error:', error);
       return {
+        success: false,
         error: error instanceof Error ? error.message : String(error),
       };
     }
@@ -339,10 +352,10 @@ export class AccessibilityTreeExtractor {
     return nodes.filter((node) => includedNodeIds.has(node.nodeId));
   }
 
-  private formatAccessibilityTree(nodes: any[]): string {
+  private formatAccessibilityTree(view: WebContentsView, nodes: any[]): string {
     const lines: string[] = [];
-    const url = this.view.webContents.getURL();
-    const title = this.view.webContents.getTitle();
+    const url = view.webContents.getURL();
+    const title = view.webContents.getTitle();
 
     lines.push(`URL: ${url}`);
     lines.push(`Title: ${title}`);

@@ -35,6 +35,7 @@ export class AutomationStateManager extends EventEmitter {
   private iteration_number = 1;
   private status: AutomationStatus = AutomationStatus.RUNNING;
   private final_error?: string;
+  private lastExecutedTabId?: string;
 
   private automationClient: AutomationClient;
   private executionService: ExecutionService;
@@ -124,28 +125,36 @@ export class AutomationStateManager extends EventEmitter {
         );
 
         const browserContext = await this.captureBrowserContext();
-        const snapshot = await this.executionService.executeTool(
-          'snapshot',
-          {}
-        );
+        const snapshot = await this.executionService.executeTool('snapshot', {
+          tabId: this.lastExecutedTabId,
+        });
+
+        const contentBlocks: Array<
+          | Anthropic.Messages.TextBlockParam
+          | Anthropic.Messages.ImageBlockParam
+          | Anthropic.Messages.ToolResultBlockParam
+        > = [
+          ...toolResults,
+          {
+            type: 'text',
+            text: browserContext,
+          },
+        ];
+
+        if (snapshot.success && snapshot.value && snapshot.value.length > 0) {
+          contentBlocks.push({
+            type: 'image',
+            source: {
+              type: 'base64',
+              media_type: 'image/jpeg',
+              data: snapshot.value,
+            },
+          });
+        }
 
         const userMessage: Anthropic.MessageParam = {
           role: 'user',
-          content: [
-            ...toolResults,
-            {
-              type: 'text',
-              text: browserContext,
-            },
-            {
-              type: 'image',
-              source: {
-                type: 'base64',
-                media_type: 'image/jpeg',
-                data: snapshot.value || '',
-              },
-            },
-          ],
+          content: contentBlocks,
         };
 
         this.addMessage(userMessage);
@@ -193,25 +202,36 @@ export class AutomationStateManager extends EventEmitter {
     );
 
     const browserContext = await this.captureBrowserContext();
-    const snapshot = await this.executionService.executeTool('snapshot', {});
+    const snapshot = await this.executionService.executeTool('snapshot', {
+      tabId: this.lastExecutedTabId,
+    });
+
+    const contentBlocks: Array<
+      | Anthropic.Messages.TextBlockParam
+      | Anthropic.Messages.ImageBlockParam
+      | Anthropic.Messages.ToolResultBlockParam
+    > = [
+      ...toolResultBlocks,
+      {
+        type: 'text',
+        text: browserContext,
+      },
+    ];
+
+    if (snapshot.success && snapshot.value && snapshot.value.length > 0) {
+      contentBlocks.push({
+        type: 'image',
+        source: {
+          type: 'base64',
+          media_type: 'image/jpeg',
+          data: snapshot.value,
+        },
+      });
+    }
 
     const userMessage: Anthropic.MessageParam = {
       role: 'user',
-      content: [
-        ...toolResultBlocks,
-        {
-          type: 'text',
-          text: browserContext,
-        },
-        {
-          type: 'image',
-          source: {
-            type: 'base64',
-            media_type: 'image/jpeg',
-            data: snapshot.value || '',
-          },
-        },
-      ],
+      content: contentBlocks,
     };
 
     this.addMessage(userMessage);
@@ -280,6 +300,10 @@ export class AutomationStateManager extends EventEmitter {
         step.input
       );
 
+      if (step.input && step.input.tabId) {
+        this.lastExecutedTabId = step.input.tabId;
+      }
+
       const executedStep: ExecutedStep = {
         stepNumber,
         toolName: step.toolName,
@@ -347,6 +371,7 @@ export class AutomationStateManager extends EventEmitter {
         maxElements: 100,
         tags: [],
         attributes: {},
+        tabId: this.lastExecutedTabId,
       });
 
       if (result.success && result.value) {
@@ -454,39 +479,11 @@ export class AutomationStateManager extends EventEmitter {
         break;
       }
 
-      const result = executedStep.result;
-
-      if (planStep.toolName === 'context') {
-        toolResultBlocks.push({
-          type: 'tool_result',
-          tool_use_id: planStep.toolUseId,
-          content: result.value || '',
-        });
-      } else if (
-        planStep.toolName === 'snapshot' &&
-        typeof result.value === 'string'
-      ) {
-        toolResultBlocks.push({
-          type: 'tool_result',
-          tool_use_id: planStep.toolUseId,
-          content: [
-            {
-              type: 'image',
-              source: {
-                type: 'base64',
-                media_type: 'image/jpeg',
-                data: result.value,
-              },
-            },
-          ],
-        });
-      } else {
-        toolResultBlocks.push({
-          type: 'tool_result',
-          tool_use_id: planStep.toolUseId,
-          content: `✅`,
-        });
-      }
+      toolResultBlocks.push({
+        type: 'tool_result',
+        tool_use_id: planStep.toolUseId,
+        content: `✅`,
+      });
     }
 
     return toolResultBlocks;

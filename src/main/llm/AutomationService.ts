@@ -7,6 +7,7 @@ import { IterativeAutomationResult } from './core/types';
 
 import { RecordingStore } from '@/main/recording';
 import { ExecutionService } from '@/main/automation';
+import { TabService } from '@/main/browser/TabService';
 import {
   AutomationProgressEvent,
   AutomationEventType,
@@ -15,24 +16,19 @@ import {
 } from '@/shared/types';
 
 export class AutomationService extends EventEmitter {
-  private recordingStore: RecordingStore;
   private recordedSession: RecordingSession | null = null;
   private automationClient: AutomationClient;
   private stateManager: AutomationStateManager;
   private executionService: ExecutionService;
 
   constructor(
-    recordingStore: RecordingStore,
-    private view: WebContentsView,
-    private tabId: string
+    private browserUIView: WebContentsView,
+    private recordingStore: RecordingStore,
+    private tabService: TabService
   ) {
     super();
     this.recordingStore = recordingStore;
-
-    this.executionService = new ExecutionService({
-      view: this.view,
-      tabId: this.tabId,
-    });
+    this.executionService = new ExecutionService(this.tabService);
 
     this.automationClient = new AutomationClient();
     this.setupAutomationClientListeners();
@@ -71,7 +67,13 @@ export class AutomationService extends EventEmitter {
       type,
       data,
     };
-    this.emit('progress', event);
+    const sessionId = this.getSessionId();
+    if (this.browserUIView && !this.browserUIView.webContents.isDestroyed()) {
+      this.browserUIView.webContents.send('automation:progress', {
+        sessionId,
+        event,
+      });
+    }
   }
 
   public async executeAutomation(
@@ -88,7 +90,6 @@ export class AutomationService extends EventEmitter {
     this.stateManager.on('progress', (event: AutomationProgressEvent) => {
       this.emitProgress(event.type, event.data);
     });
-
     try {
       await this.stateManager.generateInitialPlan();
 

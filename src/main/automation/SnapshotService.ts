@@ -1,23 +1,31 @@
-import { BaseActionService, ExecutionContext } from './BaseActionService';
+import { BaseActionService } from './BaseActionService';
 
+import { TabService } from '@/main/browser/TabService';
 import { ToolExecutionResult } from '@/shared/types';
 
 export class SnapshotService extends BaseActionService {
   private readonly JPEG_QUALITY = 80;
   private readonly MAX_DIMENSION = 1024;
 
-  constructor(context: ExecutionContext) {
-    super(context);
+  constructor(tabService: TabService) {
+    super(tabService);
   }
 
-  public async execute(
-    params: {
-      scrollTo?: 'current' | 'top' | 'bottom';
-      y?: number;
-    } = {}
-  ): Promise<ToolExecutionResult> {
+  public async execute(params: {
+    tabId: string;
+    scrollTo?: 'current' | 'top' | 'bottom';
+    y?: number;
+  }): Promise<ToolExecutionResult> {
     try {
-      await this.waitForNetworkIdle({
+      const view = this.getView(params.tabId);
+      const cdp = this.getCDP(params.tabId);
+      if (!view || !cdp) {
+        return {
+          success: false,
+          error: 'Tab not found, or debugger not attached',
+        };
+      }
+      await this.waitForNetworkIdle(cdp, {
         timeout: 3000,
         idleTime: 500,
         maxInflightRequests: 0,
@@ -25,20 +33,20 @@ export class SnapshotService extends BaseActionService {
 
       if (params.scrollTo && params.scrollTo !== 'current') {
         params.scrollTo === 'top'
-          ? await this.view.webContents.executeJavaScript(`
+          ? await view.webContents.executeJavaScript(`
         window.scrollTo({ top: 0, behavior: 'instant' });
         `)
-          : await this.view.webContents.executeJavaScript(`
+          : await view.webContents.executeJavaScript(`
         window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'instant' });
         `);
       }
       if (params.y !== undefined) {
-        await this.view.webContents.executeJavaScript(`
+        await view.webContents.executeJavaScript(`
           window.scrollTo({ top: ${params.y}, behavior: 'instant' });
         `);
       }
 
-      const image = await this.view.webContents.capturePage();
+      const image = await view.webContents.capturePage();
 
       const originalSize = image.getSize();
       let width = originalSize.width;

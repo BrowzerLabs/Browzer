@@ -1,3 +1,5 @@
+import { TabService } from '../browser';
+
 import { ContextService } from './ContextService';
 import { SnapshotService } from './SnapshotService';
 import { ClickService } from './ClickService';
@@ -7,7 +9,7 @@ import { KeyService } from './KeyService';
 import { NotifyService } from './NotifyService';
 import { FileUploadService } from './FileUploadService';
 import { ScrollService } from './ScrollService';
-import { ExecutionContext } from './BaseActionService';
+import { AccessibilityTreeExtractor } from './AccessibilityTreeExtractor';
 
 import type { ToolExecutionResult } from '@/shared/types';
 
@@ -21,17 +23,21 @@ export class ExecutionService {
   private notifyService: NotifyService;
   private fileUploadService: FileUploadService;
   private scrollService: ScrollService;
+  private accessibilityTreeExtractor: AccessibilityTreeExtractor;
 
-  constructor(private context: ExecutionContext) {
-    this.clickService = new ClickService(this.context);
-    this.typeService = new TypeService(this.context);
-    this.navigateService = new NavigateService(this.context);
-    this.keyService = new KeyService(this.context);
+  constructor(private tabService: TabService) {
+    this.clickService = new ClickService(this.tabService);
+    this.typeService = new TypeService(this.tabService);
+    this.navigateService = new NavigateService(this.tabService);
+    this.keyService = new KeyService(this.tabService);
     this.notifyService = new NotifyService();
-    this.fileUploadService = new FileUploadService(this.context);
-    this.snapshotService = new SnapshotService(this.context);
-    this.contextService = new ContextService(this.context);
-    this.scrollService = new ScrollService(this.context);
+    this.fileUploadService = new FileUploadService(this.tabService);
+    this.snapshotService = new SnapshotService(this.tabService);
+    this.contextService = new ContextService(this.tabService);
+    this.scrollService = new ScrollService(this.tabService);
+    this.accessibilityTreeExtractor = new AccessibilityTreeExtractor(
+      this.tabService
+    );
   }
 
   public async executeTool(
@@ -56,7 +62,7 @@ export class ExecutionService {
         return this.keyService.execute(params);
 
       case 'context':
-        return this.contextService.execute();
+        return this.contextService.execute(params);
 
       case 'snapshot':
         return this.snapshotService.execute(params);
@@ -67,12 +73,18 @@ export class ExecutionService {
       case 'file':
         return this.fileUploadService.execute(params);
 
+      case 'create_tab':
+        await this.tabService.createTab(params.url, params.tabId);
+        return { success: true };
+
       case 'scroll':
         return this.scrollService.execute(params);
 
       case 'waitForNetworkIdle':
-        await this.clickService.waitForNetworkIdle(params);
-        return { success: true, value: 'Network idle' };
+        return this.navigateService.executeNetworkIdle(params);
+
+      case 'extract_context':
+        return this.accessibilityTreeExtractor.execute(params);
 
       default:
         return { success: false, error: `Unknown tool: ${toolName}` };

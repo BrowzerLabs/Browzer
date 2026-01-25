@@ -188,9 +188,9 @@ export class TabService extends EventEmitter {
     }
   }
 
-  public createTab(url?: string): Tab {
+  public async createTab(url?: string, id?: string): Promise<Tab> {
     const previousActiveTabId = this.activeTabId;
-    const tabId = `tab-${++this.tabCounter}`;
+    const tabId = id ? id : `tab-${++this.tabCounter}`;
     const urlToLoad = url || this.newTabUrl;
 
     const view = new WebContentsView({
@@ -243,7 +243,9 @@ export class TabService extends EventEmitter {
     }
     this.baseWindow.contentView.addChildView(view);
     this.updateTabViewBounds(view, this.currentSidebarWidth);
-    view.webContents.loadURL(this.navigationService.normalizeURL(urlToLoad));
+    await view.webContents.loadURL(
+      this.navigationService.normalizeURL(urlToLoad)
+    );
     this.switchToTab(tabId);
     this.emit('tab:created', tab, previousActiveTabId);
     const focusDelay = process.platform === 'win32' ? 220 : 100;
@@ -304,11 +306,11 @@ export class TabService extends EventEmitter {
     return true;
   }
 
-  public restoreLastClosedTab(): boolean {
+  public async restoreLastClosedTab(): Promise<boolean> {
     const lastClosedTab = this.closedTabs.pop();
     if (!lastClosedTab) return false;
 
-    const tab = this.createTab(lastClosedTab.url);
+    const tab = await this.createTab(lastClosedTab.url);
 
     if (lastClosedTab.groupId && this.tabGroups.has(lastClosedTab.groupId)) {
       this.assignTabToGroup(tab.id, lastClosedTab.groupId);
@@ -351,13 +353,16 @@ export class TabService extends EventEmitter {
     return true;
   }
 
-  public navigate(tabId: string, url: string): boolean {
-    const tab = this.tabs.get(tabId) ?? this.createTab(url);
-    tab.view.webContents.loadURL(this.navigationService.normalizeURL(url));
+  public async navigate(tabId: string, url: string): Promise<boolean> {
+    const existingTab = this.tabs.get(tabId);
+    const tab = existingTab ? existingTab : await this.createTab(url, tabId);
+    await tab.view.webContents.loadURL(
+      this.navigationService.normalizeURL(url)
+    );
     return true;
   }
 
-  public goBack(tabId: string): boolean {
+  public async goBack(tabId: string): Promise<boolean> {
     const tab = this.tabs.get(tabId);
     if (!tab) return false;
 
@@ -381,7 +386,7 @@ export class TabService extends EventEmitter {
     return true;
   }
 
-  public goForward(tabId: string): boolean {
+  public async goForward(tabId: string): Promise<boolean> {
     const tab = this.tabs.get(tabId);
     if (!tab || !tab.view.webContents.navigationHistory.canGoForward())
       return false;
@@ -993,7 +998,7 @@ export class TabService extends EventEmitter {
 
       for (const tabInfo of snapshot.tabs) {
         console.log('[TabService] Restoring tab:', tabInfo.url);
-        const tab = this.createTab(tabInfo.url);
+        const tab = await this.createTab(tabInfo.url);
 
         if (snapshot.activeTabId === tabInfo.id) {
           newActiveTabId = tab.id;

@@ -1,5 +1,4 @@
 import { EventEmitter } from 'events';
-import { WebContentsView } from 'electron';
 
 import { v4 as uuidv4 } from 'uuid';
 
@@ -14,10 +13,7 @@ import type {
 } from './types';
 
 import { tokenManager } from '@/main/auth/TokenManager';
-import {
-  AccessibilityTreeExtractor,
-  ExecutionService,
-} from '@/main/automation';
+import { ExecutionService } from '@/main/automation';
 import { RecordingSession } from '@/shared/types';
 
 export type { AutopilotProgressEvent };
@@ -26,8 +22,6 @@ const API_BASE_URL = process.env.SERVICES_API_URL || 'http://localhost:8000';
 
 export class AutopilotExecutionService extends EventEmitter {
   private executor: ExecutionService;
-  private view: WebContentsView;
-  private accessibilityExtractor: AccessibilityTreeExtractor;
   private sessionId: string | null = null;
   private localSessionId: string;
   private status: 'idle' | 'running' | 'completed' | 'failed' | 'stopped' =
@@ -36,15 +30,9 @@ export class AutopilotExecutionService extends EventEmitter {
   private electronId: string;
   private messages: Record<string, unknown>[] = [];
 
-  constructor(
-    executor: ExecutionService,
-    view: WebContentsView,
-    electronId: string
-  ) {
+  constructor(executor: ExecutionService, electronId: string) {
     super();
     this.executor = executor;
-    this.view = view;
-    this.accessibilityExtractor = new AccessibilityTreeExtractor(this.view);
     this.localSessionId = uuidv4();
     this.electronId = electronId;
   }
@@ -270,12 +258,16 @@ export class AutopilotExecutionService extends EventEmitter {
 
     switch (toolName) {
       case 'extract_context': {
-        const extractResult =
-          await this.accessibilityExtractor.extractContext();
+        const extractResult = await this.executor.executeTool(
+          'extract_context',
+          {
+            tabId: input.tabId as string,
+          }
+        );
         if (extractResult.error) {
           return { success: false, content: extractResult.error };
         }
-        const content = extractResult.tree ?? '';
+        const content = extractResult.value ?? '';
         const truncated =
           content.length > 50000
             ? content.substring(0, 50000) + '\n[...truncated...]'
@@ -283,9 +275,18 @@ export class AutopilotExecutionService extends EventEmitter {
         return { success: true, content: truncated };
       }
 
+      case 'create_tab': {
+        await this.executor.executeTool('create_tab', {
+          url: input.url as string,
+          tabId: input.tabId as string,
+        });
+        return { success: true, content: '✅' };
+      }
+
       case 'click': {
         result = await this.executor.executeTool('click', {
           nodeId: input.backend_node_id as number,
+          tabId: input.tabId as string,
         });
         return {
           success: result?.success !== false,
@@ -300,6 +301,7 @@ export class AutopilotExecutionService extends EventEmitter {
           nodeId: input.backend_node_id as number,
           value: input.text as string,
           clearFirst: (input.clearFirst as boolean) ?? true,
+          tabId: input.tabId as string,
         });
         if (result?.success && input.pressEnter) {
           await this.executor.executeTool('key', { key: 'Enter' });
@@ -316,6 +318,7 @@ export class AutopilotExecutionService extends EventEmitter {
         result = await this.executor.executeTool('scroll', {
           direction: input.direction as string,
           amount: input.amount as number,
+          tabId: input.tabId as string,
         });
         return {
           success: result?.success !== false,
@@ -328,6 +331,7 @@ export class AutopilotExecutionService extends EventEmitter {
       case 'navigate': {
         result = await this.executor.executeTool('navigate', {
           url: input.url as string,
+          tabId: input.tabId as string,
         });
         await this.sleep(1500);
         return {
@@ -342,6 +346,7 @@ export class AutopilotExecutionService extends EventEmitter {
         result = await this.executor.executeTool('key', {
           key: input.key as string,
           modifiers: input.modifiers as string[],
+          tabId: input.tabId as string,
         });
         return {
           success: result?.success !== false,
@@ -357,6 +362,7 @@ export class AutopilotExecutionService extends EventEmitter {
           result = await this.executor.executeTool('waitForNetworkIdle', {
             timeout,
             idleTime: 500,
+            tabId: input.tabId as string,
           });
           return {
             success: result?.success !== false,
