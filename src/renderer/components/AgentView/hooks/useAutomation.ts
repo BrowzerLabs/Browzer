@@ -120,9 +120,19 @@ export function useAutomation() {
     }
   }, [currentSession, isSubmitting, stopAutomation]);
 
-  const handleModeChange = useCallback((mode: AgentMode) => {
-    setAgentMode(mode);
-  }, []);
+  const handleModeChange = useCallback(
+    (mode: AgentMode) => {
+      setAgentMode(mode);
+      if (
+        mode === 'automate' &&
+        !selectedRecordingId &&
+        recordings.length > 0
+      ) {
+        setSelectedRecording(recordings[0].id);
+      }
+    },
+    [selectedRecordingId, recordings, setSelectedRecording]
+  );
 
   const handleAskSubmit = useCallback(() => {
     if (!userPrompt.trim()) {

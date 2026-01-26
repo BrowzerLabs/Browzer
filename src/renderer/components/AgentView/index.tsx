@@ -39,6 +39,7 @@ export default function AgentView() {
       {(agentMode === 'automate' || agentMode === 'autopilot') && (
         <AgentHeader
           viewMode={viewState}
+          agentMode={agentMode}
           selectedRecordingId={selectedRecordingId}
           recordings={recordings}
           currentSession={currentSession}
