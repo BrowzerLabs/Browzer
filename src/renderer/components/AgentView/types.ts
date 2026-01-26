@@ -9,6 +9,7 @@ export type AgentMode = 'ask' | 'automate' | 'autopilot';
 
 export interface AgentHeaderProps {
   viewMode: AgentViewMode;
+  agentMode: AgentMode;
   selectedRecordingId: string | null;
   recordings: RecordingSession[];
   currentSession: AutomationSession | null;
