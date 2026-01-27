@@ -1,7 +1,8 @@
 import { WebContentsView } from 'electron';
 
-import { TabInfo } from '@/shared/types';
 import { PasswordAutomation } from '../password';
+
+import { TabInfo } from '@/shared/types';
 
 export type ClickTrackingHandler = (
   event: any,

@@ -1,5 +1,6 @@
-import { ToolExecutionResult } from '@/shared/types';
 import { BaseActionService, ExecutionContext } from './BaseActionService';
+
+import { ToolExecutionResult } from '@/shared/types';
 
 export interface KeyParams {
   key: string;
@@ -20,16 +21,8 @@ export class KeyService extends BaseActionService {
       });
 
       const modifiers = params.modifiers || [];
-
-      console.log(
-        `[KeyHandler] Pressing key: ${params.key} with modifiers: ${modifiers.join('+')}`
-      );
-
       await this.pressKey(params.key, modifiers);
-
-      return {
-        success: true,
-      };
+      return { success: true };
     } catch (error) {
       console.error('[KeyHandler] Error:', error);
       return {
@@ -89,7 +82,9 @@ export class KeyService extends BaseActionService {
     await this.sleep(10);
 
     // Release modifier keys in reverse order, tracking remaining active modifiers
-    const remainingModifiers: Array<'Control' | 'Shift' | 'Alt' | 'Meta'> = [...modifiers];
+    const remainingModifiers: Array<'Control' | 'Shift' | 'Alt' | 'Meta'> = [
+      ...modifiers,
+    ];
     for (let i = modifiers.length - 1; i >= 0; i--) {
       await this.pressModifier(modifiers[i], false, remainingModifiers);
       remainingModifiers.pop();

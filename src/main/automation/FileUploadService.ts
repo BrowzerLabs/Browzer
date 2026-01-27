@@ -1,10 +1,12 @@
-import { ToolExecutionResult } from '@/shared/types';
+import fs from 'fs';
+
 import {
   BaseActionService,
   ExecutionContext,
   NodeParams,
 } from './BaseActionService';
-import fs from 'fs';
+
+import { ToolExecutionResult } from '@/shared/types';
 
 export interface FileUploadParams extends NodeParams {
   filePaths: string[];
@@ -61,7 +63,8 @@ export class FileUploadService extends BaseActionService {
 
       return {
         success: false,
-        error: 'Either nodeId, selector, or element attributes must be provided',
+        error:
+          'Either nodeId, selector, or element attributes must be provided',
       };
     } catch (error) {
       console.error('[FileUploadService] Error:', error);
@@ -131,7 +134,7 @@ export class FileUploadService extends BaseActionService {
         return { success: false, error: 'No accessibility nodes found' };
       }
 
-      const bestMatch = this.findBestMatchingNode(nodes, params);
+      const bestMatch = await this.findBestMatchingNode(nodes, params);
 
       if (!bestMatch) {
         return {

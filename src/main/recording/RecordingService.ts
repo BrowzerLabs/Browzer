@@ -1,9 +1,12 @@
-import { BaseWindow, Debugger, WebContentsView } from 'electron';
+/* eslint-disable no-useless-escape */
+import { BaseWindow, Debugger, WebContentsView, dialog } from 'electron';
 import { EventEmitter } from 'events';
-import { AXNode, RecordingAction, RecordingSession } from '@/shared/types';
-import { RecordingStore } from '../recording';
 import { randomUUID } from 'crypto';
+
+import { RecordingStore } from '../recording';
 import { Tab } from '../browser';
+
+import { AXNode, RecordingAction, RecordingSession } from '@/shared/types';
 
 const CLICK_MARKER = '__browzer_click__';
 const INPUT_MARKER = '__browzer_input__';
@@ -12,8 +15,8 @@ const KEY_MARKER = '__browzer_key__';
 export class RecordingService extends EventEmitter {
   private recordingStore: RecordingStore;
   private currentSession: RecordingSession | null = null;
-  private recordingStartTime: number = 0;
-  private recordingStartUrl: string = '';
+  private recordingStartTime = 0;
+  private recordingStartUrl = '';
 
   constructor(
     private baseWindow: BaseWindow,
@@ -107,6 +110,30 @@ export class RecordingService extends EventEmitter {
       return;
     }
 
+    if (action.element) {
+      const role = action.element.role;
+      const lastAction =
+        this.currentSession.actions[this.currentSession.actions.length - 1];
+      if (lastAction && lastAction.element) {
+        const timeDiff = action.timestamp - lastAction.timestamp;
+        const isSameRole = lastAction.element.role === role;
+        const isSameName = lastAction.element.name === action.element.name;
+        const isSameValue = lastAction.element.value === action.element.value;
+        const isSameTab = lastAction.tabId === action.tabId;
+
+        if (
+          timeDiff < 300 &&
+          isSameRole &&
+          isSameName &&
+          isSameValue &&
+          isSameTab
+        ) {
+          console.log('Duplicate action skipped', action);
+          return;
+        }
+      }
+    }
+
     this.currentSession.actions.push(action);
     this.browserView.webContents.send('recording:action-recorded', action);
   }
@@ -155,92 +182,422 @@ export class RecordingService extends EventEmitter {
         window._click_data = null;
         window._key_data = null;
         
-        function getElementName(el) {
-          if (!el) return '';
-
-          const title = el.getAttribute('title') || el.getAttribute('name') || el.getAttribute('aria-label');
-          if (title) return title.trim().substring(0, 250);
-
-          const id = el.getAttribute('id');
+        function getElementName(element) {
+          if (!element) return '';
+          const role = getElementRole(element);
+          
+          switch (role) {
+            case 'button':
+              return getButtonName(element);
+            case 'link':
+              return getLinkName(element);
+            case 'textbox':
+            case 'searchbox':
+              return getTextboxName(element);
+            case 'checkbox':
+            case 'radio':
+            case 'switch':
+              return getCheckableInputName(element);
+            case 'combobox':
+            case 'listbox':
+              return getComboboxName(element);
+            case 'option':
+              return getOptionName(element);
+            case 'image':
+            case 'figure':
+            case 'svg':
+              return getImageName(element);
+            case 'heading':
+              return getHeadingName(element);
+            default:
+              return getGenericName(element);
+          }
+        }
+        
+        function getButtonName(element) {
+          const ariaLabel = element.getAttribute('aria-label');
+          if (ariaLabel?.trim()) return ariaLabel.trim();
+          
+          const labelledByText = getTextFromAriaLabelledBy(element);
+          if (labelledByText) return labelledByText;
+          
+          const textContent = getDirectTextContent(element);
+          if (textContent) return textContent;
+          
+          const title = element.getAttribute('title');
+          if (title?.trim()) return title.trim();
+          
+          const describedByText = getTextFromAriaDescribedBy(element);
+          if (describedByText) return describedByText;
+          
+          const img = element.querySelector('img');
+          if (img?.alt?.trim()) return img.alt.trim();
+          
+          const iconName = getIconName(element);
+          if (iconName) return iconName;
+          
+          if (element.tagName.toLowerCase() === 'input') {
+            const value = element.value;
+            if (value?.trim()) return value.trim();
+          }
+          
+          return '';
+        }
+        
+        function getLinkName(element) {
+          const textContent = getDirectTextContent(element);
+          if (textContent) return textContent;
+          
+          const ariaLabel = element.getAttribute('aria-label');
+          if (ariaLabel?.trim()) return ariaLabel.trim();
+          
+          const title = element.getAttribute('title');
+          if (title?.trim()) return title.trim();
+          
+          const labelledByText = getTextFromAriaLabelledBy(element);
+          if (labelledByText) return labelledByText;
+          
+          const img = element.querySelector('img');
+          if (img?.alt?.trim()) return img.alt.trim();
+          
+          return '';
+        }
+        
+        function getTextboxName(element) {
+          const labelText = getAssociatedLabelText(element);
+          if (labelText) return labelText;
+          
+          const ariaLabel = element.getAttribute('aria-label');
+          if (ariaLabel?.trim()) return ariaLabel.trim();
+          
+          const placeholder = element.getAttribute('placeholder');
+          if (placeholder?.trim()) return placeholder.trim();
+          
+          const title = element.getAttribute('title');
+          if (title?.trim()) return title.trim();
+          
+          const name = element.getAttribute('name');
+          if (name?.trim()) return name.trim();
+          
+          const labelledByText = getTextFromAriaLabelledBy(element);
+          if (labelledByText) return labelledByText;
+          
+          const describedByText = getTextFromAriaDescribedBy(element);
+          if (describedByText) return describedByText;
+          
+          const nearbyLabel = findNearbyLabel(element);
+          if (nearbyLabel) return nearbyLabel;
+          
+          return '';
+        }
+        
+        function getCheckableInputName(element) {
+          const text = getDirectTextContent(element);
+          if (text) return text;
+          
+          const labelText = getAssociatedLabelText(element);
+          if (labelText) return labelText;
+          
+          const ariaLabel = element.getAttribute('aria-label');
+          if (ariaLabel?.trim()) return ariaLabel.trim();
+          
+          const labelledByText = getTextFromAriaLabelledBy(element);
+          if (labelledByText) return labelledByText;
+          
+          const title = element.getAttribute('title');
+          if (title?.trim()) return title.trim();
+          
+          const parentLabel = element.closest('label');
+          if (parentLabel) {
+            const text = getDirectTextContent(parentLabel);
+            if (text) return text;
+          }
+          
+          const nearbyLabel = findNearbyLabel(element);
+          if (nearbyLabel) return nearbyLabel;
+          
+          const tableContext = getTableCellContext(element);
+          if (tableContext) return tableContext;
+          
+          const value = element.getAttribute('value');
+          if (value?.trim()) return value.trim();
+          
+          return '';
+        }
+        
+        function getComboboxName(element) {
+          const labelText = getAssociatedLabelText(element);
+          if (labelText) return labelText;
+          
+          const ariaLabel = element.getAttribute('aria-label');
+          if (ariaLabel?.trim()) return ariaLabel.trim();
+          
+          const title = element.getAttribute('title');
+          if (title?.trim()) return title.trim();
+          
+          const name = element.getAttribute('name');
+          if (name?.trim()) return name.trim();
+          
+          const labelledByText = getTextFromAriaLabelledBy(element);
+          if (labelledByText) return labelledByText;
+          
+          const nearbyLabel = findNearbyLabel(element);
+          if (nearbyLabel) return nearbyLabel;
+          
+          if (element.tagName.toLowerCase() === 'select') {
+            const selectedOption = element.options[element.selectedIndex];
+            if (selectedOption?.text?.trim()) return selectedOption.text.trim();
+          }
+          
+          const textContent = getDirectTextContent(element);
+          if (textContent) return textContent;
+          
+          return '';
+        }
+        
+        function getOptionName(element) {
+          const textContent = getDirectTextContent(element);
+          if (textContent) return textContent;
+          
+          const label = element.getAttribute('label');
+          if (label?.trim()) return label.trim();
+          
+          const value = element.getAttribute('value');
+          if (value?.trim()) return value.trim();
+          
+          const ariaLabel = element.getAttribute('aria-label');
+          if (ariaLabel?.trim()) return ariaLabel.trim();
+          
+          const labelledByText = getTextFromAriaLabelledBy(element);
+          if (labelledByText) return labelledByText;
+          
+          return '';
+        }
+        
+        function getImageName(element) {
+          const alt = element.getAttribute('alt');
+          if (alt?.trim()) return alt.trim();
+          
+          const ariaLabel = element.getAttribute('aria-label');
+          if (ariaLabel?.trim()) return ariaLabel.trim();
+          
+          const title = element.getAttribute('title');
+          if (title?.trim()) return title.trim();
+          
+          const labelledByText = getTextFromAriaLabelledBy(element);
+          if (labelledByText) return labelledByText;
+          
+          const describedByText = getTextFromAriaDescribedBy(element);
+          if (describedByText) return describedByText;
+          
+          return '';
+        }
+        
+        function getHeadingName(element) {
+          const textContent = getDirectTextContent(element);
+          if (textContent) return textContent;
+          
+          const ariaLabel = element.getAttribute('aria-label');
+          if (ariaLabel?.trim()) return ariaLabel.trim();
+          
+          const title = element.getAttribute('title');
+          if (title?.trim()) return title.trim();
+          
+          const labelledByText = getTextFromAriaLabelledBy(element);
+          if (labelledByText) return labelledByText;
+          
+          return '';
+        }
+        
+        function getGenericName(element) {
+          const ariaLabel = element.getAttribute('aria-label');
+          if (ariaLabel?.trim()) return ariaLabel.trim();
+          
+          const textContent = getDirectTextContent(element);
+          if (textContent) return textContent;
+          
+          const title = element.getAttribute('title');
+          if (title?.trim()) return title.trim();
+          
+          const name = element.getAttribute('name');
+          if (name?.trim()) return name.trim();
+          
+          const labelledByText = getTextFromAriaLabelledBy(element);
+          if (labelledByText) return labelledByText;
+          
+          const describedByText = getTextFromAriaDescribedBy(element);
+          if (describedByText) return describedByText;
+          
+          return '';
+        }
+        
+        // ========== HELPER FUNCTIONS ==========
+        
+        function getDirectTextContent(element) {
+          if (!element) return '';
+          
+          const tag = element.tagName.toLowerCase();
+          if (tag === 'button' || tag === 'a') {
+            let text = '';
+            for (const node of Array.from(element.childNodes)) {
+              if (node.nodeType === 3) {
+                text += node.textContent || node.innerText || '';
+              } else if (node.nodeType === 1 && node.tagName.toLowerCase() !== 'svg') {
+                text += node.innerText || node.textContent || '';
+              }
+            }
+            const cleaned = text.trim().replace(/\\\\s+/g, ' ');
+            return cleaned.substring(0, 250);
+          }
+          
+          const text = element.innerText?.trim() || element.textContent?.trim() || '';
+          const cleaned = text.replace(/\\\\s+/g, ' ');
+          return cleaned.substring(0, 250);
+        }
+        
+        function getTextFromAriaLabelledBy(element) {
+          const ariaLabelledBy = element.getAttribute('aria-labelledby');
+          if (!ariaLabelledBy) return '';
+          
+          const ids = ariaLabelledBy.split(' ').filter(id => id.trim());
+          const texts = ids
+            .map(id => {
+              const referencedElement = document.getElementById(id);
+              return referencedElement?.textContent?.trim() || '';
+            })
+            .filter(Boolean);
+          
+          if (texts.length > 0) {
+            return texts.join(' ').replace(/\\\\s+/g, ' ').substring(0, 250);
+          }
+          
+          return '';
+        }
+        
+        function getTextFromAriaDescribedBy(element) {
+          const ariaDescribedBy = element.getAttribute('aria-describedby');
+          if (!ariaDescribedBy) return '';
+          
+          const ids = ariaDescribedBy.split(' ').filter(id => id.trim());
+          const texts = ids
+            .map(id => {
+              const referencedElement = document.getElementById(id);
+              return referencedElement?.textContent?.trim() || '';
+            })
+            .filter(Boolean);
+          
+          if (texts.length > 0) {
+            return texts.join(' ').replace(/\\\\s+/g, ' ').substring(0, 250);
+          }
+          
+          return '';
+        }
+        
+        function getAssociatedLabelText(element) {
+          const id = element.getAttribute('id');
           if (id) {
             const label = document.querySelector(\`label[for="\${id}"]\`);
             if (label) {
-              const labelText = label.textContent?.trim() || label.innerText?.trim();
-              if (labelText) return labelText.replace(/\\\\s+/g, ' ').substring(0, 250);
+              const text = label.textContent?.trim() || '';
+              if (text) return text.replace(/\\\\s+/g, ' ').substring(0, 250);
             }
           }
-
-          const ariaLabelledBy = el.getAttribute('aria-labelledby');
-          if (ariaLabelledBy) {
-            const ids = ariaLabelledBy.split(' ').filter(id => id.trim());
-            const texts = ids.map(id => document.getElementById(id)?.textContent?.trim()).filter(Boolean);
-            if (texts.length > 0) return texts.join(' ').replace(/\\\\s+/g, ' ').substring(0, 250);
-          }
           
-          const ariaDescribedBy = el.getAttribute('aria-describedby');
-          if (ariaDescribedBy) {
-            const ids = ariaDescribedBy.split(' ').filter(id => id.trim());
-            const texts = ids.map(id => document.getElementById(id)?.textContent?.trim()).filter(Boolean);
-            if (texts.length > 0) return texts.join(' ').replace(/\\\\s+/g, ' ').substring(0, 250);
-          }
-          
-          const parentLabel = el.closest('label');
+          const parentLabel = element.closest('label');
           if (parentLabel) {
-            const labelText = parentLabel.textContent?.trim() || parentLabel.innerText?.trim();
-            if (labelText) return labelText.replace(/\\\\s+/g, ' ').substring(0, 250);
-          }
-          
-          const tag = el.tagName;
-          if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') {
-            let parent = el.parentElement;
-            let depth = 0;
-            while (parent && depth < 3) {
-              const labelInParent = parent.querySelector('label');
-              if (labelInParent) {
-                const labelText = labelInParent.textContent?.trim();
-                if (labelText) return labelText.replace(/\\\\s+/g, ' ').substring(0, 250);
-              }
-              
-              const prevSibling = parent.previousElementSibling;
-              if (prevSibling && (prevSibling.tagName === 'LABEL' || prevSibling.querySelector('label'))) {
-                const labelText = prevSibling.textContent?.trim();
-                if (labelText) return labelText.replace(/\\\\s+/g, ' ').substring(0, 250);
-              }
-              
-              parent = parent.parentElement;
-              depth++;
-            }
-            
-            if (tag === 'INPUT') {
-              const placeholder = el.placeholder;
-              if (placeholder) return placeholder.substring(0, 250);
-            }
-            
-            return '';
-          }
-          
-          const img = el.querySelector('img');
-          if (img?.alt) return img.alt.trim().substring(0, 250);
-          
-          if (tag === 'BUTTON' || tag === 'A') {
-            let text = '';
-            for (const node of el.childNodes) {
-              if (node.nodeType === 3) text += node.textContent;
-              else if (node.nodeType === 1 && node.tagName !== 'SVG') {
-                text += node.innerText || '';
-              }
-            }
-            if (text.trim()) return text.trim().replace(/\\\\s+/g, ' ').substring(0, 250);
-          } else {
-            const text = el.innerText?.trim() || el.textContent?.trim() || '';
+            const clone = parentLabel.cloneNode(true);
+            const inputs = clone.querySelectorAll('input, select, textarea');
+            inputs.forEach(input => input.remove());
+            const text = clone.textContent?.trim() || '';
             if (text) return text.replace(/\\\\s+/g, ' ').substring(0, 250);
           }
           
-          const className = el.className?.baseVal || el.className || '';
-          const iconMatch = className.match(/fa-([a-z0-9-]+)|bi-([a-z0-9-]+)|icon-([a-z0-9-]+)/i);
+          return '';
+        }
+        
+        function findNearbyLabel(element) {
+          let parent = element.parentElement;
+          let depth = 0;
+          
+          while (parent && depth < 3) {
+            const labelInParent = parent.querySelector('label');
+            if (labelInParent) {
+              const text = labelInParent.textContent?.trim();
+              if (text) return text.replace(/\\\\s+/g, ' ').substring(0, 250);
+            }
+            
+            const prevSibling = parent.previousElementSibling;
+            if (prevSibling) {
+              if (prevSibling.tagName.toLowerCase() === 'label') {
+                const text = prevSibling.textContent?.trim();
+                if (text) return text.replace(/\\\\s+/g, ' ').substring(0, 250);
+              }
+              const labelInSibling = prevSibling.querySelector('label');
+              if (labelInSibling) {
+                const text = labelInSibling.textContent?.trim();
+                if (text) return text.replace(/\\\\s+/g, ' ').substring(0, 250);
+              }
+            }
+            
+            const nextSibling = parent.nextElementSibling;
+            if (nextSibling) {
+              if (nextSibling.tagName.toLowerCase() === 'label') {
+                const text = nextSibling.textContent?.trim();
+                if (text) return text.replace(/\\\\s+/g, ' ').substring(0, 250);
+              }
+              const labelInSibling = nextSibling.querySelector('label');
+              if (labelInSibling) {
+                const text = labelInSibling.textContent?.trim();
+                if (text) return text.replace(/\\\\s+/g, ' ').substring(0, 250);
+              }
+            }
+            
+            parent = parent.parentElement;
+            depth++;
+          }
+          
+          return '';
+        }
+        
+        function getTableCellContext(element) {
+          const cell = element.closest('td, th');
+          if (!cell) return '';
+          
+          const row = cell.closest('tr');
+          if (!row) return '';
+          
+          const clone = row.cloneNode(true);
+          const checkboxes = clone.querySelectorAll('input[type="checkbox"]');
+          checkboxes.forEach(cb => cb.remove());
+          
+          const buttons = clone.querySelectorAll('button, [role="button"]');
+          buttons.forEach(btn => btn.remove());
+          
+          let text = clone.textContent?.trim() || '';
+          text = text.replace(/\\\\s+/g, ' ').trim();
+          
+          if (text && text.length > 10) {
+            return text.substring(0, 250);
+          }
+          
+          return '';
+        }
+        
+        function getIconName(element) {
+          const className = element.className?.baseVal || element.className || '';
+          if (typeof className !== 'string') return '';
+          
+          const iconMatch = className.match(/fa-([a-z0-9-]+)|bi-([a-z0-9-]+)|icon-([a-z0-9-]+)|material-icons/i);
           if (iconMatch) {
-            const iconName = (iconMatch[1] || iconMatch[2] || iconMatch[3]).replace(/-/g, ' ');
-            return iconName.charAt(0).toUpperCase() + iconName.slice(1);
+            const iconName = (iconMatch[1] || iconMatch[2] || iconMatch[3] || '').replace(/-/g, ' ');
+            if (iconName) {
+              return iconName.charAt(0).toUpperCase() + iconName.slice(1);
+            }
+          }
+          
+          if (className.includes('material-icons')) {
+            const text = element.textContent?.trim();
+            if (text) return text.replace(/_/g, ' ');
           }
           
           return '';
@@ -271,6 +628,7 @@ export class RecordingService extends EventEmitter {
             'textarea': 'textbox',
             'select': 'combobox',
             'img': 'image',
+            'svg': 'svg',
             'nav': 'navigation',
             'main': 'main',
             'header': 'banner',
@@ -311,17 +669,22 @@ export class RecordingService extends EventEmitter {
         
         function findBestElement(el) {
           if (!el) return null;
-          const tag = el.tagName;
-          const svgTags = ['PATH', 'CIRCLE', 'RECT', 'LINE', 'POLYGON', 'G', 'SVG'];
+          const tag = el.tagName.toLowerCase();
+          const svgTags = ['path', 'circle', 'rect', 'line', 'polygon', 'g', 'svg', 'ellipse', 'polyline', 'text', 'tspan'];
           
           if (svgTags.includes(tag)) {
-            const interactive = el.closest('button, a, [role="button"], [role="link"]');
+            const svgElement = tag === 'svg' ? el : el.closest('svg');
+            if (svgElement?.getAttribute('aria-label')) {
+              return svgElement;
+            }
+            
+            const interactive = el.closest('button, a, [role="button"], [role="link"], [role="menuitem"], [role="tab"], [role="combobox"]');
             if (interactive) return interactive;
-            const svg = tag === 'SVG' ? el : el.closest('svg');
-            if (svg?.parentElement) return svg.parentElement;
+            
+            if (svgElement?.parentElement) return svgElement.parentElement;
           }
           
-          const interactiveTags = ['BUTTON', 'A', 'INPUT', 'SELECT', 'TEXTAREA'];
+          const interactiveTags = ['BUTTON', 'A', 'INPUT', 'SELECT', 'TEXTAREA', 'OPTION'];
           const interactiveRoles = [
             'button', 'link', 'menuitem', 'menuitemradio', 'menuitemcheckbox',
             'tab', 'checkbox', 'radio', 'switch', 'slider', 'spinbutton',
@@ -354,17 +717,11 @@ export class RecordingService extends EventEmitter {
           
           const element = findBestElement(e.target);
           if (element) {
-            const role = getElementRole(element);
-            const name = getElementName(element);
-            const value = getElementValue(element);
-            const attributes = {};
-            if(element.href || element.getAttribute('href')) attributes.href = element.href || element.getAttribute('href');
-            
             window._click_data = {
-              role: role,
-              name: name,
-              value: value,
-              attributes: attributes,
+              role: getElementRole(element),
+              name: getElementName(element),
+              value: getElementValue(element),
+              attributes: getStableAttributes(element)
             };
           }
           console.log('${CLICK_MARKER}');
@@ -396,71 +753,126 @@ export class RecordingService extends EventEmitter {
         
         const inputDebounce = {};
         const lastRecordedValue = {};
+        const pathCache = new WeakMap();
         
-        function isTextboxElement(el) {
+        function getStableAttributes(el) {
+          const attrs = {};
+          const stableAttrs = ['id', 'name', 'type', 'aria-label', 'data-testid', 'data-test-id', 'data-cy', 'data-test', 'placeholder', 'title', 'alt', 'for', 'href'];
+          stableAttrs.forEach(attr => {
+            const val = el.getAttribute(attr);
+            if (val) attrs[attr] = val;
+          });
+          return attrs;
+        }
+        
+        function isTextInput(el) {
           if (!el) return false;
           const tag = el.tagName.toLowerCase();
-          const type = el.getAttribute('type')?.toLowerCase();
+          const type = el.type?.toLowerCase();
           const role = el.getAttribute('role');
           
-          if (tag === 'textarea' || role === 'textbox' || role === 'searchbox') return true;
-          if (tag === 'input') {
-            const textTypes = ['checkbox', 'radio', 'file'];
-            if (!textTypes.includes(type)) return true;
+          return tag === 'textarea' || role === 'textbox' || role === 'searchbox' ||
+                 (tag === 'input' && !['checkbox', 'radio', 'file', 'switch'].includes(type)) ||
+                 el.isContentEditable || el.getAttribute('contenteditable') === 'true';
+        }
+        
+        function hasContentEditableParent(el) {
+          if (!el.isContentEditable) return false;
+          let p = el.parentElement;
+          while (p && p !== document.body) {
+            if (p.isContentEditable) return true;
+            p = p.parentElement;
           }
-          if (el.isContentEditable || el.getAttribute('contenteditable') === 'true') return true;
-          
           return false;
         }
         
+        function getPath(el) {
+          if (pathCache.has(el)) return pathCache.get(el);
+          if (el.id) return pathCache.set(el, '#' + el.id).get(el);
+          
+          const parts = [];
+          let curr = el, depth = 0;
+          
+          while (curr && curr !== document.body && depth++ < 10) {
+            let sel = curr.tagName.toLowerCase();
+            const cls = typeof curr.className === 'string' ? 
+              curr.className.split(' ').filter(c => c && !/^\d/.test(c)).slice(0, 2) : [];
+            if (cls.length) sel += '.' + cls.join('.');
+            if (curr.getAttribute('role')) sel += '[role="' + curr.getAttribute('role') + '"]';
+            
+            const parent = curr.parentElement;
+            if (parent) {
+              const sibs = Array.from(parent.children).filter(s => s.tagName === curr.tagName);
+              if (sibs.length > 1) sel += ':nth-of-type(' + (sibs.indexOf(curr) + 1) + ')';
+            }
+            parts.unshift(sel);
+            curr = parent;
+          }
+          
+          const path = parts.join(' > ');
+          pathCache.set(el, path);
+          return path;
+        }
+        
+        function getKey(el) {
+          return el.id ? 'id:' + el.id : 
+                 el.name ? 'name:' + el.name : 
+                 el.isContentEditable ? 'path:' + getPath(el) :
+                 getElementName(el) ? 'label:' + getElementName(el) : 'path:' + getPath(el);
+        }
+        
+        function shouldRecord(key, oldVal, newVal, isContentEdit) {
+          if (oldVal === undefined) return true;
+          if (oldVal === newVal) return false;
+          
+          if (isContentEdit) {
+            const o = (oldVal || '').replace(/\s+/g, ' ').trim();
+            const n = (newVal || '').replace(/\s+/g, ' ').trim();
+            const diff = Math.abs(o.length - n.length);
+            return o !== n && diff > 0 && (diff >= 2 || o.length >= 5);
+          }
+          return true;
+        }
+        
         function recordInput(target) {
-          if (!isTextboxElement(target)) return;
-          const key = target.id || target.name || getElementName(target) || 'input';
-          const currentValue = target.isContentEditable 
-            ? (target.innerText || target.textContent || '').trim()
-            : (target.value || '');
+          if (!isTextInput(target) || (target.isContentEditable && hasContentEditableParent(target))) return;
           
-          if (lastRecordedValue[key] === currentValue) return;
+          const key = getKey(target);
+          const val = target.isContentEditable ? (target.innerText || target.textContent || '').trim() : (target.value || '');
           
-          lastRecordedValue[key] = currentValue;
+          if (!shouldRecord(key, lastRecordedValue[key], val, target.isContentEditable)) return;
+          
+          lastRecordedValue[key] = val;
           window.__browzer_event = target;
-          
-          const role = getElementRole(target);
-          const name = getElementName(target);
-          const attributes = {};
-          if(target.href || target.getAttribute('href')) attributes.href = target.href || target.getAttribute('href');
-          
           window._input_data = {
-            role: role,
-            name: name,
-            value: currentValue,
-            attributes: attributes,
+            role: getElementRole(target),
+            name: getElementName(target),
+            value: val,
+            attributes: getStableAttributes(target)
           };
-          
           console.log('${INPUT_MARKER}');
         }
         
-        document.addEventListener('input', (e) => {
-          if (!isTextboxElement(e.target)) return;
+        function handleInput(e) {
+          const t = e.target;
+          if (!isTextInput(t) || (t.isContentEditable && hasContentEditableParent(t))) return;
           
-          const target = e.target;
-          const key = target.id || target.name || getElementName(target) || 'input';
-          
+          const key = getKey(t);
           clearTimeout(inputDebounce[key]);
-          inputDebounce[key] = setTimeout(() => {
-            recordInput(target);
-          }, 1000);
-        }, true);
+          inputDebounce[key] = setTimeout(() => recordInput(t), t.isContentEditable ? 1500 : 1000);
+        }
         
-        document.addEventListener('blur', (e) => {
-          if (!isTextboxElement(e.target)) return;
+        function handleBlur(e) {
+          const t = e.target;
+          if (!isTextInput(t) || (t.isContentEditable && hasContentEditableParent(t))) return;
           
-          const target = e.target;
-          const key = target.id || target.name || getElementName(target) || 'input';
-          
+          const key = getKey(t);
           clearTimeout(inputDebounce[key]);
-          recordInput(target);
-        }, true);
+          recordInput(t);
+        }
+        
+        document.addEventListener('input', handleInput, true);
+        document.addEventListener('blur', handleBlur, true);
       }
     `;
   }
@@ -497,9 +909,11 @@ export class RecordingService extends EventEmitter {
           }
           break;
         case 'Page.fileChooserOpened':
-          const { dialog } = require('electron');
           const result = await dialog.showOpenDialog(this.baseWindow, {
-            properties: params.mode === 'selectMultiple' ? ['openFile', 'multiSelections'] : ['openFile']
+            properties:
+              params.mode === 'selectMultiple'
+                ? ['openFile', 'multiSelections']
+                : ['openFile'],
           });
           if (!result.canceled && result.filePaths.length > 0) {
             const fileAction: RecordingAction = {
@@ -508,20 +922,23 @@ export class RecordingService extends EventEmitter {
               url: tab.view.webContents.getURL(),
               timestamp: Date.now(),
               filePaths: result.filePaths,
-            }
+            };
             this.addAction(fileAction);
             if (params.backendNodeId) {
               try {
-                await tab.view.webContents.debugger.sendCommand('DOM.setFileInputFiles', {
-                  files: result.filePaths,
-                  backendNodeId: params.backendNodeId
-                });
+                await tab.view.webContents.debugger.sendCommand(
+                  'DOM.setFileInputFiles',
+                  {
+                    files: result.filePaths,
+                    backendNodeId: params.backendNodeId,
+                  }
+                );
                 console.log('Files set successfully');
               } catch (err) {
                 console.error('Error setting files:', err);
               }
             }
-          };
+          }
           break;
         default:
       }
@@ -560,40 +977,14 @@ export class RecordingService extends EventEmitter {
       returnByValue: true,
     });
     const data = dataResult.result.value || {};
-    let axData: AXNode = { role: '', name: '', value: '' };
-
-    try {
-      const { result } = await cdp.sendCommand('Runtime.evaluate', {
-        expression: 'window.__browzer_event',
-        returnByValue: false,
-      });
-
-      if (result && result.objectId) {
-        const { nodes } = await cdp.sendCommand(
-          'Accessibility.getPartialAXTree',
-          {
-            objectId: result.objectId,
-            fetchRelatives: true,
-          }
-        );
-
-        axData = this.extractAccessibilityData(nodes);
-        // console.log(this.formatAccessibilityTree(nodes));
-      } else {
-        console.warn('🔴 No objectId available for clicked element');
-      }
-    } catch (error) {
-      console.error('🔴 Error getting accessibility data for click:', error);
-    }
-
     return {
       tabId: tab.id,
       type: 'click',
       url: tab.view.webContents.getURL(),
       element: {
-        role: data.role || axData.role || '',
-        name: data.name || axData.name || '',
-        value: data.value || axData.value,
+        role: data.role || '',
+        name: data.name || '',
+        value: data.value,
         attributes: data.attributes,
       },
       timestamp: Date.now(),
@@ -609,159 +1000,18 @@ export class RecordingService extends EventEmitter {
       returnByValue: true,
     });
     const data = dataResult.result.value || {};
-    let axData: AXNode = { role: '', name: '', value: '' };
-    try {
-      const { result } = await cdp.sendCommand('Runtime.evaluate', {
-        expression: 'window.__browzer_event',
-        returnByValue: false,
-      });
-      if (!result || !result.objectId) {
-        throw new Error('No objectId available for input element');
-      }
-      const { nodes } = await cdp.sendCommand(
-        'Accessibility.getPartialAXTree',
-        {
-          objectId: result.objectId,
-          fetchRelatives: true,
-        }
-      );
-
-      axData = this.extractAccessibilityData(nodes);
-      console.log(this.formatAccessibilityTree(nodes));
-    } catch (error) {
-      console.error('🔴 Runtime detection also failed:', error);
-    }
-
     return {
       tabId: tab.id,
       type: 'type',
       element: {
-        role: data.role || axData.role,
-        name: data.name || axData.name,
-        value: data.value || axData.value,
+        role: data.role,
+        name: data.name,
+        value: data.value,
         attributes: data.attributes,
       },
       url: tab.view.webContents.getURL(),
       timestamp: Date.now(),
     };
-  }
-
-  private extractAccessibilityData(nodes: any[]): AXNode {
-    const rootNode = nodes.find((n: any) => !n.parentId) || nodes[0];
-    if (!rootNode) {
-      return { role: '', name: '', value: '' };
-    }
-    return {
-      role: rootNode.role?.value || '',
-      name: rootNode.name?.value || '',
-      value: rootNode.value?.value || '',
-    };
-  }
-
-  private formatAccessibilityTree(nodes: any[]): string {
-    const lines: string[] = [];
-    const nodeMap = new Map<string, any>();
-    for (const node of nodes) {
-      if (node.nodeId) {
-        nodeMap.set(node.nodeId, node);
-      }
-    }
-
-    const rootNode = nodes.find((n) => !n.parentId) || nodes[0];
-    if (rootNode) {
-      this.formatNode(rootNode, nodeMap, lines, 0, true);
-    }
-
-    return lines.filter((line) => line.trim() !== '').join('\n');
-  }
-
-  private formatNode(
-    node: any,
-    nodeMap: Map<string, any>,
-    lines: string[],
-    depth: number,
-    isRoot: boolean = false
-  ): void {
-    const role = node.role?.value || '';
-    const name = node.name?.value || '';
-    const value = node.value?.value || '';
-
-    const NOISE_ROLES = new Set([
-      'none',
-      'InlineTextBox',
-      'LineBreak',
-      'LayoutTableCell',
-      'LayoutTableRow',
-      'LayoutTable',
-      'StaticText',
-    ]);
-    const NOISE_PROPVALUE_SET = new Set([null, undefined, '', false]);
-    const NOISE_PROPNAME_SET = new Set([
-      'focusable',
-      'readonly',
-      'level',
-      'orientation',
-      'multiline',
-      'settable',
-      'pressed',
-    ]);
-
-    const shouldInclude =
-      !NOISE_ROLES.has(role) && (name.length > 0 || value.length > 0);
-
-    if (shouldInclude && !isRoot) {
-      const indent = '  '.repeat(depth);
-      let nodeStr = `${indent}[${role}]`;
-
-      if (name && name.trim().length > 0) {
-        name.length > 120
-          ? (nodeStr += ` "${name.trim().substring(0, 120)}..."`)
-          : (nodeStr += ` "${name.trim()}"`);
-      }
-
-      if (value && value !== name && value.trim().length > 0) {
-        value.length > 120
-          ? (nodeStr += ` value="${value.trim().substring(0, 120)}..."`)
-          : (nodeStr += ` value="${value.trim()}"`);
-      }
-
-      if (node.properties) {
-        const importantProps: string[] = [];
-        importantProps.push(`nodeId=${node.nodeId}`);
-
-        for (const prop of node.properties) {
-          const propName = prop.name;
-          const propValue = prop.value?.value;
-
-          if (
-            !NOISE_PROPVALUE_SET.has(propValue) &&
-            !NOISE_PROPNAME_SET.has(propName)
-          ) {
-            const propStr =
-              typeof propValue === 'string' && propValue.length > 120
-                ? `${propName}=${propValue.substring(0, 120)}...`
-                : `${propName}=${propValue}`;
-            importantProps.push(propStr);
-          }
-        }
-
-        if (importantProps.length > 0) {
-          nodeStr += ` ${importantProps.join(', ')}`;
-        }
-      }
-
-      lines.push(nodeStr);
-    }
-
-    if (node.childIds && node.childIds.length > 0) {
-      for (const childId of node.childIds) {
-        const childNode = nodeMap.get(childId);
-        if (childNode) {
-          const nextDepth = shouldInclude && !isRoot ? depth + 1 : depth;
-          this.formatNode(childNode, nodeMap, lines, nextDepth, false);
-        }
-      }
-    }
   }
 
   private isSignificantNavigation(url: string): boolean {

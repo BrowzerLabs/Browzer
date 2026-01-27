@@ -1,10 +1,10 @@
-import { Debugger } from 'electron';
-import { ToolExecutionResult } from '@/shared/types';
 import {
   BaseActionService,
   ExecutionContext,
   NodeParams,
 } from './BaseActionService';
+
+import { ToolExecutionResult } from '@/shared/types';
 
 export interface TypeParams extends NodeParams {
   value: string;
@@ -39,10 +39,19 @@ export class TypeService extends BaseActionService {
         return await this.findAndTypeByAttributes(params, clearFirst);
       }
 
-      return {
-        success: false,
-        error: `Could not find input element with provided parameters`,
-      };
+      for (const char of params.value) {
+        await this.cdp.sendCommand('Input.dispatchKeyEvent', {
+          type: 'keyDown',
+          text: char,
+        });
+
+        await this.cdp.sendCommand('Input.dispatchKeyEvent', {
+          type: 'keyUp',
+          text: char,
+        });
+      }
+
+      return { success: true };
     } catch (error) {
       console.error('Error:', error);
       return {
@@ -68,7 +77,7 @@ export class TypeService extends BaseActionService {
         return { success: false, error: 'No accessibility nodes found' };
       }
 
-      const bestMatch = this.findBestMatchingNode(nodes, params);
+      const bestMatch = await this.findBestMatchingNode(nodes, params);
 
       if (!bestMatch) {
         return {
@@ -89,9 +98,7 @@ export class TypeService extends BaseActionService {
         params.value,
         clearFirst
       );
-      return {
-        success: true,
-      };
+      return { success: true };
     } catch (error) {
       console.error('Error:', error);
       return {
