@@ -122,6 +122,8 @@ jobs:
             echo "✅ Tag created and pushed. Build workflows will be triggered automatically:" >> $GITHUB_STEP_SUMMARY
             echo "  - macOS (build-macos.yml)" >> $GITHUB_STEP_SUMMARY
             echo "  - Windows (build-windows.yml)" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "Both platforms will build and publish releases automatically." >> $GITHUB_STEP_SUMMARY
           else
             echo "⏭️ Tag already existed. No new release created." >> $GITHUB_STEP_SUMMARY
           fi

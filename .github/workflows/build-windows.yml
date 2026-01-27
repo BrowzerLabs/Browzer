@@ -19,10 +19,6 @@ jobs:
   build-windows:
     runs-on: windows-latest
     
-    env:
-      WINDOWS_CERTIFICATE_BASE64: ${{ secrets.WINDOWS_CERTIFICATE_BASE64 }}
-      WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
-    
     strategy:
       matrix:
         arch: [x64, arm64]
@@ -42,10 +38,8 @@ jobs:
           version: ${{ env.PNPM_VERSION }}
       
       - name: Get pnpm store directory
-        shell: pwsh
-        run: |
-          $storePath = pnpm store path --silent
-          "STORE_PATH=$storePath" | Out-File -FilePath $env:GITHUB_ENV -Append
+        shell: bash
+        run: echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
       
       - name: Setup pnpm cache
         uses: actions/cache@v4
@@ -58,96 +52,124 @@ jobs:
         run: pnpm install --frozen-lockfile
       
       - name: Update version in package.json
-        shell: pwsh
+        shell: bash
         run: |
-          if ("${{ github.event_name }}" -eq "workflow_dispatch") {
-            $VERSION = "${{ github.event.inputs.version }}"
-          } else {
-            $VERSION = "${{ github.ref_name }}"
-          }
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+          else
+            VERSION=${GITHUB_REF#refs/tags/}
+          fi
           
           # Remove 'v' prefix if present
-          $VERSION_NUMBER = $VERSION -replace '^v', ''
+          VERSION_NUMBER="${VERSION#v}"
           
-          Write-Host "Updating package.json to version: $VERSION_NUMBER"
+          echo "Updating package.json to version: $VERSION_NUMBER"
           
-          # Update package.json version using Node.js for reliable JSON handling
-          node -e "const fs = require('fs'); const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8')); pkg.version = '$VERSION_NUMBER'; fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');"
+          # Update package.json version (Windows compatible)
+          node -e "const fs=require('fs');const pkg=JSON.parse(fs.readFileSync('package.json'));pkg.version='$VERSION_NUMBER';fs.writeFileSync('package.json',JSON.stringify(pkg,null,2)+'\n');"
           
           # Verify the update
-          Get-Content package.json | Select-String '"version"'
+          grep "\"version\":" package.json
       
-      - name: Setup Windows code signing certificate
-        if: ${{ env.WINDOWS_CERTIFICATE_BASE64 != '' }}
+      - name: Install Azure Trusted Signing dlib
         shell: pwsh
         run: |
-          # Decode certificate from base64
-          $certBytes = [Convert]::FromBase64String($env:WINDOWS_CERTIFICATE_BASE64)
-          $certPath = Join-Path $env:RUNNER_TEMP "certificate.pfx"
-          [IO.File]::WriteAllBytes($certPath, $certBytes)
+          Write-Host "Installing Azure Code Signing tools..."
           
-          Write-Host "Certificate saved to: $certPath"
+          # Install Azure Trusted Signing client
+          Invoke-WebRequest -Uri "https://www.nuget.org/api/v2/package/Microsoft.Trusted.Signing.Client" -OutFile "signing-client.zip"
+          Expand-Archive -Path "signing-client.zip" -DestinationPath "signing-client" -Force
           
-          # Set environment variable for forge config
-          "WINDOWS_CERTIFICATE_FILE=$certPath" | Out-File -FilePath $env:GITHUB_ENV -Append
+          # Find the signing tool
+          $signingTool = Get-ChildItem -Path "signing-client" -Filter "SignTool.exe" -Recurse | Select-Object -First 1
           
-          # Verify certificate (without importing to store)
-          try {
-             $cert = New-Object System.Security.Cryptography.X509Certificates.X509Certificate2($certPath, $env:WINDOWS_CERTIFICATE_PASSWORD)
-             Write-Host "Certificate Subject: $($cert.Subject)"
-             Write-Host "Certificate Issuer: $($cert.Issuer)"
-             Write-Host "Certificate Valid Until: $($cert.NotAfter)"
-            if ($cert.NotAfter -lt (Get-Date)) {
-              throw "Certificate has expired on $($cert.NotAfter)"
-            }
-           } catch {
-            Write-Host "Error: Certificate verification failed - $($_.Exception.Message)"
-            exit 1
-           }
+          if ($signingTool) {
+            Write-Host "Found SignTool at: $($signingTool.FullName)"
+            $signingDir = $signingTool.Directory.FullName
+            echo "SIGNING_TOOL_PATH=$signingDir" >> $env:GITHUB_ENV
+            echo "$signingDir" >> $env:GITHUB_PATH
+          } else {
+            Write-Host "SignTool not found, using system SignTool"
+          }
+      
+      - name: Setup Azure Code Signing
+        shell: pwsh
+        run: |
+          Write-Host "Setting up Azure Trusted Signing parameters..."
+          
+          # Build signing parameters for Azure Trusted Signing
+          $signParams = @(
+            "/fd sha256",
+            "/tr http://timestamp.digicert.com",
+            "/td sha256",
+            "/dlib `"${{ secrets.AZURE_DLIB_PATH }}`"",
+            "/dmdf `"${{ secrets.AZURE_METADATA_FILE }}`""
+          ) -join " "
+          
+          echo "WINDOWS_SIGN_PARAMS=$signParams" >> $env:GITHUB_ENV
+          
+          Write-Host "Signing parameters configured"
+      
+      - name: Create Azure Trusted Signing metadata file
+        shell: pwsh
+        run: |
+          $metadata = @{
+            "Endpoint" = "${{ secrets.AZURE_ENDPOINT }}"
+            "CodeSigningAccountName" = "${{ secrets.AZURE_CODE_SIGNING_ACCOUNT_NAME }}"
+            "CertificateProfileName" = "${{ secrets.AZURE_CERTIFICATE_PROFILE_NAME }}"
+          } | ConvertTo-Json
+          
+          $metadataFile = Join-Path $env:TEMP "metadata.json"
+          $metadata | Out-File -FilePath $metadataFile -Encoding utf8
+          
+          echo "AZURE_METADATA_FILE=$metadataFile" >> $env:GITHUB_ENV
+          
+          Write-Host "Metadata file created at: $metadataFile"
+      
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
       
       - name: Build for Windows (${{ matrix.arch }})
+        shell: bash
         env:
           NODE_ENV: production
           BACKEND_API_URL: ${{ secrets.BACKEND_API_URL }}
-          WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
-        shell: pwsh
+          WINDOWS_SIGN_PARAMS: ${{ env.WINDOWS_SIGN_PARAMS }}
         run: |
-          Write-Host "Building for ${{ matrix.arch }}..."
+          echo "Building for ${{ matrix.arch }}..."
           pnpm run make -- --arch=${{ matrix.arch }} --platform=win32
       
       - name: List build output
-        shell: pwsh
+        shell: bash
         run: |
-          Write-Host "Build output:"
-          Get-ChildItem -Path out -Recurse -Include *.exe,*.nupkg,*.zip | ForEach-Object { $_.FullName }
+          echo "Build output:"
+          find out -type f \( -name "*.exe" -o -name "*.nupkg" -o -name "RELEASES" \)
       
       - name: Generate checksums
-        shell: pwsh
+        shell: bash
         run: |
-          Write-Host "Generating checksums..."
-          $files = Get-ChildItem -Path out/make -Recurse -Include *.exe,*.zip
-          foreach ($file in $files) {
-            Write-Host "Processing: $($file.FullName)"
-            
-            $sha256 = (Get-FileHash -Path $file.FullName -Algorithm SHA256).Hash.ToLower()
-            $sha512 = (Get-FileHash -Path $file.FullName -Algorithm SHA512).Hash.ToLower()
-            
-            "$sha256  $($file.Name)" | Out-File -FilePath "$($file.FullName).sha256" -Encoding utf8
-            "$sha512  $($file.Name)" | Out-File -FilePath "$($file.FullName).sha512" -Encoding utf8
-          }
+          echo "Generating checksums..."
+          find out/make -type f -name "*.exe" | while read file; do
+            echo "Processing: $file"
+            sha256sum "$file" | tee "$file.sha256"
+            sha512sum "$file" | tee "$file.sha512"
+          done
       
       - name: Verify code signing
-        if: env.WINDOWS_CERTIFICATE_FILE != ''
         shell: pwsh
         run: |
           Write-Host "Verifying code signatures..."
-          $exeFiles = Get-ChildItem -Path out -Recurse -Include *.exe
-          foreach ($exe in $exeFiles) {
-            Write-Host "Checking: $($exe.FullName)"
-            $sig = Get-AuthenticodeSignature -FilePath $exe.FullName
-            Write-Host "  Status: $($sig.Status)"
-            if ($sig.SignerCertificate) {
-              Write-Host "  Signer: $($sig.SignerCertificate.Subject)"
+          Get-ChildItem -Path "out" -Filter "*.exe" -Recurse | ForEach-Object {
+            Write-Host "Checking: $($_.FullName)"
+            $sig = Get-AuthenticodeSignature $_.FullName
+            Write-Host "Status: $($sig.Status)"
+            Write-Host "Signer: $($sig.SignerCertificate.Subject)"
+            if ($sig.Status -ne "Valid") {
+              Write-Warning "Signature verification failed for $($_.FullName)"
             }
           }
       
@@ -157,20 +179,19 @@ jobs:
           name: browzer-windows-${{ matrix.arch }}
           path: |
             out/make/**/*.exe
-            out/make/**/*.zip
             out/make/**/*.nupkg
+            out/make/**/RELEASES
             out/make/**/*.sha256
             out/make/**/*.sha512
           retention-days: 30
           if-no-files-found: error
       
-      - name: Cleanup certificate
-        if: always() && env.WINDOWS_CERTIFICATE_FILE != ''
+      - name: Cleanup
+        if: always()
         shell: pwsh
         run: |
-          if (Test-Path $env:WINDOWS_CERTIFICATE_FILE) {
-            Remove-Item -Path $env:WINDOWS_CERTIFICATE_FILE -Force
-            Write-Host "Certificate file cleaned up"
+          if (Test-Path $env:AZURE_METADATA_FILE) {
+            Remove-Item $env:AZURE_METADATA_FILE -Force
           }
 
   create-release:
@@ -198,8 +219,8 @@ jobs:
         run: |
           mkdir -p release-files
           
-          # Copy all EXE, ZIP, and nupkg files
-          find artifacts -type f \( -name "*.exe" -o -name "*.zip" -o -name "*.nupkg" -o -name "*.sha256" -o -name "*.sha512" \) -exec cp {} release-files/ \;
+          # Copy all EXE, NUPKG, and RELEASES files
+          find artifacts -type f \( -name "*.exe" -o -name "*.nupkg" -o -name "RELEASES" -o -name "*.sha256" -o -name "*.sha512" \) -exec cp {} release-files/ \;
           
           echo "Release files:"
           ls -lh release-files/
@@ -212,67 +233,46 @@ jobs:
           fi
           echo "version=$VERSION" >> $GITHUB_OUTPUT
       
-      - name: Create latest.yml for auto-updater (Windows)
+      - name: Create latest.yml for auto-updater
         run: |
           VERSION="${{ steps.prepare.outputs.version }}"
           VERSION_NUMBER="${VERSION#v}"
           
-          # Find the x64 setup EXE for auto-updates (most common)
-          SETUP_X64=$(find release-files -name "*x64*.exe" | head -1)
-          SETUP_ARM64=$(find release-files -name "*arm64*.exe" | head -1)
+          # Find the main installer EXE
+          INSTALLER_X64=$(find release-files -name "*Setup.exe" -o -name "*-x64-*.exe" | grep -v "arm64" | head -1)
+          INSTALLER_ARM64=$(find release-files -name "*-arm64-*.exe" | head -1)
           
-          if [ -z "$SETUP_X64" ]; then
-            SETUP_X64=$(find release-files -name "*Setup*.exe" -not -name "*arm64*" | head -1)
-          fi
-          
-          if [ -z "$SETUP_X64" ]; then
-            echo "Error: No EXE file found for auto-updates!"
+          # Use x64 as primary installer
+          if [ -n "$INSTALLER_X64" ]; then
+            INSTALLER_FILE="$INSTALLER_X64"
+          elif [ -n "$INSTALLER_ARM64" ]; then
+            INSTALLER_FILE="$INSTALLER_ARM64"
+          else
+            echo "Error: No installer EXE found!"
             echo "Available files:"
             ls -la release-files/
             exit 1
           fi
           
-          echo "Using EXE for auto-updates (x64): $SETUP_X64"
+          echo "Using installer for auto-updates: $INSTALLER_FILE"
           
-          # Get file info for x64
-          FILENAME_X64=$(basename "$SETUP_X64")
-          SIZE_X64=$(stat -c%s "$SETUP_X64" 2>/dev/null || stat -f%z "$SETUP_X64")
-          SHA512_X64=$(sha512sum "$SETUP_X64" | awk '{print $1}')
+          # Get file info
+          FILENAME=$(basename "$INSTALLER_FILE")
+          SIZE=$(stat -c%s "$INSTALLER_FILE" 2>/dev/null || stat -f%z "$INSTALLER_FILE")
+          SHA512=$(sha512sum "$INSTALLER_FILE" | awk '{print $1}')
           RELEASE_DATE=$(date -u +'%Y-%m-%dT%H:%M:%S.000Z')
           
-          # Create latest.yml in electron-updater format
+          # Create latest.yml in electron-updater format for Windows
           cat > release-files/latest.yml <<EOF
-version: ${VERSION_NUMBER}
-files:
-  - url: ${FILENAME_X64}
-    sha512: ${SHA512_X64}
-    size: ${SIZE_X64}
-path: ${FILENAME_X64}
-sha512: ${SHA512_X64}
-releaseDate: '${RELEASE_DATE}'
-EOF
-          
-          # If arm64 exists, add it to the files list
-          if [ -n "$SETUP_ARM64" ] && [ -f "$SETUP_ARM64" ]; then
-            FILENAME_ARM64=$(basename "$SETUP_ARM64")
-            SIZE_ARM64=$(stat -c%s "$SETUP_ARM64" 2>/dev/null || stat -f%z "$SETUP_ARM64")
-            SHA512_ARM64=$(sha512sum "$SETUP_ARM64" | awk '{print $1}')
-            
-            # Recreate with both architectures
-            cat > release-files/latest.yml <<EOF
-version: ${VERSION_NUMBER}
-files:
-  - url: ${FILENAME_X64}
-    sha512: ${SHA512_X64}
-    size: ${SIZE_X64}
-  - url: ${FILENAME_ARM64}
-    sha512: ${SHA512_ARM64}
-    size: ${SIZE_ARM64}
-path: ${FILENAME_X64}
-sha512: ${SHA512_X64}
-releaseDate: '${RELEASE_DATE}'
-EOF
-          fi
+          version: ${VERSION_NUMBER}
+          files:
+            - url: ${FILENAME}
+              sha512: ${SHA512}
+              size: ${SIZE}
+          path: ${FILENAME}
+          sha512: ${SHA512}
+          releaseDate: '${RELEASE_DATE}'
+          EOF
           
           echo "Generated latest.yml:"
           cat release-files/latest.yml
@@ -283,49 +283,47 @@ EOF
           VERSION="${{ steps.prepare.outputs.version }}"
           
           cat > release_notes.md <<EOF
-# Browzer ${VERSION} - Windows
-
-## 📦 Downloads
-
-### Windows
-
-Choose the appropriate version for your system:
-
-- **64-bit (x64)**: Download \`Browzer-${VERSION}-x64-Setup.exe\`
-- **ARM64**: Download \`Browzer-${VERSION}-arm64-Setup.exe\` (for Windows on ARM)
-
-### ✅ Installation
-
-1. Download the appropriate installer (.exe) for your system
-2. Run the installer
-3. Follow the installation wizard
-4. Launch Browzer from the Start Menu or Desktop shortcut
-
-> **Note**: Windows SmartScreen may show a warning for unsigned builds. Click "More info" → "Run anyway" to proceed.
-
-### 🔐 Verification
-
-Verify the integrity of your download:
-
-\`\`\`powershell
-Get-FileHash -Algorithm SHA256 Browzer-${VERSION}-x64-Setup.exe
-\`\`\`
-
-Compare with the .sha256 file included in the release.
-
-### 🔄 Auto-Updates
-
-Once installed, Browzer will automatically check for and install future updates.
-
-### 📝 What's New
-
-<!-- Add your release notes here -->
-
-EOF
+          # Browzer ${VERSION}
+          
+          ## 📦 Downloads
+          
+          ### Windows
+          
+          Choose the appropriate version for your Windows PC:
+          
+          - **64-bit (x64)**: Download \`Browzer-${VERSION}-x64-Setup.exe\`
+          - **ARM64**: Download \`Browzer-${VERSION}-arm64-Setup.exe\`
+          
+          ### ✅ Installation
+          
+          1. Download the appropriate installer
+          2. Run the installer (you may need to allow it in Windows SmartScreen)
+          3. Follow the installation wizard
+          4. Launch Browzer from the Start Menu or Desktop shortcut
+          
+          ### 🔐 Verification
+          
+          Verify the integrity of your download:
+          
+          \`\`\`powershell
+          # PowerShell
+          \$hash = Get-FileHash -Algorithm SHA256 Browzer-${VERSION}-x64-Setup.exe
+          \$hash.Hash -eq (Get-Content Browzer-${VERSION}-x64-Setup.exe.sha256 -Raw).Split()[0]
+          \`\`\`
+          
+          ### 🔄 Auto-Updates
+          
+          Once installed, Browzer will automatically check for and install future updates.
+          
+          ### 📝 What's New
+          
+          <!-- Add your release notes here -->
+          
+          EOF
           
           cat release_notes.md
       
-      - name: Upload to existing release or create new
+      - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.prepare.outputs.version }}
@@ -333,13 +331,13 @@ EOF
           body_path: release_notes.md
           draft: false
           prerelease: false
-          append_body: true
+          generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       
       - name: Output release info
         run: |
-          echo "✅ Windows release uploaded successfully!"
+          echo "✅ Release created successfully!"
           echo "Version: ${{ steps.prepare.outputs.version }}"
           echo "Files released:"
           ls -lh release-files/
