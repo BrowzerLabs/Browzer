@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 
 import AgentView from './AgentView';
-import { LiveRecordingView } from './recording';
+import { RecordingView } from './recording/RecordingView';
 
 import { RecordingAction } from '@/shared/types';
 
@@ -67,10 +67,9 @@ export function Sidebar() {
   return (
     <section className="h-full w-full flex flex-col overflow-hidden bg-background border-l border-l-foreground">
       {state !== 'default' ? (
-        <LiveRecordingView
+        <RecordingView
           actions={actions}
-          isRecording={state === 'recording'}
-          showSaveForm={state === 'saving'}
+          state={state}
           onSave={handleSaveRecording}
           onDiscard={handleDiscardRecording}
         />

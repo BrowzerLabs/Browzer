@@ -7,68 +7,52 @@ import { useAutomation } from './hooks';
 
 export default function AgentView() {
   const {
-    viewState,
-    currentSession,
-    sessionHistory,
-    selectedRecordingId,
-    userPrompt,
-    recordings,
-    isSubmitting,
-    isLoadingSession,
-    isLoadingHistory,
     agentMode,
+    currentSession,
+    selectedRecordingId,
+    userGoal,
+    recordings,
+    isRunning,
     loadRecordings,
-    handleSubmit,
-    handleSessionSelect,
     handleNewSession,
     handleRecordingSelect,
-    handlePromptChange,
-    handleStopAutomation,
+    handleGoalChange,
     handleModeChange,
-    handleAskSubmit,
+    handleSubmit,
+    handleStop,
   } = useAutomation();
 
   useEffect(() => {
     loadRecordings();
   }, [loadRecordings]);
 
-  const isDisabled = currentSession?.status === 'running';
-  const onSubmit = agentMode === 'ask' ? handleAskSubmit : handleSubmit;
-
   return (
     <section className="flex flex-col h-full overflow-hidden">
-      {/* Only show AgentHeader in automate mode */}
-      {agentMode === 'automate' && (
+      {(agentMode === 'automate' || agentMode === 'autopilot') && (
         <AgentHeader
-          viewMode={viewState}
+          agentMode={agentMode}
           selectedRecordingId={selectedRecordingId}
           recordings={recordings}
           currentSession={currentSession}
           onRecordingSelect={handleRecordingSelect}
           onNewSession={handleNewSession}
-          isDisabled={isDisabled}
         />
       )}
 
       <AgentChatArea
         agentMode={agentMode}
-        viewMode={viewState}
         currentSession={currentSession}
-        sessionHistory={sessionHistory}
-        isLoadingSession={isLoadingSession}
-        isLoadingHistory={isLoadingHistory}
-        onSessionSelect={handleSessionSelect}
+        selectedRecordingId={selectedRecordingId}
       />
 
       <AgentFooter
-        userPrompt={userPrompt}
+        userGoal={userGoal}
         selectedRecordingId={selectedRecordingId}
-        isSubmitting={isSubmitting}
-        isDisabled={isDisabled}
+        isRunning={isRunning}
         agentMode={agentMode}
-        onPromptChange={handlePromptChange}
-        onSubmit={onSubmit}
-        onStop={handleStopAutomation}
+        onGoalChange={handleGoalChange}
+        onSubmit={handleSubmit}
+        onStop={handleStop}
         onModeChange={handleModeChange}
       />
     </section>

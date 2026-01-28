@@ -9,23 +9,23 @@ import {
 import { SettingsService } from './settings/SettingsService';
 import { DownloadService } from './download/DownloadService';
 import { AdBlockerService } from './adblocker/AdBlockerService';
+import { RecordingService } from './recording/RecordingService';
 
 import { AutocompleteSuggestion } from '@/shared/types';
 import { HistoryService } from '@/main/history/HistoryService';
 import { PasswordManager } from '@/main/password/PasswordManager';
 import { BookmarkService } from '@/main/bookmark';
-import { RecordingService } from './recording/RecordingService';
+import { AutopilotService } from '@/main/llm/autopilot';
 
 export class BrowserService {
-  // Modular components
   private tabService: TabService;
   private automationManager: AutomationManager;
+  private autopilotService: AutopilotService;
   private navigationService: NavigationService;
   private debuggerService: DebuggerService;
   private downloadService: DownloadService;
   private adBlockerService: AdBlockerService;
 
-  // Services (shared across managers)
   private settingsService: SettingsService;
   private historyService: HistoryService;
   private passwordManager: PasswordManager;
@@ -38,7 +38,10 @@ export class BrowserService {
   ) {
     // Initialize services
     this.settingsService = new SettingsService(this.browserView);
-    this.recordingService = new RecordingService(this.baseWindow, this.browserView);
+    this.recordingService = new RecordingService(
+      this.baseWindow,
+      this.browserView
+    );
     this.historyService = new HistoryService();
     this.passwordManager = new PasswordManager();
     this.bookmarkService = new BookmarkService(this.browserView);
@@ -71,6 +74,8 @@ export class BrowserService {
       this.recordingService.getRecordingStore(),
       this.browserView
     );
+
+    this.autopilotService = new AutopilotService(this.browserView);
 
     this.setupTabEventListeners();
     this.setupAdBlocker();
@@ -107,6 +112,41 @@ export class BrowserService {
 
   public stopAutomation(sessionId: string): void {
     this.automationManager.stopAutomation(sessionId);
+  }
+
+  public async executeAutopilot(
+    userGoal: string,
+    startUrl?: string,
+    referenceRecordingId?: string
+  ): Promise<{
+    success: boolean;
+    sessionId: string;
+    message: string;
+  }> {
+    const referenceRecording = referenceRecordingId
+      ? this.recordingService
+          .getRecordingStore()
+          .getRecording(referenceRecordingId)
+      : undefined;
+    const effectiveStartUrl = startUrl || referenceRecording?.startUrl;
+    const newTab = this.tabService.createTab(effectiveStartUrl);
+    return this.autopilotService.executeAutopilot(
+      newTab,
+      userGoal,
+      effectiveStartUrl,
+      referenceRecording
+    );
+  }
+
+  public async stopAutopilot(sessionId: string): Promise<void> {
+    this.autopilotService.stopAutopilot(sessionId);
+  }
+
+  public getAutopilotStatus(sessionId: string): {
+    exists: boolean;
+    status?: string;
+  } {
+    return this.autopilotService.getSessionStatus(sessionId);
   }
 
   // Service Accessors (for IPCHandlers)
@@ -179,6 +219,7 @@ export class BrowserService {
     this.tabService.destroy();
     this.recordingService.destroy();
     this.automationManager.destroy();
+    this.autopilotService.destroy();
     this.downloadService.destroy();
   }
 
@@ -215,6 +256,10 @@ export class BrowserService {
     this.tabService.on('tab:created', (tab) => {
       this.adBlockerService.registerWebContents(tab.view.webContents);
     });
+  }
+
+  public async notify(channel: string, data: any): Promise<void> {
+    this.browserView.webContents.send(channel, data);
   }
 
   /**

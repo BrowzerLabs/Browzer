@@ -16,6 +16,7 @@ import type {
   CreateFolderParams,
   UpdateBookmarkParams,
   MoveBookmarkParams,
+  RecordingSession,
 } from '@/shared/types';
 
 export interface BrowserAPI {
@@ -76,7 +77,6 @@ export interface BrowserAPI {
 
   // Video File Operations
   openVideoFile: (videoPath: string) => Promise<void>;
-  getVideoFileUrl: (videoPath: string) => Promise<string>;
 
   // Password Management
   getAllPasswords: () => Promise<any[]>;
@@ -172,6 +172,21 @@ export interface BrowserAPI {
     sessionId: string;
     message: string;
   }>;
+
+  // Autopilot (DO Agent)
+  executeAutopilot: (
+    userGoal: string,
+    startUrl?: string,
+    referenceRecordingId?: string
+  ) => Promise<{
+    success: boolean;
+    sessionId: string;
+    message: string;
+  }>;
+  stopAutopilot: (sessionId: string) => Promise<{ success: boolean }>;
+  getAutopilotStatus: (
+    sessionId: string
+  ) => Promise<{ exists: boolean; status?: string }>;
 
   // Session Management
   loadAutomationSession: (sessionId: string) => Promise<any>;

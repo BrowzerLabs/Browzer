@@ -1,34 +1,80 @@
-import { useRef, useEffect } from 'react';
+import { useRef, useEffect, useState } from 'react';
+import { Loader2 } from 'lucide-react';
 
 import { EventItem } from './EventItem';
+import { RecordingActions } from './RecordingActions';
 import { AgentChatAreaProps } from './types';
+
+import { RecordingSession } from '@/shared/types';
 
 export function AgentChatArea({
   agentMode,
-  viewMode,
   currentSession,
+  selectedRecordingId,
 }: AgentChatAreaProps) {
   const chatEndRef = useRef<HTMLDivElement>(null);
+  const [selectedRecording, setSelectedRecording] =
+    useState<RecordingSession | null>(null);
+  const [isLoadingRecording, setIsLoadingRecording] = useState(false);
 
   useEffect(() => {
-    if (viewMode === 'existing_session' && chatEndRef.current) {
+    if (currentSession && chatEndRef.current) {
       chatEndRef.current.scrollIntoView({ behavior: 'smooth' });
     }
-  }, [currentSession?.events, viewMode]);
+  }, [currentSession?.events, currentSession]);
 
-  if (viewMode === 'new_session') {
+  useEffect(() => {
+    const fetchRecording = async () => {
+      if (!selectedRecordingId) {
+        setSelectedRecording(null);
+        return;
+      }
+
+      setIsLoadingRecording(true);
+      try {
+        const recording =
+          await window.recordingAPI.getRecording(selectedRecordingId);
+        setSelectedRecording(recording);
+      } catch (error) {
+        console.error('[AgentChatArea] Failed to fetch recording:', error);
+        setSelectedRecording(null);
+      } finally {
+        setIsLoadingRecording(false);
+      }
+    };
+
+    fetchRecording();
+  }, [selectedRecordingId]);
+
+  if (!currentSession) {
+    if (agentMode === 'automate' && selectedRecordingId) {
+      if (isLoadingRecording) {
+        return (
+          <div className="flex items-center justify-center h-full">
+            <Loader2 className="animate-spin" />
+          </div>
+        );
+      }
+
+      if (selectedRecording) {
+        return <RecordingActions actions={selectedRecording.actions} />;
+      }
+    }
+
     return (
       <div className="flex flex-col items-center justify-center h-full text-center px-6">
         <h3 className="text-lg font-semibold mb-2">
           {agentMode === 'ask'
             ? 'Ask anything about the current page...'
-            : 'Describe what you want to automate...'}
+            : agentMode === 'autopilot'
+              ? 'Describe what you want to accomplish...'
+              : 'Describe what you want to automate...'}
         </h3>
       </div>
     );
   }
 
-  if (viewMode === 'existing_session' && currentSession) {
+  if (currentSession) {
     return (
       <div className="flex-1 overflow-y-auto overflow-x-hidden min-h-0">
         <div className="py-4 space-y-3 max-w-4xl mx-auto">
@@ -52,12 +98,5 @@ export function AgentChatArea({
     );
   }
 
-  return (
-    <div className="flex items-center justify-center h-full">
-      <div className="text-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4" />
-        <p className="text-sm text-muted-foreground">Loading session...</p>
-      </div>
-    </div>
-  );
+  return null;
 }

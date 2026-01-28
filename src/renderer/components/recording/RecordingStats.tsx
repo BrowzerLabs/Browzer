@@ -1,26 +1,20 @@
-import { Video, MousePointerClick, Clock, HardDrive } from 'lucide-react';
+import { Video, MousePointerClick, Clock } from 'lucide-react';
 
-import { formatDuration, formatFileSize } from '@/renderer/lib/utils';
+import { formatDuration } from '@/renderer/lib/utils';
 
 interface RecordingStatsProps {
   total: number;
   totalActions: number;
   totalDuration: number;
-  totalVideoSize: number;
-  totalSnapshotSize: number;
 }
 
 export function RecordingStats({
   total,
   totalActions,
   totalDuration,
-  totalVideoSize,
-  totalSnapshotSize,
 }: RecordingStatsProps) {
-  const totalStorageSize = totalVideoSize + totalSnapshotSize;
-
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
       <StatCard
         icon={<Video className="w-5 h-5 text-blue-600" />}
         label="Total Recordings"
@@ -40,18 +34,6 @@ export function RecordingStats({
         label="Total Duration"
         value={formatDuration(totalDuration)}
         bgColor="bg-purple-100"
-      />
-
-      <StatCard
-        icon={<HardDrive className="w-5 h-5 text-orange-600" />}
-        label="Storage Used"
-        value={formatFileSize(totalStorageSize)}
-        bgColor="bg-orange-100"
-        subtitle={
-          totalSnapshotSize > 0
-            ? `${formatFileSize(totalSnapshotSize)} snapshots`
-            : undefined
-        }
       />
     </div>
   );

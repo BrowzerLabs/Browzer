@@ -4,7 +4,6 @@ import { toast } from 'sonner';
 
 import type { RecordingSession } from '@/shared/types';
 import { Button } from '@/renderer/ui/button';
-import ThemeToggle from '@/renderer/ui/theme-toggle';
 import {
   RecordingCard,
   RecordingStats,
@@ -54,14 +53,20 @@ export function Recordings() {
   const filterRecordings = () => {
     let filtered = [...recordings];
 
-    // Apply search filter
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase();
       filtered = filtered.filter(
         (rec) =>
           rec.name.toLowerCase().includes(query) ||
-          rec.description?.toLowerCase().includes(query)
+          rec.description?.toLowerCase().includes(query) ||
+          rec.startUrl?.toLowerCase().includes(query)
       );
+    }
+
+    if (filterType === 'with-video') {
+      filtered = filtered.filter((rec) => rec.videoPath);
+    } else if (filterType === 'actions-only') {
+      filtered = filtered.filter((rec) => !rec.videoPath);
     }
 
     setFilteredRecordings(filtered);
@@ -86,6 +91,26 @@ export function Recordings() {
     }
   };
 
+  const handlePlay = async (recording: RecordingSession) => {
+    setSelectedRecording(recording);
+    setIsPlayDialogOpen(true);
+
+    if (recording.videoPath) {
+      try {
+        setVideoUrl(`video-file://${encodeURIComponent(recording.videoPath)}`);
+      } catch (error) {
+        console.error('Failed to load video URL:', error);
+        setVideoUrl(null);
+      }
+    } else {
+      setVideoUrl(null);
+    }
+  };
+
+  const handleOpenVideo = async (videoPath: string) => {
+    await window.browserAPI.createTab(`file://${videoPath}`);
+  };
+
   const handleExport = async (id: string) => {
     try {
       const result = await window.recordingAPI.exportRecording(id);
@@ -94,12 +119,32 @@ export function Recordings() {
         toast.success(`Recording exported to ${result.filePath}`);
       } else if (result.error) {
         toast.error(result.error);
-        return;
+      } else {
+        toast.error('Failed to export recording');
       }
     } catch (error) {
       console.error('Failed to export recording:', error);
       toast.error('Failed to export recording');
     }
+  };
+
+  const getTotalStats = () => {
+    const totalActions = recordings.reduce(
+      (sum, rec) => sum + rec.actions.length,
+      0
+    );
+    const totalDuration = recordings.reduce(
+      (sum, rec) => sum + rec.duration,
+      0
+    );
+    const withVideo = recordings.filter((rec) => rec.videoPath).length;
+
+    return {
+      total: recordings.length,
+      totalActions,
+      totalDuration,
+      withVideo,
+    };
   };
 
   if (loading) {
@@ -109,6 +154,8 @@ export function Recordings() {
       </div>
     );
   }
+
+  const stats = getTotalStats();
 
   return (
     <div className="bg-slate-100 dark:bg-slate-800 min-h-screen">
@@ -120,6 +167,10 @@ export function Recordings() {
               <Video className="w-6 h-6 text-blue-600" />
               Recordings
             </h1>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">
+              {stats.total} recordings • {stats.withVideo} with video •{' '}
+              {stats.totalActions} total actions
+            </p>
           </div>
 
           <section className="flex items-center gap-2">
@@ -145,6 +196,9 @@ export function Recordings() {
           onFilterChange={setFilterType}
         />
 
+        {/* Stats Cards */}
+        <RecordingStats {...stats} />
+
         {/* Recordings Grid */}
         {filteredRecordings.length === 0 ? (
           <div className="bg-white dark:bg-slate-800 rounded-xl border border-gray-200 dark:border-slate-700 p-12 text-center">
@@ -164,7 +218,9 @@ export function Recordings() {
               <RecordingCard
                 key={recording.id}
                 recording={recording}
+                onPlay={handlePlay}
                 onDelete={handleDelete}
+                onOpenVideo={handleOpenVideo}
                 onExport={handleExport}
               />
             ))}

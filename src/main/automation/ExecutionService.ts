@@ -1,4 +1,3 @@
-import type { ToolExecutionResult } from '@/shared/types';
 import { ContextService } from './ContextService';
 import { SnapshotService } from './SnapshotService';
 import { ClickService } from './ClickService';
@@ -7,7 +6,10 @@ import { NavigateService } from './NavigateService';
 import { KeyService } from './KeyService';
 import { NotifyService } from './NotifyService';
 import { FileUploadService } from './FileUploadService';
+import { ScrollService } from './ScrollService';
 import { ExecutionContext } from './BaseActionService';
+
+import type { ToolExecutionResult } from '@/shared/types';
 
 export class ExecutionService {
   private contextService: ContextService;
@@ -18,6 +20,7 @@ export class ExecutionService {
   private keyService: KeyService;
   private notifyService: NotifyService;
   private fileUploadService: FileUploadService;
+  private scrollService: ScrollService;
 
   constructor(private context: ExecutionContext) {
     this.clickService = new ClickService(this.context);
@@ -28,6 +31,7 @@ export class ExecutionService {
     this.fileUploadService = new FileUploadService(this.context);
     this.snapshotService = new SnapshotService(this.context);
     this.contextService = new ContextService(this.context);
+    this.scrollService = new ScrollService(this.context);
   }
 
   public async executeTool(
@@ -62,6 +66,13 @@ export class ExecutionService {
 
       case 'file':
         return this.fileUploadService.execute(params);
+
+      case 'scroll':
+        return this.scrollService.execute(params);
+
+      case 'waitForNetworkIdle':
+        await this.clickService.waitForNetworkIdle(params);
+        return { success: true, value: 'Network idle' };
 
       default:
         return { success: false, error: `Unknown tool: ${toolName}` };

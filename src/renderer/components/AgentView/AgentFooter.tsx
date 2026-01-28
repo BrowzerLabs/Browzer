@@ -18,12 +18,11 @@ import {
 import { Button } from '@/renderer/ui/button';
 
 export function AgentFooter({
-  userPrompt,
+  userGoal,
   selectedRecordingId,
-  isSubmitting,
-  isDisabled,
+  isRunning,
   agentMode,
-  onPromptChange,
+  onGoalChange,
   onSubmit,
   onStop,
   onModeChange,
@@ -35,19 +34,17 @@ export function AgentFooter({
     }
   };
 
-  // In ask mode, only need prompt content; in automate mode, need recording selection too
   const canSubmit =
-    agentMode === 'ask'
-      ? userPrompt.trim() && !isSubmitting
-      : userPrompt.trim() &&
-        selectedRecordingId &&
-        !isSubmitting &&
-        !isDisabled;
+    agentMode === 'ask' // || agentMode === 'autopilot'
+      ? userGoal.trim() && !isRunning
+      : userGoal.trim() && selectedRecordingId && !isRunning;
 
   const placeholder =
     agentMode === 'ask'
       ? 'Ask anything about the current page...'
-      : selectedRecordingId
+      : // : agentMode === 'autopilot'
+        // ? 'Describe what you want to accomplish...'
+        selectedRecordingId
         ? 'Continue the conversation...'
         : 'Describe what you want to automate...';
 
@@ -56,11 +53,13 @@ export function AgentFooter({
       <InputGroup>
         <InputGroupTextarea
           placeholder={placeholder}
-          value={userPrompt}
-          onChange={(e) => onPromptChange(e.target.value)}
+          value={userGoal}
+          onChange={(e) => onGoalChange(e.target.value)}
           onKeyDown={handleKeyDown}
           disabled={
-            agentMode === 'automate' ? isDisabled || isSubmitting : isSubmitting
+            agentMode === 'automate'
+              ? !selectedRecordingId || isRunning
+              : isRunning
           }
           rows={3}
           className="resize-none"
@@ -74,6 +73,10 @@ export function AgentFooter({
                     <MessageSquare className="size-3" /> Ask
                   </span>
                 ) : (
+                  // ) : agentMode === 'autopilot' ? (
+                  //   <span className="flex items-center gap-2">
+                  //     <Rocket className="size-3" /> Autopilot
+                  //   </span>
                   <span className="flex items-center gap-2">
                     <Bot className="size-3" /> Automate
                   </span>
@@ -93,17 +96,21 @@ export function AgentFooter({
                 <Bot className="w-4 h-4 mr-2" />
                 Automate
               </DropdownMenuItem>
+              {/* <DropdownMenuItem onClick={() => onModeChange('autopilot')}>
+                <Rocket className="w-4 h-4 mr-2" />
+                Autopilot
+              </DropdownMenuItem> */}
             </DropdownMenuContent>
           </DropdownMenu>
           <InputGroupButton
             variant="default"
             className="rounded-full ml-auto"
             size="icon-xs"
-            disabled={isSubmitting ? false : !canSubmit}
-            onClick={isSubmitting ? onStop : onSubmit}
-            title={isSubmitting ? 'Stop automation' : 'Send message'}
+            disabled={isRunning ? false : !canSubmit}
+            onClick={isRunning ? onStop : onSubmit}
+            title={isRunning ? 'Stop automation' : 'Send message'}
           >
-            {isSubmitting ? (
+            {isRunning ? (
               <Square className="size-2 bg-white" />
             ) : (
               <ArrowUp className="w-4 h-4" />

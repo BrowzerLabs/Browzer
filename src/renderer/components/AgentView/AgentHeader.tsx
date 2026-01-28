@@ -1,4 +1,4 @@
-import { Plus, Loader2, CheckCircle2, XCircle, Clock } from 'lucide-react';
+import { Plus, Loader2, CheckCircle2, XCircle } from 'lucide-react';
 
 import { AgentHeaderProps } from './types';
 
@@ -13,34 +13,42 @@ import { Button } from '@/renderer/ui/button';
 import { AutomationStatus } from '@/shared/types';
 
 export function AgentHeader({
-  viewMode,
+  agentMode,
   selectedRecordingId,
   recordings,
   currentSession,
   onRecordingSelect,
   onNewSession,
-  isDisabled,
 }: AgentHeaderProps) {
-  const isExistingSession = viewMode === 'existing_session';
+  const isRunning = currentSession?.status === AutomationStatus.RUNNING;
+  const isAutopilotMode = agentMode === 'autopilot';
 
   // Find the selected recording to display only its name in the trigger
   const selectedRecording = recordings.find(
     (r) => r.id === selectedRecordingId
   );
 
+  const selectValue = isAutopilotMode
+    ? selectedRecordingId || 'none'
+    : selectedRecordingId || undefined;
+
   return (
     <div className="flex items-center justify-between border-b bg-background/50 backdrop-blur-sm px-4 py-2 z-16 sticky top-0">
       <div className="flex items-center gap-3">
         <Select
-          value={selectedRecordingId || undefined}
-          onValueChange={onRecordingSelect}
-          disabled={isDisabled || isExistingSession}
+          value={selectValue}
+          onValueChange={(value) =>
+            onRecordingSelect(value === 'none' ? null : value)
+          }
+          disabled={isRunning || currentSession !== null}
         >
           <SelectTrigger className="w-64 max-w-xs h-auto min-h-9">
-            <SelectValue placeholder="Select a recorded session...">
-              {selectedRecording && (
+            <SelectValue placeholder="Select a workflow...">
+              {selectedRecording ? (
                 <span className="truncate block">{selectedRecording.name}</span>
-              )}
+              ) : isAutopilotMode ? (
+                <span className="text-muted-foreground">No workflow</span>
+              ) : null}
             </SelectValue>
           </SelectTrigger>
           <SelectContent
@@ -48,6 +56,11 @@ export function AgentHeader({
             side="bottom"
             className="w-96 max-w-screen"
           >
+            {isAutopilotMode && (
+              <SelectItem value="none">
+                <span className="text-muted-foreground">No workflow</span>
+              </SelectItem>
+            )}
             {recordings.map((recording) => (
               <SelectItem key={recording.id} value={recording.id}>
                 <div className="flex flex-col items-start gap-1 w-80">

@@ -1,11 +1,12 @@
-import { ToolExecutionResult } from '@/shared/types';
 import {
   BaseActionService,
   ExecutionContext,
   NodeParams,
 } from './BaseActionService';
 
-export interface ClickParams extends NodeParams {}
+import { ToolExecutionResult } from '@/shared/types';
+
+export type ClickParams = NodeParams;
 
 export class ClickService extends BaseActionService {
   constructor(context: ExecutionContext) {
@@ -60,7 +61,7 @@ export class ClickService extends BaseActionService {
         return { success: false, error: 'No accessibility nodes found' };
       }
 
-      const bestMatch = this.findBestMatchingNode(nodes, params);
+      const bestMatch = await this.findBestMatchingNode(nodes, params);
 
       if (!bestMatch) {
         return { success: false, error: 'No matching node found for params' };

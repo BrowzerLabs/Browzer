@@ -13,6 +13,19 @@ export function useRecording() {
       .isRecording()
       .then(setIsRecording)
       .catch(() => setIsRecording(false));
+
+    const unsubStart = window.recordingAPI.onRecordingStarted(() => {
+      setIsRecording(true);
+    });
+
+    const unsubStop = window.recordingAPI.onRecordingStopped(() => {
+      setIsRecording(false);
+    });
+
+    return () => {
+      unsubStart();
+      unsubStop();
+    };
   }, []);
 
   const startRecording = useCallback(async () => {

@@ -1,65 +1,30 @@
 import { useState, useCallback, useEffect } from 'react';
 import { toast } from 'sonner';
 
-import { AgentMode } from '../types';
-
-import { useAutomationStore } from '@/renderer/stores/automationStore';
-import { RecordingSession } from '@/shared/types';
+import {
+  useAutomationStore,
+  AgentMode,
+} from '@/renderer/stores/automationStore';
+import { RecordingSession, AutomationStatus } from '@/shared/types';
 
 export function useAutomation() {
   const {
-    viewState,
+    agentMode,
     currentSession,
-    sessionHistory,
     selectedRecordingId,
-    userPrompt,
-    isLoadingSession,
-    isLoadingHistory,
+    userGoal,
+    setAgentMode,
     setSelectedRecording,
-    setUserPrompt,
-    startAutomation,
-    startNewSession,
-    loadStoredSession,
-    // loadSessionHistory,
+    setUserGoal,
+    startSession,
     addEvent,
-    completeAutomation,
-    errorAutomation,
-    stopAutomation,
+    updateSessionStatus,
+    clearSession,
   } = useAutomationStore();
 
   const [recordings, setRecordings] = useState<RecordingSession[]>([]);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [agentMode, setAgentMode] = useState<AgentMode>('automate');
 
-  useEffect(() => {
-    const unsubProgress = window.browserAPI.onAutomationProgress(
-      (data: any) => {
-        addEvent(data.sessionId, data.event);
-      }
-    );
-
-    const unsubComplete = window.browserAPI.onAutomationComplete(
-      (data: any) => {
-        completeAutomation(data.sessionId, data.result);
-        setIsSubmitting(false);
-      }
-    );
-
-    const unsubError = window.browserAPI.onAutomationError((data: any) => {
-      errorAutomation(data.sessionId, data.error);
-      setIsSubmitting(false);
-    });
-
-    return () => {
-      unsubProgress();
-      unsubComplete();
-      unsubError();
-    };
-  }, [addEvent, completeAutomation, errorAutomation]);
-
-  // useEffect(() => {
-  //   loadSessionHistory();
-  // }, [loadSessionHistory]);
+  const isRunning = currentSession?.status === AutomationStatus.RUNNING;
 
   const loadRecordings = useCallback(async () => {
     try {
@@ -70,39 +35,126 @@ export function useAutomation() {
     }
   }, []);
 
-  const handleSubmit = useCallback(async () => {
-    if (!userPrompt.trim() || !selectedRecordingId || isSubmitting) {
+  useEffect(() => {
+    const unsubProgress = window.browserAPI.onAutomationProgress(
+      (data: any) => {
+        addEvent(data.sessionId, data.event);
+      }
+    );
+
+    const unsubComplete = window.browserAPI.onAutomationComplete(
+      (data: any) => {
+        updateSessionStatus(
+          data.sessionId,
+          AutomationStatus.COMPLETED,
+          data.result
+        );
+      }
+    );
+
+    const unsubError = window.browserAPI.onAutomationError((data: any) => {
+      updateSessionStatus(
+        data.sessionId,
+        AutomationStatus.FAILED,
+        undefined,
+        data.error
+      );
+    });
+
+    const onsubUpdateRecording = window.recordingAPI.onRecordingDeleted(
+      async (recordingId: string) => {
+        await loadRecordings();
+        if (selectedRecordingId === recordingId) {
+          toast.warning('Selected recording was deleted');
+          setSelectedRecording(null);
+        }
+      }
+    );
+
+    return () => {
+      unsubProgress();
+      unsubComplete();
+      unsubError();
+      onsubUpdateRecording();
+    };
+  }, [
+    addEvent,
+    updateSessionStatus,
+    setSelectedRecording,
+    selectedRecordingId,
+    loadRecordings,
+  ]);
+
+  const handleSubmitAutomate = useCallback(async () => {
+    if (!userGoal.trim()) {
+      toast.error('Please enter a goal');
       return;
     }
 
-    setIsSubmitting(true);
+    if (!selectedRecordingId) {
+      toast.error('Please select a recording to automate');
+      return;
+    }
 
     try {
       const result = await window.browserAPI.executeLLMAutomation(
-        userPrompt,
+        userGoal,
         selectedRecordingId
       );
 
       if (result.success) {
-        startAutomation(userPrompt, selectedRecordingId, result.sessionId);
+        startSession(
+          userGoal,
+          'automate',
+          selectedRecordingId,
+          result.sessionId
+        );
       } else {
-        setIsSubmitting(false);
+        toast.error(result.message || 'Failed to start automation');
       }
     } catch (error) {
-      setIsSubmitting(false);
+      console.error('[useAutomation] Automate error:', error);
+      toast.error('Failed to start automation');
     }
-  }, [userPrompt, selectedRecordingId, isSubmitting, startAutomation]);
+  }, [userGoal, selectedRecordingId, isRunning, startSession]);
 
-  const handleSessionSelect = useCallback(
-    async (sessionId: string) => {
-      await loadStoredSession(sessionId);
-    },
-    [loadStoredSession]
-  );
+  const handleSubmitAutopilot = useCallback(async () => {
+    if (!userGoal.trim() || isRunning) {
+      return;
+    }
 
-  const handleNewSession = useCallback(() => {
-    startNewSession();
-  }, [startNewSession]);
+    try {
+      const result = await window.browserAPI.executeAutopilot(
+        userGoal,
+        undefined,
+        selectedRecordingId || undefined
+      );
+
+      if (result.success) {
+        startSession(
+          userGoal,
+          'autopilot',
+          selectedRecordingId,
+          result.sessionId
+        );
+      } else {
+        toast.error(result.message || 'Failed to start autopilot');
+      }
+    } catch (error) {
+      console.error('[useAutomation] Autopilot error:', error);
+      toast.error('Failed to start autopilot');
+    }
+  }, [userGoal, selectedRecordingId, isRunning, startSession]);
+
+  const handleSubmitAsk = useCallback(() => {
+    if (!userGoal.trim()) {
+      toast.error('Please enter a prompt');
+      return;
+    }
+    console.log('[Ask Mode] User submitted:', userGoal);
+    toast.info('Ask mode coming soon!');
+    setUserGoal('');
+  }, [userGoal, setUserGoal]);
 
   const handleRecordingSelect = useCallback(
     (recordingId: string | null) => {
@@ -111,54 +163,74 @@ export function useAutomation() {
     [setSelectedRecording]
   );
 
-  const handlePromptChange = useCallback(
-    (prompt: string) => {
-      setUserPrompt(prompt);
-    },
-    [setUserPrompt]
-  );
-
-  const handleStopAutomation = useCallback(async () => {
-    if (currentSession && isSubmitting) {
-      await stopAutomation(currentSession.sessionId);
-      setIsSubmitting(false);
+  const handleSubmit = useCallback(() => {
+    switch (agentMode) {
+      case 'automate':
+        return handleSubmitAutomate();
+      case 'autopilot':
+        return handleSubmitAutopilot();
+      case 'ask':
+        return handleSubmitAsk();
+      default:
+        toast.error('Invalid agent mode');
+        return;
     }
-  }, [currentSession, isSubmitting, stopAutomation]);
+  }, [agentMode, handleSubmitAutomate, handleSubmitAutopilot, handleSubmitAsk]);
 
-  const handleModeChange = useCallback((mode: AgentMode) => {
-    setAgentMode(mode);
-  }, []);
-
-  const handleAskSubmit = useCallback(() => {
-    if (!userPrompt.trim()) {
-      toast.error('Please enter a prompt');
+  const handleStop = useCallback(async () => {
+    if (!currentSession || !isRunning) {
       return;
     }
-    console.log('[Ask Mode] User submitted:', userPrompt);
-    toast.info(userPrompt);
-    setUserPrompt('');
-  }, [userPrompt, setUserPrompt]);
+
+    try {
+      if (currentSession.agentMode === 'autopilot') {
+        await window.browserAPI.stopAutopilot(currentSession.sessionId);
+      } else {
+        await window.browserAPI.stopAutomation(currentSession.sessionId);
+      }
+
+      updateSessionStatus(
+        currentSession.sessionId,
+        AutomationStatus.STOPPED,
+        undefined,
+        'Stopped by user'
+      );
+    } catch (error) {
+      console.error('[useAutomation] Stop error:', error);
+      toast.error('Failed to stop automation');
+    }
+  }, [currentSession, isRunning, updateSessionStatus]);
+
+  const handleModeChange = useCallback(
+    (mode: AgentMode) => {
+      setAgentMode(mode);
+
+      if (mode === 'automate') {
+        if (!selectedRecordingId && recordings.length > 0) {
+          setSelectedRecording(recordings[0].id);
+        } else if (recordings.length === 0) {
+          toast.warning(
+            'No recordings available. You need to select a recording first before automate.'
+          );
+        }
+      }
+    },
+    [setAgentMode, selectedRecordingId, recordings, setSelectedRecording]
+  );
 
   return {
-    viewState,
-    currentSession,
-    sessionHistory,
-    selectedRecordingId,
-    userPrompt,
-    recordings,
-    isSubmitting,
-    isLoadingSession,
-    isLoadingHistory,
     agentMode,
+    currentSession,
+    selectedRecordingId,
+    userGoal,
+    recordings,
+    isRunning,
     loadRecordings,
     handleSubmit,
-    handleSessionSelect,
-    handleNewSession,
+    handleStop,
     handleRecordingSelect,
-    handlePromptChange,
-    handleStopAutomation,
     handleModeChange,
-    handleAskSubmit,
-    setIsSubmitting,
+    handleGoalChange: setUserGoal,
+    handleNewSession: clearSession,
   };
 }

@@ -1,6 +1,12 @@
 import { ipcRenderer } from 'electron';
+
 import { RecordingAPI } from '../types/recording.types';
-import { createSimpleListener, invoke } from '@/preload/utils/ipc-helpers';
+
+import {
+  createEventListener,
+  createSimpleListener,
+  invoke,
+} from '@/preload/utils/ipc-helpers';
 import { RecordingAction } from '@/shared/types';
 
 export const createRecordingAPI = (): RecordingAPI => ({
@@ -25,4 +31,6 @@ export const createRecordingAPI = (): RecordingAPI => ({
     createSimpleListener('recording:started', callback),
   onRecordingStopped: (callback) =>
     createSimpleListener('recording:stopped', callback),
+  onRecordingDeleted: (callback) =>
+    createEventListener<string>('recording:deleted', callback),
 });

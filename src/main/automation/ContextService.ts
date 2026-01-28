@@ -1,5 +1,6 @@
-import { ToolExecutionResult } from '@/shared/types';
 import { BaseActionService, ExecutionContext } from './BaseActionService';
+
+import { ToolExecutionResult } from '@/shared/types';
 
 export class ContextService extends BaseActionService {
   constructor(context: ExecutionContext) {
@@ -74,7 +75,7 @@ export class ContextService extends BaseActionService {
     nodeMap: Map<string, any>,
     lines: string[],
     depth: number,
-    isRoot: boolean = false
+    isRoot = false
   ): void {
     const role = node.role?.value || '';
     const name = String(node.name?.value || '');
