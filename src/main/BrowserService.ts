@@ -258,6 +258,10 @@ export class BrowserService {
     });
   }
 
+  public async notify(channel: string, data: any): Promise<void> {
+    this.browserView.webContents.send(channel, data);
+  }
+
   /**
    * Notify renderer about tab changes
    */

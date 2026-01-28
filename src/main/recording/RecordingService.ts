@@ -143,7 +143,7 @@ export class RecordingService extends EventEmitter {
         const isSameTab = lastAction.tabId === action.tabId;
 
         if (
-          timeDiff < 300 &&
+          timeDiff < 100 &&
           isSameRole &&
           isSameName &&
           isSameValue &&

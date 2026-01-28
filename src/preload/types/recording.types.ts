@@ -16,4 +16,5 @@ export interface RecordingAPI {
   onActionRecorded: (callback: (action: RecordingAction) => void) => () => void;
   onRecordingStarted: (callback: () => void) => () => void;
   onRecordingStopped: (callback: () => void) => () => void;
+  onRecordingDeleted: (callback: (recordingId: string) => void) => () => void;
 }

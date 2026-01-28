@@ -7,68 +7,52 @@ import { useAutomation } from './hooks';
 
 export default function AgentView() {
   const {
-    viewState,
-    currentSession,
-    sessionHistory,
-    selectedRecordingId,
-    userPrompt,
-    recordings,
-    isSubmitting,
-    isLoadingSession,
-    isLoadingHistory,
     agentMode,
+    currentSession,
+    selectedRecordingId,
+    userGoal,
+    recordings,
+    isRunning,
     loadRecordings,
-    handleSessionSelect,
     handleNewSession,
     handleRecordingSelect,
-    handlePromptChange,
+    handleGoalChange,
     handleModeChange,
-    handleUnifiedSubmit,
-    handleUnifiedStop,
+    handleSubmit,
+    handleStop,
   } = useAutomation();
 
   useEffect(() => {
     loadRecordings();
   }, [loadRecordings]);
 
-  const isDisabled = currentSession?.status === 'running';
-
   return (
     <section className="flex flex-col h-full overflow-hidden">
-      {/* Show AgentHeader in automate and autopilot modes (recording selection) */}
       {(agentMode === 'automate' || agentMode === 'autopilot') && (
         <AgentHeader
-          viewMode={viewState}
           agentMode={agentMode}
           selectedRecordingId={selectedRecordingId}
           recordings={recordings}
           currentSession={currentSession}
           onRecordingSelect={handleRecordingSelect}
           onNewSession={handleNewSession}
-          isDisabled={isDisabled}
         />
       )}
 
       <AgentChatArea
         agentMode={agentMode}
-        viewMode={viewState}
         currentSession={currentSession}
-        sessionHistory={sessionHistory}
-        isLoadingSession={isLoadingSession}
-        isLoadingHistory={isLoadingHistory}
-        onSessionSelect={handleSessionSelect}
         selectedRecordingId={selectedRecordingId}
       />
 
       <AgentFooter
-        userPrompt={userPrompt}
+        userGoal={userGoal}
         selectedRecordingId={selectedRecordingId}
-        isSubmitting={isSubmitting}
-        isDisabled={isDisabled}
+        isRunning={isRunning}
         agentMode={agentMode}
-        onPromptChange={handlePromptChange}
-        onSubmit={handleUnifiedSubmit}
-        onStop={handleUnifiedStop}
+        onGoalChange={handleGoalChange}
+        onSubmit={handleSubmit}
+        onStop={handleStop}
         onModeChange={handleModeChange}
       />
     </section>
