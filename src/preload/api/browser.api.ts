@@ -94,8 +94,6 @@ export const createBrowserAPI = (): BrowserAPI => ({
 
   // Video File Operations
   openVideoFile: (videoPath: string) => invoke('video:open-file', videoPath),
-  getVideoFileUrl: (videoPath: string) =>
-    invoke('video:get-file-url', videoPath),
 
   // Password Management API
   getAllPasswords: () => invoke('password:get-all'),

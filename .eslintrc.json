@@ -27,7 +27,8 @@
   "rules": {
     "@typescript-eslint/no-explicit-any": "off",
     "import/order": ["warn", { "newlines-between": "always" }],
-    "no-case-declarations": "off"
+    "no-case-declarations": "off",
+    "no-useless-escape": "off"
   },
   "overrides": [
     {

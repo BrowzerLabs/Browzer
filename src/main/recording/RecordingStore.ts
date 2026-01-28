@@ -21,6 +21,7 @@ export class RecordingStore {
     update: Database.Statement;
     deleteById: Database.Statement;
     clearAll: Database.Statement;
+    getVideoPath: Database.Statement;
   };
 
   constructor() {
@@ -47,8 +48,8 @@ export class RecordingStore {
     this.stmts = {
       insert: this.db.prepare(`
         INSERT INTO recordings (
-          id, name, description, created_at, duration, start_url, actions_json
-        ) VALUES (?, ?, ?, ?, ?, ?, ?)
+          id, name, description, created_at, duration, start_url, actions_json, video_path
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
       `),
       getById: this.db.prepare('SELECT * FROM recordings WHERE id = ?'),
       getAll: this.db.prepare(
@@ -61,6 +62,9 @@ export class RecordingStore {
       `),
       deleteById: this.db.prepare('DELETE FROM recordings WHERE id = ?'),
       clearAll: this.db.prepare('DELETE FROM recordings'),
+      getVideoPath: this.db.prepare(
+        'SELECT video_path FROM recordings WHERE id = ?'
+      ),
     };
 
     console.log('RecordingStore initialized with SQLite at:', dbPath);
@@ -75,6 +79,7 @@ export class RecordingStore {
       duration: row.duration,
       startUrl: row.start_url || undefined,
       actions: JSON.parse(row.actions_json),
+      videoPath: row.video_path || undefined,
     };
   }
 
@@ -87,10 +92,14 @@ export class RecordingStore {
         session.createdAt,
         session.duration,
         session.startUrl || null,
-        JSON.stringify(session.actions)
+        JSON.stringify(session.actions),
+        session.videoPath || null
       );
 
       console.log('✅ Recording saved:', session.name);
+      if (session.videoPath) {
+        console.log('📹 Video included:', session.videoPath);
+      }
     } catch (error) {
       console.error('Error saving recording:', error);
       throw error;
@@ -170,13 +179,27 @@ export class RecordingStore {
     }
   }
 
-  deleteRecording(id: string): boolean {
+  async deleteRecording(id: string): Promise<boolean> {
     try {
+      const row = this.stmts.getVideoPath.get(id) as
+        | { video_path?: string }
+        | undefined;
+      const videoPath = row?.video_path;
+
       const result = this.stmts.deleteById.run(id);
       const deleted = result.changes > 0;
 
       if (deleted) {
         console.log('🗑️ Recording deleted:', id);
+
+        if (videoPath && existsSync(videoPath)) {
+          try {
+            await unlink(videoPath);
+            console.log('📹 Video file deleted:', videoPath);
+          } catch (error) {
+            console.error('Failed to delete video file:', error);
+          }
+        }
       }
 
       return deleted;
@@ -186,10 +209,20 @@ export class RecordingStore {
     }
   }
 
-  deleteRecordings(ids: string[]): number {
+  async deleteRecordings(ids: string[]): Promise<number> {
     if (ids.length === 0) return 0;
 
     try {
+      const videoPaths: string[] = [];
+      for (const id of ids) {
+        const row = this.stmts.getVideoPath.get(id) as
+          | { video_path?: string }
+          | undefined;
+        if (row?.video_path) {
+          videoPaths.push(row.video_path);
+        }
+      }
+
       const deleteMany = this.db.transaction((recordingIds: string[]) => {
         let count = 0;
         for (const id of recordingIds) {
@@ -201,6 +234,18 @@ export class RecordingStore {
 
       const deletedCount = deleteMany(ids);
       console.log(`🗑️ Deleted ${deletedCount} recordings`);
+
+      for (const videoPath of videoPaths) {
+        if (existsSync(videoPath)) {
+          try {
+            await unlink(videoPath);
+            console.log('📹 Video file deleted:', videoPath);
+          } catch (error) {
+            console.error('Failed to delete video file:', error);
+          }
+        }
+      }
+
       return deletedCount;
     } catch (error) {
       console.error('Error deleting multiple recordings:', error);
@@ -258,10 +303,26 @@ export class RecordingStore {
     }
   }
 
-  clearAll(): void {
+  async clearAll(): Promise<void> {
     try {
+      const recordings = this.getAllRecordings();
+      const videoPaths = recordings
+        .map((r) => r.videoPath)
+        .filter((path): path is string => !!path);
+
       this.stmts.clearAll.run();
       console.log('🗑️ All recordings cleared');
+
+      for (const videoPath of videoPaths) {
+        if (existsSync(videoPath)) {
+          try {
+            await unlink(videoPath);
+            console.log('📹 Video file deleted:', videoPath);
+          } catch (error) {
+            console.error('Failed to delete video file:', error);
+          }
+        }
+      }
     } catch (error) {
       console.error('Error clearing all recordings:', error);
       throw error;

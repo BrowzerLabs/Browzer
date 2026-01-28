@@ -2,11 +2,7 @@ import { RecordingAction, RecordingSession } from '@/shared/types';
 
 export interface RecordingAPI {
   startRecording: () => Promise<boolean>;
-  stopRecording: () => Promise<{
-    actions: RecordingAction[];
-    duration: number;
-    startUrl: string;
-  }>;
+  stopRecording: () => Promise<boolean>;
   saveRecording: (name: string, description?: string) => Promise<string>;
   discardRecording: () => Promise<boolean>;
   getCurrentActions: () => Promise<RecordingAction[]>;
@@ -14,7 +10,7 @@ export interface RecordingAPI {
   getRecording: (id: string) => Promise<RecordingSession>;
   exportRecording: (
     id: string
-  ) => Promise<{ success: boolean; filePath?: string; error: string }>;
+  ) => Promise<{ success: boolean; filePath?: string; error?: string }>;
   deleteRecording: (id: string) => Promise<boolean>;
   isRecording: () => Promise<boolean>;
   onActionRecorded: (callback: (action: RecordingAction) => void) => () => void;

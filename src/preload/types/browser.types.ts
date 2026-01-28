@@ -77,7 +77,6 @@ export interface BrowserAPI {
 
   // Video File Operations
   openVideoFile: (videoPath: string) => Promise<void>;
-  getVideoFileUrl: (videoPath: string) => Promise<string>;
 
   // Password Management
   getAllPasswords: () => Promise<any[]>;

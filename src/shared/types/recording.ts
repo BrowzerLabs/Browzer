@@ -20,6 +20,7 @@ export interface RecordingAction {
   filePaths?: string[];
   timestamp: number;
   keys?: string[];
+  snapshotPath?: string;
 }
 
 export interface RecordingSession {
@@ -30,6 +31,7 @@ export interface RecordingSession {
   createdAt: number;
   duration: number;
   startUrl?: string;
+  videoPath?: string;
 }
 
 export interface AXNode {
