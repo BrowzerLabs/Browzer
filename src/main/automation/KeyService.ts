@@ -1,27 +1,39 @@
-import { BaseActionService, ExecutionContext } from './BaseActionService';
+import { Debugger } from 'electron';
+
+import { TabService } from '../browser';
+
+import { BaseActionService } from './BaseActionService';
 
 import { ToolExecutionResult } from '@/shared/types';
 
 export interface KeyParams {
   key: string;
   modifiers?: Array<'Control' | 'Shift' | 'Alt' | 'Meta'>;
+  tabId: string;
 }
 
 export class KeyService extends BaseActionService {
-  constructor(context: ExecutionContext) {
-    super(context);
+  constructor(tabService: TabService) {
+    super(tabService);
   }
 
   public async execute(params: KeyParams): Promise<ToolExecutionResult> {
     try {
-      await this.waitForNetworkIdle({
+      const cdp = this.getCDP(params.tabId);
+      if (!cdp) {
+        return {
+          success: false,
+          error: 'Tab not found, or debugger not avaialable',
+        };
+      }
+      await this.waitForNetworkIdle(cdp, {
         timeout: 3000,
         idleTime: 500,
         maxInflightRequests: 0,
       });
 
       const modifiers = params.modifiers || [];
-      await this.pressKey(params.key, modifiers);
+      await this.pressKey(cdp, params.key, modifiers);
       return { success: true };
     } catch (error) {
       console.error('[KeyHandler] Error:', error);
@@ -34,6 +46,7 @@ export class KeyService extends BaseActionService {
   }
 
   private async pressKey(
+    cdp: Debugger,
     key: string,
     modifiers: Array<'Control' | 'Shift' | 'Alt' | 'Meta'>
   ): Promise<void> {
@@ -43,11 +56,11 @@ export class KeyService extends BaseActionService {
     const activeModifiers: Array<'Control' | 'Shift' | 'Alt' | 'Meta'> = [];
     for (const modifier of modifiers) {
       activeModifiers.push(modifier);
-      await this.pressModifier(modifier, true, activeModifiers);
+      await this.pressModifier(cdp, modifier, true, activeModifiers);
       await this.sleep(10);
     }
 
-    await this.cdp.sendCommand('Input.dispatchKeyEvent', {
+    await cdp.sendCommand('Input.dispatchKeyEvent', {
       type: 'rawKeyDown',
       windowsVirtualKeyCode: keyInfo.keyCode,
       nativeVirtualKeyCode: keyInfo.keyCode,
@@ -61,7 +74,7 @@ export class KeyService extends BaseActionService {
 
     // Char event for printable characters
     if (keyInfo.text) {
-      await this.cdp.sendCommand('Input.dispatchKeyEvent', {
+      await cdp.sendCommand('Input.dispatchKeyEvent', {
         type: 'char',
         text: keyInfo.text,
         unmodifiedText: keyInfo.unmodifiedText,
@@ -71,7 +84,7 @@ export class KeyService extends BaseActionService {
     }
 
     // Release the main key
-    await this.cdp.sendCommand('Input.dispatchKeyEvent', {
+    await cdp.sendCommand('Input.dispatchKeyEvent', {
       type: 'keyUp',
       windowsVirtualKeyCode: keyInfo.keyCode,
       nativeVirtualKeyCode: keyInfo.keyCode,
@@ -86,20 +99,21 @@ export class KeyService extends BaseActionService {
       ...modifiers,
     ];
     for (let i = modifiers.length - 1; i >= 0; i--) {
-      await this.pressModifier(modifiers[i], false, remainingModifiers);
+      await this.pressModifier(cdp, modifiers[i], false, remainingModifiers);
       remainingModifiers.pop();
       await this.sleep(10);
     }
   }
 
   private async pressModifier(
+    cdp: Debugger,
     modifier: 'Control' | 'Shift' | 'Alt' | 'Meta',
     isDown: boolean,
     activeModifiers: Array<'Control' | 'Shift' | 'Alt' | 'Meta'>
   ): Promise<void> {
     const modifierInfo = this.getModifierInfo(modifier);
 
-    await this.cdp.sendCommand('Input.dispatchKeyEvent', {
+    await cdp.sendCommand('Input.dispatchKeyEvent', {
       type: isDown ? 'rawKeyDown' : 'keyUp',
       windowsVirtualKeyCode: modifierInfo.keyCode,
       nativeVirtualKeyCode: modifierInfo.keyCode,

@@ -1,21 +1,28 @@
-import {
-  BaseActionService,
-  ExecutionContext,
-  NodeParams,
-} from './BaseActionService';
+import { Debugger } from 'electron';
+
+import { TabService } from '../browser';
+
+import { BaseActionService, NodeParams } from './BaseActionService';
 
 import { ToolExecutionResult } from '@/shared/types';
 
 export type ClickParams = NodeParams;
 
 export class ClickService extends BaseActionService {
-  constructor(context: ExecutionContext) {
-    super(context);
+  constructor(tabService: TabService) {
+    super(tabService);
   }
 
   public async execute(params: ClickParams): Promise<ToolExecutionResult> {
     try {
-      await this.waitForNetworkIdle({
+      const cdp = this.getCDP(params.tabId);
+      if (!cdp) {
+        return {
+          success: false,
+          error: 'Tab not found, or debugger not avaialable',
+        };
+      }
+      await this.waitForNetworkIdle(cdp, {
         timeout: 3000,
         idleTime: 500,
         maxInflightRequests: 0,
@@ -23,7 +30,7 @@ export class ClickService extends BaseActionService {
 
       // MODE 1: Direct CDP node click
       if (params.nodeId !== undefined) {
-        await this.performClick(params.nodeId);
+        await this.performClick(cdp, params.nodeId);
         return {
           success: true,
         };
@@ -31,7 +38,7 @@ export class ClickService extends BaseActionService {
 
       // MODE 2: Attribute-based element finding
       if (params.role || params.name || params.attributes) {
-        return await this.findAndClickByAttributes(params);
+        return await this.findAndClickByAttributes(cdp, params);
       }
 
       return {
@@ -47,21 +54,19 @@ export class ClickService extends BaseActionService {
   }
 
   private async findAndClickByAttributes(
+    cdp: Debugger,
     params: ClickParams
   ): Promise<ToolExecutionResult> {
     try {
-      const { nodes } = await this.cdp.sendCommand(
-        'Accessibility.getFullAXTree',
-        {
-          depth: -1,
-        }
-      );
+      const { nodes } = await cdp.sendCommand('Accessibility.getFullAXTree', {
+        depth: -1,
+      });
 
       if (!nodes || nodes.length === 0) {
         return { success: false, error: 'No accessibility nodes found' };
       }
 
-      const bestMatch = await this.findBestMatchingNode(nodes, params);
+      const bestMatch = await this.findBestMatchingNode(cdp, nodes, params);
 
       if (!bestMatch) {
         return { success: false, error: 'No matching node found for params' };
@@ -74,7 +79,7 @@ export class ClickService extends BaseActionService {
         score: bestMatch.score,
       });
 
-      await this.performClick(bestMatch.backendDOMNodeId);
+      await this.performClick(cdp, bestMatch.backendDOMNodeId);
       return { success: true };
     } catch (error) {
       console.error('[ClickHandler] Error:', error);
@@ -85,15 +90,15 @@ export class ClickService extends BaseActionService {
     }
   }
 
-  private async performClick(nodeId: number): Promise<void> {
-    const { object } = await this.cdp.sendCommand('DOM.resolveNode', {
+  private async performClick(cdp: Debugger, nodeId: number): Promise<void> {
+    const { object } = await cdp.sendCommand('DOM.resolveNode', {
       backendNodeId: nodeId,
     });
     if (!object || !object.objectId) {
       throw new Error('Element not found');
     }
 
-    await this.cdp.sendCommand('Runtime.callFunctionOn', {
+    await cdp.sendCommand('Runtime.callFunctionOn', {
       objectId: object.objectId,
       functionDeclaration: `
         function() {
@@ -109,7 +114,7 @@ export class ClickService extends BaseActionService {
 
     await this.sleep(500);
 
-    const { model } = await this.cdp.sendCommand('DOM.getBoxModel', {
+    const { model } = await cdp.sendCommand('DOM.getBoxModel', {
       objectId: object.objectId,
     });
     if (!model || !model.content || model.content.length < 8) {
@@ -120,7 +125,7 @@ export class ClickService extends BaseActionService {
     const centerX = (x1 + x2 + x3 + x4) / 4;
     const centerY = (y1 + y2 + y3 + y4) / 4;
 
-    await this.cdp.sendCommand('Runtime.evaluate', {
+    await cdp.sendCommand('Runtime.evaluate', {
       expression: `
         (function() {
           const existing = document.getElementById('__browzer_click_indicator');
@@ -147,7 +152,7 @@ export class ClickService extends BaseActionService {
       `,
     });
 
-    await this.cdp.sendCommand('Input.dispatchMouseEvent', {
+    await cdp.sendCommand('Input.dispatchMouseEvent', {
       type: 'mouseMoved',
       x: centerX,
       y: centerY,
@@ -156,7 +161,7 @@ export class ClickService extends BaseActionService {
     });
     await this.sleep(2);
 
-    await this.cdp.sendCommand('Input.dispatchMouseEvent', {
+    await cdp.sendCommand('Input.dispatchMouseEvent', {
       type: 'mousePressed',
       x: centerX,
       y: centerY,
@@ -165,7 +170,7 @@ export class ClickService extends BaseActionService {
     });
     await this.sleep(2);
 
-    await this.cdp.sendCommand('Input.dispatchMouseEvent', {
+    await cdp.sendCommand('Input.dispatchMouseEvent', {
       type: 'mouseReleased',
       x: centerX,
       y: centerY,
@@ -173,7 +178,7 @@ export class ClickService extends BaseActionService {
       clickCount: 1,
     });
 
-    await this.cdp.sendCommand('Runtime.evaluate', {
+    await cdp.sendCommand('Runtime.evaluate', {
       expression: `
         (function() {
           const indicator = document.getElementById('__browzer_click_indicator');

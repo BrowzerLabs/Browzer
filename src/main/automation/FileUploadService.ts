@@ -1,10 +1,9 @@
 import fs from 'fs';
+import { Debugger } from 'electron';
 
-import {
-  BaseActionService,
-  ExecutionContext,
-  NodeParams,
-} from './BaseActionService';
+import { TabService } from '../browser';
+
+import { BaseActionService, NodeParams } from './BaseActionService';
 
 import { ToolExecutionResult } from '@/shared/types';
 
@@ -14,12 +13,16 @@ export interface FileUploadParams extends NodeParams {
 }
 
 export class FileUploadService extends BaseActionService {
-  constructor(context: ExecutionContext) {
-    super(context);
+  constructor(tabService: TabService) {
+    super(tabService);
   }
 
   public async execute(params: FileUploadParams): Promise<ToolExecutionResult> {
     try {
+      const cdp = this.getCDP(params.tabId);
+      if (!cdp) {
+        return { success: false, error: 'CDP not found' };
+      }
       if (!params.filePaths || params.filePaths.length === 0) {
         return {
           success: false,
@@ -36,7 +39,7 @@ export class FileUploadService extends BaseActionService {
         }
       }
 
-      await this.waitForNetworkIdle({
+      await this.waitForNetworkIdle(cdp, {
         timeout: 3000,
         idleTime: 500,
         maxInflightRequests: 0,
@@ -44,13 +47,14 @@ export class FileUploadService extends BaseActionService {
 
       // MODE 1: Direct CDP node upload
       if (params.nodeId !== undefined) {
-        await this.performFileUpload(params.nodeId, params.filePaths);
+        await this.performFileUpload(cdp, params.nodeId, params.filePaths);
         return { success: true };
       }
 
       // MODE 2: CSS selector-based upload
       if (params.selector !== undefined) {
         return await this.findAndUploadBySelector(
+          cdp,
           params.selector,
           params.filePaths
         );
@@ -58,7 +62,7 @@ export class FileUploadService extends BaseActionService {
 
       // MODE 3: Attribute-based element finding
       if (params.role || params.name || params.attributes) {
-        return await this.findAndUploadByAttributes(params);
+        return await this.findAndUploadByAttributes(cdp, params);
       }
 
       return {
@@ -77,12 +81,13 @@ export class FileUploadService extends BaseActionService {
   }
 
   private async findAndUploadBySelector(
+    cdp: Debugger,
     selector: string,
     filePaths: string[]
   ): Promise<ToolExecutionResult> {
     try {
-      const { root } = await this.cdp.sendCommand('DOM.getDocument');
-      const { nodeId } = await this.cdp.sendCommand('DOM.querySelector', {
+      const { root } = await cdp.sendCommand('DOM.getDocument');
+      const { nodeId } = await cdp.sendCommand('DOM.querySelector', {
         nodeId: root.nodeId,
         selector: selector,
       });
@@ -94,7 +99,7 @@ export class FileUploadService extends BaseActionService {
         };
       }
 
-      const { node } = await this.cdp.sendCommand('DOM.describeNode', {
+      const { node } = await cdp.sendCommand('DOM.describeNode', {
         nodeId: nodeId,
       });
 
@@ -105,7 +110,7 @@ export class FileUploadService extends BaseActionService {
         };
       }
 
-      await this.performFileUpload(node.backendNodeId, filePaths);
+      await this.performFileUpload(cdp, node.backendNodeId, filePaths);
       return { success: true };
     } catch (error) {
       console.error('[FileUploadService] Selector error:', error);
@@ -120,21 +125,19 @@ export class FileUploadService extends BaseActionService {
   }
 
   private async findAndUploadByAttributes(
+    cdp: Debugger,
     params: FileUploadParams
   ): Promise<ToolExecutionResult> {
     try {
-      const { nodes } = await this.cdp.sendCommand(
-        'Accessibility.getFullAXTree',
-        {
-          depth: -1,
-        }
-      );
+      const { nodes } = await cdp.sendCommand('Accessibility.getFullAXTree', {
+        depth: -1,
+      });
 
       if (!nodes || nodes.length === 0) {
         return { success: false, error: 'No accessibility nodes found' };
       }
 
-      const bestMatch = await this.findBestMatchingNode(nodes, params);
+      const bestMatch = await this.findBestMatchingNode(cdp, nodes, params);
 
       if (!bestMatch) {
         return {
@@ -151,6 +154,7 @@ export class FileUploadService extends BaseActionService {
       });
 
       await this.performFileUpload(
+        cdp,
         bestMatch.backendDOMNodeId,
         params.filePaths
       );
@@ -168,10 +172,11 @@ export class FileUploadService extends BaseActionService {
   }
 
   private async performFileUpload(
+    cdp: Debugger,
     backendNodeId: number,
     filePaths: string[]
   ): Promise<void> {
-    await this.cdp.sendCommand('DOM.setFileInputFiles', {
+    await cdp.sendCommand('DOM.setFileInputFiles', {
       files: filePaths,
       backendNodeId: backendNodeId,
     });
