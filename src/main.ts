@@ -9,6 +9,25 @@ if (started) {
   app.quit();
 }
 
+const isDevelopment =
+  process.env.NODE_ENV !== 'production' ||
+  process.defaultApp ||
+  /[\\/]electron-prebuilt[\\/]/.test(process.execPath) ||
+  /[\\/]electron[\\/]/.test(process.execPath);
+
+if (isDevelopment) {
+  const userDataPath = path.join(app.getPath('appData'), 'Browzer Dev');
+  app.setPath('userData', userDataPath);
+  app.setPath('sessionData', path.join(userDataPath, 'Session Storage'));
+  app.setPath('cache', path.join(userDataPath, 'Cache'));
+  app.setPath('logs', path.join(userDataPath, 'logs'));
+
+  console.log(
+    '🔴 Development mode - Using separate data directory:',
+    userDataPath
+  );
+}
+
 // Set as default protocol client for browzer:// URLs
 if (process.defaultApp) {
   if (process.argv.length >= 2) {
