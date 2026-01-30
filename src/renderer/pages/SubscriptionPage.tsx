@@ -35,6 +35,8 @@ export function SubscriptionPage() {
   const [upgrading, setUpgrading] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [portalLoading, setPortalLoading] = useState(false);
+  const [retrying, setRetrying] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     loadSubscription();
@@ -43,15 +45,22 @@ export function SubscriptionPage() {
 
   const loadSubscription = async () => {
     try {
+      setError(null);
       const response = await window.subscriptionAPI.getCurrentSubscription();
       if (response.success && response.subscription) {
         setSubscription(response.subscription);
         setCurrentPlan(response.plan_details);
+      } else {
+        setError(response.error || 'Failed to load subscription data');
       }
     } catch (error) {
       console.error('Failed to load subscription:', error);
+      setError(
+        error instanceof Error ? error.message : 'An unexpected error occurred'
+      );
     } finally {
       setLoading(false);
+      setRetrying(false);
     }
   };
 
@@ -168,15 +177,43 @@ export function SubscriptionPage() {
     );
   }
 
+  const handleRetry = async () => {
+    setRetrying(true);
+    await loadSubscription();
+  };
+
   if (!subscription || !currentPlan) {
     return (
-      <div className="min-h-screen flex flex-col gap-4 items-center justify-center bg-red-50 dark:bg-slate-900">
-        <p className="text-red-600 dark:text-red-400">
-          Failed to load subscription. Please try again.
+      <div className="min-h-screen flex flex-col gap-3 items-center justify-center p-8">
+        <div className="mx-auto w-16 h-16 bg-red-100 dark:bg-red-900/20 rounded-full flex items-center justify-center mb-4">
+          <AlertCircle className="w-8 h-8 text-red-600 dark:text-red-400" />
+        </div>
+        <h2 className="text-xl font-semibold text-red-900 dark:text-red-100">
+          Unable to Load Subscription
+        </h2>
+        <p className="text-gray-600 dark:text-gray-400 text-sm leading-relaxed">
+          {error}
         </p>
-        <Button onClick={loadSubscription} className="mt-4" variant="outline">
-          Retry
-        </Button>
+        <div className="pt-4">
+          <Button
+            onClick={handleRetry}
+            disabled={retrying}
+            className="min-w-[120px]"
+          >
+            {retrying ? (
+              <Loader2Icon className="w-4 h-4 animate-spin" />
+            ) : (
+              <>
+                <RefreshCw className="w-4 h-4" />
+                Try Again
+              </>
+            )}
+          </Button>
+        </div>
+        <p className="text-xs text-gray-500 dark:text-gray-500 mt-4">
+          If the problem persists, please check your internet connection or
+          contact support.
+        </p>
       </div>
     );
   }
