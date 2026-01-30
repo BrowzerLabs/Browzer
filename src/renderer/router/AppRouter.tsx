@@ -1,4 +1,5 @@
-import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { HashRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
+import { useEffect } from 'react';
 
 import { InternalRouter, useIsInternalPage } from './InternalRouter';
 
@@ -13,7 +14,6 @@ import { ResetPasswordCallbackPage } from '@/renderer/pages/auth/ResetPasswordCa
 import { SubscriptionSuccessPage } from '@/renderer/pages/subscription/SubscriptionSuccessPage';
 import { SubscriptionCancelPage } from '@/renderer/pages/subscription/SubscriptionCancelPage';
 import { BrowserChrome } from '@/renderer/components/BrowserChrome';
-import { useDeepLink } from '@/renderer/hooks/useDeepLink';
 import NotFound from '@/renderer/pages/NotFound';
 import { NotificationProvider } from '@/renderer/providers/NotificationProvider';
 import { OnboardingFlow } from '@/renderer/pages/onboarding';
@@ -26,7 +26,21 @@ function MainApp() {
 }
 
 function AppRoutes() {
-  useDeepLink();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    const unsubscribe = window.browserAPI.onDeepLink(async (data: { path: string; fullWindow: boolean }) => {
+      if (data.fullWindow) {
+        await window.browserAPI.hideAllTabs();
+        navigate(data.path);
+      }else{
+       await window.browserAPI.load(`browzer:/${data.path}`);
+      }
+    });
+
+    return unsubscribe;
+  }, [navigate]);
+
   const { hasCompletedOnboarding } = useOnboardingStore();
 
   if (!hasCompletedOnboarding) {
