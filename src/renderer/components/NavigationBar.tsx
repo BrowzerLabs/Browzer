@@ -15,9 +15,12 @@ import {
   Download,
   Bookmark,
   Clock,
+  BanIcon,
 } from 'lucide-react';
 
-import type { TabInfo } from '@/shared/types';
+import { useAutomation } from './AgentView/hooks';
+
+import { AutomationStatus, type TabInfo } from '@/shared/types';
 import { cn } from '@/renderer/lib/utils';
 import { useSidebarStore } from '@/renderer/store/useSidebarStore';
 import { useRecording } from '@/renderer/hooks/useRecording';
@@ -57,6 +60,7 @@ export function NavigationBar({
 }: NavigationBarProps) {
   const { isVisible: isSidebarVisible, toggleSidebar } = useSidebarStore();
   const { isRecording, isLoading, toggleRecording } = useRecording();
+  const { currentSession } = useAutomation();
   const { user, signOut, loading } = useAuth();
   const { isDownloading, progress, version } = useUpdateProgress();
   const { createOverlayHandler } = useBrowserViewLayer();
@@ -65,6 +69,8 @@ export function NavigationBar({
     await signOut();
   };
 
+  const shouldKeepSidebarOpen =
+    isRecording || currentSession?.status === AutomationStatus.RUNNING;
   const isSecure = activeTab?.url.startsWith('https://') ?? false;
 
   return (
@@ -163,11 +169,14 @@ export function NavigationBar({
           onClick={toggleSidebar}
           className="bg-blue-50 dark:bg-blue-950 p-2 rounded-full"
           title={isSidebarVisible ? 'Hide Agent Panel' : 'Show Agent Panel'}
+          disabled={shouldKeepSidebarOpen}
         >
-          {isSidebarVisible ? (
-            <ChevronRight className="w-4 h-4" />
-          ) : (
+          {shouldKeepSidebarOpen ? (
+            <BanIcon className="w-4 h-4 text-gray-500" />
+          ) : isSidebarVisible ? (
             <ChevronLeft className="w-4 h-4" />
+          ) : (
+            <ChevronRight className="w-4 h-4" />
           )}
         </TooltipTrigger>
         <TooltipContent>
