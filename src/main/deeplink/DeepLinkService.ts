@@ -1,55 +1,19 @@
-import { app, BaseWindow, WebContents } from 'electron';
+import { BaseWindow, WebContents } from 'electron';
 
 import { getRouteFromURL } from '@/shared/routes';
 
 export class DeepLinkService {
   private baseWindow: BaseWindow | null = null;
   private webContents: WebContents | null = null;
-  private pendingDeepLink: string | null = null;
 
   constructor(baseWindow: BaseWindow, webContents: WebContents) {
     this.baseWindow = baseWindow;
     this.webContents = webContents;
-    this.setupDeepLinkHandlers();
-
-    if (this.pendingDeepLink) {
-      this.handleDeepLink(this.pendingDeepLink);
-      this.pendingDeepLink = null;
-    }
-  }
-
-  private setupDeepLinkHandlers(): void {
-    // macOS: Handle deep links when app is already running
-    app.on('open-url', (event, url) => {
-      event.preventDefault();
-      this.handleDeepLink(url);
-    });
-
-    app.on('second-instance', (event, commandLine) => {
-      const deepLinkUrl = commandLine.find((arg) =>
-        arg.startsWith('browzer://')
-      );
-
-      if (deepLinkUrl) {
-        this.handleDeepLink(deepLinkUrl);
-      }
-
-      this.focusMainWindow();
-    });
-
-    if (process.platform !== 'darwin') {
-      const deepLinkUrl = process.argv.find((arg) =>
-        arg.startsWith('browzer://')
-      );
-      if (deepLinkUrl) {
-        this.handleDeepLink(deepLinkUrl);
-      }
-    }
   }
 
   private parseDeepLink(
     url: string
-  ): { path: string; params?: string; fragment?: string } | null {
+  ): { path: string; params?: string; fragment?: string; fullWindow?: boolean } | null {
     try {
       if (!url.startsWith('browzer://')) {
         return null;
@@ -65,6 +29,7 @@ export class DeepLinkService {
         path: route.path,
         params: route.params,
         fragment: route.fragment,
+        fullWindow: route.fullWindow,
       };
     } catch (error) {
       console.error('[DeepLinkService] Parse error:', error);
@@ -72,13 +37,15 @@ export class DeepLinkService {
     }
   }
 
-  private handleDeepLink(url: string): void {
+  public handleDeepLink(url: string): void {
     console.log('[DeepLinkService] Handling deep link:', url);
     const data = this.parseDeepLink(url);
     if (!data) return;
 
-    if (!this.webContents) {
-      this.pendingDeepLink = url;
+    if (!this.webContents || this.webContents.isDestroyed()) {
+      console.warn(
+        '[DeepLinkService] WebContents is destroyed, cannot handle deeplink'
+      );
       return;
     }
 
@@ -91,16 +58,33 @@ export class DeepLinkService {
     if (data.params) {
       fullPath += `?${data.params}`;
     }
-    this.webContents.send('deeplink:navigate', fullPath);
+
+    this.webContents.send('deeplink:navigate', {
+      path: fullPath,
+      fullWindow: data.fullWindow || false
+    });
   }
 
-  private focusMainWindow(): void {
-    if (this.baseWindow) {
+  public focusMainWindow(): void {
+    if (!this.baseWindow || this.baseWindow.isDestroyed()) {
+      console.warn('[DeepLinkService] BaseWindow is destroyed, cannot focus');
+      return;
+    }
+
+    try {
       if (this.baseWindow.isMinimized()) {
         this.baseWindow.restore();
       }
       this.baseWindow.focus();
       this.baseWindow.show();
+    } catch (error) {
+      console.error('[DeepLinkService] Error focusing window:', error);
     }
+  }
+
+  public destroy(): void {
+    console.log('[DeepLinkService] Cleaning up');
+    this.baseWindow = null;
+    this.webContents = null;
   }
 }

@@ -9,6 +9,25 @@ if (started) {
   app.quit();
 }
 
+const isDevelopment =
+  process.env.NODE_ENV !== 'production' ||
+  process.defaultApp ||
+  /[\\/]electron-prebuilt[\\/]/.test(process.execPath) ||
+  /[\\/]electron[\\/]/.test(process.execPath);
+
+if (isDevelopment) {
+  const userDataPath = path.join(app.getPath('appData'), 'Browzer Dev');
+  app.setPath('userData', userDataPath);
+  app.setPath('sessionData', path.join(userDataPath, 'Session Storage'));
+  app.setPath('cache', path.join(userDataPath, 'Cache'));
+  app.setPath('logs', path.join(userDataPath, 'logs'));
+
+  console.log(
+    '🔴 Development mode - Using separate data directory:',
+    userDataPath
+  );
+}
+
 // Set as default protocol client for browzer:// URLs
 if (process.defaultApp) {
   if (process.argv.length >= 2) {
@@ -66,6 +85,46 @@ const createWindow = () => {
   }
 };
 
+const setupDeepLinkHandlers = () => {
+  app.on('open-url', (_event, url) => {
+    console.log('[main.ts] Received open-url event:', url);
+    if (!mainService || !mainService.getBaseWindow()) {
+      console.log('[main.ts] No window exists, creating new window');
+      createWindow();
+    }
+
+    setTimeout(() => {
+      mainService?.handleDeepLink(url);
+    }, 500);
+  });
+
+  app.on('second-instance', (_event, commandLine) => {
+    const deepLinkUrl = commandLine.find((arg) => arg.startsWith('browzer://'));
+    if (deepLinkUrl) {
+      console.log('[main.ts] Found deeplink in second instance:', deepLinkUrl);
+      if (!mainService || !mainService.getBaseWindow()) {
+        console.log('[main.ts] No window exists, creating new window');
+        createWindow();
+      }
+      setTimeout(() => {
+        mainService?.handleDeepLink(deepLinkUrl);
+      }, 500);
+    }
+    mainService?.focusMainWindow();
+  });
+
+  if (process.platform !== 'darwin') {
+    const deepLinkUrl = process.argv.find((arg) =>
+      arg.startsWith('browzer://')
+    );
+    if (deepLinkUrl) {
+      setTimeout(() => {
+        mainService?.handleDeepLink(deepLinkUrl);
+      }, 500);
+    }
+  }
+};
+
 app.whenReady().then(() => {
   protocol.handle('video-file', (request) => {
     const url = request.url.replace('video-file://', '');
@@ -74,6 +133,7 @@ app.whenReady().then(() => {
     return net.fetch(`file://${normalizedPath}`);
   });
 
+  setupDeepLinkHandlers();
   createWindow();
 });
 

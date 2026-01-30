@@ -1,15 +1,21 @@
 import { XCircle } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
 import { Button } from '@/renderer/ui/button';
 import { Card } from '@/renderer/ui/card';
 
 export function SubscriptionCancelPage() {
-  const handleViewPlans = () => {
-    window.location.hash = '/subscription';
+  const navigate = useNavigate();
+
+  const handleViewPlans = async () => {
+    navigate(`/`);
+    await window.browserAPI.showAllTabs();
+    await window.browserAPI.load('browzer://subscription');
   };
 
-  const handleGoBack = () => {
+  const handleGoBack = async () => {
     window.history.back();
+    await window.browserAPI.showAllTabs();
   };
 
   return (

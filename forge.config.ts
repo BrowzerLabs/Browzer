@@ -10,38 +10,39 @@ import { FusesPlugin } from '@electron-forge/plugin-fuses';
 import { FuseV1Options, FuseVersion } from '@electron/fuses';
 import path from 'path';
 
+const isDevelopment = process.env.NODE_ENV !== 'production';
+const appName = isDevelopment ? 'Browzer Dev' : 'Browzer';
+const appBundleId = isDevelopment
+  ? 'com.trybrowzer.app.dev'
+  : 'com.trybrowzer.app';
 
 const config: ForgeConfig = {
   packagerConfig: {
-    name: 'Browzer',
+    name: appName,
     asar: {
       unpack: '**/*.{node,dll,lottie,mp3}',
       unpackDir: path.join('**', 'node_modules', 'better-sqlite3', '**', '*'),
     },
-    ignore: [
-      /node_modules\/(?!(better-sqlite3|bindings|file-uri-to-path)\/)/,
-    ],
+    ignore: [/node_modules\/(?!(better-sqlite3|bindings|file-uri-to-path)\/)/],
     icon: './assets/icon',
-    appBundleId: 'com.trybrowzer.app',
+    appBundleId: appBundleId,
     appCategoryType: 'public.app-category.productivity',
-    extraResource: [
-      './app-update.yml'
-    ],
+    extraResource: ['./app-update.yml'],
     osxSign: {
       identity: process.env.APPLE_IDENTITY!,
       identityValidation: true,
       optionsForFile: (filePath) => {
         return {
-          entitlements: path.join(__dirname, 'entitlements.mac.plist')
+          entitlements: path.join(__dirname, 'entitlements.mac.plist'),
         };
-      }
+      },
     },
     osxNotarize: {
       appleId: process.env.APPLE_ID!,
       appleIdPassword: process.env.APPLE_ID_PASSWORD!,
-      teamId: process.env.APPLE_TEAM_ID!
+      teamId: process.env.APPLE_TEAM_ID!,
     },
-    darwinDarkModeSupport: true
+    darwinDarkModeSupport: true,
   },
   rebuildConfig: {},
   makers: [
@@ -60,16 +61,16 @@ const config: ForgeConfig = {
       contents: (opts) => {
         return [
           { x: 130, y: 220, type: 'file', path: opts.appPath },
-          { x: 410, y: 220, type: 'link', path: '/Applications' }
+          { x: 410, y: 220, type: 'link', path: '/Applications' },
         ];
       },
       additionalDMGOptions: {
         window: { size: { width: 540, height: 380 } },
-        "background-color": "#fff",
-      }
+        'background-color': '#fff',
+      },
     }),
     new MakerZIP({}, ['darwin', 'win32']),
-    
+
     new MakerDeb({
       options: {
         name: 'browzer',
@@ -80,30 +81,30 @@ const config: ForgeConfig = {
         icon: './assets/icon.png',
         homepage: 'https://github.com/BrowzerLabs/Browzer',
         maintainer: 'Browzer <rahul@trybrowzer.com>',
-        section: 'web'
-      }
+        section: 'web',
+      },
     }),
-    
+
     new MakerRpm({
       options: {
         name: 'browzer',
         productName: 'Browzer',
         icon: './assets/icon.png',
-        categories: ['Network', 'Office']
-      }
-    })
+        categories: ['Network', 'Office'],
+      },
+    }),
   ],
   publishers: [
     {
-       name: '@electron-forge/publisher-github',
-       config: {
-         repository: {
-           owner: 'BrowzerLabs',
-           name: 'Browzer'
-         },
-         prerelease: false
-       }
-    }
+      name: '@electron-forge/publisher-github',
+      config: {
+        repository: {
+          owner: 'BrowzerLabs',
+          name: 'Browzer',
+        },
+        prerelease: false,
+      },
+    },
   ],
   plugins: [
     new AutoUnpackNativesPlugin({}),

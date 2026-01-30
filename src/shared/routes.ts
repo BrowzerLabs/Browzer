@@ -19,6 +19,7 @@ import {
 export interface RouteConfig {
   path: string;
   title: string;
+  fullWindow?: boolean;
   favicon?: string;
   params?: string;
   fragment?: string;
@@ -28,26 +29,31 @@ export const ROUTES: Record<string, RouteConfig> = {
   'auth/confirm-signup': {
     path: '/auth/confirm-signup',
     title: 'Confirm Email',
+    fullWindow: true,
     favicon: 'mail-check',
   },
   'auth/reset-password': {
     path: '/auth/reset-password',
     title: 'Reset Password',
+    fullWindow: true,
     favicon: 'key-round',
   },
   'auth/callback': {
     path: '/auth/callback',
     title: 'OAuth Callback',
+    fullWindow: true,
     favicon: 'loader',
   },
   'subscription/success': {
     path: '/subscription/success',
     title: 'Subscription Success',
+    fullWindow: true,
     favicon: 'check-circle',
   },
   'subscription/cancel': {
     path: '/subscription/cancel',
     title: 'Checkout Cancelled',
+    fullWindow: true,
     favicon: 'x-circle',
   },
   home: {
