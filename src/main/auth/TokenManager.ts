@@ -3,7 +3,6 @@ import {
   createCipheriv,
   createDecipheriv,
   randomBytes,
-  pbkdf2Sync,
   scryptSync,
 } from 'crypto';
 import { EventEmitter } from 'events';
@@ -37,7 +36,6 @@ export class TokenManager extends EventEmitter {
     super();
     this.store = new Store({
       name: 'browzer',
-      encryptionKey: 'browzer-store-encryption-key',
     });
 
     this.encryptionKey = this.deriveEncryptionKey();
