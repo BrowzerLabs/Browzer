@@ -351,6 +351,19 @@ export class TabService extends EventEmitter {
     return true;
   }
 
+  public async load(url: string): Promise<boolean> {
+    const activeId = this.activeTabId;
+    const tab = activeId ? this.tabs.get(activeId) : undefined;
+    if (!tab) {
+      this.createTab(url);
+      return true;
+    }
+    if (tab.view.webContents.isDestroyed()) return false;
+    tab.view.webContents.navigationHistory.clear();
+    await tab.view.webContents.loadURL(this.navigationService.normalizeURL(url));
+    return true;
+  }
+
   public navigate(tabId: string, url: string): boolean {
     const tab = this.tabs.get(tabId) ?? this.createTab(url);
     tab.view.webContents.loadURL(this.navigationService.normalizeURL(url));

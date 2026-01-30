@@ -8,6 +8,10 @@ export class NavigationHandler extends BaseHandler {
       return tabService.navigate(tabId, url);
     });
 
+    this.handle('browser:load', async (_, url: string) => {
+      return tabService.load(url);
+    });
+
     this.handle('browser:go-back', async (_, tabId: string) => {
       return tabService.goBack(tabId);
     });

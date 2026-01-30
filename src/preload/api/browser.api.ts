@@ -45,6 +45,7 @@ export const createBrowserAPI = (): BrowserAPI => ({
     invoke('browser:toggle-tab-group-collapse', groupId),
 
   // Navigation
+  load: (url: string) => invoke('browser:load', url),
   navigate: (tabId: string, url: string) =>
     invoke('browser:navigate', tabId, url),
   goBack: (tabId: string) => invoke('browser:go-back', tabId),
@@ -227,7 +228,7 @@ export const createBrowserAPI = (): BrowserAPI => ({
 
   // Event listeners - Deep Link events
   onDeepLink: (callback) =>
-    createEventListener<string>('deeplink:navigate', callback),
+    createEventListener<{ path: string; fullWindow: boolean }>('deeplink:navigate', callback),
 
   // Event listeners - Address Bar focus
   onRequestAddressBarFocus: (callback) =>

@@ -174,17 +174,28 @@ export class MainService {
   }
 
   public getBaseWindow() {
-    return this.baseWindow;
+    return this.baseWindow && !this.baseWindow.isDestroyed()
+      ? this.baseWindow
+      : null;
   }
 
   public getBrowserUIView() {
     return this.browserView;
   }
 
+  public handleDeepLink(url: string): void {
+    this.deepLinkService.handleDeepLink(url);
+  }
+
+  public focusMainWindow(): void {
+    this.deepLinkService.focusMainWindow();
+  }
+
   public destroy(): void {
     this.ipcHandlers.cleanup();
     this.themeService.destroy();
     this.browserService.destroy();
+    this.deepLinkService.destroy();
     this.baseWindow = null;
     this.browserView = null;
   }

@@ -42,6 +42,7 @@ export interface BrowserAPI {
   toggleTabGroupCollapse: (groupId: string) => Promise<boolean>;
 
   // Navigation
+  load: (url: string) => Promise<boolean>;
   navigate: (tabId: string, url: string) => Promise<boolean>;
   goBack: (tabId: string) => Promise<boolean>;
   goForward: (tabId: string) => Promise<boolean>;
@@ -224,7 +225,7 @@ export interface BrowserAPI {
   ) => () => void;
 
   // Deep Link event listeners
-  onDeepLink: (callback: (path: string) => void) => () => void;
+  onDeepLink: (callback: (data: { path: string; fullWindow: boolean }) => void) => () => void;
 
   // Address Bar focus event listener
   onRequestAddressBarFocus: (callback: () => void) => () => void;

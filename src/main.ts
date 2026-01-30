@@ -85,6 +85,46 @@ const createWindow = () => {
   }
 };
 
+const setupDeepLinkHandlers = () => {
+  app.on('open-url', (_event, url) => {
+    console.log('[main.ts] Received open-url event:', url);
+    if (!mainService || !mainService.getBaseWindow()) {
+      console.log('[main.ts] No window exists, creating new window');
+      createWindow();
+    }
+
+    setTimeout(() => {
+      mainService?.handleDeepLink(url);
+    }, 500);
+  });
+
+  app.on('second-instance', (_event, commandLine) => {
+    const deepLinkUrl = commandLine.find((arg) => arg.startsWith('browzer://'));
+    if (deepLinkUrl) {
+      console.log('[main.ts] Found deeplink in second instance:', deepLinkUrl);
+      if (!mainService || !mainService.getBaseWindow()) {
+        console.log('[main.ts] No window exists, creating new window');
+        createWindow();
+      }
+      setTimeout(() => {
+        mainService?.handleDeepLink(deepLinkUrl);
+      }, 500);
+    }
+    mainService?.focusMainWindow();
+  });
+
+  if (process.platform !== 'darwin') {
+    const deepLinkUrl = process.argv.find((arg) =>
+      arg.startsWith('browzer://')
+    );
+    if (deepLinkUrl) {
+      setTimeout(() => {
+        mainService?.handleDeepLink(deepLinkUrl);
+      }, 500);
+    }
+  }
+};
+
 app.whenReady().then(() => {
   protocol.handle('video-file', (request) => {
     const url = request.url.replace('video-file://', '');
@@ -93,6 +133,7 @@ app.whenReady().then(() => {
     return net.fetch(`file://${normalizedPath}`);
   });
 
+  setupDeepLinkHandlers();
   createWindow();
 });
 
