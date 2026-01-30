@@ -6,6 +6,8 @@ import {
   scryptSync,
 } from 'crypto';
 import { EventEmitter } from 'events';
+import * as fs from 'fs';
+import * as path from 'path';
 
 import Store from 'electron-store';
 import { machineIdSync } from 'node-machine-id';
@@ -34,11 +36,54 @@ export class TokenManager extends EventEmitter {
 
   private constructor() {
     super();
-    this.store = new Store({
-      name: 'browzer',
-    });
-
+    this.store = this.initializeStore();
     this.encryptionKey = this.deriveEncryptionKey();
+  }
+
+  private initializeStore(): Store {
+    try {
+      const store = new Store({
+        name: 'browzer',
+        clearInvalidConfig: true,
+      });
+
+      return store;
+    } catch (error) {
+      console.error(
+        '[TokenManager] Failed to initialize store, attempting recovery:',
+        error
+      );
+
+      try {
+        const storePath = path.join(app.getPath('userData'), 'browzer.json');
+
+        if (fs.existsSync(storePath)) {
+          const backupPath = storePath + '.backup.' + Date.now();
+          fs.copyFileSync(storePath, backupPath);
+          console.log(
+            '[TokenManager] Backed up corrupted config to:',
+            backupPath
+          );
+
+          fs.unlinkSync(storePath);
+          console.log('[TokenManager] Removed corrupted config file');
+        }
+
+        return new Store({
+          name: 'browzer',
+          clearInvalidConfig: true,
+        });
+      } catch (recoveryError) {
+        console.error('[TokenManager] Recovery failed:', recoveryError);
+        console.warn(
+          '[TokenManager] Creating fallback in-memory store - tokens will not persist'
+        );
+        return new Store({
+          name: 'browzer-fallback-' + Date.now(),
+          clearInvalidConfig: true,
+        });
+      }
+    }
   }
 
   private deriveEncryptionKey(): Buffer {
