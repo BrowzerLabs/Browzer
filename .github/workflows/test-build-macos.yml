@@ -1,0 +1,106 @@
+name: Test Build macOS
+
+on:
+  push:
+    tags:
+      - 'test-v*.*.*'  # Only trigger on test tags
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Test version to build (e.g., test-v1.0.0)'
+        required: false
+        default: ''
+
+env:
+  NODE_VERSION: '22'
+  PNPM_VERSION: '10.19.0'
+
+jobs:
+  test-build-macos:
+    runs-on: macos-latest
+    
+    strategy:
+      matrix:
+        arch: [x64]  # Only test x64 to save resources
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+      
+      - name: Get pnpm store directory
+        shell: bash
+        run: echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
+      
+      - name: Setup pnpm cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: ${{ runner.os }}-pnpm-
+      
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      
+      - name: Update version in package.json
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+          else
+            VERSION=${GITHUB_REF#refs/tags/}
+          fi
+          
+          # Remove 'test-v' prefix if present
+          VERSION_NUMBER="${VERSION#test-v}"
+          
+          echo "Updating package.json to test version: $VERSION_NUMBER"
+          
+          # Update package.json version
+          sed -i '' "s/\"version\": \"[^\"]*\"/\"version\": \"$VERSION_NUMBER\"/" package.json
+          
+          # Verify the update
+          grep "\"version\":" package.json
+      
+      - name: Test Build for macOS (${{ matrix.arch }}) - NO SIGNING
+        env:
+          NODE_ENV: production
+          BACKEND_API_URL: ${{ secrets.BACKEND_API_URL }}
+        run: |
+          echo "Test building for ${{ matrix.arch }} (unsigned)..."
+          # Build without code signing for testing
+          pnpm run package -- --arch=${{ matrix.arch }} --platform=darwin
+      
+      - name: List test build output
+        run: |
+          echo "Test build output:"
+          find out -type f -name "*.app" -o -name "*.zip" | head -10
+      
+      - name: Upload test artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-browzer-macos-${{ matrix.arch }}
+          path: |
+            out/**/*.app
+          retention-days: 7
+          if-no-files-found: warn
+      
+      - name: Test Success Notification
+        run: |
+          echo "✅ TEST: macOS build workflow was triggered successfully!"
+          echo "This confirms that PAT_TOKEN is working correctly."
+          echo "The tag push from test-auto-release.yml triggered this workflow."
+          
+          echo "## Test Results" >> $GITHUB_STEP_SUMMARY
+          echo "✅ **SUCCESS**: Build workflow triggered by test tag" >> $GITHUB_STEP_SUMMARY
+          echo "- Tag: ${GITHUB_REF#refs/tags/}" >> $GITHUB_STEP_SUMMARY
+          echo "- Architecture: ${{ matrix.arch }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Build completed without signing (test mode)" >> $GITHUB_STEP_SUMMARY
