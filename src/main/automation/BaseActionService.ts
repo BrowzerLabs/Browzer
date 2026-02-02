@@ -1,6 +1,15 @@
 import { Debugger, WebContentsView } from 'electron';
 
-import { TabService } from '@/main/browser/TabService';
+import log from 'electron-log';
+
+import { PasswordService } from '@/main/password';
+import { TabService } from '@/main/browser';
+
+export interface ExecutionContext {
+  tabService: TabService;
+  passwordService: PasswordService;
+}
+
 export interface NodeParams {
   tabId: string;
   nodeId?: number;
@@ -16,14 +25,14 @@ export interface NetworkIdleOptions {
 }
 
 export abstract class BaseActionService {
-  constructor(protected tabService: TabService) {}
+  constructor(protected context: ExecutionContext) {}
 
   protected getCDP(tabId: string): Debugger | undefined {
-    return this.tabService.getTab(tabId)?.view.webContents.debugger;
+    return this.context.tabService.getTab(tabId)?.view.webContents.debugger;
   }
 
   protected getView(tabId: string): WebContentsView | undefined {
-    return this.tabService.getTab(tabId)?.view;
+    return this.context.tabService.getTab(tabId)?.view;
   }
 
   protected sleep(ms: number): Promise<void> {
@@ -229,7 +238,7 @@ export abstract class BaseActionService {
       });
 
       if (!domNode || !domNode.object || !domNode.object.objectId) {
-        console.log('Failed to resolve DOM node');
+        log.info('Failed to resolve DOM node');
         return 0;
       }
 
@@ -275,7 +284,7 @@ export abstract class BaseActionService {
 
       return Math.floor(150 * (matchedCount / totalCount));
     } catch (error) {
-      console.error('Error calculating attribute score:', error);
+      log.error('Error calculating attribute score:', error);
       return 0;
     }
   }
@@ -308,7 +317,6 @@ export abstract class BaseActionService {
     const resolveOnce = (reason: string) => {
       if (isResolved) return;
       isResolved = true;
-      console.log(`[NetworkIdle] ${reason}`);
       cleanup();
       resolvePromise();
     };
@@ -394,7 +402,7 @@ export abstract class BaseActionService {
       cdp.on('message', onLoadingFailed);
       cdp.on('message', onResponseReceived);
 
-      await cdp.sendCommand('Network.enable').catch(console.error);
+      await cdp.sendCommand('Network.enable').catch(log.error);
 
       if (!isLoading) {
         await this.sleep(100);
@@ -407,7 +415,7 @@ export abstract class BaseActionService {
 
       checkNetworkIdle();
     } catch (error) {
-      console.error('[NetworkIdle] Setup error:', error);
+      log.error('[NetworkIdle] Setup error:', error);
       resolveOnce('Setup error, proceeding anyway');
     }
 

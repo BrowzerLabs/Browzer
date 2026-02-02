@@ -1,4 +1,3 @@
-// Base exports
 export { BaseHandler, IPCContext, IIPCHandler } from './base';
 
 export { TabHandler } from './TabHandler';
@@ -9,7 +8,6 @@ export { RecordingHandler } from './RecordingHandler';
 export { SettingsHandler } from './SettingsHandler';
 export { HistoryHandler } from './HistoryHandler';
 export { BookmarkHandler } from './BookmarkHandler';
-export { PasswordHandler } from './PasswordHandler';
 export { WindowHandler } from './WindowHandler';
 export { AutomationHandler } from './AutomationHandler';
 export { AuthHandler } from './AuthHandler';
@@ -18,3 +16,4 @@ export { ShellHandler } from './ShellHandler';
 export { DeepLinkHandler } from './DeepLinkHandler';
 export { AutocompleteHandler } from './AutocompleteHandler';
 export { ThemeHandler } from './ThemeHandler';
+export { PasswordHandler } from './PasswordHandler';

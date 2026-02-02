@@ -1,8 +1,6 @@
 import { Debugger } from 'electron';
 
-import { TabService } from '../browser';
-
-import { BaseActionService } from './BaseActionService';
+import { BaseActionService, ExecutionContext } from './BaseActionService';
 
 import { ToolExecutionResult } from '@/shared/types';
 
@@ -13,8 +11,8 @@ export interface KeyParams {
 }
 
 export class KeyService extends BaseActionService {
-  constructor(tabService: TabService) {
-    super(tabService);
+  constructor(context: ExecutionContext) {
+    super(context);
   }
 
   public async execute(params: KeyParams): Promise<ToolExecutionResult> {

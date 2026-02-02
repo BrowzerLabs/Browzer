@@ -1,7 +1,5 @@
 import { WebContentsView } from 'electron';
 
-import { PasswordAutomation } from '../password';
-
 import { TabInfo } from '@/shared/types';
 
 export type ClickTrackingHandler = (
@@ -15,8 +13,5 @@ export interface Tab {
   view: WebContentsView;
   info: TabInfo;
   clickTrackingHandler?: ClickTrackingHandler;
-  passwordAutomation?: PasswordAutomation;
-  selectedCredentialId?: string;
-  selectedCredentialUsername?: string;
   bypassedCertificateHosts?: Set<string>;
 }

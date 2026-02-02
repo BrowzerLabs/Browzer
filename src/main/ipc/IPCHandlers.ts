@@ -45,7 +45,6 @@ export class IPCHandlers extends EventEmitter {
       authService: this.authService,
       subscriptionService: new SubscriptionService(),
       themeService: this.themeService,
-      passwordManager: this.browserService.getPasswordManager(),
       bookmarkService: this.browserService.getBookmarkService(),
       tabService: this.browserService.getTabService(),
       settingsService: this.browserService.getSettingsService(),

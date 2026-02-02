@@ -1,6 +1,4 @@
-import { TabService } from '../browser';
-
-import { BaseActionService } from './BaseActionService';
+import { BaseActionService, ExecutionContext } from './BaseActionService';
 
 import { ToolExecutionResult } from '@/shared/types';
 
@@ -11,8 +9,8 @@ export interface ScrollParams {
 }
 
 export class ScrollService extends BaseActionService {
-  constructor(tabService: TabService) {
-    super(tabService);
+  constructor(context: ExecutionContext) {
+    super(context);
   }
 
   public async execute(params: ScrollParams): Promise<ToolExecutionResult> {

@@ -1,5 +1,3 @@
-import { TabService } from '../browser';
-
 import { ContextService } from './ContextService';
 import { SnapshotService } from './SnapshotService';
 import { ClickService } from './ClickService';
@@ -10,6 +8,7 @@ import { NotifyService } from './NotifyService';
 import { FileUploadService } from './FileUploadService';
 import { ScrollService } from './ScrollService';
 import { AccessibilityTreeExtractor } from './AccessibilityTreeExtractor';
+import { ExecutionContext } from './BaseActionService';
 
 import type { ToolExecutionResult } from '@/shared/types';
 
@@ -25,18 +24,18 @@ export class ExecutionService {
   private scrollService: ScrollService;
   private accessibilityTreeExtractor: AccessibilityTreeExtractor;
 
-  constructor(private tabService: TabService) {
-    this.clickService = new ClickService(this.tabService);
-    this.typeService = new TypeService(this.tabService);
-    this.navigateService = new NavigateService(this.tabService);
-    this.keyService = new KeyService(this.tabService);
+  constructor(private context: ExecutionContext) {
+    this.clickService = new ClickService(this.context);
+    this.typeService = new TypeService(this.context);
+    this.navigateService = new NavigateService(this.context);
+    this.keyService = new KeyService(this.context);
     this.notifyService = new NotifyService();
-    this.fileUploadService = new FileUploadService(this.tabService);
-    this.snapshotService = new SnapshotService(this.tabService);
-    this.contextService = new ContextService(this.tabService);
-    this.scrollService = new ScrollService(this.tabService);
+    this.fileUploadService = new FileUploadService(this.context);
+    this.snapshotService = new SnapshotService(this.context);
+    this.contextService = new ContextService(this.context);
+    this.scrollService = new ScrollService(this.context);
     this.accessibilityTreeExtractor = new AccessibilityTreeExtractor(
-      this.tabService
+      this.context
     );
   }
 
@@ -75,7 +74,7 @@ export class ExecutionService {
 
       case 'create_tab':
         try {
-          const res = await this.tabService.createTab(params.url);
+          const res = await this.context.tabService.createTab(params.url);
           return { success: true, value: res.id };
         } catch (error) {
           return { success: false, error: error.message };

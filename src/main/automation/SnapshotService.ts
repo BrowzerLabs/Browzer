@@ -1,14 +1,13 @@
-import { BaseActionService } from './BaseActionService';
+import { BaseActionService, ExecutionContext } from './BaseActionService';
 
-import { TabService } from '@/main/browser/TabService';
 import { ToolExecutionResult } from '@/shared/types';
 
 export class SnapshotService extends BaseActionService {
   private readonly JPEG_QUALITY = 80;
   private readonly MAX_DIMENSION = 1024;
 
-  constructor(tabService: TabService) {
-    super(tabService);
+  constructor(context: ExecutionContext) {
+    super(context);
   }
 
   public async execute(params: {

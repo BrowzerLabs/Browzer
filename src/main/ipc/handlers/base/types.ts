@@ -5,7 +5,6 @@ import { BrowserService } from '@/main/BrowserService';
 import { AuthService } from '@/main/auth';
 import { SubscriptionService } from '@/main/subscription/SubscriptionService';
 import { ThemeService } from '@/main/theme';
-import { PasswordManager } from '@/main/password/PasswordManager';
 import { BookmarkService } from '@/main/bookmark';
 import { TabService } from '@/main/browser';
 import { SettingsService } from '@/main/settings/SettingsService';
@@ -16,7 +15,6 @@ export interface IPCContext {
   authService: AuthService;
   subscriptionService: SubscriptionService;
   themeService: ThemeService;
-  passwordManager: PasswordManager;
   bookmarkService: BookmarkService;
   tabService: TabService;
   settingsService: SettingsService;

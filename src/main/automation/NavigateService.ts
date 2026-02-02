@@ -1,7 +1,5 @@
-import { TabService } from '../browser';
-
 import { BaseActionService } from './BaseActionService';
-import type { NetworkIdleOptions } from './BaseActionService';
+import type { ExecutionContext, NetworkIdleOptions } from './BaseActionService';
 
 import type { ToolExecutionResult } from '@/shared/types';
 
@@ -10,8 +8,8 @@ export interface ExecuteNetworkIdleParams extends NetworkIdleOptions {
 }
 
 export class NavigateService extends BaseActionService {
-  constructor(tabService: TabService) {
-    super(tabService);
+  constructor(context: ExecutionContext) {
+    super(context);
   }
 
   async execute(params: {

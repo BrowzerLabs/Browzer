@@ -79,37 +79,6 @@ export interface BrowserAPI {
   // Video File Operations
   openVideoFile: (videoPath: string) => Promise<void>;
 
-  // Password Management
-  getAllPasswords: () => Promise<any[]>;
-  savePassword: (
-    origin: string,
-    username: string,
-    password: string
-  ) => Promise<boolean>;
-  getPasswordsForOrigin: (origin: string) => Promise<any[]>;
-  getPassword: (credentialId: string) => Promise<string | null>;
-  updatePassword: (
-    credentialId: string,
-    username: string,
-    password: string
-  ) => Promise<boolean>;
-  deletePassword: (credentialId: string) => Promise<boolean>;
-  deleteMultiplePasswords: (credentialIds: string[]) => Promise<boolean>;
-  searchPasswords: (query: string) => Promise<any[]>;
-  getPasswordBlacklist: () => Promise<string[]>;
-  neverSaveForSite: (origin: string) => Promise<boolean>;
-  removeFromBlacklist: (origin: string) => Promise<boolean>;
-  isSiteBlacklisted: (origin: string) => Promise<boolean>;
-  exportPasswords: () => Promise<{ credentials: any[]; blacklist: string[] }>;
-  importPasswords: (
-    data: string
-  ) => Promise<{ success: boolean; imported: number; errors: number }>;
-  getPasswordStats: () => Promise<{
-    totalPasswords: number;
-    blacklistedSites: number;
-    mostUsedSites: Array<{ origin: string; count: number }>;
-  }>;
-
   // Settings Management
   getAllSettings: () => Promise<AppSettings>;
   getSettingsCategory: (category: keyof AppSettings) => Promise<any>;
@@ -225,7 +194,9 @@ export interface BrowserAPI {
   ) => () => void;
 
   // Deep Link event listeners
-  onDeepLink: (callback: (data: { path: string; fullWindow: boolean }) => void) => () => void;
+  onDeepLink: (
+    callback: (data: { path: string; fullWindow: boolean }) => void
+  ) => () => void;
 
   // Address Bar focus event listener
   onRequestAddressBarFocus: (callback: () => void) => () => void;

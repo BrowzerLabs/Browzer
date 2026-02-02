@@ -131,6 +131,7 @@
     "input-otp": "^1.4.2",
     "lucide-react": "^0.545.0",
     "node-machine-id": "^1.1.12",
+    "psl": "^1.15.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "react-icons": "^5.5.0",

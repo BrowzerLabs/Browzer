@@ -8,6 +8,7 @@ import {
 } from './AutopilotExecutionService';
 import { AutopilotConfig } from './types';
 
+import { PasswordService } from '@/main/password';
 import { ExecutionService } from '@/main/automation';
 import { RecordingSession } from '@/shared/types';
 import { TabService } from '@/main/browser';
@@ -18,7 +19,8 @@ export class AutopilotService {
 
   constructor(
     private tabService: TabService,
-    private browserUIView: WebContentsView
+    private browserUIView: WebContentsView,
+    private passwordService: PasswordService
   ) {
     this.electronId = uuidv4();
   }
@@ -43,7 +45,10 @@ export class AutopilotService {
     }
 
     // Create an ExecutionService for this tab
-    const executionService = new ExecutionService(this.tabService);
+    const executionService = new ExecutionService({
+      tabService: this.tabService,
+      passwordService: this.passwordService,
+    });
 
     const executor = new AutopilotExecutionService(
       executionService,

@@ -39,6 +39,7 @@ import {
 import { AddressBar } from '@/renderer/components/AddressBar';
 import { DownloadsDropdown } from '@/renderer/components/DownloadsDropdown';
 import { BookmarkButton } from '@/renderer/components/BookmarkButton';
+import { CredentialSavePopover } from '@/renderer/components/CredentialSavePopover';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/renderer/ui/tooltip';
 
 interface NavigationBarProps {
@@ -116,6 +117,8 @@ export function NavigationBar({
         title={activeTab?.title || ''}
         favicon={activeTab?.favicon}
       />
+
+      <CredentialSavePopover />
 
       {isDownloading && (
         <Tooltip>

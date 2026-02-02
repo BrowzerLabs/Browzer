@@ -5,6 +5,7 @@ import { AutomationClient } from './clients/AutomationClient';
 import { AutomationStateManager } from './core/AutomationStateManager';
 import { IterativeAutomationResult } from './core/types';
 
+import { PasswordService } from '@/main/password';
 import { RecordingStore } from '@/main/recording';
 import { ExecutionService } from '@/main/automation';
 import { TabService } from '@/main/browser/TabService';
@@ -24,11 +25,16 @@ export class AutomationService extends EventEmitter {
   constructor(
     private browserUIView: WebContentsView,
     private recordingStore: RecordingStore,
-    private tabService: TabService
+    private tabService: TabService,
+    private passwordService: PasswordService
   ) {
     super();
     this.recordingStore = recordingStore;
-    this.executionService = new ExecutionService(this.tabService);
+
+    this.executionService = new ExecutionService({
+      tabService: this.tabService,
+      passwordService: this.passwordService,
+    });
 
     this.automationClient = new AutomationClient();
     this.setupAutomationClientListeners();

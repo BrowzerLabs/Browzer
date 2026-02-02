@@ -96,32 +96,6 @@ export const createBrowserAPI = (): BrowserAPI => ({
   // Video File Operations
   openVideoFile: (videoPath: string) => invoke('video:open-file', videoPath),
 
-  // Password Management API
-  getAllPasswords: () => invoke('password:get-all'),
-  savePassword: (origin: string, username: string, password: string) =>
-    invoke('password:save', origin, username, password),
-  getPasswordsForOrigin: (origin: string) =>
-    invoke('password:get-for-origin', origin),
-  getPassword: (credentialId: string) =>
-    invoke('password:get-password', credentialId),
-  updatePassword: (credentialId: string, username: string, password: string) =>
-    invoke('password:update', credentialId, username, password),
-  deletePassword: (credentialId: string) =>
-    invoke('password:delete', credentialId),
-  deleteMultiplePasswords: (credentialIds: string[]) =>
-    invoke('password:delete-multiple', credentialIds),
-  searchPasswords: (query: string) => invoke('password:search', query),
-  getPasswordBlacklist: () => invoke('password:get-blacklist'),
-  neverSaveForSite: (origin: string) =>
-    invoke('password:add-to-blacklist', origin),
-  removeFromBlacklist: (origin: string) =>
-    invoke('password:remove-from-blacklist', origin),
-  isSiteBlacklisted: (origin: string) =>
-    invoke('password:is-blacklisted', origin),
-  exportPasswords: () => invoke('password:export'),
-  importPasswords: (data: string) => invoke('password:import', data),
-  getPasswordStats: () => invoke('password:get-stats'),
-
   // Settings API
   getAllSettings: () => invoke('settings:get-all'),
   getSettingsCategory: (category: keyof AppSettings) =>
@@ -228,7 +202,10 @@ export const createBrowserAPI = (): BrowserAPI => ({
 
   // Event listeners - Deep Link events
   onDeepLink: (callback) =>
-    createEventListener<{ path: string; fullWindow: boolean }>('deeplink:navigate', callback),
+    createEventListener<{ path: string; fullWindow: boolean }>(
+      'deeplink:navigate',
+      callback
+    ),
 
   // Event listeners - Address Bar focus
   onRequestAddressBarFocus: (callback) =>
