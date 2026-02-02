@@ -15,6 +15,7 @@ import {
   Download,
   Bookmark,
   Clock,
+  BanIcon,
 } from 'lucide-react';
 
 import type { TabInfo } from '@/shared/types';
@@ -24,6 +25,8 @@ import { useRecording } from '@/renderer/hooks/useRecording';
 import { useAuth } from '@/renderer/hooks/useAuth';
 import { useUpdateProgress } from '@/renderer/hooks/useUpdateProgress';
 import { useBrowserViewLayer } from '@/renderer/hooks/useBrowserViewLayer';
+import { useAutomationStore } from '@/renderer/stores/automationStore';
+import { AutomationStatus } from '@/shared/types';
 import ThemeToggle from '@/renderer/ui/theme-toggle';
 import { Avatar, AvatarFallback, AvatarImage } from '@/renderer/ui/avatar';
 import {
@@ -60,11 +63,14 @@ export function NavigationBar({
   const { user, signOut, loading } = useAuth();
   const { isDownloading, progress, version } = useUpdateProgress();
   const { createOverlayHandler } = useBrowserViewLayer();
+  const { currentSession } = useAutomationStore();
 
   const handleSignOut = async () => {
     await signOut();
   };
 
+  const shouldKeepSidebarOpen =
+    isRecording || currentSession?.status === AutomationStatus.RUNNING;
   const isSecure = activeTab?.url.startsWith('https://') ?? false;
 
   return (
@@ -163,15 +169,30 @@ export function NavigationBar({
           onClick={toggleSidebar}
           className="bg-blue-50 dark:bg-blue-950 p-2 rounded-full"
           title={isSidebarVisible ? 'Hide Agent Panel' : 'Show Agent Panel'}
+          disabled={shouldKeepSidebarOpen}
         >
           {isSidebarVisible ? (
-            <ChevronRight className="w-4 h-4" />
+            <ChevronLeft
+              className={cn(
+                'w-4 h-4',
+                shouldKeepSidebarOpen && 'text-gray-500'
+              )}
+            />
           ) : (
-            <ChevronLeft className="w-4 h-4" />
+            <ChevronRight
+              className={cn(
+                'w-4 h-4',
+                shouldKeepSidebarOpen && 'text-gray-500'
+              )}
+            />
           )}
         </TooltipTrigger>
         <TooltipContent>
-          {isSidebarVisible ? 'Hide Agent Panel' : 'Show Agent Panel'}
+          {shouldKeepSidebarOpen
+            ? 'Disabled'
+            : isSidebarVisible
+              ? 'Hide Agent Panel'
+              : 'Show Agent Panel'}
         </TooltipContent>
       </Tooltip>
       <DropdownMenu onOpenChange={createOverlayHandler('nav-more-menu')}>
