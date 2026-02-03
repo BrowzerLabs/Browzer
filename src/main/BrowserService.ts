@@ -16,6 +16,7 @@ import { HistoryService } from '@/main/history/HistoryService';
 import { PasswordManager } from '@/main/password/PasswordManager';
 import { BookmarkService } from '@/main/bookmark';
 import { AutopilotService } from '@/main/llm/autopilot';
+import { SchedulerService } from '@/main/scheduler';
 
 export class BrowserService {
   private tabService: TabService;
@@ -31,6 +32,7 @@ export class BrowserService {
   private passwordManager: PasswordManager;
   private bookmarkService: BookmarkService;
   private recordingService: RecordingService;
+  private schedulerService: SchedulerService;
 
   constructor(
     private baseWindow: BaseWindow,
@@ -80,6 +82,9 @@ export class BrowserService {
       this.tabService,
       this.browserView
     );
+
+    this.schedulerService = new SchedulerService();
+    this.setupScheduler();
 
     this.setupTabEventListeners();
     this.setupAdBlocker();
@@ -174,6 +179,10 @@ export class BrowserService {
     return this.recordingService;
   }
 
+  public getSchedulerService(): SchedulerService {
+    return this.schedulerService;
+  }
+
   public updateLayout(
     _windowWidth: number,
     _windowHeight: number,
@@ -221,6 +230,44 @@ export class BrowserService {
     this.automationManager.destroy();
     this.autopilotService.destroy();
     this.downloadService.destroy();
+    this.schedulerService.destroy();
+  }
+
+  private setupScheduler(): void {
+    this.schedulerService.on(
+      'automation:trigger',
+      async (data: {
+        automationId: string;
+        userGoal: string;
+        recordingId: string;
+      }) => {
+        try {
+          const result = await this.executeIterativeAutomation(
+            data.userGoal,
+            data.recordingId
+          );
+
+          this.schedulerService.onAutomationComplete(
+            data.automationId,
+            result.sessionId,
+            result.success,
+            result,
+            result.success ? undefined : result.message
+          );
+        } catch (error) {
+          console.error('[BrowserService] Scheduled automation failed:', error);
+          this.schedulerService.onAutomationComplete(
+            data.automationId,
+            '',
+            false,
+            undefined,
+            error instanceof Error ? error.message : 'Unknown error'
+          );
+        }
+      }
+    );
+
+    this.schedulerService.start();
   }
 
   private setupTabEventListeners(): void {

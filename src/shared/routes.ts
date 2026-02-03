@@ -101,6 +101,11 @@ export const ROUTES: Record<string, RouteConfig> = {
     title: 'Bookmarks',
     favicon: 'star',
   },
+  automation: {
+    path: '/automation',
+    title: 'Automation',
+    favicon: 'bot',
+  },
 };
 
 export const ICON_MAP: Record<string, LucideIcon> = {
