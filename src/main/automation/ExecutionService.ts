@@ -1,3 +1,5 @@
+import { RecordingStore } from '../recording';
+
 import { ContextService } from './ContextService';
 import { SnapshotService } from './SnapshotService';
 import { ClickService } from './ClickService';
@@ -22,7 +24,11 @@ export class ExecutionService {
   private fileUploadService: FileUploadService;
   private scrollService: ScrollService;
 
-  constructor(private context: ExecutionContext) {
+  constructor(
+    private context: ExecutionContext,
+    private recordingStore: RecordingStore,
+    private recordingId: string
+  ) {
     this.clickService = new ClickService(this.context);
     this.typeService = new TypeService(this.context);
     this.navigateService = new NavigateService(this.context);
@@ -73,6 +79,9 @@ export class ExecutionService {
       case 'waitForNetworkIdle':
         await this.clickService.waitForNetworkIdle(params);
         return { success: true, value: 'Network idle' };
+
+      case 'update_recording':
+        return this.recordingStore.improveRecording(params, this.recordingId);
 
       default:
         return { success: false, error: `Unknown tool: ${toolName}` };

@@ -10,7 +10,7 @@ import { FormatService } from '../llm/utils/FormatService';
 import { MigrationService } from './MigrationService';
 import { migrations } from './migrations';
 
-import { RecordingSession } from '@/shared/types';
+import { RecordingSession, ToolExecutionResult } from '@/shared/types';
 export class RecordingStore {
   private db: Database.Database;
 
@@ -300,6 +300,73 @@ export class RecordingStore {
     } catch (error) {
       console.error('Error updating recording:', error);
       return false;
+    }
+  }
+
+  public async improveRecording(
+    params: any = {},
+    recordingId: string
+  ): Promise<ToolExecutionResult> {
+    try {
+      if (!recordingId)
+        return {
+          success: false,
+          error: 'No recording ID available for update',
+        };
+
+      const recording = this.getRecording(recordingId);
+      if (!recording)
+        return {
+          success: false,
+          error: `Recording not found: ${recordingId}`,
+        };
+
+      const { actionIndex, updatedAction } = params;
+
+      if (actionIndex !== undefined && updatedAction) {
+        const newActions = [...recording.actions];
+        const originalAction = newActions[actionIndex];
+
+        if (!originalAction) {
+          return {
+            success: false,
+            error: `Action at index ${actionIndex} not found`,
+          };
+        }
+
+        newActions[actionIndex] = {
+          ...originalAction,
+          ...updatedAction,
+        };
+
+        const success = this.updateRecording(recordingId, {
+          ...recording,
+          actions: newActions,
+        });
+
+        if (!success) {
+          return {
+            success: false,
+            error: 'Failed to update recording in database',
+          };
+        }
+        return {
+          success: true,
+          value: `✅`,
+        };
+      }
+
+      return {
+        success: false,
+        error:
+          'Invalid update_recording parameters. Provide actionIndex + updatedAction',
+      };
+    } catch (error) {
+      console.error('[ExecutionService] Error updating recording:', error);
+      return {
+        success: false,
+        error: `Failed to update recording: ${error instanceof Error ? error.message : String(error)}`,
+      };
     }
   }
 

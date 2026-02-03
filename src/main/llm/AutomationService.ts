@@ -29,10 +29,14 @@ export class AutomationService extends EventEmitter {
     super();
     this.recordingStore = recordingStore;
 
-    this.executionService = new ExecutionService({
-      view: this.view,
-      tabId: this.tabId,
-    });
+    this.executionService = new ExecutionService(
+      {
+        view: this.view,
+        tabId: this.tabId,
+      },
+      this.recordingStore,
+      this.recordedSession?.id
+    );
 
     this.automationClient = new AutomationClient();
     this.setupAutomationClientListeners();

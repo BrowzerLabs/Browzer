@@ -7,7 +7,8 @@ export type AutomationEventType =
   | 'step_error'
   | 'automation_complete'
   | 'automation_error'
-  | 'automation_stopped';
+  | 'automation_stopped'
+  | 'recording_updated';
 
 export interface AutomationProgressEvent {
   type: AutomationEventType;
