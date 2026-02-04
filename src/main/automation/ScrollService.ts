@@ -1,18 +1,29 @@
-import { BaseActionService, ExecutionContext } from './BaseActionService';
+import { TabService } from '../browser';
+
+import { BaseActionService } from './BaseActionService';
 
 import { ToolExecutionResult } from '@/shared/types';
 
 export interface ScrollParams {
+  tabId: string;
   direction: 'up' | 'down' | 'left' | 'right';
   amount?: number;
 }
 
 export class ScrollService extends BaseActionService {
-  constructor(context: ExecutionContext) {
-    super(context);
+  constructor(tabService: TabService) {
+    super(tabService);
   }
 
   public async execute(params: ScrollParams): Promise<ToolExecutionResult> {
+    const view = this.getView(params.tabId);
+    if (!view) {
+      return {
+        success: false,
+        error: 'Tab not found, or debugger not attached.',
+      };
+    }
+
     const amount = params.amount ?? 300;
     let deltaX = 0;
     let deltaY = 0;
@@ -33,7 +44,7 @@ export class ScrollService extends BaseActionService {
     }
 
     try {
-      await this.view.webContents.executeJavaScript(`
+      await view.webContents.executeJavaScript(`
         window.scrollBy({
           left: ${deltaX},
           top: ${deltaY},

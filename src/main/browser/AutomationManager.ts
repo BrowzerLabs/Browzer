@@ -1,21 +1,20 @@
-import { WebContentsView, dialog } from 'electron';
+import { WebContentsView } from 'electron';
 
-import { Tab } from './types';
+import { TabService } from './TabService';
 
 import { AutomationService } from '@/main/llm';
 import { RecordingStore } from '@/main/recording';
-import { AutomationProgressEvent } from '@/shared/types';
 
 export class AutomationManager {
   private automationSessions: Map<string, AutomationService> = new Map();
 
   constructor(
     private recordingStore: RecordingStore,
-    private browserUIView: WebContentsView
+    private browserUIView: WebContentsView,
+    private tabService: TabService
   ) {}
 
   public async executeAutomation(
-    newTab: Tab,
     userGoal: string,
     recordedSessionId: string
   ): Promise<{
@@ -23,23 +22,10 @@ export class AutomationManager {
     sessionId: string;
     message: string;
   }> {
-    if (!newTab) {
-      dialog.showMessageBox({
-        type: 'error',
-        title: 'Error',
-        message: 'No active tab or automation. At least one tab must be open.',
-      });
-      return {
-        success: false,
-        sessionId: '',
-        message: 'No active tab or automation. At least one tab must be open.',
-      };
-    }
-
     const automationService = new AutomationService(
+      this.browserUIView,
       this.recordingStore,
-      newTab.view,
-      newTab.id
+      this.tabService
     );
 
     const automationPromise = automationService.executeAutomation(
@@ -50,14 +36,6 @@ export class AutomationManager {
     const sessionId = automationService.getSessionId();
 
     this.automationSessions.set(sessionId, automationService);
-    automationService.on('progress', (event: AutomationProgressEvent) => {
-      if (this.browserUIView && !this.browserUIView.webContents.isDestroyed()) {
-        this.browserUIView.webContents.send('automation:progress', {
-          sessionId,
-          event,
-        });
-      }
-    });
 
     automationPromise
       .then((result) => {
