@@ -8,20 +8,22 @@ import {
 } from './AutopilotExecutionService';
 import { AutopilotConfig } from './types';
 
-import { Tab } from '@/main/browser/types';
 import { ExecutionService } from '@/main/automation';
 import { RecordingSession } from '@/shared/types';
+import { TabService } from '@/main/browser';
 
 export class AutopilotService {
   private sessions: Map<string, AutopilotExecutionService> = new Map();
   private electronId: string;
 
-  constructor(private browserUIView: WebContentsView) {
+  constructor(
+    private tabService: TabService,
+    private browserUIView: WebContentsView
+  ) {
     this.electronId = uuidv4();
   }
 
   public async executeAutopilot(
-    tab: Tab,
     userGoal: string,
     startUrl?: string,
     referenceRecording?: RecordingSession,
@@ -31,14 +33,6 @@ export class AutopilotService {
     sessionId: string;
     message: string;
   }> {
-    if (!tab) {
-      return {
-        success: false,
-        sessionId: '',
-        message: 'No active tab available',
-      };
-    }
-
     console.log(
       `[AutopilotManager] Starting autopilot for goal: "${userGoal}"`
     );
@@ -49,14 +43,10 @@ export class AutopilotService {
     }
 
     // Create an ExecutionService for this tab
-    const executionService = new ExecutionService({
-      view: tab.view,
-      tabId: tab.id,
-    });
+    const executionService = new ExecutionService(this.tabService);
 
     const executor = new AutopilotExecutionService(
       executionService,
-      tab.view,
       this.electronId
     );
     const sessionId = executor.getSessionId();

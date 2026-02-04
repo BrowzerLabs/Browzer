@@ -72,10 +72,14 @@ export class BrowserService {
 
     this.automationManager = new AutomationManager(
       this.recordingService.getRecordingStore(),
-      this.browserView
+      this.browserView,
+      this.tabService
     );
 
-    this.autopilotService = new AutopilotService(this.browserView);
+    this.autopilotService = new AutopilotService(
+      this.tabService,
+      this.browserView
+    );
 
     this.setupTabEventListeners();
     this.setupAdBlocker();
@@ -102,9 +106,7 @@ export class BrowserService {
     sessionId: string;
     message: string;
   }> {
-    const newTab = this.tabService.createTab();
     return this.automationManager.executeAutomation(
-      newTab,
       userGoal,
       recordedSessionId
     );
@@ -129,9 +131,7 @@ export class BrowserService {
           .getRecording(referenceRecordingId)
       : undefined;
     const effectiveStartUrl = startUrl || referenceRecording?.startUrl;
-    const newTab = this.tabService.createTab(effectiveStartUrl);
     return this.autopilotService.executeAutopilot(
-      newTab,
       userGoal,
       effectiveStartUrl,
       referenceRecording

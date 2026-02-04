@@ -1,21 +1,33 @@
-import { BaseActionService, ExecutionContext } from './BaseActionService';
+import { WebContentsView } from 'electron';
+
+import { TabService } from '../browser';
+
+import { BaseActionService } from './BaseActionService';
 
 import { ToolExecutionResult } from '@/shared/types';
 
 export class ContextService extends BaseActionService {
-  constructor(context: ExecutionContext) {
-    super(context);
+  constructor(tabService: TabService) {
+    super(tabService);
   }
 
-  public async execute(): Promise<ToolExecutionResult> {
+  public async execute(params: {
+    tabId: string;
+  }): Promise<ToolExecutionResult> {
     try {
-      await this.waitForNetworkIdle({
+      const cdp = this.getCDP(params.tabId);
+      const view = this.getView(params.tabId);
+      if (!cdp || !view) {
+        return {
+          success: false,
+          error: 'Tab not found, or debugger not attached',
+        };
+      }
+      await this.waitForNetworkIdle(cdp, {
         timeout: 3000,
         idleTime: 500,
         maxInflightRequests: 0,
       });
-
-      const cdp = this.view.webContents.debugger;
 
       await cdp.sendCommand('Accessibility.enable');
 
@@ -29,7 +41,11 @@ export class ContextService extends BaseActionService {
         return { success: false, error: 'No accessibility nodes found' };
       }
 
-      const treeString = this.formatAccessibilityTree(nodes);
+      const treeString = this.formatAccessibilityTree(
+        params.tabId,
+        view,
+        nodes
+      );
       return { success: true, value: treeString };
     } catch (error) {
       console.error('[ContextService] Error:', error);
@@ -40,11 +56,16 @@ export class ContextService extends BaseActionService {
     }
   }
 
-  private formatAccessibilityTree(nodes: any[]): string {
+  private formatAccessibilityTree(
+    tabId: string,
+    view: WebContentsView,
+    nodes: any[]
+  ): string {
     const lines: string[] = [];
-    const url = this.view.webContents.getURL();
-    const title = this.view.webContents.getTitle();
+    const url = view.webContents.getURL();
+    const title = view.webContents.getTitle();
 
+    lines.push(`Tab ID: ${tabId}`);
     lines.push(`URL: ${url}`);
     lines.push(`Title: ${title}`);
     lines.push('');
@@ -63,8 +84,6 @@ export class ContextService extends BaseActionService {
 
     const filteredLines = lines.filter((line) => line.trim() !== '');
     lines.length = 0;
-    lines.push(`URL: ${url}`);
-    lines.push(`Title: ${title}`);
     lines.push(...filteredLines.slice(2));
 
     return lines.join('\n');

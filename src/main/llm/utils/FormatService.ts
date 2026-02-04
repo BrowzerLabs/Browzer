@@ -34,7 +34,7 @@ export class FormatService {
         formatted += ` value="${escapeXml(action.keys.join('+'))}"`;
       }
 
-      formatted += ` tab_id="${action.tabId}" />\n`;
+      formatted += ` tabId="${action.tabId}" />\n`;
     });
 
     formatted += `</rec>`;

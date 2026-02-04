@@ -1,11 +1,8 @@
 import { Debugger, WebContentsView } from 'electron';
 
-export interface ExecutionContext {
-  view: Electron.WebContentsView;
-  tabId: string;
-}
-
+import { TabService } from '@/main/browser/TabService';
 export interface NodeParams {
+  tabId: string;
   nodeId?: number;
   role?: string;
   name?: string;
@@ -19,14 +16,14 @@ export interface NetworkIdleOptions {
 }
 
 export abstract class BaseActionService {
-  protected view: WebContentsView;
-  protected tabId: string;
-  protected cdp: Debugger;
+  constructor(protected tabService: TabService) {}
 
-  constructor(context: ExecutionContext) {
-    this.view = context.view;
-    this.tabId = context.tabId;
-    this.cdp = context.view.webContents.debugger;
+  protected getCDP(tabId: string): Debugger | undefined {
+    return this.tabService.getTab(tabId)?.view.webContents.debugger;
+  }
+
+  protected getView(tabId: string): WebContentsView | undefined {
+    return this.tabService.getTab(tabId)?.view;
   }
 
   protected sleep(ms: number): Promise<void> {
@@ -34,6 +31,7 @@ export abstract class BaseActionService {
   }
 
   protected async findBestMatchingNode(
+    cdp: Debugger,
     nodes: any[],
     params: NodeParams
   ): Promise<any | null> {
@@ -82,7 +80,7 @@ export abstract class BaseActionService {
       const nodeRole = node.role?.value?.toLowerCase() || '';
       if (NOISE_ROLES.has(nodeRole)) continue;
 
-      const score = await this.calculateMatchScore(node, params);
+      const score = await this.calculateMatchScore(cdp, node, params);
 
       if (score > 0) {
         candidates.push({ node, score });
@@ -101,6 +99,7 @@ export abstract class BaseActionService {
   }
 
   protected async calculateMatchScore(
+    cdp: Debugger,
     node: any,
     params: NodeParams
   ): Promise<number> {
@@ -137,6 +136,7 @@ export abstract class BaseActionService {
 
     if (params.attributes && Object.keys(params.attributes).length > 0) {
       const attrScore = await this.calculateAttributeScore(
+        cdp,
         node,
         params.attributes
       );
@@ -215,6 +215,7 @@ export abstract class BaseActionService {
   }
 
   private async calculateAttributeScore(
+    cdp: Debugger,
     node: any,
     targetAttributes: Record<string, string>
   ): Promise<number> {
@@ -223,7 +224,7 @@ export abstract class BaseActionService {
     }
 
     try {
-      const domNode = await this.cdp.sendCommand('DOM.resolveNode', {
+      const domNode = await cdp.sendCommand('DOM.resolveNode', {
         backendNodeId: node.backendDOMNodeId,
       });
 
@@ -232,11 +233,9 @@ export abstract class BaseActionService {
         return 0;
       }
 
-      const attributesResult = await this.cdp.sendCommand(
-        'Runtime.callFunctionOn',
-        {
-          objectId: domNode.object.objectId,
-          functionDeclaration: `function() {
+      const attributesResult = await cdp.sendCommand('Runtime.callFunctionOn', {
+        objectId: domNode.object.objectId,
+        functionDeclaration: `function() {
           const attrs = {};
           if (this.attributes) {
             for (let i = 0; i < this.attributes.length; i++) {
@@ -246,9 +245,8 @@ export abstract class BaseActionService {
           }
           return attrs;
         }`,
-          returnByValue: true,
-        }
-      );
+        returnByValue: true,
+      });
 
       const htmlAttributes = attributesResult.result?.value || {};
       let matchedCount = 0;
@@ -283,6 +281,7 @@ export abstract class BaseActionService {
   }
 
   public async waitForNetworkIdle(
+    cdp: Debugger,
     options: NetworkIdleOptions = {}
   ): Promise<void> {
     const { timeout = 5000, idleTime = 500, maxInflightRequests = 0 } = options;
@@ -300,10 +299,10 @@ export abstract class BaseActionService {
     const cleanup = () => {
       if (timeoutTimer) clearTimeout(timeoutTimer);
       if (networkIdleTimer) clearTimeout(networkIdleTimer);
-      this.cdp.removeListener('message', onRequestWillBeSent);
-      this.cdp.removeListener('message', onLoadingFinished);
-      this.cdp.removeListener('message', onLoadingFailed);
-      this.cdp.removeListener('message', onResponseReceived);
+      cdp.removeListener('message', onRequestWillBeSent);
+      cdp.removeListener('message', onLoadingFinished);
+      cdp.removeListener('message', onLoadingFailed);
+      cdp.removeListener('message', onResponseReceived);
     };
 
     const resolveOnce = (reason: string) => {
@@ -383,21 +382,19 @@ export abstract class BaseActionService {
     };
 
     try {
-      const readyState = await this.cdp.sendCommand('Runtime.evaluate', {
+      const readyState = await cdp.sendCommand('Runtime.evaluate', {
         expression: 'document.readyState',
         returnByValue: true,
       });
 
       const isLoading = readyState.result?.value === 'loading';
 
-      this.cdp.on('message', onRequestWillBeSent);
-      this.cdp.on('message', onLoadingFinished);
-      this.cdp.on('message', onLoadingFailed);
-      this.cdp.on('message', onResponseReceived);
+      cdp.on('message', onRequestWillBeSent);
+      cdp.on('message', onLoadingFinished);
+      cdp.on('message', onLoadingFailed);
+      cdp.on('message', onResponseReceived);
 
-      await this.cdp.sendCommand('Network.enable').catch(() => {
-        // Ignore - Network.enable may fail if already enabled
-      });
+      await cdp.sendCommand('Network.enable').catch(console.error);
 
       if (!isLoading) {
         await this.sleep(100);
