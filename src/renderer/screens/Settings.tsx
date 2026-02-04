@@ -5,6 +5,8 @@ import {
   Palette,
   Loader2Icon,
   Key,
+  Plug2,
+  Bot,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -14,6 +16,8 @@ import { GeneralSettings } from '@/renderer/components/settings/GeneralSettings'
 import { PrivacySettings } from '@/renderer/components/settings/PrivacySettings';
 import { AppearanceSettings } from '@/renderer/components/settings/AppearanceSettings';
 import { PasswordSettings } from '@/renderer/components/settings/PasswordSettings';
+import { IntegrationSettings } from '@/renderer/components/settings/IntegrationSettings';
+import { AgentSettings } from '@/renderer/components/settings/AgentSettings';
 import { AppSettings } from '@/shared/types';
 import { Separator } from '@/renderer/ui/separator';
 
@@ -122,6 +126,20 @@ export function Settings() {
                 <Shield className="h-4 w-4" />
                 <span>Privacy & Security</span>
               </TabsTrigger>
+              <TabsTrigger
+                value="integrations"
+                className="justify-start gap-3 rounded-full px-4 py-2.5"
+              >
+                <Plug2 className="h-4 w-4" />
+                <span>Integrations</span>
+              </TabsTrigger>
+              <TabsTrigger
+                value="agent"
+                className="justify-start gap-3 rounded-full px-4 py-2.5"
+              >
+                <Bot className="h-4 w-4" />
+                <span>Agent</span>
+              </TabsTrigger>
             </TabsList>
           </ScrollArea>
 
@@ -161,6 +179,20 @@ export function Settings() {
                       handleUpdateSetting('appearance', key, value)
                     }
                     onReset={() => handleResetCategory('appearance')}
+                  />
+                </TabsContent>
+
+                <TabsContent value="integrations">
+                  <IntegrationSettings />
+                </TabsContent>
+
+                <TabsContent value="agent">
+                  <AgentSettings
+                    settings={settings.agent}
+                    onUpdate={(key, value) =>
+                      handleUpdateSetting('agent', key, value)
+                    }
+                    onReset={() => handleResetCategory('agent')}
                   />
                 </TabsContent>
               </div>

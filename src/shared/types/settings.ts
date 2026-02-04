@@ -15,4 +15,8 @@ export interface AppSettings {
     fontSize: number;
     showBookmarksBar: boolean;
   };
+
+  agent: {
+    globalInstructions: string;
+  };
 }

@@ -10,7 +10,16 @@ import { AutopilotConfig } from './types';
 
 import { ExecutionService } from '@/main/automation';
 import { RecordingSession } from '@/shared/types';
-import { TabService } from '@/main/browser';
+import { Tab, TabService } from '@/main/browser';
+
+export interface ExecuteAutopilotOptions {
+  tab: Tab;
+  userGoal: string;
+  startUrl?: string;
+  referenceRecording?: RecordingSession;
+  config?: Partial<AutopilotConfig>;
+  globalInstructions?: string;
+}
 
 export class AutopilotService {
   private sessions: Map<string, AutopilotExecutionService> = new Map();
@@ -23,16 +32,27 @@ export class AutopilotService {
     this.electronId = uuidv4();
   }
 
-  public async executeAutopilot(
-    userGoal: string,
-    startUrl?: string,
-    referenceRecording?: RecordingSession,
-    config?: Partial<AutopilotConfig>
-  ): Promise<{
+  public async executeAutopilot(options: ExecuteAutopilotOptions): Promise<{
     success: boolean;
     sessionId: string;
     message: string;
   }> {
+    const {
+      tab,
+      userGoal,
+      startUrl,
+      referenceRecording,
+      config,
+      globalInstructions,
+    } = options;
+
+    if (!tab) {
+      return {
+        success: false,
+        sessionId: '',
+        message: 'No active tab available',
+      };
+    }
     console.log(
       `[AutopilotManager] Starting autopilot for goal: "${userGoal}"`
     );
@@ -66,7 +86,8 @@ export class AutopilotService {
       userGoal,
       effectiveStartUrl,
       referenceRecording,
-      config
+      config,
+      globalInstructions
     );
 
     executionPromise

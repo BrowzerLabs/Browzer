@@ -16,6 +16,7 @@ import { HistoryService } from '@/main/history/HistoryService';
 import { PasswordManager } from '@/main/password/PasswordManager';
 import { BookmarkService } from '@/main/bookmark';
 import { AutopilotService } from '@/main/llm/autopilot';
+import { NotionOAuthService } from '@/main/integrations';
 
 export class BrowserService {
   private tabService: TabService;
@@ -31,6 +32,7 @@ export class BrowserService {
   private passwordManager: PasswordManager;
   private bookmarkService: BookmarkService;
   private recordingService: RecordingService;
+  private notionService: NotionOAuthService;
 
   constructor(
     private baseWindow: BaseWindow,
@@ -46,6 +48,7 @@ export class BrowserService {
     this.passwordManager = new PasswordManager();
     this.bookmarkService = new BookmarkService(this.browserView);
     this.adBlockerService = new AdBlockerService();
+    this.notionService = new NotionOAuthService();
 
     // Initialize managers
     this.navigationService = new NavigationService(
@@ -131,11 +134,16 @@ export class BrowserService {
           .getRecording(referenceRecordingId)
       : undefined;
     const effectiveStartUrl = startUrl || referenceRecording?.startUrl;
-    return this.autopilotService.executeAutopilot(
+    const newTab = await this.tabService.createTab(effectiveStartUrl);
+    const globalInstructions =
+      this.settingsService.getAgentGlobalInstructions();
+    return this.autopilotService.executeAutopilot({
+      tab: newTab,
       userGoal,
-      effectiveStartUrl,
-      referenceRecording
-    );
+      startUrl: effectiveStartUrl,
+      referenceRecording,
+      globalInstructions,
+    });
   }
 
   public async stopAutopilot(sessionId: string): Promise<void> {
@@ -172,6 +180,10 @@ export class BrowserService {
 
   public getRecordingService(): RecordingService {
     return this.recordingService;
+  }
+
+  public getNotionService(): NotionOAuthService {
+    return this.notionService;
   }
 
   public updateLayout(
@@ -221,6 +233,7 @@ export class BrowserService {
     this.automationManager.destroy();
     this.autopilotService.destroy();
     this.downloadService.destroy();
+    this.notionService.destroy();
   }
 
   private setupTabEventListeners(): void {

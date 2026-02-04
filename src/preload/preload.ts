@@ -17,6 +17,7 @@ import {
   createSubscriptionAPI,
   createNotificationAPI,
   createUpdaterAPI,
+  createNotionAPI,
 } from './api';
 import { createRecordingAPI } from './api/recording.api';
 
@@ -26,6 +27,7 @@ export type AuthAPI = ReturnType<typeof createAuthAPI>;
 export type SubscriptionAPI = ReturnType<typeof createSubscriptionAPI>;
 export type NotificationAPI = ReturnType<typeof createNotificationAPI>;
 export type UpdaterAPI = ReturnType<typeof createUpdaterAPI>;
+export type NotionAPI = ReturnType<typeof createNotionAPI>;
 
 const browserAPI = createBrowserAPI();
 const authAPI = createAuthAPI();
@@ -33,6 +35,7 @@ const subscriptionAPI = createSubscriptionAPI();
 const notificationAPI = createNotificationAPI();
 const updaterAPI = createUpdaterAPI();
 const recordingAPI = createRecordingAPI();
+const notionAPI = createNotionAPI();
 
 contextBridge.exposeInMainWorld('browserAPI', browserAPI);
 contextBridge.exposeInMainWorld('authAPI', authAPI);
@@ -40,3 +43,4 @@ contextBridge.exposeInMainWorld('subscriptionAPI', subscriptionAPI);
 contextBridge.exposeInMainWorld('notificationAPI', notificationAPI);
 contextBridge.exposeInMainWorld('updaterAPI', updaterAPI);
 contextBridge.exposeInMainWorld('recordingAPI', recordingAPI);
+contextBridge.exposeInMainWorld('notionAPI', notionAPI);

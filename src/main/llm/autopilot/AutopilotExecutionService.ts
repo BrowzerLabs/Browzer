@@ -29,6 +29,7 @@ export class AutopilotExecutionService extends EventEmitter {
   private stepCount = 0;
   private electronId: string;
   private messages: Record<string, unknown>[] = [];
+  private globalInstructions: string | null = null;
 
   constructor(executor: ExecutionService, electronId: string) {
     super();
@@ -49,11 +50,13 @@ export class AutopilotExecutionService extends EventEmitter {
     userGoal: string,
     startUrl: string,
     referenceRecording?: RecordingSession,
-    config?: Partial<AutopilotConfig>
+    config?: Partial<AutopilotConfig>,
+    globalInstructions?: string
   ): Promise<{ success: boolean; message: string; stepCount: number }> {
     this.status = 'running';
     this.stepCount = 0;
     this.messages = [];
+    this.globalInstructions = globalInstructions || null;
 
     try {
       const startPayload: Record<string, unknown> = {
@@ -75,6 +78,10 @@ export class AutopilotExecutionService extends EventEmitter {
           max_steps: config.maxSteps,
           max_consecutive_failures: config.maxConsecutiveFailures,
         };
+      }
+
+      if (globalInstructions) {
+        startPayload.global_instructions = globalInstructions;
       }
 
       const startResponse = await this.callBackendAPI<AutopilotStartResponse>(
@@ -116,6 +123,7 @@ export class AutopilotExecutionService extends EventEmitter {
           {
             session_id: this.sessionId,
             messages: [...this.messages, toolResultMessage],
+            global_instructions: this.globalInstructions,
           }
         );
 
