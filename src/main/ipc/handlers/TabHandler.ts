@@ -12,7 +12,7 @@ export class TabHandler extends BaseHandler {
     });
 
     this.handle('browser:create-tab', async (_, url?: string) => {
-      const tab = tabService.createTab(url);
+      const tab = await tabService.createTab(url);
       return tab.info;
     });
 
@@ -21,7 +21,7 @@ export class TabHandler extends BaseHandler {
     });
 
     this.handle('browser:restore-closed-tab', async () => {
-      return tabService.restoreLastClosedTab();
+      return await tabService.restoreLastClosedTab();
     });
 
     this.handle('browser:switch-tab', async (_, tabId: string) => {

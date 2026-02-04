@@ -1,8 +1,8 @@
-import {
-  BaseActionService,
-  ExecutionContext,
-  NodeParams,
-} from './BaseActionService';
+import { Debugger } from 'electron';
+
+import { TabService } from '../browser';
+
+import { BaseActionService, NodeParams } from './BaseActionService';
 
 import { ToolExecutionResult } from '@/shared/types';
 
@@ -12,13 +12,19 @@ export interface TypeParams extends NodeParams {
 }
 
 export class TypeService extends BaseActionService {
-  constructor(context: ExecutionContext) {
-    super(context);
+  constructor(tabService: TabService) {
+    super(tabService);
   }
 
   public async execute(params: TypeParams): Promise<ToolExecutionResult> {
     try {
-      await this.waitForNetworkIdle({
+      const cdp = this.getCDP(params.tabId);
+      if (!cdp)
+        return {
+          success: false,
+          error: 'Tab not found, or debugger not attached',
+        };
+      await this.waitForNetworkIdle(cdp, {
         timeout: 3000,
         idleTime: 500,
         maxInflightRequests: 0,
@@ -28,7 +34,7 @@ export class TypeService extends BaseActionService {
 
       // MODE 1: Direct CDP node typing
       if (params.nodeId !== undefined) {
-        await this.performType(params.nodeId, params.value, clearFirst);
+        await this.performType(cdp, params.nodeId, params.value, clearFirst);
         return {
           success: true,
         };
@@ -36,10 +42,10 @@ export class TypeService extends BaseActionService {
 
       // MODE 2: Attribute-based element finding
       if (params.role || params.name || params.attributes) {
-        return await this.findAndTypeByAttributes(params, clearFirst);
+        return await this.findAndTypeByAttributes(cdp, params, clearFirst);
       }
 
-      const focusCheck = await this.cdp.sendCommand('Runtime.evaluate', {
+      const focusCheck = await cdp.sendCommand('Runtime.evaluate', {
         expression: 'document.activeElement?.tagName',
         returnByValue: true,
       });
@@ -52,12 +58,12 @@ export class TypeService extends BaseActionService {
       }
 
       for (const char of params.value) {
-        await this.cdp.sendCommand('Input.dispatchKeyEvent', {
+        await cdp.sendCommand('Input.dispatchKeyEvent', {
           type: 'keyDown',
           text: char,
         });
 
-        await this.cdp.sendCommand('Input.dispatchKeyEvent', {
+        await cdp.sendCommand('Input.dispatchKeyEvent', {
           type: 'keyUp',
           text: char,
         });
@@ -74,22 +80,20 @@ export class TypeService extends BaseActionService {
   }
 
   private async findAndTypeByAttributes(
+    cdp: Debugger,
     params: TypeParams,
     clearFirst: boolean
   ): Promise<ToolExecutionResult> {
     try {
-      const { nodes } = await this.cdp.sendCommand(
-        'Accessibility.getFullAXTree',
-        {
-          depth: -1,
-        }
-      );
+      const { nodes } = await cdp.sendCommand('Accessibility.getFullAXTree', {
+        depth: -1,
+      });
 
       if (!nodes || nodes.length === 0) {
         return { success: false, error: 'No accessibility nodes found' };
       }
 
-      const bestMatch = await this.findBestMatchingNode(nodes, params);
+      const bestMatch = await this.findBestMatchingNode(cdp, nodes, params);
 
       if (!bestMatch) {
         return {
@@ -106,6 +110,7 @@ export class TypeService extends BaseActionService {
       });
 
       await this.performType(
+        cdp,
         bestMatch.backendDOMNodeId,
         params.value,
         clearFirst
@@ -121,11 +126,12 @@ export class TypeService extends BaseActionService {
   }
 
   private async performType(
+    cdp: Debugger,
     nodeId: number,
     value: string,
     clearFirst: boolean
   ): Promise<void> {
-    const { object } = await this.cdp.sendCommand('DOM.resolveNode', {
+    const { object } = await cdp.sendCommand('DOM.resolveNode', {
       backendNodeId: nodeId,
     });
 
@@ -133,7 +139,7 @@ export class TypeService extends BaseActionService {
       throw new Error('Element not found');
     }
 
-    await this.cdp.sendCommand('Runtime.callFunctionOn', {
+    await cdp.sendCommand('Runtime.callFunctionOn', {
       objectId: object.objectId,
       functionDeclaration: `
         function() {
@@ -149,7 +155,7 @@ export class TypeService extends BaseActionService {
 
     await this.sleep(500);
 
-    const { model } = await this.cdp.sendCommand('DOM.getBoxModel', {
+    const { model } = await cdp.sendCommand('DOM.getBoxModel', {
       objectId: object.objectId,
     });
 
@@ -161,7 +167,7 @@ export class TypeService extends BaseActionService {
     const centerX = (x1 + x2 + x3 + x4) / 4;
     const centerY = (y1 + y2 + y3 + y4) / 4;
 
-    await this.cdp.sendCommand('Input.dispatchMouseEvent', {
+    await cdp.sendCommand('Input.dispatchMouseEvent', {
       type: 'mouseMoved',
       x: centerX,
       y: centerY,
@@ -170,7 +176,7 @@ export class TypeService extends BaseActionService {
     });
     await this.sleep(1);
 
-    await this.cdp.sendCommand('Input.dispatchMouseEvent', {
+    await cdp.sendCommand('Input.dispatchMouseEvent', {
       type: 'mousePressed',
       x: centerX,
       y: centerY,
@@ -179,7 +185,7 @@ export class TypeService extends BaseActionService {
     });
     await this.sleep(1);
 
-    await this.cdp.sendCommand('Input.dispatchMouseEvent', {
+    await cdp.sendCommand('Input.dispatchMouseEvent', {
       type: 'mouseReleased',
       x: centerX,
       y: centerY,
@@ -189,7 +195,7 @@ export class TypeService extends BaseActionService {
     await this.sleep(1);
 
     if (clearFirst) {
-      await this.cdp.sendCommand('Runtime.callFunctionOn', {
+      await cdp.sendCommand('Runtime.callFunctionOn', {
         objectId: object.objectId,
         functionDeclaration: `
           function() {
@@ -209,12 +215,12 @@ export class TypeService extends BaseActionService {
     }
 
     for (const char of value) {
-      await this.cdp.sendCommand('Input.dispatchKeyEvent', {
+      await cdp.sendCommand('Input.dispatchKeyEvent', {
         type: 'keyDown',
         text: char,
       });
 
-      await this.cdp.sendCommand('Input.dispatchKeyEvent', {
+      await cdp.sendCommand('Input.dispatchKeyEvent', {
         type: 'keyUp',
         text: char,
       });
