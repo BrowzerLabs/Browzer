@@ -41,13 +41,23 @@ if (process.defaultApp) {
 
 const gotTheLock = app.requestSingleInstanceLock();
 if (!gotTheLock) {
-  dialog.showMessageBox({
-    type: 'error',
-    title: 'Application is already running',
-    message:
-      'Another instance of the application is already running. Only one instance is allowed at a time.',
-  });
-  app.quit();
+  app
+    .whenReady()
+    .then(() => {
+      dialog
+        .showMessageBox({
+          type: 'error',
+          title: 'Application is already running',
+          message:
+            'Another instance of the application is already running. Only one instance is allowed at a time.',
+        })
+        .then(() => {
+          app.quit();
+        });
+    })
+    .catch(() => {
+      app.quit();
+    });
 }
 
 protocol.registerSchemesAsPrivileged([

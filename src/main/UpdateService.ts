@@ -9,6 +9,9 @@ export class UpdateService {
   private isDownloading = false;
   private downloadedUpdateInfo: UpdateInfo | null = null;
   private shouldShowNoUpdateDialog = false;
+  private lastErrorShown = 0;
+  private lastErrorMessage = '';
+  private readonly ERROR_DIALOG_THROTTLE_MS = 5 * 60 * 1000;
 
   constructor(webContents: WebContents) {
     this.webContents = webContents;
@@ -71,18 +74,20 @@ export class UpdateService {
         currentVersion,
       });
 
-      dialog.showMessageBox({
-        type: 'info',
-        title: 'Update Available',
-        message: `A new version ${info.version} is available!`,
-        detail: `Current version: ${currentVersion}\n\nThe update will be downloaded in the background. You'll be notified when it's ready to install.`,
-        buttons: ['OK'],
-        defaultId: 0,
-      });
+      if (app.isReady()) {
+        dialog.showMessageBox({
+          type: 'info',
+          title: 'Update Available',
+          message: `A new version ${info.version} is available!`,
+          detail: `Current version: ${currentVersion}\n\nThe update will be downloaded in the background. You'll be notified when it's ready to install.`,
+          buttons: ['OK'],
+          defaultId: 0,
+        });
+      }
     });
 
     autoUpdater.on('update-not-available', (info: UpdateInfo) => {
-      if (this.shouldShowNoUpdateDialog) {
+      if (this.shouldShowNoUpdateDialog && app.isReady()) {
         dialog
           .showMessageBox({
             type: 'info',
@@ -95,6 +100,8 @@ export class UpdateService {
           .then(() => {
             this.shouldShowNoUpdateDialog = false;
           });
+      } else if (this.shouldShowNoUpdateDialog) {
+        this.shouldShowNoUpdateDialog = false;
       }
 
       log.info(
@@ -135,25 +142,27 @@ export class UpdateService {
       });
 
       // Show install dialog
-      dialog
-        .showMessageBox({
-          type: 'info',
-          title: 'Update Ready',
-          message: `Version ${info.version} has been downloaded`,
-          detail:
-            'The update is ready to install. Would you like to restart now or install it later?\n\nNote: The update will be automatically installed when you quit the app.',
-          buttons: ['Quit and Install', 'Install Later'],
-          defaultId: 0,
-          cancelId: 1,
-        })
-        .then((result) => {
-          if (result.response === 0) {
-            log.info('[Updater] User chose to install update now');
-            this.installUpdate();
-          } else {
-            log.info('[Updater] User chose to install update later');
-          }
-        });
+      if (app.isReady()) {
+        dialog
+          .showMessageBox({
+            type: 'info',
+            title: 'Update Ready',
+            message: `Version ${info.version} has been downloaded`,
+            detail:
+              'The update is ready to install. Would you like to restart now or install it later?\n\nNote: The update will be automatically installed when you quit the app.',
+            buttons: ['Quit and Install', 'Install Later'],
+            defaultId: 0,
+            cancelId: 1,
+          })
+          .then((result) => {
+            if (result.response === 0) {
+              log.info('[Updater] User chose to install update now');
+              this.installUpdate();
+            } else {
+              log.info('[Updater] User chose to install update later');
+            }
+          });
+      }
     });
 
     autoUpdater.on('error', (error: Error) => {
@@ -166,14 +175,17 @@ export class UpdateService {
         name: error.name,
       });
 
-      // Show error dialog only for critical errors
-      dialog.showMessageBox({
-        type: 'error',
-        title: 'Update Error',
-        message: 'Failed to check for updates',
-        detail: error.message,
-        buttons: ['OK'],
-      });
+      if (this.shouldShowErrorDialog(error.message) && app.isReady()) {
+        dialog.showMessageBox({
+          type: 'error',
+          title: 'Update Error',
+          message: 'Failed to check for updates',
+          detail: error.message,
+          buttons: ['OK'],
+        });
+        this.lastErrorShown = Date.now();
+        this.lastErrorMessage = error.message;
+      }
     });
   }
 
@@ -198,14 +210,6 @@ export class UpdateService {
     } catch (error) {
       log.error('[Updater] Error checking for updates:', error);
       this.shouldShowNoUpdateDialog = false;
-
-      dialog.showMessageBox({
-        type: 'error',
-        title: 'Update Error',
-        message: 'Failed to check for updates',
-        detail: error.message,
-        buttons: ['OK'],
-      });
     }
   }
 
@@ -228,15 +232,6 @@ export class UpdateService {
     } catch (error) {
       log.error('[Updater] Error downloading update:', error);
       this.isDownloading = false;
-
-      dialog.showMessageBox({
-        type: 'error',
-        title: 'Update Error',
-        message: 'Failed to download update',
-        detail: error.message,
-        buttons: ['OK'],
-      });
-
       throw error;
     }
   }
@@ -247,14 +242,16 @@ export class UpdateService {
   public installUpdate(): void {
     if (!this.downloadedUpdateInfo) {
       log.error('[Updater] No update downloaded to install');
-      dialog.showMessageBox({
-        type: 'error',
-        title: 'Update Error',
-        message: `No updates available.`,
-        detail: `Current version: ${this.getCurrentVersion()}`,
-        buttons: ['OK'],
-        defaultId: 0,
-      });
+      if (app.isReady()) {
+        dialog.showMessageBox({
+          type: 'error',
+          title: 'Update Error',
+          message: `No updates available.`,
+          detail: `Current version: ${this.getCurrentVersion()}`,
+          buttons: ['OK'],
+          defaultId: 0,
+        });
+      }
       return;
     }
 
@@ -301,6 +298,29 @@ export class UpdateService {
     if (this.webContents && !this.webContents.isDestroyed()) {
       this.webContents.send(channel, data);
     }
+  }
+
+  private shouldShowErrorDialog(errorMessage: string): boolean {
+    const now = Date.now();
+    const timeSinceLastError = now - this.lastErrorShown;
+
+    if (timeSinceLastError < this.ERROR_DIALOG_THROTTLE_MS) {
+      if (this.lastErrorMessage === errorMessage) {
+        log.info(
+          `[Updater] Suppressing duplicate error dialog (shown ${Math.round(timeSinceLastError / 1000)}s ago)`
+        );
+        return false;
+      }
+    }
+
+    if (timeSinceLastError < this.ERROR_DIALOG_THROTTLE_MS) {
+      log.info(
+        '[Updater] Suppressing automatic check error dialog (too soon since last error)'
+      );
+      return false;
+    }
+
+    return timeSinceLastError >= this.ERROR_DIALOG_THROTTLE_MS;
   }
 
   /**
