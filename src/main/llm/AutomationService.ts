@@ -1,110 +1,99 @@
 import { EventEmitter } from 'events';
 import { WebContentsView } from 'electron';
+import { randomUUID } from 'crypto';
 
-import { AutomationClient } from './clients/AutomationClient';
-import { AutomationStateManager } from './core/AutomationStateManager';
 import { IterativeAutomationResult } from './core/types';
+import { FormatService } from './utils/FormatService';
+import { Automation } from './core/Automation';
 
 import { RecordingStore } from '@/main/recording';
 import { ExecutionService } from '@/main/automation';
-import { TabService } from '@/main/browser/TabService';
-import {
-  AutomationProgressEvent,
-  AutomationEventType,
-  RecordingSession,
-  AutomationStatus,
-} from '@/shared/types';
+import { AutomationStatus } from '@/shared/types';
+import { api } from '@/main/api';
 
 export class AutomationService extends EventEmitter {
-  private recordedSession: RecordingSession | null = null;
-  private automationClient: AutomationClient;
-  private stateManager: AutomationStateManager;
-  private executionService: ExecutionService;
+  private automationSessions: Map<string, Automation> = new Map();
 
   constructor(
-    private browserUIView: WebContentsView,
+    private browserView: WebContentsView,
     private recordingStore: RecordingStore,
-    private tabService: TabService
+    private executionService: ExecutionService
   ) {
     super();
     this.recordingStore = recordingStore;
-    this.executionService = new ExecutionService(this.tabService);
-
-    this.automationClient = new AutomationClient();
-    this.setupAutomationClientListeners();
   }
 
-  private setupAutomationClientListeners(): void {
-    this.automationClient.on('thinking', (message: string) => {
-      this.emitProgress('thinking', { message });
+  public async execute(
+    userGoal: string,
+    recordedSessionId: string
+  ): Promise<{
+    success: boolean;
+    sessionId: string;
+    message: string;
+  }> {
+    const recordingSession =
+      this.recordingStore.getRecording(recordedSessionId);
+    const formattedSession =
+      FormatService.formatRecordedSession(recordingSession);
+    const clientSessionId = randomUUID();
+    const automation = new Automation(
+      clientSessionId,
+      userGoal,
+      formattedSession,
+      this.executionService,
+      this.browserView
+    );
+
+    this.automationSessions.set(clientSessionId, automation);
+    this.executeAutomation(automation).catch((error) => {
+      if (this.browserView && !this.browserView.webContents.isDestroyed()) {
+        this.browserView.webContents.send('automation:error', {
+          sessionId: clientSessionId,
+          error: error instanceof Error ? error.message : 'Unknown error',
+        });
+      }
     });
+    this.automationSessions.delete(clientSessionId);
 
-    this.automationClient.on('error', (error: Error) => {
-      console.error('❌ [AutomationService] AutomationClient error:', error);
-      this.emitProgress('automation_error', {
-        error: error.message,
-        stack: error.stack,
-      });
-    });
+    return {
+      success: true,
+      sessionId: clientSessionId,
+      message: 'Automation started successfully 🎉',
+    };
   }
 
-  public getSessionId(): string | null {
-    return this.stateManager?.getSessionId() || null;
-  }
-
-  public stopAutomation(): void {
-    this.stateManager.markComplete(
+  public stopAutomation(session_id: string): Promise<boolean> {
+    const automation = this.automationSessions.get(session_id);
+    if (!automation) {
+      return Promise.resolve(false);
+    }
+    automation.markComplete(
       AutomationStatus.STOPPED,
       'Automation stopped by user'
     );
-    this.emitProgress('automation_stopped', {
+    this.browserView.webContents.send('automation_stopped', {
       message: 'Automation stopped by user',
     });
-  }
-
-  private emitProgress(type: AutomationEventType, data: any): void {
-    const event: AutomationProgressEvent = {
-      type,
-      data,
-    };
-    const sessionId = this.getSessionId();
-    if (this.browserUIView && !this.browserUIView.webContents.isDestroyed()) {
-      this.browserUIView.webContents.send('automation:progress', {
-        sessionId,
-        event,
-      });
-    }
+    return Promise.resolve(true);
   }
 
   public async executeAutomation(
-    userGoal: string,
-    recordedSessionId: string
+    automation: Automation
   ): Promise<IterativeAutomationResult> {
-    this.recordedSession = this.recordingStore.getRecording(recordedSessionId);
-    this.stateManager = new AutomationStateManager(
-      userGoal,
-      this.recordedSession,
-      this.automationClient,
-      this.executionService
-    );
-    this.stateManager.on('progress', (event: AutomationProgressEvent) => {
-      this.emitProgress(event.type, event.data);
-    });
     try {
-      await this.stateManager.generateInitialPlan();
+      await automation.generateInitialPlan();
 
-      while (this.stateManager.isRunning()) {
-        const executionResult =
-          await this.stateManager.executePlanWithRecovery();
+      while (automation.isRunning()) {
+        const executionResult = await automation.executePlanWithRecovery();
 
         if (executionResult.isComplete) {
           if (executionResult.error) {
-            this.emitProgress('automation_error', {
+            automation.emitProgress('automation_error', {
               error: executionResult.error,
               stack: executionResult.error,
             });
           }
-          this.stateManager.markComplete(
+          automation.markComplete(
             executionResult.status,
             executionResult.error
           );
@@ -112,48 +101,105 @@ export class AutomationService extends EventEmitter {
         }
       }
 
-      const finalResult = this.stateManager.getFinalResult();
+      const finalResult = automation.getFinalResult();
 
       const status = finalResult.success
         ? AutomationStatus.COMPLETED
         : AutomationStatus.FAILED;
 
-      await this.automationClient.updateSessionStatus(status);
+      await this.updateSessionStatus(automation.getSessionId(), status);
 
-      this.emitProgress('automation_complete', {
+      automation.emitProgress('automation_complete', {
         success: finalResult.success,
-        totalSteps: this.stateManager.getTotalStepsExecuted(),
+        totalSteps: automation.getTotalStepsExecuted(),
+      });
+
+      this.emit('automation:session-complete', {
+        sessionId: automation.getClientSessionId(),
+        success: finalResult.success,
+        finalOutput: automation.getFinalOutput(),
+        error: finalResult.error,
+        totalStepsExecuted: automation.getTotalStepsExecuted(),
       });
 
       return {
         success: finalResult.success,
-        plan: this.stateManager.getCurrentPlan(),
-        executionResults: this.stateManager.getExecutedSteps(),
+        plan: automation.getCurrentPlan(),
+        executionResults: automation.getExecutedSteps(),
         error: finalResult.error,
-        totalStepsExecuted: this.stateManager.getTotalStepsExecuted(),
+        totalStepsExecuted: automation.getTotalStepsExecuted(),
+        finalOutput: automation.getFinalOutput(),
       };
     } catch (error: any) {
-      console.error('❌ [IterativeAutomation] Fatal error:', error);
-      this.emitProgress('automation_error', {
+      console.error('❌ [AutomationService] Fatal error:', error);
+      automation.emitProgress('automation_error', {
         error: error.message || 'Unknown error occurred',
         stack: error.stack,
       });
 
-      this.automationClient
-        .updateSessionStatus(AutomationStatus.FAILED)
-        .catch((error) => {
-          console.error(
-            '❌ [IterativeAutomation] Failed to update session status:',
-            error
-          );
-        });
+      this.updateSessionStatus(
+        automation.getSessionId(),
+        AutomationStatus.FAILED
+      ).catch((error) => {
+        console.error(
+          '❌ [AutomationService] Failed to update session status:',
+          error
+        );
+      });
+
+      this.emit('automation:session-error', {
+        sessionId: automation.getClientSessionId(),
+        error: error.message || 'Unknown error occurred',
+        finalOutput: automation.getFinalOutput(),
+      });
 
       return {
         success: false,
-        executionResults: this.stateManager?.getExecutedSteps() || [],
+        executionResults: automation.getExecutedSteps() || [],
         error: error.message || 'Unknown error occurred',
-        totalStepsExecuted: this.stateManager?.getTotalStepsExecuted() || 0,
+        totalStepsExecuted: automation.getTotalStepsExecuted() || 0,
+        finalOutput: automation.getFinalOutput(),
       };
     }
+  }
+
+  public async updateSessionStatus(
+    sessionId: string,
+    status: AutomationStatus
+  ): Promise<void> {
+    try {
+      const response = await api.post<{
+        success: boolean;
+        session_id: string;
+        status: string;
+      }>(
+        '/automation/session/update',
+        {
+          status: status,
+        },
+        {
+          headers: {
+            'session-id': sessionId,
+          },
+        }
+      );
+
+      if (!response.success || !response.data?.success) {
+        throw new Error(response.error || 'Failed to update session status');
+      }
+    } catch (error) {
+      console.error(
+        '❌ [AutomationService] Failed to update session status:',
+        error
+      );
+      throw error;
+    }
+  }
+
+  public destroy(): void {
+    this.automationSessions.clear();
+    this.browserView.webContents.removeAllListeners('automation_error');
+    this.browserView.webContents.removeAllListeners('automation_complete');
+    this.browserView.webContents.removeAllListeners('automation_stopped');
   }
 }

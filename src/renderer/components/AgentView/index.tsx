@@ -3,6 +3,7 @@ import { useEffect } from 'react';
 import { AgentHeader } from './AgentHeader';
 import { AgentChatArea } from './AgentChatArea';
 import { AgentFooter } from './AgentFooter';
+import { SchedulePanel } from './SchedulePanel';
 import { useAutomation } from './hooks';
 
 export default function AgentView() {
@@ -44,6 +45,14 @@ export default function AgentView() {
         currentSession={currentSession}
         selectedRecordingId={selectedRecordingId}
       />
+
+      {agentMode === 'automate' && !currentSession && (
+        <SchedulePanel
+          userGoal={userGoal}
+          selectedRecordingId={selectedRecordingId}
+          isRunning={isRunning}
+        />
+      )}
 
       <AgentFooter
         userGoal={userGoal}

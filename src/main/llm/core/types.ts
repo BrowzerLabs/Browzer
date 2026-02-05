@@ -36,4 +36,5 @@ export interface IterativeAutomationResult {
   error?: string;
   analysis?: string;
   totalStepsExecuted: number;
+  finalOutput?: string;
 }

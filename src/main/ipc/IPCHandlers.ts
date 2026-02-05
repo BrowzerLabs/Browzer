@@ -21,6 +21,7 @@ import {
   DeepLinkHandler,
   AutocompleteHandler,
   ThemeHandler,
+  SchedulerHandler,
 } from './handlers';
 
 import { BrowserService } from '@/main/BrowserService';
@@ -74,6 +75,7 @@ export class IPCHandlers extends EventEmitter {
       new DeepLinkHandler(this.context),
       new AutocompleteHandler(this.context),
       new ThemeHandler(this.context),
+      new SchedulerHandler(this.context),
     ];
     this.handlers.forEach((handler) => handler.register());
   }

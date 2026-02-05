@@ -228,7 +228,10 @@ export const createBrowserAPI = (): BrowserAPI => ({
 
   // Event listeners - Deep Link events
   onDeepLink: (callback) =>
-    createEventListener<{ path: string; fullWindow: boolean }>('deeplink:navigate', callback),
+    createEventListener<{ path: string; fullWindow: boolean }>(
+      'deeplink:navigate',
+      callback
+    ),
 
   // Event listeners - Address Bar focus
   onRequestAddressBarFocus: (callback) =>
@@ -276,4 +279,18 @@ export const createBrowserAPI = (): BrowserAPI => ({
     invoke('bookmark:search', query, limit),
   getAllBookmarks: () => invoke('bookmark:get-all'),
   getRecentBookmarks: (limit?: number) => invoke('bookmark:get-recent', limit),
+
+  // Scheduled Automations API
+  createScheduledAutomation: (input) => invoke('scheduler:create', input),
+  getScheduledAutomations: () => invoke('scheduler:get-all'),
+  getScheduledAutomationById: (id: string) => invoke('scheduler:get-by-id', id),
+  updateScheduledAutomation: (id: string, updates) =>
+    invoke('scheduler:update', id, updates),
+  deleteScheduledAutomation: (id: string) => invoke('scheduler:delete', id),
+  pauseScheduledAutomation: (id: string) => invoke('scheduler:pause', id),
+  resumeScheduledAutomation: (id: string) => invoke('scheduler:resume', id),
+  getScheduledAutomationRunLogs: (id: string) =>
+    invoke('scheduler:get-run-logs', id),
+  onSchedulerUpdated: (callback) =>
+    createEventListener('scheduler:updated', callback),
 });
