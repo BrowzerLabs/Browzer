@@ -7,6 +7,7 @@ import { existsSync } from 'fs';
 
 import { RecordingStore } from '../recording';
 import { Tab } from '../browser';
+import { PasswordService } from '../password';
 
 import { ScreenRecordingService } from './ScreenRecordingService';
 
@@ -25,11 +26,13 @@ export class RecordingService extends EventEmitter {
 
   constructor(
     private baseWindow: BaseWindow,
-    private browserView: WebContentsView
+    private browserView: WebContentsView,
+    private passwordService: PasswordService
   ) {
     super();
     this.recordingStore = new RecordingStore();
     this.screenRecordingService = new ScreenRecordingService(baseWindow);
+    this.passwordService = passwordService;
     this.snapshotsDir = join(
       app.getPath('userData'),
       'recordings',
@@ -805,6 +808,34 @@ export class RecordingService extends EventEmitter {
           return attrs;
         }
         
+        function isCredentialField(el) {
+          if (!el) return false;
+          const tag = el.tagName.toLowerCase();
+          const type = el.type?.toLowerCase();
+          const name = el.name?.toLowerCase() || '';
+          const id = el.id?.toLowerCase() || '';
+          const placeholder = el.placeholder?.toLowerCase() || '';
+          const ariaLabel = el.getAttribute('aria-label')?.toLowerCase() || '';
+          const autocomplete = el.autocomplete?.toLowerCase() || '';
+          
+          if (tag === 'input' && type === 'password') return true;
+          
+          const credentialPatterns = [
+            'password', 'passwd', 'pwd', 'pass',
+            'email', 'e-mail', 'username', 'user', 'login',
+            'account', 'credential', 'auth', 'signin', 'sign-in'
+          ];
+          
+          const autocompleteCredentials = [
+            'current-password', 'new-password', 'email', 'username'
+          ];
+          
+          if (autocompleteCredentials.includes(autocomplete)) return true;
+          
+          const textToCheck = [name, id, placeholder, ariaLabel].join(' ');
+          return credentialPatterns.some(pattern => textToCheck.includes(pattern));
+        }
+        
         function isTextInput(el) {
           if (!el) return false;
           const tag = el.tagName.toLowerCase();
@@ -884,11 +915,17 @@ export class RecordingService extends EventEmitter {
           
           lastRecordedValue[key] = val;
           window.__browzer_event = target;
+          
+          const isCredential = isCredentialField(target);
+          const recordedValue = isCredential ? '*******' : val;
+          
           window._input_data = {
             role: getElementRole(target),
             name: getElementName(target),
-            value: val,
-            attributes: getStableAttributes(target)
+            value: recordedValue,
+            attributes: getStableAttributes(target),
+            isCredentialField: isCredential,
+            actualValue: isCredential ? val : undefined
           };
           console.log('${INPUT_MARKER}');
         }
@@ -1043,6 +1080,8 @@ export class RecordingService extends EventEmitter {
       returnByValue: true,
     });
     const data = dataResult.result.value || {};
+    const url = tab.view.webContents.getURL();
+
     return {
       tabId: tab.id,
       type: 'type',
@@ -1052,7 +1091,7 @@ export class RecordingService extends EventEmitter {
         value: data.value,
         attributes: data.attributes,
       },
-      url: tab.view.webContents.getURL(),
+      url,
       timestamp: Date.now(),
     };
   }

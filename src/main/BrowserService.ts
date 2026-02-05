@@ -10,10 +10,11 @@ import { SettingsService } from './settings/SettingsService';
 import { DownloadService } from './download/DownloadService';
 import { AdBlockerService } from './adblocker/AdBlockerService';
 import { RecordingService } from './recording/RecordingService';
+import { PasswordService } from './password';
+import { CredentialService } from './password/CredentialService';
 
 import { AutocompleteSuggestion } from '@/shared/types';
 import { HistoryService } from '@/main/history/HistoryService';
-import { PasswordManager } from '@/main/password/PasswordManager';
 import { BookmarkService } from '@/main/bookmark';
 import { AutopilotService } from '@/main/llm/autopilot';
 
@@ -28,9 +29,10 @@ export class BrowserService {
 
   private settingsService: SettingsService;
   private historyService: HistoryService;
-  private passwordManager: PasswordManager;
   private bookmarkService: BookmarkService;
   private recordingService: RecordingService;
+  private passwordService: PasswordService;
+  private credentialService: CredentialService;
 
   constructor(
     private baseWindow: BaseWindow,
@@ -38,12 +40,14 @@ export class BrowserService {
   ) {
     // Initialize services
     this.settingsService = new SettingsService(this.browserView);
+    this.passwordService = new PasswordService();
+    this.credentialService = new CredentialService(this.browserView);
     this.recordingService = new RecordingService(
       this.baseWindow,
-      this.browserView
+      this.browserView,
+      this.passwordService
     );
     this.historyService = new HistoryService();
-    this.passwordManager = new PasswordManager();
     this.bookmarkService = new BookmarkService(this.browserView);
     this.adBlockerService = new AdBlockerService();
 
@@ -61,24 +65,32 @@ export class BrowserService {
     this.tabService = new TabService(
       baseWindow,
       browserView,
-      this.passwordManager,
       this.settingsService,
       this.historyService,
       this.navigationService,
       this.debuggerService,
       this.bookmarkService,
-      this.recordingService
+      this.recordingService,
+      this.credentialService
     );
 
     this.automationManager = new AutomationManager(
       this.recordingService.getRecordingStore(),
       this.browserView,
-      this.tabService
+      this.tabService,
+      this.passwordService
     );
 
     this.autopilotService = new AutopilotService(
       this.tabService,
-      this.browserView
+      this.browserView,
+      this.passwordService
+    );
+
+    this.autopilotService = new AutopilotService(
+      this.tabService,
+      this.browserView,
+      this.passwordService
     );
 
     this.setupTabEventListeners();
@@ -154,24 +166,28 @@ export class BrowserService {
     return this.settingsService;
   }
 
-  public getHistoryService(): HistoryService {
-    return this.historyService;
+  public getPasswordService(): PasswordService {
+    return this.passwordService;
   }
 
-  public getPasswordManager(): PasswordManager {
-    return this.passwordManager;
+  public getRecordingService(): RecordingService {
+    return this.recordingService;
   }
 
-  public getBookmarkService(): BookmarkService {
-    return this.bookmarkService;
+  public getAdBlockerService(): AdBlockerService {
+    return this.adBlockerService;
   }
 
   public getDownloadService(): DownloadService {
     return this.downloadService;
   }
 
-  public getRecordingService(): RecordingService {
-    return this.recordingService;
+  public getHistoryService(): HistoryService {
+    return this.historyService;
+  }
+
+  public getBookmarkService(): BookmarkService {
+    return this.bookmarkService;
   }
 
   public updateLayout(

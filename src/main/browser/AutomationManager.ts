@@ -3,6 +3,7 @@ import { WebContentsView } from 'electron';
 import { TabService } from './TabService';
 
 import { AutomationService } from '@/main/llm';
+import { PasswordService } from '@/main/password';
 import { RecordingStore } from '@/main/recording';
 
 export class AutomationManager {
@@ -11,7 +12,8 @@ export class AutomationManager {
   constructor(
     private recordingStore: RecordingStore,
     private browserUIView: WebContentsView,
-    private tabService: TabService
+    private tabService: TabService,
+    private passwordService: PasswordService
   ) {}
 
   public async executeAutomation(
@@ -25,7 +27,8 @@ export class AutomationManager {
     const automationService = new AutomationService(
       this.browserUIView,
       this.recordingStore,
-      this.tabService
+      this.tabService,
+      this.passwordService
     );
 
     const automationPromise = automationService.executeAutomation(

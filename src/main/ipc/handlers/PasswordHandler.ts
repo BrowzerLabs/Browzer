@@ -1,82 +1,68 @@
 import { BaseHandler } from './base';
 
+import { PasswordFormData } from '@/shared/types';
+
 export class PasswordHandler extends BaseHandler {
   register(): void {
-    const { passwordManager } = this.context;
+    const { browserService } = this.context;
+    const passwordService = browserService.getPasswordService();
+
+    this.handle('password:save', async (_, formData: PasswordFormData) => {
+      return await passwordService.saveCredential(formData);
+    });
+
+    this.handle('password:get', async (_, id: string) => {
+      return passwordService.getCredential(id);
+    });
 
     this.handle('password:get-all', async () => {
-      return passwordManager.getAllCredentials();
+      return passwordService.getAllCredentials();
     });
 
-    this.handle(
-      'password:save',
-      async (_, origin: string, username: string, password: string) => {
-        return passwordManager.saveCredential(origin, username, password);
-      }
-    );
-
-    this.handle('password:get-for-origin', async (_, origin: string) => {
-      return passwordManager.getCredentialsForOrigin(origin);
-    });
-
-    this.handle('password:get-password', async (_, credentialId: string) => {
-      return passwordManager.getPassword(credentialId);
+    this.handle('password:get-suggestions', async (_, url: string) => {
+      return passwordService.getSuggestionsForUrl(url);
     });
 
     this.handle(
       'password:update',
-      async (_, credentialId: string, username: string, password: string) => {
-        return passwordManager.updateCredential(
-          credentialId,
-          username,
-          password
-        );
+      async (
+        _,
+        id: string,
+        updates: Partial<
+          Pick<
+            PasswordFormData,
+            'password' | 'username' | 'usernameField' | 'passwordField'
+          >
+        >
+      ) => {
+        return passwordService.updateCredential(id, updates);
       }
     );
 
-    this.handle('password:delete', async (_, credentialId: string) => {
-      return passwordManager.deleteCredential(credentialId);
+    this.handle('password:delete', async (_, id: string) => {
+      return passwordService.deleteCredential(id);
     });
-
-    this.handle(
-      'password:delete-multiple',
-      async (_, credentialIds: string[]) => {
-        return passwordManager.deleteMultipleCredentials(credentialIds);
-      }
-    );
 
     this.handle('password:search', async (_, query: string) => {
-      return passwordManager.searchCredentials(query);
+      return passwordService.searchCredentials(query);
     });
 
-    this.handle('password:get-blacklist', async () => {
-      return passwordManager.getBlacklist();
-    });
-
-    this.handle('password:add-to-blacklist', async (_, origin: string) => {
-      passwordManager.addToBlacklist(origin);
+    this.handle('password:mark-used', async (_, id: string) => {
+      passwordService.markCredentialUsed(id);
       return true;
-    });
-
-    this.handle('password:remove-from-blacklist', async (_, origin: string) => {
-      passwordManager.removeFromBlacklist(origin);
-      return true;
-    });
-
-    this.handle('password:is-blacklisted', async (_, origin: string) => {
-      return passwordManager.isBlacklisted(origin);
     });
 
     this.handle('password:export', async () => {
-      return passwordManager.exportPasswords();
+      return passwordService.exportCredentials();
     });
 
-    this.handle('password:import', async (_, data: string) => {
-      return passwordManager.importPasswords(data);
+    this.handle('password:import', async (_, credentials: any[]) => {
+      return passwordService.importCredentials(credentials);
     });
 
-    this.handle('password:get-stats', async () => {
-      return passwordManager.getStats();
+    this.handle('password:clear-all', async () => {
+      passwordService.clearAllCredentials();
+      return true;
     });
   }
 }

@@ -1,8 +1,6 @@
 import { WebContentsView } from 'electron';
 
-import { TabService } from '../browser';
-
-import { BaseActionService } from './BaseActionService';
+import { BaseActionService, ExecutionContext } from './BaseActionService';
 
 import { ToolExecutionResult } from '@/shared/types';
 
@@ -20,8 +18,8 @@ interface VisibilityContext {
 }
 
 export class AccessibilityTreeExtractor extends BaseActionService {
-  constructor(tabService: TabService) {
-    super(tabService);
+  constructor(context: ExecutionContext) {
+    super(context);
   }
 
   public async execute(params: {

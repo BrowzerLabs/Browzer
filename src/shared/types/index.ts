@@ -2,6 +2,7 @@
 
 export * from './tabs';
 export * from './recording';
+export * from './password';
 export * from './history';
 export * from './context';
 export * from './automation';

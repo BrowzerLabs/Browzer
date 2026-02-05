@@ -22,7 +22,6 @@ import {
   ClosedTabInfo,
 } from '@/shared/types';
 import { GROUP_COLORS } from '@/shared/constants/tabs';
-import { PasswordManager } from '@/main/password/PasswordManager';
 import { HistoryService } from '@/main/history/HistoryService';
 import { BookmarkService } from '@/main/bookmark';
 import {
@@ -30,7 +29,7 @@ import {
   SettingsChangeEvent,
 } from '@/main/settings/SettingsService';
 import { RecordingService } from '@/main/recording/RecordingService';
-import { PasswordAutomation } from '@/main/password';
+import { CredentialService } from '@/main/password/CredentialService';
 
 const TAB_HEIGHT = {
   WITHOUT_BOOKMARKS: 75 as number,
@@ -57,13 +56,13 @@ export class TabService extends EventEmitter {
   constructor(
     private baseWindow: BaseWindow,
     private browserView: WebContentsView,
-    private passwordManager: PasswordManager,
     private settingsService: SettingsService,
     private historyService: HistoryService,
     private navigationService: NavigationService,
     private debuggerService: DebuggerService,
     private bookmarkService: BookmarkService,
-    private recordingService: RecordingService
+    private recordingService: RecordingService,
+    private credentialService: CredentialService
   ) {
     super();
     this.sessionStore = new Store<{ lastSession: TabsSnapshot | null }>({
@@ -220,12 +219,6 @@ export class TabService extends EventEmitter {
       id: tabId,
       view,
       info: tabInfo,
-      passwordAutomation: new PasswordAutomation(
-        view,
-        this.passwordManager,
-        tabId,
-        this.handleCredentialSelected.bind(this)
-      ),
     };
 
     this.tabs.set(tabId, tab);
@@ -235,6 +228,16 @@ export class TabService extends EventEmitter {
       .initializeDebugger(view, tabId)
       .catch((err) =>
         console.error('[TabService] Failed to initialize debugger:', tabId, err)
+      );
+
+    // Enable credential detection for all tabs (always on)
+    this.credentialService
+      .enableForTab(tab)
+      .catch((err) =>
+        console.error(
+          '[TabService] Failed to enable credential detection:',
+          err
+        )
       );
 
     if (this.recordingService.isRecording()) {
@@ -278,7 +281,6 @@ export class TabService extends EventEmitter {
     }
 
     this.baseWindow.contentView.removeChildView(tab.view);
-    tab.passwordAutomation?.stop().catch(console.error);
     this.debuggerService.cleanupDebugger(tab.view);
 
     // Remove all event listeners before closing to prevent memory leaks
@@ -642,18 +644,6 @@ export class TabService extends EventEmitter {
     this.activeTabId = null;
   }
 
-  public handleCredentialSelected(
-    tabId: string,
-    credentialId: string,
-    username: string
-  ): void {
-    const tab = this.tabs.get(tabId);
-    if (tab) {
-      tab.selectedCredentialId = credentialId;
-      tab.selectedCredentialUsername = username;
-    }
-  }
-
   private setupTabWebContentsEvents(tab: Tab): void {
     const { view, info } = tab;
     const wc = view.webContents;
@@ -682,20 +672,6 @@ export class TabService extends EventEmitter {
         this.historyService
           .addEntry(info.url, info.title, HistoryTransition.LINK, info.favicon)
           .catch((err) => console.error('Failed to add history entry:', err));
-      }
-
-      if (
-        tab.passwordAutomation &&
-        !this.navigationService.isInternalPage(info.url)
-      ) {
-        try {
-          await tab.passwordAutomation.start();
-        } catch (error) {
-          console.error(
-            '[TabService] Failed to start password automation:',
-            error
-          );
-        }
       }
       this.emit('tabs:changed');
     });

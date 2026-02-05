@@ -2,17 +2,12 @@ import { useState, useEffect } from 'react';
 import {
   Search,
   Eye,
-  EyeOff,
   Trash2,
   Edit2,
   Download,
-  Upload,
-  Shield,
   Key,
   Globe,
   MoreVertical,
-  Check,
-  X,
   Save,
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -21,7 +16,6 @@ import { Button } from '@/renderer/ui/button';
 import { Input } from '@/renderer/ui/input';
 import { Card } from '@/renderer/ui/card';
 import { ScrollArea } from '@/renderer/ui/scroll-area';
-import { Badge } from '@/renderer/ui/badge';
 import {
   Dialog,
   DialogContent,
@@ -38,19 +32,11 @@ import {
 } from '@/renderer/ui/dropdown-menu';
 import { CopyableInput } from '@/renderer/components/common/CopyableInput';
 import { Checkbox } from '@/renderer/ui/checkbox';
-
-interface PasswordCredential {
-  id: string;
-  origin: string;
-  username: string;
-  lastUsed: number;
-  timesUsed: number;
-}
+import { PasswordCredential } from '@/shared/types';
 
 interface PasswordStats {
   totalPasswords: number;
-  blacklistedSites: number;
-  mostUsedSites: Array<{ origin: string; count: number }>;
+  mostUsedSites: Array<{ url: string; count: number }>;
 }
 
 export function PasswordSettings() {
@@ -63,7 +49,6 @@ export function PasswordSettings() {
     new Set()
   );
   const [stats, setStats] = useState<PasswordStats | null>(null);
-  const [blacklist, setBlacklist] = useState<string[]>([]);
 
   // Dialog states
   const [editDialog, setEditDialog] = useState<{
@@ -97,12 +82,11 @@ export function PasswordSettings() {
   useEffect(() => {
     loadPasswords();
     loadStats();
-    loadBlacklist();
   }, []);
 
   useEffect(() => {
     if (searchQuery.trim()) {
-      window.browserAPI.searchPasswords(searchQuery).then(setFilteredPasswords);
+      window.passwordAPI.search(searchQuery).then(setFilteredPasswords);
     } else {
       setFilteredPasswords(passwords);
     }
@@ -110,7 +94,7 @@ export function PasswordSettings() {
 
   const loadPasswords = async () => {
     try {
-      const allPasswords = await window.browserAPI.getAllPasswords();
+      const allPasswords = await window.passwordAPI.getAll();
       setPasswords(allPasswords);
       setFilteredPasswords(allPasswords);
     } catch (error) {
@@ -121,28 +105,24 @@ export function PasswordSettings() {
 
   const loadStats = async () => {
     try {
-      const passwordStats = await window.browserAPI.getPasswordStats();
+      const allPasswords = await window.passwordAPI.getAll();
+      const passwordStats: PasswordStats = {
+        totalPasswords: allPasswords.length,
+        mostUsedSites: allPasswords
+          .sort((a, b) => (b.timesUsed || 0) - (a.timesUsed || 0))
+          .slice(0, 5)
+          .map((p) => ({ url: p.url, count: p.timesUsed || 0 })),
+      };
       setStats(passwordStats);
     } catch (error) {
       console.error('Failed to load stats:', error);
     }
   };
 
-  const loadBlacklist = async () => {
-    try {
-      const sites = await window.browserAPI.getPasswordBlacklist();
-      setBlacklist(sites);
-    } catch (error) {
-      console.error('Failed to load blacklist:', error);
-    }
-  };
-
   const handleDelete = async (ids: string[]) => {
     try {
-      if (ids.length === 1) {
-        await window.browserAPI.deletePassword(ids[0]);
-      } else {
-        await window.browserAPI.deleteMultiplePasswords(ids);
+      for (const id of ids) {
+        await window.passwordAPI.delete(id);
       }
 
       toast.success(
@@ -160,9 +140,13 @@ export function PasswordSettings() {
 
   const handleViewPassword = async (id: string) => {
     try {
-      const password = await window.browserAPI.getPassword(id);
-      if (password) {
-        setViewPasswordDialog({ open: true, id, password });
+      const credential = await window.passwordAPI.get(id);
+      if (credential) {
+        setViewPasswordDialog({
+          open: true,
+          id,
+          password: credential.password,
+        });
       }
     } catch (error) {
       console.error('Failed to get password:', error);
@@ -172,13 +156,13 @@ export function PasswordSettings() {
 
   const handleEditPassword = async (credential: PasswordCredential) => {
     try {
-      const password = await window.browserAPI.getPassword(credential.id);
-      if (password) {
+      const fullCredential = await window.passwordAPI.get(credential.id);
+      if (fullCredential) {
         setEditDialog({
           open: true,
           credential,
-          username: credential.username,
-          password,
+          username: fullCredential.username,
+          password: fullCredential.password,
         });
       }
     } catch (error) {
@@ -191,25 +175,20 @@ export function PasswordSettings() {
     if (!editDialog.credential) return;
 
     try {
-      const success = await window.browserAPI.updatePassword(
-        editDialog.credential.id,
-        editDialog.username,
-        editDialog.password
-      );
+      await window.passwordAPI.update(editDialog.credential.id, {
+        username: editDialog.username,
+        password: editDialog.password,
+      });
 
-      if (success) {
-        toast.success('Password updated successfully');
-        setEditDialog({
-          open: false,
-          credential: null,
-          username: '',
-          password: '',
-        });
-        await loadPasswords();
-        await loadStats();
-      } else {
-        toast.error('Failed to update password');
-      }
+      toast.success('Password updated successfully');
+      setEditDialog({
+        open: false,
+        credential: null,
+        username: '',
+        password: '',
+      });
+      await loadPasswords();
+      await loadStats();
     } catch (error) {
       console.error('Failed to save password:', error);
       toast.error('Failed to save password');
@@ -218,7 +197,7 @@ export function PasswordSettings() {
 
   const handleExport = async () => {
     try {
-      const data = await window.browserAPI.exportPasswords();
+      const data = await window.passwordAPI.export();
       const blob = new Blob([JSON.stringify(data, null, 2)], {
         type: 'application/json',
       });
@@ -232,17 +211,6 @@ export function PasswordSettings() {
     } catch (error) {
       console.error('Failed to export passwords:', error);
       toast.error('Failed to export passwords');
-    }
-  };
-
-  const handleRemoveFromBlacklist = async (origin: string) => {
-    try {
-      await window.browserAPI.removeFromBlacklist(origin);
-      toast.success('Site removed from blacklist');
-      await loadBlacklist();
-    } catch (error) {
-      console.error('Failed to remove from blacklist:', error);
-      toast.error('Failed to remove from blacklist');
     }
   };
 
@@ -270,11 +238,11 @@ export function PasswordSettings() {
     return `${Math.floor(diffDays / 365)} years ago`;
   };
 
-  const getDomain = (origin: string) => {
+  const getDomain = (url: string) => {
     try {
-      return new URL(origin).hostname;
+      return new URL(url).hostname;
     } catch {
-      return origin;
+      return url;
     }
   };
 
@@ -283,7 +251,7 @@ export function PasswordSettings() {
       <h2 className="text-2xl font-semibold">Passwords</h2>
       {/* Stats Cards */}
       {stats && (
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-2 gap-4">
           <Card className="p-4">
             <div className="flex items-center gap-3">
               <div className="bg-primary/10 text-primary flex h-10 w-10 items-center justify-center rounded-lg">
@@ -298,30 +266,14 @@ export function PasswordSettings() {
 
           <Card className="p-4">
             <div className="flex items-center gap-3">
-              <div className="bg-destructive/10 text-destructive flex h-10 w-10 items-center justify-center rounded-lg">
-                <Shield className="h-5 w-5" />
-              </div>
-              <div>
-                <p className="text-muted-foreground text-xs">
-                  Blacklisted Sites
-                </p>
-                <p className="text-lg font-semibold">
-                  {stats.blacklistedSites}
-                </p>
-              </div>
-            </div>
-          </Card>
-
-          <Card className="p-4">
-            <div className="flex items-center gap-3">
               <div className="bg-blue-500/10 text-blue-500 flex h-10 w-10 items-center justify-center rounded-lg">
                 <Globe className="h-5 w-5" />
               </div>
               <div>
                 <p className="text-muted-foreground text-xs">Most Used</p>
                 <p className="text-lg font-medium truncate">
-                  {stats.mostUsedSites[0]?.origin
-                    ? getDomain(stats.mostUsedSites[0].origin)
+                  {stats.mostUsedSites[0]?.url
+                    ? getDomain(stats.mostUsedSites[0].url)
                     : 'None'}
                 </p>
               </div>
@@ -391,13 +343,19 @@ export function PasswordSettings() {
                     <div className="flex items-center gap-2">
                       <Globe className="text-muted-foreground h-4 w-4 flex-shrink-0" />
                       <span className="font-medium truncate">
-                        {getDomain(credential.origin)}
+                        {getDomain(credential.url)}
                       </span>
                     </div>
                     <div className="text-muted-foreground mt-1 flex items-center gap-4 text-sm">
                       <span className="truncate">{credential.username}</span>
-                      <span>•</span>
-                      <span>Last used {formatDate(credential.lastUsed)}</span>
+                      {credential.lastUsed && (
+                        <>
+                          <span>•</span>
+                          <span>
+                            Last used {formatDate(credential.lastUsed)}
+                          </span>
+                        </>
+                      )}
                       {credential.timesUsed > 1 && (
                         <>
                           <span>•</span>
@@ -457,42 +415,6 @@ export function PasswordSettings() {
         </ScrollArea>
       </Card>
 
-      {/* Blacklisted Sites */}
-      {blacklist.length > 0 && (
-        <div className="space-y-3">
-          <div>
-            <h3 className="text-lg font-semibold">Never Save Passwords For</h3>
-            <p className="text-muted-foreground text-sm">
-              Sites where you chose "Never" for password saving
-            </p>
-          </div>
-
-          <Card>
-            <div className="divide-y">
-              {blacklist.map((site) => (
-                <div
-                  key={site}
-                  className="flex items-center justify-between p-4"
-                >
-                  <div className="flex items-center gap-2">
-                    <Shield className="text-muted-foreground h-4 w-4" />
-                    <span className="font-medium">{getDomain(site)}</span>
-                  </div>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => handleRemoveFromBlacklist(site)}
-                  >
-                    <X className="mr-2 h-4 w-4" />
-                    Remove
-                  </Button>
-                </div>
-              ))}
-            </div>
-          </Card>
-        </div>
-      )}
-
       {/* View Password Dialog */}
       <Dialog
         open={viewPasswordDialog.open}
@@ -535,8 +457,8 @@ export function PasswordSettings() {
             <DialogTitle>Edit Password</DialogTitle>
             <DialogDescription>
               Update your password for{' '}
-              {editDialog.credential?.origin
-                ? getDomain(editDialog.credential.origin)
+              {editDialog.credential?.url
+                ? getDomain(editDialog.credential.url)
                 : 'this site'}
             </DialogDescription>
           </DialogHeader>

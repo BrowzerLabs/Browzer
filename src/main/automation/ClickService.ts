@@ -1,16 +1,18 @@
 import { Debugger } from 'electron';
 
-import { TabService } from '../browser';
-
-import { BaseActionService, NodeParams } from './BaseActionService';
+import {
+  BaseActionService,
+  ExecutionContext,
+  NodeParams,
+} from './BaseActionService';
 
 import { ToolExecutionResult } from '@/shared/types';
 
 export type ClickParams = NodeParams;
 
 export class ClickService extends BaseActionService {
-  constructor(tabService: TabService) {
-    super(tabService);
+  constructor(context: ExecutionContext) {
+    super(context);
   }
 
   public async execute(params: ClickParams): Promise<ToolExecutionResult> {
