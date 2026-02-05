@@ -6,3 +6,4 @@ export type { AuthAPI } from './auth.types';
 export type { SubscriptionAPI } from './subscription.types';
 export type { NotificationAPI } from './notification.types';
 export type { UpdaterAPI } from './updater.types';
+export type { AutomationAPI } from './automation.types';
