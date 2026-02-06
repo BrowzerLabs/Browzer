@@ -1,6 +1,7 @@
 import { EventEmitter } from 'events';
 
 import { v4 as uuidv4 } from 'uuid';
+import log from 'electron-log';
 
 import type {
   AutopilotConfig,
@@ -130,6 +131,9 @@ export class AutopilotExecutionService extends EventEmitter {
           stepResponse.status === 'failed'
         ) {
           this.status = stepResponse.status as 'completed' | 'failed';
+          log.info(
+            `[AutopilotExecutionService] Emitting autopilot_complete with success=${stepResponse.result?.success}`
+          );
           this.emitProgress('autopilot_complete', {
             success: stepResponse.result?.success ?? false,
             message: stepResponse.result?.message ?? '',
@@ -197,12 +201,16 @@ export class AutopilotExecutionService extends EventEmitter {
     for (const toolCall of toolCalls) {
       this.stepCount++;
       const stepNumber = this.stepCount;
+      const currentUrl = this.executor.getTabUrl(
+        toolCall.input.tabId as string | undefined
+      );
 
       this.emitProgress('step_start', {
         stepNumber,
         toolName: toolCall.name,
         toolUseId: toolCall.id,
         params: toolCall.input,
+        url: currentUrl,
       });
 
       try {
@@ -216,6 +224,7 @@ export class AutopilotExecutionService extends EventEmitter {
           toolName: toolCall.name,
           params: toolCall.input,
           status: 'success',
+          url: currentUrl,
         });
 
         results.push({
@@ -233,6 +242,7 @@ export class AutopilotExecutionService extends EventEmitter {
           params: toolCall.input,
           error: errorMessage,
           status: 'error',
+          url: currentUrl,
         });
 
         results.push({

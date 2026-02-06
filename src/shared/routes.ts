@@ -14,6 +14,7 @@ import {
   Download,
   BookmarkIcon,
   Home,
+  ClipboardList,
 } from 'lucide-react';
 
 export interface RouteConfig {
@@ -101,6 +102,11 @@ export const ROUTES: Record<string, RouteConfig> = {
     title: 'Bookmarks',
     favicon: 'star',
   },
+  'audit-history': {
+    path: '/audit-history',
+    title: 'Audit History',
+    favicon: 'clipboard-list',
+  },
 };
 
 export const ICON_MAP: Record<string, LucideIcon> = {
@@ -118,6 +124,7 @@ export const ICON_MAP: Record<string, LucideIcon> = {
   download: Download,
   star: BookmarkIcon,
   home: Home,
+  'clipboard-list': ClipboardList,
 };
 
 export function getRouteFromURL(url: string): RouteConfig | null {

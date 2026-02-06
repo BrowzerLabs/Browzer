@@ -8,6 +8,7 @@ import { BrowserService } from '@/main/BrowserService';
 import { IPCHandlers } from '@/main/ipc/IPCHandlers';
 import { DeepLinkService } from '@/main/deeplink/DeepLinkService';
 import { AuthService } from '@/main/auth/AuthService';
+import { AuditService } from '@/main/audit';
 import { AppMenu } from '@/main/menu/AppMenu';
 import { ThemeService } from '@/main/theme/ThemeService';
 
@@ -15,6 +16,7 @@ export class MainService {
   private browserService: BrowserService;
   private connectionService: ConnectionService;
   private authService: AuthService;
+  private auditService: AuditService;
   private ipcHandlers: IPCHandlers;
   private deepLinkService: DeepLinkService;
   private appMenu: AppMenu;
@@ -88,6 +90,12 @@ export class MainService {
       this.connectionService
     );
 
+    // Create AuditService after AuthService (AuditService needs AuthService for user email)
+    this.auditService = new AuditService(this.authService);
+
+    // Pass AuditService to BrowserService for AutomationManager and AutopilotService
+    this.browserService.setAuditService(this.auditService);
+
     this.connectionService.setRefreshCallback(() =>
       this.authService.refreshSession()
     );
@@ -96,6 +104,7 @@ export class MainService {
       this.baseWindow,
       this.browserService,
       this.authService,
+      this.auditService,
       this.themeService
     );
 
@@ -196,6 +205,7 @@ export class MainService {
     this.themeService.destroy();
     this.browserService.destroy();
     this.deepLinkService.destroy();
+    this.auditService.destroy();
     this.baseWindow = null;
     this.browserView = null;
   }

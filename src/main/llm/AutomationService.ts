@@ -68,6 +68,10 @@ export class AutomationService extends EventEmitter {
       data,
     };
     const sessionId = this.getSessionId();
+
+    // Emit to EventEmitter listeners (for AuditService integration)
+    this.emit('progress', event);
+
     if (this.browserUIView && !this.browserUIView.webContents.isDestroyed()) {
       this.browserUIView.webContents.send('automation:progress', {
         sessionId,
@@ -123,6 +127,10 @@ export class AutomationService extends EventEmitter {
       this.emitProgress('automation_complete', {
         success: finalResult.success,
         totalSteps: this.stateManager.getTotalStepsExecuted(),
+        message: finalResult.success
+          ? 'Automation completed successfully'
+          : finalResult.error || 'Automation failed',
+        error: finalResult.error,
       });
 
       return {

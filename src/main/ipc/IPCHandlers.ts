@@ -21,10 +21,12 @@ import {
   DeepLinkHandler,
   AutocompleteHandler,
   ThemeHandler,
+  AuditHandler,
 } from './handlers';
 
 import { BrowserService } from '@/main/BrowserService';
 import { AuthService } from '@/main/auth';
+import { AuditService } from '@/main/audit';
 import { SubscriptionService } from '@/main/subscription/SubscriptionService';
 import { ThemeService } from '@/main/theme';
 
@@ -36,6 +38,7 @@ export class IPCHandlers extends EventEmitter {
     private baseWindow: BaseWindow,
     private browserService: BrowserService,
     private authService: AuthService,
+    private auditService: AuditService,
     private themeService: ThemeService
   ) {
     super();
@@ -43,6 +46,7 @@ export class IPCHandlers extends EventEmitter {
       baseWindow: this.baseWindow,
       browserService: this.browserService,
       authService: this.authService,
+      auditService: this.auditService,
       subscriptionService: new SubscriptionService(),
       themeService: this.themeService,
       passwordManager: this.browserService.getPasswordManager(),
@@ -74,6 +78,7 @@ export class IPCHandlers extends EventEmitter {
       new DeepLinkHandler(this.context),
       new AutocompleteHandler(this.context),
       new ThemeHandler(this.context),
+      new AuditHandler(this.context),
     ];
     this.handlers.forEach((handler) => handler.register());
   }

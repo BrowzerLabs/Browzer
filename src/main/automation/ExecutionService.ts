@@ -98,4 +98,11 @@ export class ExecutionService {
   private sleep(ms: number): Promise<void> {
     return new Promise((resolve) => setTimeout(resolve, ms));
   }
+
+  public getTabUrl(tabId?: string): string | undefined {
+    const tab = tabId
+      ? this.tabService.getTab(tabId) || this.tabService.getActiveTab()
+      : this.tabService.getActiveTab();
+    return tab?.info.url;
+  }
 }
