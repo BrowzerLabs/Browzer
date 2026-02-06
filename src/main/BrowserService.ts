@@ -1,15 +1,13 @@
 import { BaseWindow, WebContentsView } from 'electron';
 
-import {
-  TabService,
-  AutomationManager,
-  NavigationService,
-  DebuggerService,
-} from './browser';
+import { TabService, NavigationService, DebuggerService } from './browser';
 import { SettingsService } from './settings/SettingsService';
 import { DownloadService } from './download/DownloadService';
 import { AdBlockerService } from './adblocker/AdBlockerService';
 import { RecordingService } from './recording/RecordingService';
+import { AutomationService } from './llm';
+import { ExecutionService } from './automation';
+import { SchedulerService } from './scheduler';
 
 import { AutocompleteSuggestion } from '@/shared/types';
 import { HistoryService } from '@/main/history/HistoryService';
@@ -19,7 +17,8 @@ import { AutopilotService } from '@/main/llm/autopilot';
 
 export class BrowserService {
   private tabService: TabService;
-  private automationManager: AutomationManager;
+  private executionService: ExecutionService;
+  private automationService: AutomationService;
   private autopilotService: AutopilotService;
   private navigationService: NavigationService;
   private debuggerService: DebuggerService;
@@ -31,6 +30,7 @@ export class BrowserService {
   private passwordManager: PasswordManager;
   private bookmarkService: BookmarkService;
   private recordingService: RecordingService;
+  private schedulerService: SchedulerService;
 
   constructor(
     private baseWindow: BaseWindow,
@@ -70,15 +70,22 @@ export class BrowserService {
       this.recordingService
     );
 
-    this.automationManager = new AutomationManager(
-      this.recordingService.getRecordingStore(),
+    this.executionService = new ExecutionService(this.tabService);
+
+    this.automationService = new AutomationService(
       this.browserView,
-      this.tabService
+      this.recordingService.getRecordingStore(),
+      this.executionService
     );
 
     this.autopilotService = new AutopilotService(
       this.tabService,
       this.browserView
+    );
+
+    this.schedulerService = new SchedulerService(
+      this.browserView,
+      this.automationService
     );
 
     this.setupTabEventListeners();
@@ -106,14 +113,11 @@ export class BrowserService {
     sessionId: string;
     message: string;
   }> {
-    return this.automationManager.executeAutomation(
-      userGoal,
-      recordedSessionId
-    );
+    return this.automationService.execute(userGoal, recordedSessionId);
   }
 
   public stopAutomation(sessionId: string): void {
-    this.automationManager.stopAutomation(sessionId);
+    this.automationService.stopAutomation(sessionId);
   }
 
   public async executeAutopilot(
@@ -174,6 +178,10 @@ export class BrowserService {
     return this.recordingService;
   }
 
+  public getSchedulerService(): SchedulerService {
+    return this.schedulerService;
+  }
+
   public updateLayout(
     _windowWidth: number,
     _windowHeight: number,
@@ -218,8 +226,8 @@ export class BrowserService {
   public destroy(): void {
     this.tabService.destroy();
     this.recordingService.destroy();
-    this.automationManager.destroy();
     this.autopilotService.destroy();
+    this.schedulerService.destroy();
     this.downloadService.destroy();
   }
 

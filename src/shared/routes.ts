@@ -81,11 +81,11 @@ export const ROUTES: Record<string, RouteConfig> = {
     title: 'Downloads',
     favicon: 'download',
   },
-  // automation: {
-  //   path: '/automation',
-  //   title: 'Automation',
-  //   favicon: 'bot',
-  // },
+  automation: {
+    path: '/automation',
+    title: 'Automation',
+    favicon: 'bot',
+  },
   profile: {
     path: '/profile',
     title: 'Profile',

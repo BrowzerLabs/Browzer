@@ -93,10 +93,6 @@ export function RecordingActions({ actions }: RecordingActionsProps) {
           </div>
         </details>
       </div>
-
-      <p className="text-xs text-muted-foreground text-center">
-        Enter your automation goal below to execute this workflow
-      </p>
     </div>
   );
 }

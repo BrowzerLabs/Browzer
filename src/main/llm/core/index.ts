@@ -1,2 +1,2 @@
-export { AutomationStateManager } from './AutomationStateManager';
+export { AutomationStateManager } from './Automation';
 export * from './types';

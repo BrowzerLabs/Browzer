@@ -1,5 +1,4 @@
 export { TabService } from './TabService';
-export { AutomationManager } from './AutomationManager';
 export { NavigationService } from './NavigationService';
 export { DebuggerService } from './DebuggerService';
 export { ContextMenuService } from './ContextMenuService';

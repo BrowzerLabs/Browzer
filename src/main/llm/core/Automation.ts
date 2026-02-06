@@ -1,11 +1,8 @@
 import { EventEmitter } from 'events';
-import { randomUUID } from 'crypto';
+import { WebContentsView } from 'electron';
 
 import Anthropic from '@anthropic-ai/sdk';
 import log from 'electron-log';
-
-import { AutomationClient } from '..';
-import { FormatService } from '../utils/FormatService';
 
 import {
   ExecutedStep,
@@ -16,54 +13,42 @@ import {
 import { ContextWindowService } from './ContextWindowService';
 
 import { ExecutionService } from '@/main/automation';
-import {
-  RecordingSession,
-  AutomationStatus,
-  AutomationEventType,
-  AutomationProgressEvent,
-  SystemPromptType,
-} from '@/shared/types';
+import { AutomationStatus, AutomationEventType } from '@/shared/types';
 import { MAX_AUTOMATION_STEPS } from '@/shared/constants/limits';
+import { api } from '@/main/api';
 
-export class AutomationStateManager extends EventEmitter {
+export class Automation extends EventEmitter {
   private session_id: string;
-  private user_goal: string;
-  private cached_context: string;
-
   private messages: Anthropic.MessageParam[] = [];
   private current_plan: AutomationPlan | null = null;
   private executed_steps: ExecutedStep[] = [];
   private iteration_number = 1;
   private status: AutomationStatus = AutomationStatus.RUNNING;
   private final_error?: string;
+  private final_output?: string;
   private lastExecutedTabId?: string;
 
   private llmToLocalTabIdMap: Map<string, string> = new Map();
 
-  private automationClient: AutomationClient;
-  private executionService: ExecutionService;
-
   constructor(
-    userGoal: string,
-    recordedSession: RecordingSession,
-    automationClient: AutomationClient,
-    executionService: ExecutionService
+    private clientSessionId: string,
+    private user_goal: string,
+    private recording_session: string,
+    private executionService: ExecutionService,
+    private browserView: WebContentsView
   ) {
     super();
-    this.user_goal = userGoal;
-    this.cached_context = FormatService.formatRecordedSession(recordedSession);
-    this.session_id = randomUUID();
+  }
 
-    this.automationClient = automationClient;
-    this.executionService = executionService;
+  public getClientSessionId(): string {
+    return this.clientSessionId;
   }
 
   public emitProgress(type: AutomationEventType, data: any): void {
-    const event: AutomationProgressEvent = {
-      type,
-      data,
-    };
-    this.emit('progress', event);
+    this.browserView.webContents.send('automation:progress', {
+      sessionId: this.clientSessionId,
+      event: { type, data },
+    });
   }
 
   public async generateInitialPlan(): Promise<void> {
@@ -74,12 +59,28 @@ export class AutomationStateManager extends EventEmitter {
       role: 'user',
       content: this.user_goal,
     });
-    const response = await this.automationClient.createAutomationPlan(
-      this.cached_context,
-      this.user_goal
-    );
-    this.current_plan = this.parsePlan(response);
-    this.addMessage({ role: 'assistant', content: response.content });
+    try {
+      const response = await api.post<{
+        message: Anthropic.Message;
+        session_id: string;
+      }>('/automation/plan', {
+        recording_session: this.recording_session,
+        user_goal: this.user_goal,
+      });
+
+      if (!response.success || !response.data?.message) {
+        throw new Error(response.error || 'Failed to create automation plan');
+      }
+      this.session_id = response.data.session_id;
+      this.current_plan = this.parsePlan(response.data.message);
+      this.addMessage({
+        role: 'assistant',
+        content: response.data.message.content,
+      });
+    } catch (error) {
+      log.error(error);
+      throw error;
+    }
   }
 
   public async executePlanWithRecovery(): Promise<PlanExecutionResult> {
@@ -170,11 +171,7 @@ export class AutomationStateManager extends EventEmitter {
         // this.messages.forEach((message, index)=> {
         //   console.info(index, message);
         // });
-        const response = await this.automationClient.continueConversation(
-          SystemPromptType.AUTOMATION_ERROR_RECOVERY,
-          this.getMessages(),
-          this.cached_context
-        );
+        const response = await this.continueConversation();
 
         this.addMessage({ role: 'assistant', content: response.content });
         this.compressMessages();
@@ -246,11 +243,7 @@ export class AutomationStateManager extends EventEmitter {
     // this.messages.forEach((message, index)=> {
     //   console.info(index, message);
     // });
-    const response = await this.automationClient.continueConversation(
-      SystemPromptType.AUTOMATION_CONTINUATION,
-      this.getMessages(),
-      this.cached_context
-    );
+    const response = await this.continueConversation();
 
     this.addMessage({ role: 'assistant', content: response.content });
     this.compressMessages();
@@ -438,11 +431,20 @@ export class AutomationStateManager extends EventEmitter {
     return this.executed_steps.length;
   }
 
-  public getFinalResult(): { success: boolean; error?: string } {
+  public getFinalResult(): {
+    success: boolean;
+    error?: string;
+    output?: string;
+  } {
     return {
       success: this.status === AutomationStatus.COMPLETED,
       error: this.final_error,
+      output: this.final_output,
     };
+  }
+
+  public getFinalOutput(): string | undefined {
+    return this.final_output;
   }
 
   public compressMessages(): void {
@@ -463,15 +465,49 @@ export class AutomationStateManager extends EventEmitter {
     return input;
   }
 
+  public async continueConversation(): Promise<Anthropic.Message> {
+    try {
+      this.emitProgress('thinking', {
+        message: 'Analyzing and generating next steps...',
+      });
+
+      const response = await api.post<{ message: Anthropic.Message }>(
+        '/automation/continue',
+        {
+          messages: this.getMessages(),
+          cached_context: this.recording_session,
+        },
+        {
+          headers: {
+            'session-id': this.session_id,
+          },
+        }
+      );
+
+      if (!response.success || !response.data?.message) {
+        throw new Error(response.error || 'Failed to continue conversation');
+      }
+      return response.data.message as Anthropic.Message;
+    } catch (error) {
+      console.error(
+        '❌ [AutomationClient] Failed to continue conversation:',
+        error
+      );
+      throw error;
+    }
+  }
+
   private parsePlan(response: Anthropic.Message): AutomationPlan {
     const steps: AutomationStep[] = [];
     let stepOrder = 0;
+    let textContent = '';
 
     for (const block of response.content) {
       if (block.type === 'text') {
         this.emitProgress('text_response', {
           message: block.text,
         });
+        textContent += block.text;
       } else if (block.type === 'tool_use') {
         steps.push({
           toolName: block.name,
@@ -480,6 +516,10 @@ export class AutomationStateManager extends EventEmitter {
           order: stepOrder++,
         });
       }
+    }
+
+    if (steps.length === 0 && textContent.trim()) {
+      this.final_output = textContent.trim();
     }
 
     return { steps };

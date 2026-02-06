@@ -252,6 +252,10 @@ export function NavigationBar({
             <Video className="w-4 h-4 mr-2" />
             Recordings
           </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => onNavigate('browzer://automation')}>
+            <Video className="w-4 h-4 mr-2" />
+            Automation
+          </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem
             onClick={handleSignOut}

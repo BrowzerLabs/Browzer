@@ -17,6 +17,9 @@ import type {
   UpdateBookmarkParams,
   MoveBookmarkParams,
   RecordingSession,
+  ScheduledAutomation,
+  CreateScheduledAutomationInput,
+  ScheduledAutomationRunLog,
 } from '@/shared/types';
 
 export interface BrowserAPI {
@@ -225,7 +228,9 @@ export interface BrowserAPI {
   ) => () => void;
 
   // Deep Link event listeners
-  onDeepLink: (callback: (data: { path: string; fullWindow: boolean }) => void) => () => void;
+  onDeepLink: (
+    callback: (data: { path: string; fullWindow: boolean }) => void
+  ) => () => void;
 
   // Address Bar focus event listener
   onRequestAddressBarFocus: (callback: () => void) => () => void;
@@ -272,4 +277,26 @@ export interface BrowserAPI {
   searchBookmarks: (query: string, limit?: number) => Promise<Bookmark[]>;
   getAllBookmarks: () => Promise<Bookmark[]>;
   getRecentBookmarks: (limit?: number) => Promise<Bookmark[]>;
+
+  // Scheduled Automations
+  createScheduledAutomation: (
+    input: CreateScheduledAutomationInput
+  ) => Promise<ScheduledAutomation>;
+  getScheduledAutomations: () => Promise<ScheduledAutomation[]>;
+  getScheduledAutomationById: (
+    id: string
+  ) => Promise<ScheduledAutomation | null>;
+  updateScheduledAutomation: (
+    id: string,
+    updates: Partial<CreateScheduledAutomationInput>
+  ) => Promise<ScheduledAutomation | null>;
+  deleteScheduledAutomation: (id: string) => Promise<boolean>;
+  pauseScheduledAutomation: (id: string) => Promise<boolean>;
+  resumeScheduledAutomation: (id: string) => Promise<boolean>;
+  getScheduledAutomationRunLogs: (
+    id: string
+  ) => Promise<ScheduledAutomationRunLog[]>;
+  onSchedulerUpdated: (
+    callback: (data: ScheduledAutomation[]) => void
+  ) => () => void;
 }
