@@ -7,6 +7,7 @@ import {
   Settings,
   Downloads,
   Bookmarks,
+  AuditHistory,
 } from '@/renderer/screens';
 import Profile from '@/renderer/pages/Profile';
 import { ROUTES } from '@/shared/routes';
@@ -25,6 +26,7 @@ const ROUTE_COMPONENTS: Record<string, React.ComponentType> = {
   automation: Automation,
   subscription: SubscriptionPage,
   bookmarks: Bookmarks,
+  'audit-history': AuditHistory,
 };
 
 export type InternalRouteName = keyof typeof ROUTES;

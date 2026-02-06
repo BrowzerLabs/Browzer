@@ -10,6 +10,7 @@ import { SettingsService } from './settings/SettingsService';
 import { DownloadService } from './download/DownloadService';
 import { AdBlockerService } from './adblocker/AdBlockerService';
 import { RecordingService } from './recording/RecordingService';
+import { AuditService } from './audit';
 
 import { AutocompleteSuggestion } from '@/shared/types';
 import { HistoryService } from '@/main/history/HistoryService';
@@ -31,6 +32,7 @@ export class BrowserService {
   private passwordManager: PasswordManager;
   private bookmarkService: BookmarkService;
   private recordingService: RecordingService;
+  private auditService: AuditService | null = null;
 
   constructor(
     private baseWindow: BaseWindow,
@@ -73,12 +75,14 @@ export class BrowserService {
     this.automationManager = new AutomationManager(
       this.recordingService.getRecordingStore(),
       this.browserView,
-      this.tabService
+      this.tabService,
+      this.baseWindow
     );
 
     this.autopilotService = new AutopilotService(
       this.tabService,
-      this.browserView
+      this.browserView,
+      this.baseWindow
     );
 
     this.setupTabEventListeners();
@@ -172,6 +176,16 @@ export class BrowserService {
 
   public getRecordingService(): RecordingService {
     return this.recordingService;
+  }
+
+  public setAuditService(auditService: AuditService): void {
+    this.auditService = auditService;
+    this.automationManager.setAuditService(auditService);
+    this.autopilotService.setAuditService(auditService);
+  }
+
+  public getAuditService(): AuditService | null {
+    return this.auditService;
   }
 
   public updateLayout(

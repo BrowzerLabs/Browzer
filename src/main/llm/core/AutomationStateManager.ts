@@ -290,12 +290,17 @@ export class AutomationStateManager extends EventEmitter {
       };
     }
 
+    const currentUrl = this.executionService.getTabUrl(
+      step.input?.tabId || this.lastExecutedTabId
+    );
+
     this.emitProgress('step_start', {
       stepNumber,
       totalSteps,
       toolName: step.toolName,
       toolUseId: step.toolUseId,
       params: step.input,
+      url: currentUrl,
     });
 
     try {
@@ -334,6 +339,7 @@ export class AutomationStateManager extends EventEmitter {
           params: step.input,
           error: result.error,
           status: 'error',
+          url: currentUrl,
         });
 
         return {
@@ -347,6 +353,7 @@ export class AutomationStateManager extends EventEmitter {
         toolUseId: step.toolUseId,
         params: step.input,
         status: 'success',
+        url: currentUrl,
       });
 
       return {

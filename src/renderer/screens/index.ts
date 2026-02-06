@@ -4,3 +4,4 @@ export * from './Automation';
 export * from './Settings';
 export * from './Downloads';
 export * from './Bookmarks';
+export * from './AuditHistory';

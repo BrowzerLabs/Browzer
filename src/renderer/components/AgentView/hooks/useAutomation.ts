@@ -23,6 +23,7 @@ export function useAutomation() {
   } = useAutomationStore();
 
   const [recordings, setRecordings] = useState<RecordingSession[]>([]);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const isRunning = currentSession?.status === AutomationStatus.RUNNING;
 
@@ -96,6 +97,11 @@ export function useAutomation() {
       return;
     }
 
+    if (isSubmitting || isRunning) {
+      return;
+    }
+
+    setIsSubmitting(true);
     try {
       const result = await window.browserAPI.executeLLMAutomation(
         userGoal,
@@ -115,14 +121,17 @@ export function useAutomation() {
     } catch (error) {
       console.error('[useAutomation] Automate error:', error);
       toast.error('Failed to start automation');
+    } finally {
+      setIsSubmitting(false);
     }
-  }, [userGoal, selectedRecordingId, isRunning, startSession]);
+  }, [userGoal, selectedRecordingId, isRunning, isSubmitting, startSession]);
 
   const handleSubmitAutopilot = useCallback(async () => {
-    if (!userGoal.trim() || isRunning) {
+    if (!userGoal.trim() || isRunning || isSubmitting) {
       return;
     }
 
+    setIsSubmitting(true);
     try {
       const result = await window.browserAPI.executeAutopilot(
         userGoal,
@@ -143,8 +152,10 @@ export function useAutomation() {
     } catch (error) {
       console.error('[useAutomation] Autopilot error:', error);
       toast.error('Failed to start autopilot');
+    } finally {
+      setIsSubmitting(false);
     }
-  }, [userGoal, selectedRecordingId, isRunning, startSession]);
+  }, [userGoal, selectedRecordingId, isRunning, isSubmitting, startSession]);
 
   const handleSubmitAsk = useCallback(() => {
     if (!userGoal.trim()) {
@@ -225,6 +236,7 @@ export function useAutomation() {
     userGoal,
     recordings,
     isRunning,
+    isSubmitting,
     loadRecordings,
     handleSubmit,
     handleStop,

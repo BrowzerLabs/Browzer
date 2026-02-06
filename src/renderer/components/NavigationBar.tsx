@@ -16,6 +16,7 @@ import {
   Bookmark,
   Clock,
   BanIcon,
+  ClipboardList,
 } from 'lucide-react';
 
 import type { TabInfo } from '@/shared/types';
@@ -251,6 +252,12 @@ export function NavigationBar({
           <DropdownMenuItem onClick={() => onNavigate('browzer://recordings')}>
             <Video className="w-4 h-4 mr-2" />
             Recordings
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            onClick={() => onNavigate('browzer://audit-history')}
+          >
+            <ClipboardList className="w-4 h-4 mr-2" />
+            Audit History
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem

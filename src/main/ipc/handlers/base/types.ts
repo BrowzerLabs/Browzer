@@ -3,6 +3,7 @@ import { EventEmitter } from 'events';
 
 import { BrowserService } from '@/main/BrowserService';
 import { AuthService } from '@/main/auth';
+import { AuditService } from '@/main/audit';
 import { SubscriptionService } from '@/main/subscription/SubscriptionService';
 import { ThemeService } from '@/main/theme';
 import { PasswordManager } from '@/main/password/PasswordManager';
@@ -14,6 +15,7 @@ export interface IPCContext {
   baseWindow: BaseWindow;
   browserService: BrowserService;
   authService: AuthService;
+  auditService: AuditService;
   subscriptionService: SubscriptionService;
   themeService: ThemeService;
   passwordManager: PasswordManager;
