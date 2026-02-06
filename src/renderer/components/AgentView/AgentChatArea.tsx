@@ -47,7 +47,12 @@ export function AgentChatArea({
   }, [selectedRecordingId]);
 
   if (!currentSession) {
-    if (agentMode === 'automate' && selectedRecordingId) {
+    // Show recording actions for both automate and autopilot modes when a recording is selected
+    const showRecording =
+      (agentMode === 'automate' || agentMode === 'autopilot') &&
+      selectedRecordingId;
+
+    if (showRecording) {
       if (isLoadingRecording) {
         return (
           <div className="flex items-center justify-center h-full">
@@ -57,7 +62,12 @@ export function AgentChatArea({
       }
 
       if (selectedRecording) {
-        return <RecordingActions actions={selectedRecording.actions} />;
+        return (
+          <RecordingActions
+            actions={selectedRecording.actions}
+            mode={agentMode}
+          />
+        );
       }
     }
 

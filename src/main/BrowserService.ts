@@ -133,12 +133,35 @@ export class BrowserService {
           .getRecordingStore()
           .getRecording(referenceRecordingId)
       : undefined;
-    const effectiveStartUrl = startUrl || referenceRecording?.startUrl;
-    const newTab = await this.tabService.createTab(effectiveStartUrl);
+
+    const explicitStartUrl = startUrl || referenceRecording?.startUrl;
+    const activeTab = this.tabService.getActiveTab();
+    const activeUrl = activeTab?.info.url;
+    const isActiveTabValid = activeUrl && !activeUrl.startsWith('browzer://');
+
+    let effectiveStartUrl = explicitStartUrl;
+    let tabToUse = activeTab;
+
+    if (explicitStartUrl) {
+      if (isActiveTabValid && activeUrl === explicitStartUrl) {
+        tabToUse = activeTab;
+      } else {
+        tabToUse = await this.tabService.createTab(explicitStartUrl);
+      }
+      effectiveStartUrl = explicitStartUrl;
+    } else if (isActiveTabValid && activeTab) {
+      tabToUse = activeTab;
+      effectiveStartUrl = activeUrl;
+    } else {
+      tabToUse = await this.tabService.createTab();
+      effectiveStartUrl = tabToUse.info.url;
+    }
+
     const globalInstructions =
       this.settingsService.getAgentGlobalInstructions();
+
     return this.autopilotService.executeAutopilot({
-      tab: newTab,
+      tab: tabToUse!,
       userGoal,
       startUrl: effectiveStartUrl,
       referenceRecording,

@@ -1,3 +1,7 @@
+import { useState } from 'react';
+import { Copy, Check } from 'lucide-react';
+import { toast } from 'sonner';
+
 import {
   extractWorkflowVariables,
   WorkflowVariable,
@@ -7,35 +11,75 @@ import { getActionColor, getActionDescription } from './utils';
 
 import { RecordingAction } from '@/shared/types';
 import { cn } from '@/renderer/lib/utils';
+import { AgentMode } from '@/renderer/stores/automationStore';
 
 interface RecordingActionsProps {
   actions: RecordingAction[];
+  mode?: AgentMode;
 }
 
 function VariableBadge({ variable }: { variable: WorkflowVariable }) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = async () => {
+    const textToCopy = `${variable.name}: ${variable.value}`;
+    await navigator.clipboard.writeText(textToCopy);
+    setCopied(true);
+    toast.success(`Copied "${variable.name}" to clipboard`);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
   return (
-    <div className="flex items-center justify-center px-4 py-1 rounded-full bg-primary/20 text-xs text-primary dark:text-slate-100 dark:bg-slate-600">
-      <strong className="font-semibold mr-1 truncate max-w-48">
-        {variable.name}:{' '}
-      </strong>
-      <span className="truncate max-w-32">{variable.value}</span>
-    </div>
+    <button
+      onClick={handleCopy}
+      className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-primary/10 hover:bg-primary/20 text-xs text-primary dark:text-slate-100 dark:bg-slate-600 dark:hover:bg-slate-500 transition-colors cursor-pointer group"
+      title="Click to copy - mention this variable in your goal to customize"
+    >
+      <span className="flex items-center">
+        <strong className="font-semibold mr-1 truncate max-w-40">
+          {variable.name}:
+        </strong>
+        <span className="truncate max-w-28">{variable.value}</span>
+      </span>
+      {copied ? (
+        <Check className="size-3 text-green-500" />
+      ) : (
+        <Copy className="size-3 opacity-0 group-hover:opacity-100 transition-opacity" />
+      )}
+    </button>
   );
 }
 
-export function RecordingActions({ actions }: RecordingActionsProps) {
+export function RecordingActions({
+  actions,
+  mode = 'automate',
+}: RecordingActionsProps) {
   const variables = extractWorkflowVariables(actions);
+
+  const footerMessage =
+    mode === 'autopilot'
+      ? 'These variables are from your workflow. Describe your goal below - autopilot will use this workflow as a reference.'
+      : 'Enter your automation goal below to execute this workflow';
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
       <p className="text-xs text-muted-foreground py-1 pl-3">
         Workflow Variables
+        {mode === 'autopilot' && variables.length > 0 && (
+          <span className="ml-1 text-primary">(Reference)</span>
+        )}
       </p>
       {variables.length > 0 && (
-        <div className="flex flex-wrap gap-2 px-6 py-3 border-b border-border/50 bg-muted/20">
-          {variables.map((variable, index) => (
-            <VariableBadge key={index} variable={variable} />
-          ))}
+        <div className="border-b border-border/50 bg-muted/20">
+          <div className="flex flex-wrap gap-2 px-6 py-3">
+            {variables.map((variable, index) => (
+              <VariableBadge key={index} variable={variable} />
+            ))}
+          </div>
+          <p className="text-xs text-muted-foreground px-6 pb-2 italic">
+            Click to copy. Mention different values in your goal to customize
+            (e.g., "use email: john@example.com")
+          </p>
         </div>
       )}
       <div className="flex-1 overflow-y-auto px-6 py-4">
@@ -94,8 +138,8 @@ export function RecordingActions({ actions }: RecordingActionsProps) {
         </details>
       </div>
 
-      <p className="text-xs text-muted-foreground text-center">
-        Enter your automation goal below to execute this workflow
+      <p className="text-xs text-muted-foreground text-center px-4 py-2">
+        {footerMessage}
       </p>
     </div>
   );

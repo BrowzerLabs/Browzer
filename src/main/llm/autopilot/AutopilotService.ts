@@ -80,11 +80,17 @@ export class AutopilotService {
       });
     });
 
-    const effectiveStartUrl = startUrl || 'browzer://home';
+    // Validate start URL - browzer:// internal pages can't be automated
+    const effectiveStartUrl = startUrl;
+    if (!effectiveStartUrl || effectiveStartUrl.startsWith('browzer://')) {
+      console.warn(
+        '[AutopilotManager] No valid start URL provided, autopilot may not work correctly'
+      );
+    }
 
     const executionPromise = executor.execute(
       userGoal,
-      effectiveStartUrl,
+      effectiveStartUrl || 'about:blank',
       referenceRecording,
       config,
       globalInstructions

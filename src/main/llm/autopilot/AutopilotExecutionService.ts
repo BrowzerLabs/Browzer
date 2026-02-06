@@ -20,6 +20,11 @@ export type { AutopilotProgressEvent };
 
 const API_BASE_URL = process.env.SERVICES_API_URL || 'http://localhost:8000';
 
+function isInternalUrl(url: string): boolean {
+  if (!url) return true;
+  return url.startsWith('browzer://');
+}
+
 export class AutopilotExecutionService extends EventEmitter {
   private executor: ExecutionService;
   private sessionId: string | null = null;
@@ -276,6 +281,18 @@ export class AutopilotExecutionService extends EventEmitter {
           return { success: false, content: extractResult.error };
         }
         const content = extractResult.value ?? '';
+
+        const urlLine = content
+          .split('\n')
+          .find((line) => line.startsWith('URL:'));
+        const currentUrl = urlLine?.replace('URL:', '').trim() || '';
+        if (currentUrl && isInternalUrl(currentUrl)) {
+          return {
+            success: false,
+            content: `ERROR: Cannot automate internal browser page (${currentUrl}). Please navigate to an external website first using the navigate tool.`,
+          };
+        }
+
         const truncated =
           content.length > 50000
             ? content.substring(0, 50000) + '\n[...truncated...]'
@@ -284,8 +301,15 @@ export class AutopilotExecutionService extends EventEmitter {
       }
 
       case 'create_tab': {
+        const urlToCreate = input.url as string;
+        if (isInternalUrl(urlToCreate)) {
+          return {
+            success: false,
+            content: `ERROR: Cannot create tab with internal URL (${urlToCreate}). Please use an external website URL.`,
+          };
+        }
         const createResult = await this.executor.executeTool('create_tab', {
-          url: input.url as string,
+          url: urlToCreate,
         });
         if (!createResult.success) {
           return {
@@ -346,15 +370,22 @@ export class AutopilotExecutionService extends EventEmitter {
       }
 
       case 'navigate': {
+        const urlToNavigate = input.url as string;
+        if (isInternalUrl(urlToNavigate)) {
+          return {
+            success: false,
+            content: `ERROR: Cannot navigate to internal browser page (${urlToNavigate}). Please use an external website URL.`,
+          };
+        }
         result = await this.executor.executeTool('navigate', {
-          url: input.url as string,
+          url: urlToNavigate,
           tabId: input.tabId as string,
         });
-        await this.sleep(1500);
+        await this.sleep(500);
         return {
           success: result?.success !== false,
           content: result?.success
-            ? `Navigated to ${input.url}`
+            ? `Navigated to ${urlToNavigate}`
             : 'Navigation failed',
         };
       }
