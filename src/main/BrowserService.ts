@@ -1,5 +1,7 @@
 import { BaseWindow, WebContentsView } from 'electron';
 
+import log from 'electron-log';
+
 import {
   TabService,
   AutomationManager,
@@ -133,6 +135,22 @@ export class BrowserService {
           .getRecordingStore()
           .getRecording(referenceRecordingId)
       : undefined;
+
+    if (referenceRecordingId) {
+      if (referenceRecording) {
+        log.info(
+          `[BrowserService] Autopilot starting with recording: "${referenceRecording.name}" (${referenceRecording.actions.length} actions)`
+        );
+      } else {
+        log.warn(
+          `[BrowserService] Recording ID provided (${referenceRecordingId}) but recording not found!`
+        );
+      }
+    } else {
+      log.info(
+        '[BrowserService] Autopilot starting without recording reference'
+      );
+    }
 
     const explicitStartUrl = startUrl || referenceRecording?.startUrl;
     const activeTab = this.tabService.getActiveTab();

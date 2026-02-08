@@ -2,6 +2,12 @@ import { useState, useCallback, useEffect } from 'react';
 import { toast } from 'sonner';
 
 import {
+  extractWorkflowVariables,
+  WorkflowVariable,
+} from '../utils/extractVariables';
+import { VariableValue } from '../VariableInputDialog';
+
+import {
   useAutomationStore,
   AgentMode,
 } from '@/renderer/stores/automationStore';
@@ -23,6 +29,13 @@ export function useAutomation() {
   } = useAutomationStore();
 
   const [recordings, setRecordings] = useState<RecordingSession[]>([]);
+  const [showVariableDialog, setShowVariableDialog] = useState(false);
+  const [selectedRecordingVariables, setSelectedRecordingVariables] = useState<
+    WorkflowVariable[]
+  >([]);
+  const [pendingSubmitMode, setPendingSubmitMode] = useState<
+    'automate' | 'autopilot' | null
+  >(null);
 
   const isRunning = currentSession?.status === AutomationStatus.RUNNING;
 
@@ -61,7 +74,7 @@ export function useAutomation() {
       );
     });
 
-    const onsubUpdateRecording = window.recordingAPI.onRecordingDeleted(
+    const unsubUpdateRecording = window.recordingAPI.onRecordingDeleted(
       async (recordingId: string) => {
         await loadRecordings();
         if (selectedRecordingId === recordingId) {
@@ -75,7 +88,7 @@ export function useAutomation() {
       unsubProgress();
       unsubComplete();
       unsubError();
-      onsubUpdateRecording();
+      unsubUpdateRecording();
     };
   }, [
     addEvent,
@@ -84,6 +97,149 @@ export function useAutomation() {
     selectedRecordingId,
     loadRecordings,
   ]);
+
+  useEffect(() => {
+    const loadVariables = async () => {
+      if (!selectedRecordingId) {
+        setSelectedRecordingVariables([]);
+        return;
+      }
+
+      try {
+        const recording =
+          await window.recordingAPI.getRecording(selectedRecordingId);
+        if (recording) {
+          const variables = extractWorkflowVariables(recording.actions);
+          setSelectedRecordingVariables(variables);
+        }
+      } catch (error) {
+        console.error(
+          '[useAutomation] Failed to load recording variables:',
+          error
+        );
+        setSelectedRecordingVariables([]);
+      }
+    };
+
+    loadVariables();
+  }, [selectedRecordingId]);
+
+  const buildGoalWithVariables = useCallback(
+    (baseGoal: string, variableValues: VariableValue[]): string => {
+      const customizations = variableValues
+        .filter((v) => v.newValue !== v.originalValue)
+        .map((v) => `${v.name}: ${v.newValue}`)
+        .join(', ');
+
+      if (customizations) {
+        return `${baseGoal}\n\nUse the following values: ${customizations}`;
+      }
+
+      return baseGoal;
+    },
+    []
+  );
+
+  const executeAutomate = useCallback(
+    async (finalGoal: string) => {
+      if (!selectedRecordingId) {
+        toast.error('Please select a recording to automate');
+        return;
+      }
+
+      try {
+        const result = await window.browserAPI.executeLLMAutomation(
+          finalGoal,
+          selectedRecordingId
+        );
+
+        if (result.success) {
+          startSession(
+            finalGoal,
+            'automate',
+            selectedRecordingId,
+            result.sessionId
+          );
+        } else {
+          toast.error(result.message || 'Failed to start automation');
+        }
+      } catch (error) {
+        console.error('[useAutomation] Automate error:', error);
+        toast.error('Failed to start automation');
+      }
+    },
+    [selectedRecordingId, startSession]
+  );
+
+  const executeAutopilot = useCallback(
+    async (finalGoal: string) => {
+      if (selectedRecordingId) {
+        try {
+          const recording =
+            await window.recordingAPI.getRecording(selectedRecordingId);
+          if (!recording) {
+            toast.error(
+              'Selected workflow could not be found. Please select a different workflow.'
+            );
+            setSelectedRecording(null);
+            return;
+          }
+          console.log(
+            '[useAutomation] Validated recording for autopilot:',
+            recording.name
+          );
+        } catch (error) {
+          console.error('[useAutomation] Failed to validate recording:', error);
+          toast.error('Failed to load selected workflow. Please try again.');
+          return;
+        }
+      }
+
+      try {
+        const result = await window.browserAPI.executeAutopilot(
+          finalGoal,
+          undefined,
+          selectedRecordingId || undefined
+        );
+
+        if (result.success) {
+          startSession(
+            finalGoal,
+            'autopilot',
+            selectedRecordingId,
+            result.sessionId
+          );
+        } else {
+          toast.error(result.message || 'Failed to start autopilot');
+        }
+      } catch (error) {
+        console.error('[useAutomation] Autopilot error:', error);
+        toast.error('Failed to start autopilot');
+      }
+    },
+    [selectedRecordingId, startSession, setSelectedRecording]
+  );
+
+  const handleVariableConfirm = useCallback(
+    (variableValues: VariableValue[]) => {
+      const finalGoal = buildGoalWithVariables(userGoal, variableValues);
+
+      if (pendingSubmitMode === 'automate') {
+        executeAutomate(finalGoal);
+      } else if (pendingSubmitMode === 'autopilot') {
+        executeAutopilot(finalGoal);
+      }
+
+      setPendingSubmitMode(null);
+    },
+    [
+      userGoal,
+      pendingSubmitMode,
+      buildGoalWithVariables,
+      executeAutomate,
+      executeAutopilot,
+    ]
+  );
 
   const handleSubmitAutomate = useCallback(async () => {
     if (!userGoal.trim()) {
@@ -96,55 +252,33 @@ export function useAutomation() {
       return;
     }
 
-    try {
-      const result = await window.browserAPI.executeLLMAutomation(
-        userGoal,
-        selectedRecordingId
-      );
-
-      if (result.success) {
-        startSession(
-          userGoal,
-          'automate',
-          selectedRecordingId,
-          result.sessionId
-        );
-      } else {
-        toast.error(result.message || 'Failed to start automation');
-      }
-    } catch (error) {
-      console.error('[useAutomation] Automate error:', error);
-      toast.error('Failed to start automation');
+    if (selectedRecordingVariables.length > 0) {
+      setPendingSubmitMode('automate');
+      setShowVariableDialog(true);
+      return;
     }
-  }, [userGoal, selectedRecordingId, isRunning, startSession]);
+
+    await executeAutomate(userGoal);
+  }, [
+    userGoal,
+    selectedRecordingId,
+    selectedRecordingVariables,
+    executeAutomate,
+  ]);
 
   const handleSubmitAutopilot = useCallback(async () => {
     if (!userGoal.trim() || isRunning) {
       return;
     }
 
-    try {
-      const result = await window.browserAPI.executeAutopilot(
-        userGoal,
-        undefined,
-        selectedRecordingId || undefined
-      );
-
-      if (result.success) {
-        startSession(
-          userGoal,
-          'autopilot',
-          selectedRecordingId,
-          result.sessionId
-        );
-      } else {
-        toast.error(result.message || 'Failed to start autopilot');
-      }
-    } catch (error) {
-      console.error('[useAutomation] Autopilot error:', error);
-      toast.error('Failed to start autopilot');
+    if (selectedRecordingVariables.length > 0) {
+      setPendingSubmitMode('autopilot');
+      setShowVariableDialog(true);
+      return;
     }
-  }, [userGoal, selectedRecordingId, isRunning, startSession]);
+
+    await executeAutopilot(userGoal);
+  }, [userGoal, isRunning, selectedRecordingVariables, executeAutopilot]);
 
   const handleSubmitAsk = useCallback(() => {
     if (!userGoal.trim()) {
@@ -232,5 +366,9 @@ export function useAutomation() {
     handleModeChange,
     handleGoalChange: setUserGoal,
     handleNewSession: clearSession,
+    showVariableDialog,
+    setShowVariableDialog,
+    selectedRecordingVariables,
+    handleVariableConfirm,
   };
 }
