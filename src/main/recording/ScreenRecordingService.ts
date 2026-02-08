@@ -24,91 +24,68 @@ export class ScreenRecordingService {
     this.recordingDir = path.join(userDataPath, 'recordings', 'videos');
   }
 
-  private async checkScreenRecordingPermission(): Promise<boolean> {
+  private async ensurePermissionAndGetSource(): Promise<{
+    id: string;
+    name: string;
+  } | null> {
     if (process.platform !== 'darwin') {
-      return true;
+      const sources = await desktopCapturer.getSources({
+        types: ['window'],
+        thumbnailSize: { width: 0, height: 0 },
+      });
+      const windowId = this.baseWindow.getMediaSourceId();
+      return sources.find((s) => s.id === windowId) || null;
     }
 
-    const status = systemPreferences.getMediaAccessStatus('screen');
-    console.log('[ScreenRecording] Permission status:', status);
-
-    if (status === 'granted') {
-      return true;
-    }
-
-    if (status === 'denied') {
-      const response = await dialog.showMessageBox({
-        type: 'warning',
-        title: 'Screen Recording Permission Required',
-        message:
-          'Browzer needs screen recording permission to record your browser sessions.',
-        detail:
-          'Please grant screen recording permission in System Settings > Privacy & Security > Screen Recording, then restart the app.',
-        buttons: ['Open System Settings', 'Cancel'],
-        defaultId: 0,
-        cancelId: 1,
+    try {
+      const sources = await desktopCapturer.getSources({
+        types: ['window'],
+        thumbnailSize: { width: 0, height: 0 },
       });
 
-      if (response.response === 0) {
-        shell.openExternal(
-          'x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture'
-        );
+      const windowId = this.baseWindow.getMediaSourceId();
+      const source = sources.find((s) => s.id === windowId);
+
+      if (source) {
+        console.log('[ScreenRecording] Source found:', source.name);
+        return source;
       }
 
-      return false;
-    }
+      console.warn('[ScreenRecording] Window source not found');
+      return null;
+    } catch (error) {
+      console.error('[ScreenRecording] Failed to get sources:', error);
 
-    if (status === 'not-determined' || status === 'restricted') {
-      const response = await dialog.showMessageBox({
-        type: 'info',
-        title: 'Screen Recording Permission Required',
-        message: 'Browzer needs your permission to record screen activity.',
-        detail:
-          'When you click "Continue", macOS will ask for screen recording permission. Please allow it to enable recording features.',
-        buttons: ['Continue', 'Cancel'],
-        defaultId: 0,
-        cancelId: 1,
-      });
+      const status = systemPreferences.getMediaAccessStatus('screen');
+      console.log('[ScreenRecording] Permission status:', status);
 
-      if (response.response === 1) {
-        return false;
-      }
-
-      try {
-        await desktopCapturer.getSources({
-          types: ['screen'],
-          thumbnailSize: { width: 1, height: 1 },
-        });
-
-        const newStatus = systemPreferences.getMediaAccessStatus('screen');
-        if (newStatus === 'granted') {
-          return true;
-        }
-
-        await dialog.showMessageBox({
+      if (status === 'denied') {
+        const response = await dialog.showMessageBox({
           type: 'warning',
-          title: 'Permission Not Granted',
-          message: 'Screen recording permission was not granted.',
+          title: 'Screen Recording Permission Denied',
+          message: 'Browzer needs screen recording permission.',
           detail:
-            'To use recording features, please grant permission in System Settings > Privacy & Security > Screen Recording, then restart the app.',
-          buttons: ['Open System Settings', 'OK'],
-          defaultId: 0,
+            'Please enable it in System Settings > Privacy & Security > Screen Recording, then restart the app.',
+          buttons: ['Open System Settings', 'Cancel'],
         });
 
-        if (newStatus === 'denied') {
+        if (response.response === 0) {
           shell.openExternal(
             'x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture'
           );
         }
-
-        return false;
-      } catch (error) {
-        console.error('[ScreenRecording] Error requesting permission:', error);
-        return false;
+      } else if (status === 'not-determined') {
+        await dialog.showMessageBox({
+          type: 'info',
+          title: 'Screen Recording Permission Required',
+          message:
+            'macOS will now ask for screen recording permission. Please allow it and restart the app.',
+          buttons: ['OK'],
+        });
       }
-    }
 
-    return false;
+      return null;
+    }
   }
 
   async startRecording(recordingId: string): Promise<boolean> {
@@ -117,26 +94,13 @@ export class ScreenRecordingService {
       return false;
     }
 
-    const hasPermission = await this.checkScreenRecordingPermission();
-    if (!hasPermission) {
-      console.error(
-        '[ScreenRecording] Screen recording permission not granted'
-      );
-      return false;
-    }
-
     try {
       this.recordingId = recordingId;
       await mkdir(this.recordingDir, { recursive: true });
-      const sources = await desktopCapturer.getSources({
-        types: ['window'],
-        thumbnailSize: { width: 0, height: 0 },
-      });
 
-      const windowId = this.baseWindow.getMediaSourceId();
-      const source = sources.find((s) => s.id === windowId);
+      const source = await this.ensurePermissionAndGetSource();
       if (!source) {
-        console.error('[ScreenRecording] Could not find window source');
+        console.error('[ScreenRecording] Could not get window source');
         return false;
       }
       this.offscreenWindow = new BrowserWindow({
