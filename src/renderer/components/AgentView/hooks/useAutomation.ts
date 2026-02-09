@@ -36,6 +36,9 @@ export function useAutomation() {
   const [pendingSubmitMode, setPendingSubmitMode] = useState<
     'automate' | 'autopilot' | null
   >(null);
+  const [submittedInputs, setSubmittedInputs] = useState<Map<string, string>>(
+    new Map()
+  );
 
   const isRunning = currentSession?.status === AutomationStatus.RUNNING;
 
@@ -160,6 +163,7 @@ export function useAutomation() {
             selectedRecordingId,
             result.sessionId
           );
+          setSubmittedInputs(new Map());
         } else {
           toast.error(result.message || 'Failed to start automation');
         }
@@ -209,6 +213,7 @@ export function useAutomation() {
             selectedRecordingId,
             result.sessionId
           );
+          setSubmittedInputs(new Map());
         } else {
           toast.error(result.message || 'Failed to start autopilot');
         }
@@ -335,6 +340,49 @@ export function useAutomation() {
     }
   }, [currentSession, isRunning, updateSessionStatus]);
 
+  const handleInputSubmit = useCallback(
+    async (requestId: string, value: string) => {
+      if (!currentSession) return;
+
+      try {
+        await window.browserAPI.submitAutopilotInput(
+          currentSession.sessionId,
+          requestId,
+          value
+        );
+
+        setSubmittedInputs((prev) => new Map(prev).set(requestId, value));
+      } catch (error) {
+        console.error('[useAutomation] Failed to submit input:', error);
+        toast.error('Failed to submit input');
+      }
+    },
+    [currentSession]
+  );
+
+  const handleInputCancel = useCallback(
+    async (requestId: string) => {
+      if (!currentSession) return;
+
+      try {
+        await window.browserAPI.cancelAutopilotInput(
+          currentSession.sessionId,
+          requestId
+        );
+
+        updateSessionStatus(
+          currentSession.sessionId,
+          AutomationStatus.STOPPED,
+          undefined,
+          'User cancelled input request'
+        );
+      } catch (error) {
+        console.error('[useAutomation] Failed to cancel input:', error);
+      }
+    },
+    [currentSession, updateSessionStatus]
+  );
+
   const handleModeChange = useCallback(
     (mode: AgentMode) => {
       setAgentMode(mode);
@@ -370,5 +418,8 @@ export function useAutomation() {
     setShowVariableDialog,
     selectedRecordingVariables,
     handleVariableConfirm,
+    submittedInputs,
+    handleInputSubmit,
+    handleInputCancel,
   };
 }

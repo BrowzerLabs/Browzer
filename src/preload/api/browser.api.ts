@@ -184,6 +184,10 @@ export const createBrowserAPI = (): BrowserAPI => ({
   stopAutopilot: (sessionId: string) => invoke('autopilot:stop', sessionId),
   getAutopilotStatus: (sessionId: string) =>
     invoke('autopilot:status', sessionId),
+  submitAutopilotInput: (sessionId: string, requestId: string, value: string) =>
+    invoke('autopilot:submit-input', sessionId, requestId, value),
+  cancelAutopilotInput: (sessionId: string, requestId: string) =>
+    invoke('autopilot:cancel-input', sessionId, requestId),
 
   // Session Management API
   loadAutomationSession: (sessionId: string) =>
@@ -228,7 +232,10 @@ export const createBrowserAPI = (): BrowserAPI => ({
 
   // Event listeners - Deep Link events
   onDeepLink: (callback) =>
-    createEventListener<{ path: string; fullWindow: boolean }>('deeplink:navigate', callback),
+    createEventListener<{ path: string; fullWindow: boolean }>(
+      'deeplink:navigate',
+      callback
+    ),
 
   // Event listeners - Address Bar focus
   onRequestAddressBarFocus: (callback) =>

@@ -35,6 +35,13 @@ export class AutopilotExecutionService extends EventEmitter {
   private electronId: string;
   private messages: Record<string, unknown>[] = [];
   private globalInstructions: string | null = null;
+  private pendingInputRequest: {
+    resolve: (value: string) => void;
+    reject: (error: Error) => void;
+    requestId: string;
+    toolUseId: string;
+  } | null = null;
+  private sensitiveValues: Set<string> = new Set();
 
   constructor(executor: ExecutionService, electronId: string) {
     super();
@@ -62,6 +69,7 @@ export class AutopilotExecutionService extends EventEmitter {
     this.stepCount = 0;
     this.messages = [];
     this.globalInstructions = globalInstructions || null;
+    this.sensitiveValues.clear();
 
     try {
       const startPayload: Record<string, unknown> = {
@@ -186,6 +194,11 @@ export class AutopilotExecutionService extends EventEmitter {
   }
 
   public async stop(): Promise<void> {
+    if (this.pendingInputRequest) {
+      this.pendingInputRequest.reject(new Error('Autopilot stopped by user'));
+      this.pendingInputRequest = null;
+    }
+
     if (!this.sessionId) {
       this.status = 'stopped';
       return;
@@ -204,6 +217,49 @@ export class AutopilotExecutionService extends EventEmitter {
     this.emitProgress('autopilot_stopped', { message: 'Stopped by user' });
   }
 
+  public async submitUserInput(
+    requestId: string,
+    value: string
+  ): Promise<void> {
+    if (
+      !this.pendingInputRequest ||
+      this.pendingInputRequest.requestId !== requestId
+    ) {
+      console.warn(
+        `[AutopilotExecutionService] No pending input request matching ${requestId}`
+      );
+      return;
+    }
+
+    this.pendingInputRequest.resolve(value);
+    this.pendingInputRequest = null;
+  }
+
+  public cancelUserInput(requestId: string): void {
+    if (
+      !this.pendingInputRequest ||
+      this.pendingInputRequest.requestId !== requestId
+    ) {
+      return;
+    }
+
+    this.pendingInputRequest.reject(new Error('User cancelled input request'));
+    this.pendingInputRequest = null;
+  }
+
+  private maskSensitiveParams(
+    toolName: string,
+    params: Record<string, unknown>
+  ): Record<string, unknown> {
+    if (toolName !== 'type') return params;
+
+    const text = params.text as string | undefined;
+    if (text && this.sensitiveValues.has(text)) {
+      return { ...params, text: '••••••••' };
+    }
+    return params;
+  }
+
   private async executeToolCalls(toolCalls: ToolCall[]): Promise<ToolResult[]> {
     const results: ToolResult[] = [];
 
@@ -211,11 +267,16 @@ export class AutopilotExecutionService extends EventEmitter {
       this.stepCount++;
       const stepNumber = this.stepCount;
 
+      const displayParams = this.maskSensitiveParams(
+        toolCall.name,
+        toolCall.input
+      );
+
       this.emitProgress('step_start', {
         stepNumber,
         toolName: toolCall.name,
         toolUseId: toolCall.id,
-        params: toolCall.input,
+        params: displayParams,
       });
 
       try {
@@ -227,7 +288,7 @@ export class AutopilotExecutionService extends EventEmitter {
         this.emitProgress('step_complete', {
           toolUseId: toolCall.id,
           toolName: toolCall.name,
-          params: toolCall.input,
+          params: displayParams,
           status: 'success',
         });
 
@@ -243,7 +304,7 @@ export class AutopilotExecutionService extends EventEmitter {
         this.emitProgress('step_error', {
           toolUseId: toolCall.id,
           toolName: toolCall.name,
-          params: toolCall.input,
+          params: displayParams,
           error: errorMessage,
           status: 'error',
         });
@@ -429,6 +490,39 @@ export class AutopilotExecutionService extends EventEmitter {
         return {
           success: input.success as boolean,
           content: input.message as string,
+        };
+      }
+
+      case 'request_user_input': {
+        const requestId = uuidv4();
+        const toolUseId = `input-${requestId}`;
+        const inputType = input.input_type as string;
+        const fieldName = input.field_name as string;
+
+        this.emitProgress('input_required', {
+          requestId,
+          toolUseId,
+          fieldName,
+          fieldDescription: input.field_description as string,
+          inputType,
+          placeholder: input.placeholder as string | undefined,
+          options: input.options as string[] | undefined,
+        });
+
+        const userValue = await new Promise<string>((resolve, reject) => {
+          this.pendingInputRequest = { resolve, reject, requestId, toolUseId };
+        });
+
+        if (inputType === 'password') {
+          this.sensitiveValues.add(userValue);
+        }
+
+        return {
+          success: true,
+          content:
+            inputType === 'password'
+              ? `User provided password for "${fieldName}". Use this value: ${userValue}`
+              : `User provided value for "${fieldName}": ${userValue}`,
         };
       }
 

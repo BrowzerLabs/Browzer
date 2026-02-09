@@ -159,6 +159,10 @@ export class AutopilotService {
     return { exists: false };
   }
 
+  public getSession(sessionId: string): AutopilotExecutionService | undefined {
+    return this.sessions.get(sessionId);
+  }
+
   public hasActiveSession(): boolean {
     return this.sessions.size > 0;
   }

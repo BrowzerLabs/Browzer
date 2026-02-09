@@ -198,6 +198,27 @@ export class BrowserService {
     return this.autopilotService.getSessionStatus(sessionId);
   }
 
+  public async submitAutopilotInput(
+    sessionId: string,
+    requestId: string,
+    value: string
+  ): Promise<void> {
+    const session = this.autopilotService.getSession(sessionId);
+    if (!session) {
+      log.warn(`[BrowserService] No autopilot session found for ${sessionId}`);
+      return;
+    }
+    await session.submitUserInput(requestId, value);
+  }
+
+  public cancelAutopilotInput(sessionId: string, requestId: string): void {
+    const session = this.autopilotService.getSession(sessionId);
+    if (!session) {
+      return;
+    }
+    session.cancelUserInput(requestId);
+  }
+
   // Service Accessors (for IPCHandlers)
   public getSettingsService(): SettingsService {
     return this.settingsService;

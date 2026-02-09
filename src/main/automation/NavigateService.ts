@@ -28,10 +28,9 @@ export class NavigateService extends BaseActionService {
         };
       }
       await view.webContents.loadURL(params.url);
-      // Wait for network idle with longer timeout for SPAs and heavy pages
       await this.waitForNetworkIdle(cdp, {
-        timeout: 10000,
-        idleTime: 1000,
+        timeout: 3000,
+        idleTime: 500,
         maxInflightRequests: 0,
       });
 

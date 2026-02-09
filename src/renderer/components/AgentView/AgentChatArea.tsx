@@ -11,6 +11,9 @@ export function AgentChatArea({
   agentMode,
   currentSession,
   selectedRecordingId,
+  onInputSubmit,
+  onInputCancel,
+  submittedInputs,
 }: AgentChatAreaProps) {
   const chatEndRef = useRef<HTMLDivElement>(null);
   const [selectedRecording, setSelectedRecording] =
@@ -99,6 +102,10 @@ export function AgentChatArea({
                 key={event.id}
                 event={event}
                 isLatest={index === currentSession.events.length - 1}
+                sessionId={currentSession.sessionId}
+                onInputSubmit={onInputSubmit}
+                onInputCancel={onInputCancel}
+                submittedInputs={submittedInputs}
               />
             ))}
           </div>

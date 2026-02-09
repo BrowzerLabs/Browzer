@@ -25,6 +25,9 @@ export default function AgentView() {
     setShowVariableDialog,
     selectedRecordingVariables,
     handleVariableConfirm,
+    submittedInputs,
+    handleInputSubmit,
+    handleInputCancel,
   } = useAutomation();
 
   useEffect(() => {
@@ -48,6 +51,9 @@ export default function AgentView() {
         agentMode={agentMode}
         currentSession={currentSession}
         selectedRecordingId={selectedRecordingId}
+        onInputSubmit={handleInputSubmit}
+        onInputCancel={handleInputCancel}
+        submittedInputs={submittedInputs}
       />
 
       <AgentFooter
