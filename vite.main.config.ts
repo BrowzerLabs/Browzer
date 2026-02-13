@@ -13,7 +13,7 @@ export default defineConfig({
   },
   define: {
     'process.env.BACKEND_API_URL': JSON.stringify(
-      process.env.BACKEND_API_URL || 'http://localhost:8000/api/v1'
+      process.env.BACKEND_API_URL || 'https://services.trybrowzer.com/api/v1'
     ),
   },
   build: {
