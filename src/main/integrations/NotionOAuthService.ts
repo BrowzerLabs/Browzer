@@ -12,7 +12,7 @@ import type {
   NotionDisconnectResponse,
 } from '@/shared/types';
 
-const NOTION_CLIENT_ID = process.env.NOTION_CLIENT_ID || '';
+const NOTION_CLIENT_ID = '2f5d872b-594c-80a0-8e48-0037b7993e3b';
 const OAUTH_PORT = 8080;
 const NOTION_REDIRECT_URI = `http://localhost:${OAUTH_PORT}/notion/callback`;
 const NOTION_AUTH_URL = 'https://api.notion.com/v1/oauth/authorize';

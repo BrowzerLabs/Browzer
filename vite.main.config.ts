@@ -15,9 +15,6 @@ export default defineConfig({
     'process.env.BACKEND_API_URL': JSON.stringify(
       process.env.BACKEND_API_URL || 'http://localhost:8000/api/v1'
     ),
-    'process.env.NOTION_CLIENT_ID': JSON.stringify(
-      process.env.NOTION_CLIENT_ID || ''
-    ),
   },
   build: {
     sourcemap: true,
