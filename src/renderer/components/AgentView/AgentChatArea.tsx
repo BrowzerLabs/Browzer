@@ -11,6 +11,9 @@ export function AgentChatArea({
   agentMode,
   currentSession,
   selectedRecordingId,
+  onInputSubmit,
+  onInputCancel,
+  submittedInputs,
 }: AgentChatAreaProps) {
   const chatEndRef = useRef<HTMLDivElement>(null);
   const [selectedRecording, setSelectedRecording] =
@@ -47,7 +50,12 @@ export function AgentChatArea({
   }, [selectedRecordingId]);
 
   if (!currentSession) {
-    if (agentMode === 'automate' && selectedRecordingId) {
+    // Show recording actions for both automate and autopilot modes when a recording is selected
+    const showRecording =
+      (agentMode === 'automate' || agentMode === 'autopilot') &&
+      selectedRecordingId;
+
+    if (showRecording) {
       if (isLoadingRecording) {
         return (
           <div className="flex items-center justify-center h-full">
@@ -57,7 +65,12 @@ export function AgentChatArea({
       }
 
       if (selectedRecording) {
-        return <RecordingActions actions={selectedRecording.actions} />;
+        return (
+          <RecordingActions
+            actions={selectedRecording.actions}
+            mode={agentMode}
+          />
+        );
       }
     }
 
@@ -89,6 +102,10 @@ export function AgentChatArea({
                 key={event.id}
                 event={event}
                 isLatest={index === currentSession.events.length - 1}
+                sessionId={currentSession.sessionId}
+                onInputSubmit={onInputSubmit}
+                onInputCancel={onInputCancel}
+                submittedInputs={submittedInputs}
               />
             ))}
           </div>

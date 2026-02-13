@@ -1,5 +1,7 @@
 import { BaseWindow, WebContentsView } from 'electron';
 
+import log from 'electron-log';
+
 import {
   TabService,
   AutomationManager,
@@ -16,6 +18,7 @@ import { HistoryService } from '@/main/history/HistoryService';
 import { PasswordManager } from '@/main/password/PasswordManager';
 import { BookmarkService } from '@/main/bookmark';
 import { AutopilotService } from '@/main/llm/autopilot';
+import { NotionOAuthService } from '@/main/integrations';
 
 export class BrowserService {
   private tabService: TabService;
@@ -31,6 +34,7 @@ export class BrowserService {
   private passwordManager: PasswordManager;
   private bookmarkService: BookmarkService;
   private recordingService: RecordingService;
+  private notionService: NotionOAuthService;
 
   constructor(
     private baseWindow: BaseWindow,
@@ -46,6 +50,7 @@ export class BrowserService {
     this.passwordManager = new PasswordManager();
     this.bookmarkService = new BookmarkService(this.browserView);
     this.adBlockerService = new AdBlockerService();
+    this.notionService = new NotionOAuthService();
 
     // Initialize managers
     this.navigationService = new NavigationService(
@@ -130,12 +135,56 @@ export class BrowserService {
           .getRecordingStore()
           .getRecording(referenceRecordingId)
       : undefined;
-    const effectiveStartUrl = startUrl || referenceRecording?.startUrl;
-    return this.autopilotService.executeAutopilot(
+
+    if (referenceRecordingId) {
+      if (referenceRecording) {
+        log.info(
+          `[BrowserService] Autopilot starting with recording: "${referenceRecording.name}" (${referenceRecording.actions.length} actions)`
+        );
+      } else {
+        log.warn(
+          `[BrowserService] Recording ID provided (${referenceRecordingId}) but recording not found!`
+        );
+      }
+    } else {
+      log.info(
+        '[BrowserService] Autopilot starting without recording reference'
+      );
+    }
+
+    const explicitStartUrl = startUrl || referenceRecording?.startUrl;
+    const activeTab = this.tabService.getActiveTab();
+    const activeUrl = activeTab?.info.url;
+    const isActiveTabValid = activeUrl && !activeUrl.startsWith('browzer://');
+
+    let effectiveStartUrl = explicitStartUrl;
+    let tabToUse = activeTab;
+
+    if (explicitStartUrl) {
+      if (isActiveTabValid && activeUrl === explicitStartUrl) {
+        tabToUse = activeTab;
+      } else {
+        tabToUse = await this.tabService.createTab(explicitStartUrl);
+      }
+      effectiveStartUrl = explicitStartUrl;
+    } else if (isActiveTabValid && activeTab) {
+      tabToUse = activeTab;
+      effectiveStartUrl = activeUrl;
+    } else {
+      tabToUse = await this.tabService.createTab();
+      effectiveStartUrl = tabToUse.info.url;
+    }
+
+    const globalInstructions =
+      this.settingsService.getAgentGlobalInstructions();
+
+    return this.autopilotService.executeAutopilot({
+      tab: tabToUse!,
       userGoal,
-      effectiveStartUrl,
-      referenceRecording
-    );
+      startUrl: effectiveStartUrl,
+      referenceRecording,
+      globalInstructions,
+    });
   }
 
   public async stopAutopilot(sessionId: string): Promise<void> {
@@ -147,6 +196,27 @@ export class BrowserService {
     status?: string;
   } {
     return this.autopilotService.getSessionStatus(sessionId);
+  }
+
+  public async submitAutopilotInput(
+    sessionId: string,
+    requestId: string,
+    value: string
+  ): Promise<void> {
+    const session = this.autopilotService.getSession(sessionId);
+    if (!session) {
+      log.warn(`[BrowserService] No autopilot session found for ${sessionId}`);
+      return;
+    }
+    await session.submitUserInput(requestId, value);
+  }
+
+  public cancelAutopilotInput(sessionId: string, requestId: string): void {
+    const session = this.autopilotService.getSession(sessionId);
+    if (!session) {
+      return;
+    }
+    session.cancelUserInput(requestId);
   }
 
   // Service Accessors (for IPCHandlers)
@@ -172,6 +242,10 @@ export class BrowserService {
 
   public getRecordingService(): RecordingService {
     return this.recordingService;
+  }
+
+  public getNotionService(): NotionOAuthService {
+    return this.notionService;
   }
 
   public updateLayout(
@@ -221,6 +295,7 @@ export class BrowserService {
     this.automationManager.destroy();
     this.autopilotService.destroy();
     this.downloadService.destroy();
+    this.notionService.destroy();
   }
 
   private setupTabEventListeners(): void {

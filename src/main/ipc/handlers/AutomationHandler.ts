@@ -43,5 +43,21 @@ export class AutomationHandler extends BaseHandler {
     this.handle('autopilot:status', async (_, sessionId: string) => {
       return browserService.getAutopilotStatus(sessionId);
     });
+
+    this.handle(
+      'autopilot:submit-input',
+      async (_, sessionId: string, requestId: string, value: string) => {
+        await browserService.submitAutopilotInput(sessionId, requestId, value);
+        return { success: true };
+      }
+    );
+
+    this.handle(
+      'autopilot:cancel-input',
+      async (_, sessionId: string, requestId: string) => {
+        browserService.cancelAutopilotInput(sessionId, requestId);
+        return { success: true };
+      }
+    );
   }
 }

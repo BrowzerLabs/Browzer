@@ -90,7 +90,11 @@ export const useAutomationStore = create<AutomationStore>()(
         set({
           currentSession: newSession,
           userGoal: '',
-          selectedRecordingId: agentMode === 'automate' ? recordingId : null,
+          // Preserve the selected recording for both automate and autopilot modes
+          selectedRecordingId:
+            agentMode === 'automate' || agentMode === 'autopilot'
+              ? recordingId
+              : null,
         });
       },
 

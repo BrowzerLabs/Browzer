@@ -21,6 +21,7 @@ import {
   DeepLinkHandler,
   AutocompleteHandler,
   ThemeHandler,
+  NotionHandler,
 } from './handlers';
 
 import { BrowserService } from '@/main/BrowserService';
@@ -49,6 +50,7 @@ export class IPCHandlers extends EventEmitter {
       bookmarkService: this.browserService.getBookmarkService(),
       tabService: this.browserService.getTabService(),
       settingsService: this.browserService.getSettingsService(),
+      notionService: this.browserService.getNotionService(),
       eventEmitter: this,
     };
 
@@ -74,6 +76,7 @@ export class IPCHandlers extends EventEmitter {
       new DeepLinkHandler(this.context),
       new AutocompleteHandler(this.context),
       new ThemeHandler(this.context),
+      new NotionHandler(this.context),
     ];
     this.handlers.forEach((handler) => handler.register());
   }

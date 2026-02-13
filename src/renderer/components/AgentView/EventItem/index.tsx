@@ -6,8 +6,23 @@ import { ErrorEvent } from './ErrorEvent';
 import { TextEvent } from './TextEvent';
 import { AutomationStoppedEvent } from './AutomationStoppedEvent';
 import { AutomationCompleteEvent } from './AutomationCompleteEvent';
+import { InputRequiredEvent } from './InputRequiredEvent';
 
-export function EventItem({ event, isLatest }: EventItemProps) {
+interface ExtendedEventItemProps extends EventItemProps {
+  sessionId?: string;
+  onInputSubmit?: (requestId: string, value: string) => void;
+  onInputCancel?: (requestId: string) => void;
+  submittedInputs?: Map<string, string>;
+}
+
+export function EventItem({
+  event,
+  isLatest,
+  sessionId,
+  onInputSubmit,
+  onInputCancel,
+  submittedInputs,
+}: ExtendedEventItemProps) {
   switch (event.type) {
     case 'thinking':
       return <ThinkingEvent event={event} isLatest={isLatest} />;
@@ -19,6 +34,25 @@ export function EventItem({ event, isLatest }: EventItemProps) {
     case 'step_complete':
     case 'step_error':
       return <StepEvent event={event} isLatest={isLatest} />;
+
+    case 'input_required':
+      if (!sessionId || !onInputSubmit || !onInputCancel) {
+        return null;
+      }
+      const requestId = event.data.requestId;
+      const isSubmitted = submittedInputs?.has(requestId) ?? false;
+      const submittedValue = submittedInputs?.get(requestId);
+      return (
+        <InputRequiredEvent
+          event={event}
+          isLatest={isLatest}
+          sessionId={sessionId}
+          onSubmit={onInputSubmit}
+          onCancel={onInputCancel}
+          isSubmitted={isSubmitted}
+          submittedValue={submittedValue}
+        />
+      );
 
     case 'automation_error':
       return <ErrorEvent event={event} isLatest={isLatest} />;

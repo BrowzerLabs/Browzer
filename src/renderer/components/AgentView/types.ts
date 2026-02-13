@@ -17,6 +17,9 @@ export interface AgentChatAreaProps {
   agentMode: AgentMode;
   currentSession: AutomationSession | null;
   selectedRecordingId: string | null;
+  onInputSubmit?: (requestId: string, value: string) => void;
+  onInputCancel?: (requestId: string) => void;
+  submittedInputs?: Map<string, string>;
 }
 
 export interface AgentFooterProps {
