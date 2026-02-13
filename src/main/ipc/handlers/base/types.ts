@@ -9,6 +9,7 @@ import { PasswordManager } from '@/main/password/PasswordManager';
 import { BookmarkService } from '@/main/bookmark';
 import { TabService } from '@/main/browser';
 import { SettingsService } from '@/main/settings/SettingsService';
+import { NotionOAuthService } from '@/main/integrations';
 
 export interface IPCContext {
   baseWindow: BaseWindow;
@@ -20,6 +21,7 @@ export interface IPCContext {
   bookmarkService: BookmarkService;
   tabService: TabService;
   settingsService: SettingsService;
+  notionService: NotionOAuthService;
   eventEmitter: EventEmitter;
 }
 

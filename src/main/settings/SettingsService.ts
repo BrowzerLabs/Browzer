@@ -21,6 +21,9 @@ const defaultSettings: AppSettings = {
     fontSize: 16,
     showBookmarksBar: false,
   },
+  agent: {
+    globalInstructions: '',
+  },
 };
 
 export interface SettingsChangeEvent<
@@ -38,6 +41,7 @@ export interface SettingsServiceEvents {
   'settings:general': (event: SettingsChangeEvent<'general'>) => void;
   'settings:privacy': (event: SettingsChangeEvent<'privacy'>) => void;
   'settings:appearance': (event: SettingsChangeEvent<'appearance'>) => void;
+  'settings:agent': (event: SettingsChangeEvent<'agent'>) => void;
 }
 
 export class SettingsService extends EventEmitter {
@@ -161,5 +165,9 @@ export class SettingsService extends EventEmitter {
       console.error('Failed to import settings:', error);
       return false;
     }
+  }
+
+  public getAgentGlobalInstructions(): string {
+    return this.getSetting('agent', 'globalInstructions') || '';
   }
 }

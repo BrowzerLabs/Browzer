@@ -5,6 +5,7 @@ import type {
   NotificationAPI,
   UpdaterAPI,
   RecordingAPI,
+  NotionAPI,
 } from './preload/preload';
 
 declare global {
@@ -15,6 +16,7 @@ declare global {
     notificationAPI: NotificationAPI;
     updaterAPI: UpdaterAPI;
     recordingAPI: RecordingAPI;
+    notionAPI: NotionAPI;
   }
 
   // Vite Electron Forge globals

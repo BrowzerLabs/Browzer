@@ -188,6 +188,15 @@ export interface BrowserAPI {
   getAutopilotStatus: (
     sessionId: string
   ) => Promise<{ exists: boolean; status?: string }>;
+  submitAutopilotInput: (
+    sessionId: string,
+    requestId: string,
+    value: string
+  ) => Promise<{ success: boolean }>;
+  cancelAutopilotInput: (
+    sessionId: string,
+    requestId: string
+  ) => Promise<{ success: boolean }>;
 
   // Session Management
   loadAutomationSession: (sessionId: string) => Promise<any>;
@@ -225,7 +234,9 @@ export interface BrowserAPI {
   ) => () => void;
 
   // Deep Link event listeners
-  onDeepLink: (callback: (data: { path: string; fullWindow: boolean }) => void) => () => void;
+  onDeepLink: (
+    callback: (data: { path: string; fullWindow: boolean }) => void
+  ) => () => void;
 
   // Address Bar focus event listener
   onRequestAddressBarFocus: (callback: () => void) => () => void;

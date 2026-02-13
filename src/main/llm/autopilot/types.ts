@@ -29,6 +29,7 @@ export type AutopilotEventType =
   | 'step_error'
   | 'text_response'
   | 'plan_generated'
+  | 'input_required'
   | 'autopilot_stopped'
   | 'autopilot_error'
   | 'autopilot_complete';

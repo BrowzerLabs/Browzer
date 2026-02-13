@@ -3,6 +3,7 @@ import { useEffect } from 'react';
 import { AgentHeader } from './AgentHeader';
 import { AgentChatArea } from './AgentChatArea';
 import { AgentFooter } from './AgentFooter';
+import { VariableInputDialog } from './VariableInputDialog';
 import { useAutomation } from './hooks';
 
 export default function AgentView() {
@@ -20,6 +21,13 @@ export default function AgentView() {
     handleModeChange,
     handleSubmit,
     handleStop,
+    showVariableDialog,
+    setShowVariableDialog,
+    selectedRecordingVariables,
+    handleVariableConfirm,
+    submittedInputs,
+    handleInputSubmit,
+    handleInputCancel,
   } = useAutomation();
 
   useEffect(() => {
@@ -43,6 +51,9 @@ export default function AgentView() {
         agentMode={agentMode}
         currentSession={currentSession}
         selectedRecordingId={selectedRecordingId}
+        onInputSubmit={handleInputSubmit}
+        onInputCancel={handleInputCancel}
+        submittedInputs={submittedInputs}
       />
 
       <AgentFooter
@@ -54,6 +65,14 @@ export default function AgentView() {
         onSubmit={handleSubmit}
         onStop={handleStop}
         onModeChange={handleModeChange}
+      />
+
+      <VariableInputDialog
+        open={showVariableDialog}
+        onOpenChange={setShowVariableDialog}
+        variables={selectedRecordingVariables}
+        onConfirm={handleVariableConfirm}
+        userGoal={userGoal}
       />
     </section>
   );

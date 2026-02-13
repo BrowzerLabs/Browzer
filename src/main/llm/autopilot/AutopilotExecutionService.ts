@@ -20,6 +20,11 @@ export type { AutopilotProgressEvent };
 
 const API_BASE_URL = process.env.SERVICES_API_URL || 'http://localhost:8000';
 
+function isInternalUrl(url: string): boolean {
+  if (!url) return true;
+  return url.startsWith('browzer://');
+}
+
 export class AutopilotExecutionService extends EventEmitter {
   private executor: ExecutionService;
   private sessionId: string | null = null;
@@ -29,6 +34,14 @@ export class AutopilotExecutionService extends EventEmitter {
   private stepCount = 0;
   private electronId: string;
   private messages: Record<string, unknown>[] = [];
+  private globalInstructions: string | null = null;
+  private pendingInputRequest: {
+    resolve: (value: string) => void;
+    reject: (error: Error) => void;
+    requestId: string;
+    toolUseId: string;
+  } | null = null;
+  private sensitiveValues: Set<string> = new Set();
 
   constructor(executor: ExecutionService, electronId: string) {
     super();
@@ -49,11 +62,14 @@ export class AutopilotExecutionService extends EventEmitter {
     userGoal: string,
     startUrl: string,
     referenceRecording?: RecordingSession,
-    config?: Partial<AutopilotConfig>
+    config?: Partial<AutopilotConfig>,
+    globalInstructions?: string
   ): Promise<{ success: boolean; message: string; stepCount: number }> {
     this.status = 'running';
     this.stepCount = 0;
     this.messages = [];
+    this.globalInstructions = globalInstructions || null;
+    this.sensitiveValues.clear();
 
     try {
       const startPayload: Record<string, unknown> = {
@@ -75,6 +91,10 @@ export class AutopilotExecutionService extends EventEmitter {
           max_steps: config.maxSteps,
           max_consecutive_failures: config.maxConsecutiveFailures,
         };
+      }
+
+      if (globalInstructions) {
+        startPayload.global_instructions = globalInstructions;
       }
 
       const startResponse = await this.callBackendAPI<AutopilotStartResponse>(
@@ -116,6 +136,7 @@ export class AutopilotExecutionService extends EventEmitter {
           {
             session_id: this.sessionId,
             messages: [...this.messages, toolResultMessage],
+            global_instructions: this.globalInstructions,
           }
         );
 
@@ -173,6 +194,11 @@ export class AutopilotExecutionService extends EventEmitter {
   }
 
   public async stop(): Promise<void> {
+    if (this.pendingInputRequest) {
+      this.pendingInputRequest.reject(new Error('Autopilot stopped by user'));
+      this.pendingInputRequest = null;
+    }
+
     if (!this.sessionId) {
       this.status = 'stopped';
       return;
@@ -191,6 +217,49 @@ export class AutopilotExecutionService extends EventEmitter {
     this.emitProgress('autopilot_stopped', { message: 'Stopped by user' });
   }
 
+  public async submitUserInput(
+    requestId: string,
+    value: string
+  ): Promise<void> {
+    if (
+      !this.pendingInputRequest ||
+      this.pendingInputRequest.requestId !== requestId
+    ) {
+      console.warn(
+        `[AutopilotExecutionService] No pending input request matching ${requestId}`
+      );
+      return;
+    }
+
+    this.pendingInputRequest.resolve(value);
+    this.pendingInputRequest = null;
+  }
+
+  public cancelUserInput(requestId: string): void {
+    if (
+      !this.pendingInputRequest ||
+      this.pendingInputRequest.requestId !== requestId
+    ) {
+      return;
+    }
+
+    this.pendingInputRequest.reject(new Error('User cancelled input request'));
+    this.pendingInputRequest = null;
+  }
+
+  private maskSensitiveParams(
+    toolName: string,
+    params: Record<string, unknown>
+  ): Record<string, unknown> {
+    if (toolName !== 'type') return params;
+
+    const text = params.text as string | undefined;
+    if (text && this.sensitiveValues.has(text)) {
+      return { ...params, text: '••••••••' };
+    }
+    return params;
+  }
+
   private async executeToolCalls(toolCalls: ToolCall[]): Promise<ToolResult[]> {
     const results: ToolResult[] = [];
 
@@ -198,11 +267,16 @@ export class AutopilotExecutionService extends EventEmitter {
       this.stepCount++;
       const stepNumber = this.stepCount;
 
+      const displayParams = this.maskSensitiveParams(
+        toolCall.name,
+        toolCall.input
+      );
+
       this.emitProgress('step_start', {
         stepNumber,
         toolName: toolCall.name,
         toolUseId: toolCall.id,
-        params: toolCall.input,
+        params: displayParams,
       });
 
       try {
@@ -214,7 +288,7 @@ export class AutopilotExecutionService extends EventEmitter {
         this.emitProgress('step_complete', {
           toolUseId: toolCall.id,
           toolName: toolCall.name,
-          params: toolCall.input,
+          params: displayParams,
           status: 'success',
         });
 
@@ -230,7 +304,7 @@ export class AutopilotExecutionService extends EventEmitter {
         this.emitProgress('step_error', {
           toolUseId: toolCall.id,
           toolName: toolCall.name,
-          params: toolCall.input,
+          params: displayParams,
           error: errorMessage,
           status: 'error',
         });
@@ -268,6 +342,18 @@ export class AutopilotExecutionService extends EventEmitter {
           return { success: false, content: extractResult.error };
         }
         const content = extractResult.value ?? '';
+
+        const urlLine = content
+          .split('\n')
+          .find((line) => line.startsWith('URL:'));
+        const currentUrl = urlLine?.replace('URL:', '').trim() || '';
+        if (currentUrl && isInternalUrl(currentUrl)) {
+          return {
+            success: false,
+            content: `ERROR: Cannot automate internal browser page (${currentUrl}). Please navigate to an external website first using the navigate tool.`,
+          };
+        }
+
         const truncated =
           content.length > 50000
             ? content.substring(0, 50000) + '\n[...truncated...]'
@@ -276,8 +362,15 @@ export class AutopilotExecutionService extends EventEmitter {
       }
 
       case 'create_tab': {
+        const urlToCreate = input.url as string;
+        if (isInternalUrl(urlToCreate)) {
+          return {
+            success: false,
+            content: `ERROR: Cannot create tab with internal URL (${urlToCreate}). Please use an external website URL.`,
+          };
+        }
         const createResult = await this.executor.executeTool('create_tab', {
-          url: input.url as string,
+          url: urlToCreate,
         });
         if (!createResult.success) {
           return {
@@ -338,15 +431,22 @@ export class AutopilotExecutionService extends EventEmitter {
       }
 
       case 'navigate': {
+        const urlToNavigate = input.url as string;
+        if (isInternalUrl(urlToNavigate)) {
+          return {
+            success: false,
+            content: `ERROR: Cannot navigate to internal browser page (${urlToNavigate}). Please use an external website URL.`,
+          };
+        }
         result = await this.executor.executeTool('navigate', {
-          url: input.url as string,
+          url: urlToNavigate,
           tabId: input.tabId as string,
         });
-        await this.sleep(1500);
+        await this.sleep(500);
         return {
           success: result?.success !== false,
           content: result?.success
-            ? `Navigated to ${input.url}`
+            ? `Navigated to ${urlToNavigate}`
             : 'Navigation failed',
         };
       }
@@ -390,6 +490,39 @@ export class AutopilotExecutionService extends EventEmitter {
         return {
           success: input.success as boolean,
           content: input.message as string,
+        };
+      }
+
+      case 'request_user_input': {
+        const requestId = uuidv4();
+        const toolUseId = `input-${requestId}`;
+        const inputType = input.input_type as string;
+        const fieldName = input.field_name as string;
+
+        this.emitProgress('input_required', {
+          requestId,
+          toolUseId,
+          fieldName,
+          fieldDescription: input.field_description as string,
+          inputType,
+          placeholder: input.placeholder as string | undefined,
+          options: input.options as string[] | undefined,
+        });
+
+        const userValue = await new Promise<string>((resolve, reject) => {
+          this.pendingInputRequest = { resolve, reject, requestId, toolUseId };
+        });
+
+        if (inputType === 'password') {
+          this.sensitiveValues.add(userValue);
+        }
+
+        return {
+          success: true,
+          content:
+            inputType === 'password'
+              ? `User provided password for "${fieldName}". Use this value: ${userValue}`
+              : `User provided value for "${fieldName}": ${userValue}`,
         };
       }
 

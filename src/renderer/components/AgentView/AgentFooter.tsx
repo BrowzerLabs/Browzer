@@ -1,5 +1,5 @@
 import React from 'react';
-import { ArrowUp, Square, MessageSquare, Bot } from 'lucide-react';
+import { ArrowUp, Square, MessageSquare, Bot, Rocket } from 'lucide-react';
 
 import { AgentFooterProps } from './types';
 
@@ -35,18 +35,18 @@ export function AgentFooter({
   };
 
   const canSubmit =
-    agentMode === 'ask' // || agentMode === 'autopilot'
+    agentMode === 'ask' || agentMode === 'autopilot'
       ? userGoal.trim() && !isRunning
       : userGoal.trim() && selectedRecordingId && !isRunning;
 
   const placeholder =
     agentMode === 'ask'
       ? 'Ask anything about the current page...'
-      : // : agentMode === 'autopilot'
-        // ? 'Describe what you want to accomplish...'
-        selectedRecordingId
-        ? 'Continue the conversation...'
-        : 'Describe what you want to automate...';
+      : agentMode === 'autopilot'
+        ? 'Describe what you want to accomplish...'
+        : selectedRecordingId
+          ? 'Continue the conversation...'
+          : 'Describe what you want to automate...';
 
   return (
     <section className="p-3 flex-shrink-0">
@@ -72,11 +72,11 @@ export function AgentFooter({
                   <span className="flex items-center gap-2">
                     <MessageSquare className="size-3" /> Ask
                   </span>
+                ) : agentMode === 'autopilot' ? (
+                  <span className="flex items-center gap-2">
+                    <Rocket className="size-3" /> Autopilot
+                  </span>
                 ) : (
-                  // ) : agentMode === 'autopilot' ? (
-                  //   <span className="flex items-center gap-2">
-                  //     <Rocket className="size-3" /> Autopilot
-                  //   </span>
                   <span className="flex items-center gap-2">
                     <Bot className="size-3" /> Automate
                   </span>
@@ -96,10 +96,10 @@ export function AgentFooter({
                 <Bot className="w-4 h-4 mr-2" />
                 Automate
               </DropdownMenuItem>
-              {/* <DropdownMenuItem onClick={() => onModeChange('autopilot')}>
+              <DropdownMenuItem onClick={() => onModeChange('autopilot')}>
                 <Rocket className="w-4 h-4 mr-2" />
                 Autopilot
-              </DropdownMenuItem> */}
+              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
           <InputGroupButton

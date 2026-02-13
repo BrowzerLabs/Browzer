@@ -119,7 +119,11 @@ export class ConnectionService extends EventEmitter {
     if (this.sseClient) {
       await this.sseClient.reconnectWithAuth();
     } else {
-      console.warn('[ConnectionService] No SSE client to reconnect');
+      console.log(
+        '[ConnectionService] No SSE client exists, initializing connection...'
+      );
+      this.status = ConnectionStatus.DISCONNECTED;
+      await this.initialize();
     }
   }
 }
