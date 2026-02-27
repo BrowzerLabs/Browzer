@@ -17,6 +17,7 @@ import { api, ConnectionService } from '@/main/api';
 export class AuthService {
   private currentUser: User | null = null;
   private authWindow: BrowserWindow | null = null;
+  private pendingCodeVerifier: string | null = null;
   private readonly browserService: BrowserService;
   private readonly connectionService: ConnectionService;
 
@@ -109,6 +110,7 @@ export class AuthService {
       const urlResponse = await api.post<{
         success: boolean;
         url?: string;
+        code_verifier?: string;
         error?: string;
       }>('/auth/oauth/url', {
         provider: 'google',
@@ -124,6 +126,9 @@ export class AuthService {
           },
         };
       }
+
+      // Store the PKCE code_verifier for the callback
+      this.pendingCodeVerifier = urlResponse.data.code_verifier || null;
 
       let oauthUrl = urlResponse.data.url;
 
@@ -157,6 +162,7 @@ export class AuthService {
 
         this.authWindow.on('closed', () => {
           this.authWindow = null;
+          this.pendingCodeVerifier = null;
           resolve({
             success: false,
             error: {
@@ -235,7 +241,11 @@ export class AuthService {
 
       const response = await api.post<AuthResponse>('/auth/oauth/callback', {
         code,
+        code_verifier: this.pendingCodeVerifier,
       });
+
+      // Clear the pending code verifier after use
+      this.pendingCodeVerifier = null;
 
       if (!response.success || !response.data) {
         this.authWindow?.close();
